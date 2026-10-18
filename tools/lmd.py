@@ -1,0 +1,295 @@
+"""Parser for Liquid Entertainment .lmd models (LIQD0LMD, versions 1.2 to 1.7).
+
+A model links database records: skeleton (Skeletons.lqr), meshes (Meshes.lqr),
+weights (Weights.lqr), materials (Materials.lqr), textures (Textures.lqr) and
+attached models / effects (Models.lqr, Effects.lqr). Little endian. "str" is
+u8 0, u32 char count incl. NUL, UTF-16LE (as in .lqr). Nested objects start
+with a u32 class version (0x64..0x6a). Layout as far as decoded:
+
+    char[8]  "LIQD0LMD"
+    f32      version (1.2 .. 1.7)
+    u32      model class (ModelClasses.lqr: 0 object, 1 unit, 2 building,
+             3 ambient creature, 5 static, 6 ambient)
+    u8, u8   unknown (1, 0)
+    u32[F]   counts, F = 13 (1.2), 14 (1.3), 16 (1.4), 17 (1.5, 1.6), 16 (1.7)
+             [0] animation states, [1] skeletons, [2] meshes, [3] materials,
+             [4] textures, [6] attached models, [7] attached effects; in
+             1.7 animated models the last field is the joint count
+    u32[c1]  skeleton record ids
+    ...      if c1 > 0: joint sets ("Full Skeleton") and per joint bounds
+             (not decoded, skipped by searching for the first slot)
+    c2 x mesh slot:     ref, u32 state_mask, u32 0, u32 0x64, i32 weight id
+                        (str weight path instead if the mesh ref is a path)
+    c3 x material slot: ref, u32 state_mask, u32 0, u32 0x64
+    c4 x texture slot:  ref, u32 state_mask, u32 0, u32 0x65, u32 n,
+                        u8[n] channel flags (one is set: the texture channel,
+                        0 diffuse, the team colour mask is usually channel 1)
+    ...      c0 animation states: u32 0x64, u32 state id, ... (not decoded)
+    c6 + c7 attachments (models first, then effects):
+             u32 0x6a, u8 has_id, u32 record id (or str path when has_id is 0),
+             u32 attach_to_joint, i32 joint index (into the skeleton, -1 none),
+             u8 shown (0 = hidden until the game shows it: arrows in hand,
+             worker sacks, missiles), u32 x3, u32 state_mask (as for slots:
+             blood has an extra bit, weapon upgrade levels one bit each),
+             i32, f32[8] offset (quaternion w x y z,
+             position x y z, scale), then u32 0x65 + 15 bytes (models)
+             or u32 0x64 (effects)
+
+    ref:     u32 0x66, u8 has_id, u32 1, u32 n, u32[n] (0 or -1),
+             i32 record id, or str file path when has_id is 0
+
+state_mask is a bit set of model states (unit upgrade levels, variations).
+A slot is used in the states whose bits it has; bits shared by every slot
+mean "always". Gondorian swordsmen pick body mesh and texture this way.
+Joint names come from the skeleton (.lsk), see resolve_model.py.
+
+Usage:
+    python lmd.py <model.lmd> [...]
+"""
+import re
+import struct
+import sys
+from dataclasses import dataclass, field
+
+HEADER_FIELDS = {12: 13, 13: 14, 14: 16, 15: 17, 16: 17, 17: 16}  # version * 10
+
+REF_PATTERN = re.compile(re.escape(b'\x66\x00\x00\x00') + b'[\x00\x01]'
+                         + re.escape(b'\x01\x00\x00\x00'))
+ATTACH_PATTERN = re.compile(b'[\x67-\x6a]\x00\x00\x00[\x00\x01]')
+
+
+@dataclass
+class Ref:
+    id: int = -1          # record id, -1 if none
+    path: str = ''        # raw file path when the slot is not in the database
+    state_mask: int = 0
+
+
+@dataclass
+class MeshSlot:
+    mesh: Ref
+    weight: int           # Weights.lqr id, -1 for static meshes
+    weight_path: str = ''
+
+
+@dataclass
+class TextureSlot:
+    texture: Ref
+    channels: list        # set channel indices
+
+
+@dataclass
+class Attachment:
+    kind: str             # 'model' or 'effect'
+    id: int               # Models.lqr / Effects.lqr id, -1 if given by path
+    path: str
+    joint: int            # skeleton joint index, -1 if not attached to a joint
+    offset: tuple         # quaternion w x y z, position x y z, scale
+    shown: bool = True    # visible by default
+    state_mask: int = 0
+
+
+@dataclass
+class Model:
+    version: float
+    model_class: int
+    counts: list
+    skeletons: list
+    meshes: list = field(default_factory=list)
+    materials: list = field(default_factory=list)
+    textures: list = field(default_factory=list)
+    attachments: list = field(default_factory=list)
+    warnings: list = field(default_factory=list)
+
+    def common_state_bits(self):
+        masks = [s.mesh.state_mask for s in self.meshes] + [s.texture.state_mask for s in self.textures]
+        common = ~0
+        for m in masks:
+            common &= m
+        return common if masks else 0
+
+    def states(self):
+        """{state bit: (mesh slot indices, texture slot indices)} for the
+        non-common state bits; empty when every slot is always used."""
+        common = self.common_state_bits()
+        bits = 0
+        for s in self.meshes:
+            bits |= s.mesh.state_mask
+        for s in self.textures:
+            bits |= s.texture.state_mask
+        bits &= ~common
+        out = {}
+        for b in range(32):
+            if bits >> b & 1:
+                meshes = [i for i, s in enumerate(self.meshes) if s.mesh.state_mask >> b & 1
+                          or not s.mesh.state_mask & ~common]
+                texs = [i for i, s in enumerate(self.textures) if s.texture.state_mask >> b & 1
+                        or not s.texture.state_mask & ~common]
+                out[b] = (meshes, texs)
+        return out
+
+    def textures_for_mesh(self, mesh_index):
+        """Texture slot indices that can be used with a mesh slot (shared state bits)."""
+        common = self.common_state_bits()
+        m = self.meshes[mesh_index].mesh.state_mask & ~common
+        out = []
+        for i, t in enumerate(self.textures):
+            tm = t.texture.state_mask & ~common
+            if not m or not tm or m & tm:
+                out.append(i)
+        return out
+
+
+class _Reader:
+    def __init__(self, data, pos):
+        self.data = data
+        self.pos = pos
+
+    def unpack(self, fmt):
+        vals = struct.unpack_from('<' + fmt, self.data, self.pos)
+        self.pos += struct.calcsize('<' + fmt)
+        return vals if len(vals) > 1 else vals[0]
+
+    def ints(self, n):
+        vals = list(struct.unpack_from('<%dI' % n, self.data, self.pos))
+        self.pos += 4 * n
+        return vals
+
+    def str(self):
+        if self.data[self.pos] != 0:
+            raise ValueError('bad string marker at 0x%x' % self.pos)
+        n = struct.unpack_from('<I', self.data, self.pos + 1)[0]
+        start = self.pos + 5
+        self.pos = start + 2 * n
+        return self.data[start:self.pos].decode('utf-16-le').rstrip('\0')
+
+    def expect(self, value, what):
+        got = self.unpack('I')
+        if got != value:
+            raise ValueError('%s: expected 0x%x at 0x%x, got 0x%x' % (what, value, self.pos - 4, got))
+
+    def ref(self):
+        self.expect(0x66, 'ref')
+        has_id, one, n = self.unpack('BII')
+        if one != 1 or n > 4:
+            raise ValueError('bad ref at 0x%x' % (self.pos - 9))
+        self.pos += 4 * n
+        if has_id:
+            r = Ref(id=self.unpack('i'))
+        else:
+            r = Ref(path=self.str())
+        r.state_mask, _ = self.unpack('II')
+        return r
+
+
+def _attachment(r, kind):
+    version, has_id = r.unpack('IB')
+    if not 0x67 <= version <= 0x6a:
+        raise ValueError('attachment: bad version 0x%x' % version)
+    rid, path = (r.unpack('i'), '') if has_id else (-1, r.str())
+    to_joint, joint = r.unpack('Ii')
+    shown = r.data[r.pos] != 0
+    state_mask = struct.unpack_from('<I', r.data, r.pos + 13)[0]
+    r.pos += 21
+    offset = r.unpack('8f') if version >= 0x6a else (1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)
+    tag = r.unpack('I')
+    if tag == 0x65:
+        r.pos += 15
+    elif tag != 0x64:
+        raise ValueError('attachment: unknown tail 0x%x at 0x%x' % (tag, r.pos - 4))
+    return Attachment(kind, rid, path, joint if to_joint else -1, offset, shown, state_mask)
+
+
+def parse(data):
+    if data[:8] != b'LIQD0LMD':
+        raise ValueError('not a LIQD0LMD file')
+    version, model_class = struct.unpack_from('<fI', data, 8)
+    nf = HEADER_FIELDS.get(round(version * 10))
+    if nf is None:
+        raise ValueError('unsupported lmd version %.2f' % version)
+    r = _Reader(data, 0x12)
+    counts = r.ints(nf)
+    skeletons = r.ints(counts[1])
+    m = Model(round(version, 2), model_class, counts, skeletons)
+
+    nmesh, nmat, ntex = counts[2:5]
+    if nmesh + nmat + ntex:
+        hit = REF_PATTERN.search(data, r.pos)
+        if not hit:
+            raise ValueError('no mesh/material/texture slots found')
+        r.pos = hit.start()
+        for _ in range(nmesh):
+            ref = r.ref()
+            r.expect(0x64, 'mesh slot')
+            if ref.id >= 0 or not ref.path:
+                m.meshes.append(MeshSlot(ref, r.unpack('i')))
+            else:                                 # mesh by path: weights by path too
+                m.meshes.append(MeshSlot(ref, -1, r.str()))
+        for _ in range(nmat):
+            ref = r.ref()
+            r.expect(0x64, 'material slot')
+            m.materials.append(ref)
+        for _ in range(ntex):
+            ref = r.ref()
+            r.expect(0x65, 'texture slot')
+            n = r.unpack('I')
+            flags = data[r.pos:r.pos + n]
+            r.pos += n
+            m.textures.append(TextureSlot(ref, [i for i, b in enumerate(flags) if b]))
+
+    # attachments: after the (undecoded) animation states; take the first
+    # run of back to back attachment objects of the expected length
+    want = counts[6] + counts[7] if nf > 7 else 0
+    if want:
+        start = r.pos
+        for hit in ATTACH_PATTERN.finditer(data, start):
+            r.pos = hit.start()
+            found = []
+            try:
+                for i in range(want):
+                    found.append(_attachment(r, 'model' if i < counts[6] else 'effect'))
+            except (ValueError, struct.error, UnicodeDecodeError):
+                continue
+            if all(-1 <= a.joint < 1024 for a in found):
+                m.attachments = found
+                break
+        else:
+            m.warnings.append('expected %d attachments, none decoded' % want)
+    return m
+
+
+def load(path):
+    with open(path, 'rb') as f:
+        return parse(f.read())
+
+
+def _ref(ref):
+    return ('0x%x' % ref.id) if ref.id >= 0 else (ref.path or '-')
+
+
+def main(argv):
+    if len(argv) < 2:
+        print(__doc__)
+        return 1
+    for path in argv[1:]:
+        m = load(path)
+        print('%s: v%.1f class %d, skeletons %s, counts %s' % (
+            path, m.version, m.model_class, ['0x%x' % s for s in m.skeletons], m.counts))
+        for i, s in enumerate(m.meshes):
+            print('  mesh %d: %s weight %s states 0x%x textures %s' % (
+                i, _ref(s.mesh), ('0x%x' % s.weight) if s.weight >= 0 else '-',
+                s.mesh.state_mask, m.textures_for_mesh(i)))
+        for i, s in enumerate(m.materials):
+            print('  material %d: %s' % (i, _ref(s)))
+        for i, s in enumerate(m.textures):
+            print('  texture %d: %s channel %s states 0x%x' % (
+                i, _ref(s.texture), s.channels, s.texture.state_mask))
+        for a in m.attachments:
+            print('  attached %s %s joint %d' % (a.kind, ('0x%x' % a.id) if a.id >= 0 else a.path, a.joint))
+        for w in m.warnings:
+            print('  warning:', w)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))

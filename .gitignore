@@ -1,0 +1,11 @@
+# Original game installation and derived game data
+/TLOTR - War of the Ring/
+/extracted/
+/converted/
+
+# Local editor settings and Python caches
+/.claude/
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/

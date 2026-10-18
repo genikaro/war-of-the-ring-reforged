@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model Viewer</title>
+<style>
+  :root { --bg: #20242b; --fg: #d8dde5; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px system-ui, sans-serif; overflow: hidden; }
+  #info { position: absolute; top: 8px; left: 12px; pointer-events: none; }
+  #units { position: absolute; top: 30px; left: 12px; display: none; }
+  #clips { position: absolute; top: 56px; left: 12px; display: none; }
+  #team { position: absolute; top: 82px; left: 12px; display: none; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="info"></div>
+<select id="units"></select>
+<select id="clips"></select>
+<select id="team"></select>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const params = new URLSearchParams(location.search);
+// ?index= points at the index.json written by "lms2gltf.py units"; ?model= overrides the unit.
+const indexUrl = params.get('index') || '../converted/units/index.json';
+const indexDir = indexUrl.slice(0, indexUrl.lastIndexOf('/') + 1);
+const url = params.get('model') || indexDir + 'MODEL_G_ARAGORN.glb';
+const info = document.getElementById('info');
+
+fetch(indexUrl).then(r => r.ok ? r.json() : []).then(entries => {
+  const select = document.getElementById('units');
+  for (const e of entries.filter(e => e.file)) {
+    select.add(new Option(`${e.unit}  (${e.clips.length} clips)`, indexDir + e.file));
+  }
+  if (!select.options.length) return;
+  select.value = url;
+  select.onchange = () => {
+    const next = new URLSearchParams({ index: indexUrl, model: select.value });
+    location.search = next.toString();
+  };
+  select.style.display = 'block';
+}).catch(() => {});
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x20242b);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+sun.position.set(2, 4, 3);
+scene.add(sun);
+
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.01, 100);
+const controls = new OrbitControls(camera, renderer.domElement);
+const clock = new THREE.Clock();
+let mixer = null;
+// ?clip=Name picks a clip, ?t=0.5 freezes it at that fraction of its duration.
+const freeze = params.has('t') ? parseFloat(params.get('t')) : null;
+
+function setupClips(root, clips) {
+  if (!clips.length) return;
+  mixer = new THREE.AnimationMixer(root);
+  const select = document.getElementById('clips');
+  for (const c of clips) select.add(new Option(`${c.name} (${c.duration.toFixed(2)}s)`, c.name));
+  const play = name => {
+    mixer.stopAllAction();
+    const clip = clips.find(c => c.name === name);
+    const action = mixer.clipAction(clip).play();
+    if (freeze !== null) { action.paused = true; action.time = freeze * clip.duration; mixer.update(0); }
+  };
+  const wanted = params.get('clip');
+  select.value = clips.some(c => c.name === wanted) ? wanted : clips[0].name;
+  select.onchange = () => play(select.value);
+  select.style.display = 'block';
+  play(select.value);
+}
+
+// TeamColors.lqr. Team colour parts carry their mask as emissiveMap; the colour is the emissive.
+const TEAM_COLORS = { Red: [185, 0, 0], Green: [83, 179, 0], Blue: [2, 92, 209], Purple: [129, 0, 194],
+  Yellow: [204, 184, 0], Cyan: [0, 152, 163], Orange: [255, 132, 0], Gray: [255, 255, 255], Pink: [255, 166, 255] };
+
+// ?team=Blue picks the colour.
+function setupTeam(root) {
+  const materials = new Set();
+  root.traverse(o => { if (o.isMesh && o.material.emissiveMap) materials.add(o.material); });
+  if (!materials.size) return;
+  const select = document.getElementById('team');
+  for (const name in TEAM_COLORS) select.add(new Option(`Team: ${name}`, name));
+  const apply = name => {
+    const [r, g, b] = TEAM_COLORS[name];
+    for (const m of materials) m.emissive.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
+  };
+  const wanted = params.get('team');
+  select.value = Object.hasOwn(TEAM_COLORS, wanted) ? wanted : 'Red';
+  select.onchange = () => apply(select.value);
+  select.style.display = 'block';
+  apply(select.value);
+}
+
+new GLTFLoader().load(url, gltf => {
+  const root = gltf.scene;
+  scene.add(root);
+  root.traverse(o => { if (o.isSkinnedMesh) o.frustumCulled = false; });
+  setupClips(root, gltf.animations);
+  setupTeam(root);
+  const box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const extent = Math.max(4, Math.ceil(Math.max(size.x, size.z) * 1.5));
+  scene.add(new THREE.GridHelper(extent, extent * 4, 0x556070, 0x3a404a));
+  let tris = 0;
+  root.traverse(o => { if (o.isMesh) tris += o.geometry.index.count / 3; });
+  const yaw = parseFloat(params.get('yaw') || '0') * Math.PI / 180;
+  const dist = Math.max(size.x, size.y, size.z) * 1.8;
+  camera.position.set(center.x + Math.sin(yaw) * dist, center.y + size.y * 0.15, center.z + Math.cos(yaw) * dist);
+  controls.target.copy(center);
+  controls.update();
+  info.textContent = `${url.split('/').pop()}  |  ${tris} triangles  |  ${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)} m`;
+}, undefined, err => { info.textContent = 'Failed to load ' + url + ': ' + err.message; });
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+renderer.setAnimationLoop(() => {
+  const dt = clock.getDelta();
+  if (mixer && freeze === null) mixer.update(dt);
+  controls.update();
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
