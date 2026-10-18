@@ -10,6 +10,7 @@ Python 3.13 + Pillow. Run from this folder.
 | `lsk.py` | `.lsk` skeleton + animation clip parser (v1.0 and v2.0). Format and pose maths in the docstring; verification in `NOTES-legacy-assets.md`. |
 | `lwt.py` | `.lwt` skin weight parser. |
 | `lqr.py`, `lmd.py`, `resolve_model.py` | Database tables (including JSON export), `.lmd` models, and name to file resolution. See `NOTES-database.md`. |
+| `lmd_states.py` | Decoded weighted animation choices, mesh selectors, attachment visibility and property tracks inside `.lmd` models. See `NOTES-animation-states.md`. |
 | `lms2gltf.py` | Export to `.glb`: one unit by name, all units, or hand-picked files. |
 | `viewer.html` | three.js viewer with unit and clip pickers (`?clip=Name`, `?t=0.5` freezes a frame). |
 
@@ -36,6 +37,32 @@ by default. The old manual mode is `lms2gltf.py files` (see its `--help`).
 
 Viewer: serve the repo root (`.claude/launch.json` config `viewer`) and open
 `http://localhost:8765/tools/viewer.html` (config `viewer-alt` serves on 8767 when 8765 is taken).
+
+## Animation states
+
+Inspect state IDs, database names, primary skeleton clip names, mesh selectors,
+attachment masks and timed property keys:
+
+```bash
+python resolve_model.py UNIT_G_HERO_ARAGORN --json --no-recurse
+python resolve_model.py MODEL_E_BEAST_LAIR --json --no-recurse
+python lmd.py "../extracted/Models/Units/Good/Aragorn/G_Aragorn.lmd" --json
+```
+
+The resolver's `animation_states` contains every weighted choice. A choice's
+`mesh_selections` has one value per mesh slot: `-1` disables the mesh; other
+values are retained selectors, whose detailed meaning is still being studied.
+`models.indices` and `effects.indices` contain visible attachment indices,
+each relative to its own attachment kind. `model_tracks` and `effect_tracks`
+contain per-attachment timed keys, including `shown` values and raw flags.
+`animation_state_table` and `default_animation_state` come from `ModelClasses`.
+
+Aragorn's idle state selects the sword in its scabbard, while attack-ready
+selects the drawn sword. The Uruk-hai missile state includes arrow visibility
+changes at 0, 0.285, 0.683 and 1.0 of the clip. Building states select different
+construction, healthy, damaged and ruins meshes. Configuration masks still
+gate gear variants independently. Applying this decoded appearance data to
+the GLB exporter/viewer is the next roadmap task.
 
 ## Database JSON
 
@@ -92,6 +119,8 @@ python -m unittest discover -v
   against joint parents, and the resolver reads joint names through this parser.
 - LWT: all 162 weight files parse. glTF keeps the top 4 influences per vertex.
 - Database: all 154 tables export to JSON (24,468 records); all 2108 models resolve to existing files.
+- LMD: all 2108 models decode sequentially, including 5576 animation states,
+  5998 weighted choices, 411 joint sets and 4788 joint bounds.
 - Units: 83 of 85 export with animation (69 unique models, no warnings). Shelob's model has no mesh of
   its own (only hidden egg attachments); `UNIT_WILD_BUTTERFLY` has no model record.
 - Spot-checked in the viewer: Aragorn, Legolas, Gandalf, Uruk-hai, Elf Knight,
@@ -120,4 +149,5 @@ python -m unittest discover -v
 
 ## Not yet handled
 
-per-clip attachment visibility, animation events, effects (`.lfx`), terrain/levels.
+Applying decoded per-clip appearance in the exporter/viewer, animation event
+payloads, effects (`.lfx`), terrain/levels.

@@ -16,15 +16,20 @@ with a u32 class version (0x64..0x6a). Layout as far as decoded:
              [4] textures, [6] attached models, [7] attached effects; in
              1.7 animated models the last field is the joint count
     u32[c1]  skeleton record ids
-    ...      if c1 > 0: joint sets ("Full Skeleton") and per joint bounds
-             (not decoded, skipped by searching for the first slot)
+    joint sets: f32 2.0, f32 1.0/1.1, u32 n, u32[n] joint indices;
+             inner v1.1 adds str name ("Full Skeleton") and u32[2] flags
+    joint bounds: f32 1.0, f32[4], repeated for the header's joint count
+             joint set count / joint count: fields [12]/[15] in v1.7,
+             [13]/last in v1.4..1.6; neither block exists in v1.2/1.3
     c2 x mesh slot:     ref, u32 state_mask, u32 0, u32 0x64, i32 weight id
                         (str weight path instead if the mesh ref is a path)
     c3 x material slot: ref, u32 state_mask, u32 0, u32 0x64
     c4 x texture slot:  ref, u32 state_mask, u32 0, u32 0x65, u32 n,
                         u8[n] channel flags (one is set: the texture channel,
                         0 diffuse, the team colour mask is usually channel 1)
-    ...      c0 animation states: u32 0x64, u32 state id, ... (not decoded)
+    c0 animation states: u32 0x64, u32 state id, u32 total weight,
+             u32 choice count, u32 flags, weighted choices (lmd_states.py)
+    if c0 > 0: u32 n, i32[n] state-id to record-index lookup (-1 absent)
     c6 + c7 attachments (models first, then effects):
              u32 0x6a, u8 has_id, u32 record id (or str path when has_id is 0),
              u32 attach_to_joint, i32 joint index (into the skeleton, -1 none),
@@ -38,24 +43,23 @@ with a u32 class version (0x64..0x6a). Layout as far as decoded:
     ref:     u32 0x66, u8 has_id, u32 1, u32 n, u32[n] (0 or -1),
              i32 record id, or str file path when has_id is 0
 
-state_mask is a bit set of model states (unit upgrade levels, variations).
-A slot is used in the states whose bits it has; bits shared by every slot
-mean "always". Gondorian swordsmen pick body mesh and texture this way.
+state_mask is a bit set of model configurations (unit upgrade levels,
+variations), separate from the decoded animation-state IDs and visibility
+masks. The configuration bits' gameplay meanings are still under research.
 Joint names come from the skeleton (.lsk), see resolve_model.py.
 
 Usage:
-    python lmd.py <model.lmd> [...]
+    python lmd.py <model.lmd> [...] [--json]
 """
-import re
+import argparse
+import json
 import struct
 import sys
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+
+from lmd_states import read_states
 
 HEADER_FIELDS = {12: 13, 13: 14, 14: 16, 15: 17, 16: 17, 17: 16}  # version * 10
-
-REF_PATTERN = re.compile(re.escape(b'\x66\x00\x00\x00') + b'[\x00\x01]'
-                         + re.escape(b'\x01\x00\x00\x00'))
-ATTACH_PATTERN = re.compile(b'[\x67-\x6a]\x00\x00\x00[\x00\x01]')
 
 
 @dataclass
@@ -100,6 +104,10 @@ class Model:
     textures: list = field(default_factory=list)
     attachments: list = field(default_factory=list)
     warnings: list = field(default_factory=list)
+    joint_sets: list = field(default_factory=list)
+    joint_bounds: list = field(default_factory=list)
+    animation_states: list = field(default_factory=list)
+    state_lookup: list = field(default_factory=list)
 
     def common_state_bits(self):
         masks = [s.mesh.state_mask for s in self.meshes] + [s.texture.state_mask for s in self.textures]
@@ -107,6 +115,13 @@ class Model:
         for m in masks:
             common &= m
         return common if masks else 0
+
+    def animation_state(self, state_id):
+        """Decoded gameplay state by its sparse ID, or None when absent."""
+        if not 0 <= state_id < len(self.state_lookup):
+            return None
+        index = self.state_lookup[state_id]
+        return self.animation_states[index] if index >= 0 else None
 
     def states(self):
         """{state bit: (mesh slot indices, texture slot indices)} for the
@@ -146,21 +161,39 @@ class _Reader:
         self.pos = pos
 
     def unpack(self, fmt):
+        size = struct.calcsize('<' + fmt)
+        if self.pos + size > len(self.data):
+            raise ValueError('truncated model data at 0x%x' % self.pos)
         vals = struct.unpack_from('<' + fmt, self.data, self.pos)
-        self.pos += struct.calcsize('<' + fmt)
-        return vals if len(vals) > 1 else vals[0]
+        self.pos += size
+        return vals[0] if len(vals) == 1 else vals
 
     def ints(self, n):
+        if n > (len(self.data) - self.pos) // 4:
+            raise ValueError('integer array exceeds model data at 0x%x' % self.pos)
         vals = list(struct.unpack_from('<%dI' % n, self.data, self.pos))
         self.pos += 4 * n
         return vals
 
+    def signed(self, n):
+        return [value if value < 0x80000000 else value - (1 << 32) for value in self.ints(n)]
+
+    def count(self):
+        count = self.unpack('I')
+        if count > (len(self.data) - self.pos) // 4:
+            raise ValueError('record count exceeds model data at 0x%x' % (self.pos - 4))
+        return count
+
     def str(self):
-        if self.data[self.pos] != 0:
+        if self.pos + 5 > len(self.data) or self.data[self.pos] != 0:
             raise ValueError('bad string marker at 0x%x' % self.pos)
         n = struct.unpack_from('<I', self.data, self.pos + 1)[0]
         start = self.pos + 5
+        if start + 2 * n > len(self.data):
+            raise ValueError('truncated model string at 0x%x' % self.pos)
         self.pos = start + 2 * n
+        if n and self.data[self.pos - 2:self.pos] != b'\0\0':
+            raise ValueError('unterminated model string at 0x%x' % start)
         return self.data[start:self.pos].decode('utf-16-le').rstrip('\0')
 
     def expect(self, value, what):
@@ -173,7 +206,7 @@ class _Reader:
         has_id, one, n = self.unpack('BII')
         if one != 1 or n > 4:
             raise ValueError('bad ref at 0x%x' % (self.pos - 9))
-        self.pos += 4 * n
+        self.ints(n)
         if has_id:
             r = Ref(id=self.unpack('i'))
         else:
@@ -188,22 +221,21 @@ def _attachment(r, kind):
         raise ValueError('attachment: bad version 0x%x' % version)
     rid, path = (r.unpack('i'), '') if has_id else (-1, r.str())
     to_joint, joint = r.unpack('Ii')
-    shown = r.data[r.pos] != 0
-    state_mask = struct.unpack_from('<I', r.data, r.pos + 13)[0]
-    r.pos += 21
+    shown, _a, _b, _c, state_mask, _d = r.unpack('B4Ii')
     offset = r.unpack('8f') if version >= 0x6a else (1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)
     tag = r.unpack('I')
     if tag == 0x65:
-        r.pos += 15
+        r.unpack('15B')
     elif tag != 0x64:
         raise ValueError('attachment: unknown tail 0x%x at 0x%x' % (tag, r.pos - 4))
-    return Attachment(kind, rid, path, joint if to_joint else -1, offset, shown, state_mask)
+    return Attachment(kind, rid, path, joint if to_joint else -1, offset, bool(shown), state_mask)
 
 
 def parse(data):
     if data[:8] != b'LIQD0LMD':
         raise ValueError('not a LIQD0LMD file')
-    version, model_class = struct.unpack_from('<fI', data, 8)
+    r = _Reader(data, 8)
+    version, model_class = r.unpack('fI')
     nf = HEADER_FIELDS.get(round(version * 10))
     if nf is None:
         raise ValueError('unsupported lmd version %.2f' % version)
@@ -212,12 +244,22 @@ def parse(data):
     skeletons = r.ints(counts[1])
     m = Model(round(version, 2), model_class, counts, skeletons)
 
+    # Header positions changed when the unused legacy field was removed in 1.7.
+    joint_sets = counts[12] if m.version >= 1.7 else counts[13] if m.version >= 1.4 else 0
+    for _ in range(joint_sets):
+        outer, inner = r.unpack('ff')
+        if outer != 2.0 or round(inner, 1) not in (1.0, 1.1):
+            raise ValueError('unsupported joint set version %s/%s' % (outer, inner))
+        joints = r.ints(r.count())
+        name, flags = (r.str(), r.unpack('II')) if inner > 1.05 else ('', (0, 0))
+        m.joint_sets.append({'joints': joints, 'name': name, 'flags': flags})
+    for _ in range(counts[-1] if m.version >= 1.4 else 0):
+        if r.unpack('f') != 1.0:
+            raise ValueError('unsupported joint bounds version')
+        m.joint_bounds.append(r.unpack('4f'))
+
     nmesh, nmat, ntex = counts[2:5]
     if nmesh + nmat + ntex:
-        hit = REF_PATTERN.search(data, r.pos)
-        if not hit:
-            raise ValueError('no mesh/material/texture slots found')
-        r.pos = hit.start()
         for _ in range(nmesh):
             ref = r.ref()
             r.expect(0x64, 'mesh slot')
@@ -233,28 +275,21 @@ def parse(data):
             ref = r.ref()
             r.expect(0x65, 'texture slot')
             n = r.unpack('I')
+            if n > len(data) - r.pos:
+                raise ValueError('texture channel flags exceed model data')
             flags = data[r.pos:r.pos + n]
             r.pos += n
             m.textures.append(TextureSlot(ref, [i for i, b in enumerate(flags) if b]))
 
-    # attachments: after the (undecoded) animation states; take the first
-    # run of back to back attachment objects of the expected length
+    m.animation_states, m.state_lookup = read_states(r, counts[0])
+    # The state lookup ends exactly where attachments begin; no pattern search.
     want = counts[6] + counts[7] if nf > 7 else 0
     if want:
-        start = r.pos
-        for hit in ATTACH_PATTERN.finditer(data, start):
-            r.pos = hit.start()
-            found = []
-            try:
-                for i in range(want):
-                    found.append(_attachment(r, 'model' if i < counts[6] else 'effect'))
-            except (ValueError, struct.error, UnicodeDecodeError):
-                continue
-            if all(-1 <= a.joint < 1024 for a in found):
-                m.attachments = found
-                break
-        else:
-            m.warnings.append('expected %d attachments, none decoded' % want)
+        for i in range(want):
+            item = _attachment(r, 'model' if i < counts[6] else 'effect')
+            if not -1 <= item.joint < 1024:
+                raise ValueError('attachment joint index out of range')
+            m.attachments.append(item)
     return m
 
 
@@ -271,7 +306,15 @@ def main(argv):
     if len(argv) < 2:
         print(__doc__)
         return 1
-    for path in argv[1:]:
+    parser = argparse.ArgumentParser(description='Inspect model resources and decoded animation states.')
+    parser.add_argument('paths', nargs='+', metavar='MODEL.lmd')
+    parser.add_argument('--json', action='store_true', help='include all state choices and property keys as JSON')
+    args = parser.parse_args(argv[1:])
+    if args.json:
+        rows = [{'file': path, **asdict(load(path))} for path in args.paths]
+        print(json.dumps(rows[0] if len(rows) == 1 else rows, ensure_ascii=False, allow_nan=False, indent=2))
+        return 0
+    for path in args.paths:
         m = load(path)
         print('%s: v%.1f class %d, skeletons %s, counts %s' % (
             path, m.version, m.model_class, ['0x%x' % s for s in m.skeletons], m.counts))
@@ -286,6 +329,11 @@ def main(argv):
                 i, _ref(s.texture), s.channels, s.texture.state_mask))
         for a in m.attachments:
             print('  attached %s %s joint %d' % (a.kind, ('0x%x' % a.id) if a.id >= 0 else a.path, a.joint))
+        for state in m.animation_states:
+            print('  animation state %d: %d choices, flags 0x%x' % (state.id, len(state.choices), state.flags))
+            for choice in state.choices:
+                print('    clip %d, weight %d, mesh selections %s, models %s, effects %s' % (
+                    choice.clip, choice.weight, choice.mesh_selections, choice.models.indices, choice.effects.indices))
         for w in m.warnings:
             print('  warning:', w)
     return 0

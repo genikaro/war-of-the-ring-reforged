@@ -8,7 +8,7 @@ records how they were verified and what is still open.
 | Script | Purpose |
 |---|---|
 | `lqr.py` | Reads any `Database/*.lqr` table (records, symbolic names, column schema, references, editor folders) and `Rings.lrp` (table id to name); exports all tables and schema to JSON. |
-| `lmd.py` | Parses `.lmd` models: skeleton ids, mesh / material / texture slots with weights and state masks, attached models and effects with joint index and offset. |
+| `lmd.py`, `lmd_states.py` | Parse `.lmd` models: skeleton IDs, joint sets/bounds, resource slots, animation states and attached models/effects. `lmd.py --json` includes raw choices and keys. |
 | `resolve_model.py` | Model name, unit name, id or `.lmd` path to the files under `extracted/` (`.lsk`, `.lms`, `.lwt`, `.dds`, `.lfx`), recursive over attachments, joint names from the `.lsk`. `--json`, `--validate`. |
 
 ```bash
@@ -77,6 +77,11 @@ Texture paths: `Textures.lqr` stores the source `.tga`; the extracted file is
 - `.lmd`: all 2108 models parse; header counts match the slot lists in every
   file; all 288 models that declare attachments decode them (1879
   attachments: 1876 by id, every id exists in Models or Effects, 3 by path).
+- Animation states: all 5576 state records and 5998 weighted choices decode
+  sequentially and agree with their dense lookup tables. All choice weights
+  sum to their state's total; all primary skeleton clip indices are valid.
+  Existing mesh, material, texture and attachment output matches the earlier
+  parser across all 2108 models. See `NOTES-animation-states.md`.
 - `resolve_model.py --validate`: **2108 of 2108 models resolve fully**, every
   referenced file exists (model, all skeleton slots, meshes, weights, all
   texture slots, attached models recursively, effect `.lfx` files). 2 models
@@ -109,14 +114,11 @@ Texture paths: `Textures.lqr` stores the source `.tga`; the extracted file is
 
 ### .lmd
 
-- Not decoded: the joint set / per joint bounds block after the skeleton ids
-  (skipped by searching for the first slot ref), and the animation state list
-  (header count [0]) between the texture slots and the attachments. The
-  animation states probably carry per state mesh visibility and texture
-  channel binding, which buildings need (construction / healthy / damaged /
-  ruins meshes and damaged texture swaps). Until then, `resolve_model.py`
-  gives every mesh the default diffuse texture (first diffuse slot on the
-  lowest channel) and lists the rest as alternates.
+- The joint sets, per-joint bounds and animation-state list are decoded;
+  slot and attachment searches have been removed. Positive per-mesh selector
+  values and property flags beyond visibility remain uninterpreted. They are
+  preserved in the state inspector; they must not be treated as material-slot
+  indices. The exporter still uses its earlier default texture/gear selection.
 - Texture channel byte: units use 0 = diffuse, 1 = team colour mask, but
   buildings number channels 0..6 (healthy, damaged, mask, black, ruins...).
   Mask detection therefore uses "material is MATERIAL_TEAM_COLOR and the
@@ -137,8 +139,10 @@ Texture paths: `Textures.lqr` stores the source `.tga`; the extracted file is
   understood; version 0x69 and older have no offset (identity assumed).
   Offset order is assumed quaternion w x y z, position, scale (identity is
   1,0,0,0, 0,0,0, 1).
-- Header fields [5] and [8..14] (beyond the counts listed in `lmd.py`) are not
-  identified.
+- Header field [8] counts cloth attachments (the third visibility bitset),
+  [12] counts joint sets in v1.7, and the last field counts joint bounds from
+  v1.4 onward. Joint sets moved from [13] to [12] in v1.7. Event-list payloads
+  and the remaining header fields still need semantic decoding.
 - The `.lms` header flag is not a strict "has weights" marker: 21 parts
   disagree (trees and moss flagged skinned without weights, Uruk-hai head and
   ambient spider the other way round).

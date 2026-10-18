@@ -30,6 +30,7 @@ import json
 import os
 import struct
 import sys
+from dataclasses import asdict
 
 import lmd
 import lqr
@@ -41,6 +42,9 @@ EXTRACTED = os.path.join(ROOT, 'extracted')
 TEAM_COLOR = 'MATERIAL_TEAM_COLOR'
 CLASS_NAMES = {0: 'object', 1: 'unit', 2: 'building', 3: 'ambient creature',
                4: 'interface', 5: 'static', 6: 'ambient'}
+ANIM_STATE_TABLES = {0: 'ObjectAnimStates', 1: 'UnitAnimStates', 2: 'BuildingAnimStates',
+                     3: 'AmbientCreatureAnimStates', 4: 'InterfaceAnimStates',
+                     5: 'StaticAnimStates', 6: 'AmbientAnimStates'}
 
 
 class FileIndex:
@@ -90,6 +94,7 @@ class Resolver:
         self.effects = self.db['Effects']
         self.model_by_file = {r['Filename'].replace('\\', '/').lower(): r for r in self.models}
         self._joints = {}
+        self._clips = {}
 
     # -- single records ------------------------------------------------
     def _entry(self, table, folder, rid, path=''):
@@ -132,6 +137,40 @@ class Resolver:
         if skeleton_file not in self._joints:
             self._joints[skeleton_file] = joint_names(os.path.join(ROOT, skeleton_file))
         return self._joints[skeleton_file]
+
+    def clips(self, skeleton_file):
+        if skeleton_file not in self._clips:
+            try:
+                with open(os.path.join(ROOT, skeleton_file), 'rb') as f:
+                    skeleton = lsk.parse(f.read())
+                self._clips[skeleton_file] = [clip.name for clip in skeleton.clips]
+            except (OSError, ValueError, struct.error):
+                self._clips[skeleton_file] = []
+        return self._clips[skeleton_file]
+
+    def animation_states(self, model, skeleton_file):
+        """Keep raw choices and keys; annotate state IDs and primary clip indices."""
+        table_name, _default = self.animation_class(model.model_class)
+        table = self.db[table_name] if table_name and table_name.lower() in self.db.files else None
+        clips = self.clips(skeleton_file) if skeleton_file else []
+        states = []
+        for state in model.animation_states:
+            entry = asdict(state)
+            record = table.get(state.id) if table is not None else None
+            entry['name'] = record.name if record else None
+            for choice in entry['choices']:
+                clip = choice['clip']
+                choice['clip_name'] = clips[clip] if 0 <= clip < len(clips) else None
+            states.append(entry)
+        return states
+
+    def animation_class(self, model_class):
+        """Use the shipped class metadata, including its declared default state."""
+        if 'modelclasses' in self.db.files:
+            record = self.db['ModelClasses'].get(model_class)
+            if record is not None:
+                return record['AnimationStateTable'], record['DefaultAnimState']
+        return ANIM_STATE_TABLES.get(model_class), None
 
     # -- models --------------------------------------------------------
     def model_by_path(self, path):
@@ -213,6 +252,8 @@ class Resolver:
             out['states'] = {b: {'meshes': ms, 'textures': ts} for b, (ms, ts) in states.items()}
 
         skel_file = out['skeletons'][0]['file'] if out['skeletons'] and out['skeletons'][0] else None
+        out['animation_state_table'], out['default_animation_state'] = self.animation_class(m.model_class)
+        out['animation_states'] = self.animation_states(m, skel_file)
         names = self.joints(skel_file) if skel_file else None
         out['attachments'] = []
         for a in m.attachments:
@@ -306,6 +347,13 @@ def print_model(res, indent=''):
         else:
             print('%sattached at %s:' % (ind, where.strip()))
             print_model(a['model'], ind + '  ')
+    for state in res.get('animation_states', []):
+        print('%sanimation state %d %s:' % (ind, state['id'], state['name'] or ''))
+        for choice in state['choices']:
+            active_meshes = [i for i, selection in enumerate(choice['mesh_selections']) if selection >= 0]
+            print('%s  %s, weight %d, meshes %s, models %s' % (
+                ind, choice['clip_name'] or 'clip %d' % choice['clip'], choice['weight'],
+                active_meshes, choice['models']['indices']))
     for w in res.get('warnings', []):
         print('%swarning: %s' % (ind, w))
 

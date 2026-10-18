@@ -28,7 +28,7 @@ Only the engine choice blocks progress, and only from Phase 3 on; Phases 1 and 2
 **Gate:** every unit and building exports with correct team colour and the right gear in each clip, matched against in-game screenshots.
 
 - [x] Apply team colour: additive and unlit, texture × light + mask × team colour (decoded from Team Color.lmt), using the `*_Mask.dds` (744 parts); exported as glTF emissive, the viewer has a team colour picker
-- [ ] Decode the `.lmd` animation state list, to get per-clip attachment visibility (sword drawn or sheathed) and building states (construction, healthy, damaged, ruins)
+- [x] Decode the `.lmd` animation state list, to get per-clip attachment visibility (sword drawn or sheathed) and building states (construction, healthy, damaged, ruins) — 5576 states / 5998 weighted choices in all 2108 models; resolver exposes named states, clips, mesh selectors and attachment timelines; see `NOTES-animation-states.md`
 - [ ] Replace the inferred default-gear rules with the decoded ones
 - [x] Parse v1.0 skeletons (83 files, 15 units incl. Merry and Pippin) and the one v1.0 mesh — all 247 skeletons and 2395 meshes parse; Merry and Pippin export with 19 clips each; see `NOTES-legacy-assets.md`
 - [ ] Export buildings: models with several state meshes and damaged texture swaps
