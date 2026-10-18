@@ -92,6 +92,30 @@ default state; independent nested clip playback is pending. Effects, cloth,
 unknown property parameters and gameplay flag operations are not rendered.
 See `NOTES-model-appearance.md` for the metadata contract and preview policy.
 
+## Level inventory
+
+Inventory the extracted levels or read `Levels.H2O` directly, without changing
+the game install:
+
+```bash
+python wor.py inventory --out-dir ../converted/levels --previews
+python wor.py inspect "../extracted/Levels/Helms Deep.wor"
+python wor.py inventory "../TLOTR - War of the Ring/Archives/Levels.H2O" --out-dir ../converted/levels-from-archive
+```
+
+All 54 `.wor` containers have metadata, a 128×128 minimap, a compressed terrain
+grid and an interned name pool. The inspector verifies terrain sizes and CRCs
+and writes `index.json` plus per-map JSON under `maps/`. `--previews` adds PNGs
+under `minimaps/` and `heights/`; elevation previews are normalized grayscale,
+while the Python API retains the float heights. Archive input also verifies
+H2O entry CRCs. Invalid maps are reported individually and cause a failing exit.
+
+The JSON includes byte ranges and the complete indexed name pool. Opaque
+terrain/environment and world-record ranges are marked explicitly. Waypoint
+prefixes are naming hints; positions, typed objects, terrain layers, water and
+passability are still to be decoded. See `NOTES-levels.md` for evidence and the
+editor guide's level terminology.
+
 ## Database JSON
 
 Export every database table, including its schema, for use by game-rule code:
@@ -154,6 +178,9 @@ node --test test-model-appearance.mjs
   Barad-dur models stop at their undecoded cloth simulation records).
 - Buildings: 41 of 41 export (40 unique models, 36 with texture keys). One
   warning: two Dark Foundry ore parts name an attach joint their skeleton lacks.
+- Levels: 54 of 54 inventoried with verified terrain CRCs, 5,208,066 elevation
+  samples and 64,639 interned names. Texture layers and placed world records
+  remain opaque; the editor guide's concepts are summarized in `NOTES-levels.md`.
 - Units: 84 of 85 export with animation (69 unique models, no warnings). Shelob now
   includes her body and 27 leg/head parts; only `UNIT_WILD_BUTTERFLY` lacks a model record.
 - Spot-checked in the viewer: Aragorn, Legolas, Gandalf, Uruk-hai, Elf Knight,
@@ -183,5 +210,6 @@ node --test test-model-appearance.mjs
 
 ## Not yet handled
 
-Building texture swaps, animation event payloads, effects (`.lfx`), cloth,
-independent nested-model animation, full gameplay flag operations, terrain/levels.
+Effects (`.lfx`), cloth, unnamed animation-event types, independent nested-model
+animation, full gameplay flag operations, terrain layers/decals, object placement,
+water, passability and map scene export.

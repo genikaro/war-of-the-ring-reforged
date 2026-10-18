@@ -40,8 +40,8 @@ Only the engine choice blocks progress, and only from Phase 3 on; Phases 1 and 2
 
 **Gate:** one campaign map (Helm's Deep is a good first target) renders in the viewer with terrain, textures, every placed object and water.
 
-- [ ] Map the contents of `Levels.H2O` (54 files, 102 MB unpacked): which files are heightmaps, texture layers, object placement, markers and script waypoints
-- [ ] Read the shipped `RingsEditor.chm` for the level concepts and terminology
+- [x] Map the contents of `Levels.H2O` (54 files, 102 MB unpacked): all are `.wor` containers with embedded terrain and world records; `wor.py` inventories metadata, CRC-checked elevation grids, interned names and opaque ranges, with minimap/elevation previews; 54/54 maps, 64,639 names; texture layers and placement payloads remain the following tasks; see `NOTES-levels.md`
+- [x] Read the shipped `RingsEditor.chm` for the level concepts and terminology — terrain palettes/vertex colour, separate walker/building passability, walkable meshes, painted lakes, placeables, markers, camera margins, lights and sound lines summarized in `NOTES-levels.md`
 - [ ] Decode the terrain: heightmap, texture blending (`TerrainSets.H2O`, `TerrainSets.lqr`, `TerrainCompositions.lqr`), decals
 - [ ] Decode object placement and link each placed object to its model through the resolver
 - [ ] Decode pathing data (`MeshPathLookups.H2O`, walkable meshes, `PathingCategories.lqr`)
