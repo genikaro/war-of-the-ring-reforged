@@ -7,7 +7,7 @@ records how they were verified and what is still open.
 
 | Script | Purpose |
 |---|---|
-| `lqr.py` | Reads any `Database/*.lqr` table (records, symbolic names, column schema, references, editor folders) and `Rings.lrp` (table id to name). |
+| `lqr.py` | Reads any `Database/*.lqr` table (records, symbolic names, column schema, references, editor folders) and `Rings.lrp` (table id to name); exports all tables and schema to JSON. |
 | `lmd.py` | Parses `.lmd` models: skeleton ids, mesh / material / texture slots with weights and state masks, attached models and effects with joint index and offset. |
 | `resolve_model.py` | Model name, unit name, id or `.lmd` path to the files under `extracted/` (`.lsk`, `.lms`, `.lwt`, `.dds`, `.lfx`), recursive over attachments, joint names from the `.lsk`. `--json`, `--validate`. |
 
@@ -18,6 +18,14 @@ python lqr.py schema Units
 ```bash
 python lqr.py show Units UNIT_G_HERO_ARAGORN
 ```
+
+```bash
+python lqr.py export --out-dir ../converted/database
+```
+
+The JSON format and reference lookup are documented in `README.md`, under
+"Database JSON". Raw IDs and values are preserved; enum labels and reference
+targets live in the column schema rather than replacing record values.
 
 ```bash
 python resolve_model.py UNIT_G_HERO_ARAGORN
@@ -61,6 +69,11 @@ Texture paths: `Textures.lqr` stores the source `.tga`; the extracted file is
 - `.lqr`: all 154 tables parse to the exact byte (record block ends at the
   name block offset, editor block ends at the string table offset);
   `lqr.py list` and `schema` run on every table.
+- JSON export: 154 tables, 24,468 records and 1,466 columns. All exported record
+  IDs, names, folders and values, plus column types, defaults, references and
+  enum labels, round-trip against the parsed source. Repeat exports are byte
+  identical. Synthetic regression tests cover sparse IDs, metadata collisions,
+  UTF-8, absent project metadata, invalid input and interrupted file replacement.
 - `.lmd`: all 2108 models parse; header counts match the slot lists in every
   file; all 288 models that declare attachments decode them (1879
   attachments: 1876 by id, every id exists in Models or Effects, 3 by path).

@@ -9,7 +9,7 @@ Python 3.13 + Pillow. Run from this folder.
 | `lms.py` | `.lms` mesh parser (v1.1 and v2.0). Format notes in the module docstring. |
 | `lsk.py` | `.lsk` skeleton + animation clip parser (v2.0). Format and pose maths in the docstring. |
 | `lwt.py` | `.lwt` skin weight parser. |
-| `lqr.py`, `lmd.py`, `resolve_model.py` | Database tables, `.lmd` models, and name to file resolution. See `NOTES-database.md`. |
+| `lqr.py`, `lmd.py`, `resolve_model.py` | Database tables (including JSON export), `.lmd` models, and name to file resolution. See `NOTES-database.md`. |
 | `lms2gltf.py` | Export to `.glb`: one unit by name, all units, or hand-picked files. |
 | `viewer.html` | three.js viewer with unit and clip pickers (`?clip=Name`, `?t=0.5` freezes a frame). |
 
@@ -37,6 +37,45 @@ by default. The old manual mode is `lms2gltf.py files` (see its `--help`).
 Viewer: serve the repo root (`.claude/launch.json` config `viewer`) and open
 `http://localhost:8765/tools/viewer.html` (config `viewer-alt` serves on 8767 when 8765 is taken).
 
+## Database JSON
+
+Export every database table, including its schema, for use by game-rule code:
+
+```bash
+python lqr.py export --out-dir ../converted/database
+```
+
+Use `--db "/path/to/game/Database"` for another install. The output directory
+must be outside the source Database directory. This install exports 154 table
+files (24,468 records), plus `index.json` mapping table IDs to JSON filenames.
+
+Each table contains `format_version` (currently 1), `table_id`, `name` (the
+internal name, e.g. `Unit`), `prefix`, `source`, `columns` and `records`.
+The filename keeps the original table filename's stem, e.g. `Units.json`.
+Records keep sparse IDs, symbolic names and editor folders, with game fields
+nested under `values` so they cannot overwrite record metadata:
+
+```json
+{"id": 16, "name": "UNIT_G_HERO_ARAGORN", "folder": "Root\\\\Good Units\\\\Hero", "values": {"Model": 321, "MaxHealth": 485}}
+```
+
+That example shows only two of Aragorn's fields. All fields are exported.
+Column schema includes types (`int`, `float`, `string`, `id`, `filename`),
+defaults, descriptions, file extensions and editor groups. `kind` is 0 for
+plain values, 1 for references, and 2 for enums. Reference columns include
+`reference: {"table_id": 3, "table": "Models"}`; enum columns include a list
+of `{value, label}` pairs. Values remain the original numbers, including `-1`
+sentinels. Follow a reference through `index.json` and match the target record's
+`id`, rather than using its array position. Without `Rings.lrp`, table IDs and
+referenced table names are `null`; the column's reference table ID is retained.
+
+Files are UTF-8, strict JSON, and deterministic for unchanged source data.
+Run exporter regression tests without game assets or additional dependencies:
+
+```bash
+python -m unittest -v test_lqr_export
+```
+
 ## Status
 
 - H2O: all 23 archives extract, every CRC verified. Stored entries are plain files
@@ -45,7 +84,7 @@ Viewer: serve the repo root (`.claude/launch.json` config `viewer`) and open
 - LSK: all 164 v2.0 skeletons parse to the exact byte. 83 v1.0 files (mostly static
   buildings/objects) are not handled, so Merry and Pippin export static.
 - LWT: all 162 weight files parse. glTF keeps the top 4 influences per vertex.
-- Database: all 2108 models resolve to existing files.
+- Database: all 154 tables export to JSON (24,468 records); all 2108 models resolve to existing files.
 - Units: 83 of 85 export (69 unique models, 26 MB). Shelob's model has no mesh of
   its own (only hidden egg attachments); `UNIT_WILD_BUTTERFLY` has no model record.
 - Spot-checked in the viewer: Aragorn, Legolas, Gandalf, Uruk-hai, Elf Knight,

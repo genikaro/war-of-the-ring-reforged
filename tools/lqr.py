@@ -56,11 +56,14 @@ Usage:
     python lqr.py schema <table.lqr|name>
     python lqr.py list <table.lqr|name> [--grep TEXT] [--json]
     python lqr.py show <table.lqr|name> <id|SYMBOLIC_NAME>
+    python lqr.py export --out-dir <dir> [--db <Database dir>]
 """
+import argparse
 import json
 import os
 import struct
 import sys
+import tempfile
 from dataclasses import dataclass, field
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -276,6 +279,91 @@ class Database:
         return value
 
 
+def table_to_dict(table, table_id=None, table_ids=None):
+    """JSON-ready table with raw values and enough schema to follow references.
+
+    Values stay nested so columns named id, name or folder cannot overwrite
+    record metadata. References and enums retain their original integer values.
+    """
+    table_ids = table_ids or {}
+    columns = []
+    for col in table.columns:
+        column = {'name': col.name, 'type': TYPE_NAMES[col.type],
+                  'kind': col.kind, 'default': col.default,
+                  'description': col.description, 'file_ext': col.file_ext,
+                  'group': col.group}
+        if col.kind == 1:
+            column['reference'] = {'table_id': col.ref_table,
+                                   'table': table_ids.get(col.ref_table)}
+        if col.enum:
+            column['enum'] = [{'value': value, 'label': label}
+                              for value, label in sorted(col.enum.items())]
+        columns.append(column)
+    return {'format_version': 1, 'table_id': table_id, 'name': table.name,
+            'prefix': table.prefix, 'source': os.path.basename(table.path),
+            'columns': columns,
+            'records': [{'id': rec.id, 'name': rec.name, 'folder': rec.folder,
+                         'values': rec.values.copy()} for rec in table]}
+
+
+def _write_export(path, text):
+    """Replace a JSON file only after its complete contents have been written."""
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', newline='\n',
+                                         dir=os.path.dirname(path),
+                                         prefix='.lqr-', suffix='.tmp',
+                                         delete=False) as f:
+            temporary = f.name
+            f.write(text)
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None and os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def export_database(db, out_dir):
+    """Export every .lqr plus index.json; return the index as a plain dict.
+
+    Parse and serialize all tables before writing anything. Invalid input or
+    non-JSON numeric values therefore leave an existing export untouched.
+    """
+    source = os.path.normcase(os.path.realpath(db.path))
+    destination = os.path.normcase(os.path.realpath(out_dir))
+    # commonpath raises ValueError for paths on different Windows drives.
+    try:
+        inside_source = os.path.commonpath([source, destination]) == source
+    except ValueError:
+        inside_source = False
+    if inside_source:
+        raise ValueError('output directory must be outside the source Database directory')
+    if not db.files:
+        raise ValueError('no .lqr tables found in %s' % db.path)
+
+    ids = {name.lower(): rid for rid, name in db.table_ids.items()}
+    files = []
+    manifest = {'format_version': 1, 'record_count': 0, 'tables': []}
+    for key in sorted(db.files):
+        table = db[key]
+        stem = os.path.splitext(os.path.basename(table.path))[0]
+        if stem.lower() == 'index':
+            raise ValueError('Index.lqr conflicts with the export index.json')
+        filename = stem + '.json'
+        payload = table_to_dict(table, ids.get(key), db.table_ids)
+        files.append((filename, json.dumps(payload, ensure_ascii=False,
+                                           allow_nan=False, indent=2) + '\n'))
+        manifest['tables'].append({'id': ids.get(key), 'name': stem,
+                                   'file': filename, 'record_count': len(table),
+                                   'column_count': len(table.columns)})
+        manifest['record_count'] += len(table)
+    files.append(('index.json', json.dumps(manifest, ensure_ascii=False,
+                                           allow_nan=False, indent=2) + '\n'))
+    os.makedirs(out_dir, exist_ok=True)
+    for filename, contents in files:
+        _write_export(os.path.join(out_dir, filename), contents)
+    return manifest
+
+
 def _open(arg):
     if os.path.isfile(arg):
         db = Database(os.path.dirname(os.path.abspath(arg)))
@@ -296,7 +384,22 @@ def main(argv):
         print(__doc__)
         return 1
     cmd = argv[1]
-    if cmd == 'tables':
+    if cmd == 'export':
+        parser = argparse.ArgumentParser(prog='%s export' % argv[0],
+                                         description='Export all .lqr tables and their schema to JSON.')
+        parser.add_argument('--db', default=DEFAULT_DB, metavar='DIR',
+                            help='source Database directory (default: the local game install)')
+        parser.add_argument('--out-dir', required=True, metavar='DIR',
+                            help='destination directory, outside the source Database')
+        args = parser.parse_args(argv[2:])
+        try:
+            manifest = export_database(Database(args.db), args.out_dir)
+        except (OSError, ValueError, KeyError, IndexError, struct.error) as e:
+            print('export failed: %s' % e, file=sys.stderr)
+            return 1
+        print('Exported %d tables, %d records to %s' % (
+            len(manifest['tables']), manifest['record_count'], os.path.abspath(args.out_dir)))
+    elif cmd == 'tables':
         db = Database(argv[2] if len(argv) > 2 else DEFAULT_DB)
         names = {v.lower(): k for k, v in db.table_ids.items()}
         for key in sorted(db.files):
