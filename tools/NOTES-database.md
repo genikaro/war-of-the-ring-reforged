@@ -142,5 +142,6 @@ Texture paths: `Textures.lqr` stores the source `.tga`; the extracted file is
 - The `.lms` header flag is not a strict "has weights" marker: 21 parts
   disagree (trees and moss flagged skinned without weights, Uruk-hai head and
   ambient spider the other way round).
-- `.lsk` 1.0 joint names are read heuristically by `resolve_model.py`
-  (exact for 2.0).
+- `.lsk` 1.0 and 2.0 joint names now come from `lsk.parse`, including the
+  decoded legacy child-index block. No heuristic string scan is needed; see
+  `NOTES-legacy-assets.md` for the layout and validation.

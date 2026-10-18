@@ -6,8 +6,8 @@ Python 3.13 + Pillow. Run from this folder.
 |---|---|
 | `h2o.py` | List/extract Liquid Entertainment `.H2O` archives (v6). Format notes in the module docstring. |
 | `blast.py` | PKWARE DCL "implode" decompressor used by H2O. |
-| `lms.py` | `.lms` mesh parser (v1.1 and v2.0). Format notes in the module docstring. |
-| `lsk.py` | `.lsk` skeleton + animation clip parser (v2.0). Format and pose maths in the docstring. |
+| `lms.py` | `.lms` mesh parser (v1.0, v1.1 and v2.0). Format notes in the module docstring. |
+| `lsk.py` | `.lsk` skeleton + animation clip parser (v1.0 and v2.0). Format and pose maths in the docstring; verification in `NOTES-legacy-assets.md`. |
 | `lwt.py` | `.lwt` skin weight parser. |
 | `lqr.py`, `lmd.py`, `resolve_model.py` | Database tables (including JSON export), `.lmd` models, and name to file resolution. See `NOTES-database.md`. |
 | `lms2gltf.py` | Export to `.glb`: one unit by name, all units, or hand-picked files. |
@@ -76,16 +76,23 @@ Run exporter regression tests without game assets or additional dependencies:
 python -m unittest -v test_lqr_export
 ```
 
+Run all parser and exporter regression tests (synthetic fixtures, no game assets):
+
+```bash
+python -m unittest discover -v
+```
+
 ## Status
 
 - H2O: all 23 archives extract, every CRC verified. Stored entries are plain files
   (`.dds` textures, Ogg Vorbis speech/music, WAV effects, Bink `.bik` movies).
-- LMS: 2394 of 2395 meshes parse (one v1.0 tree is left).
-- LSK: all 164 v2.0 skeletons parse to the exact byte. 83 v1.0 files (mostly static
-  buildings/objects) are not handled, so Merry and Pippin export static.
+- LMS: all 2395 meshes parse, including the v1.0 Grasslands Tree 02.
+- LSK: all 247 skeletons parse to the exact byte (164 v2.0, 83 v1.0).
+  Merry and Pippin now export with 19 clips each. Legacy child lists are checked
+  against joint parents, and the resolver reads joint names through this parser.
 - LWT: all 162 weight files parse. glTF keeps the top 4 influences per vertex.
 - Database: all 154 tables export to JSON (24,468 records); all 2108 models resolve to existing files.
-- Units: 83 of 85 export (69 unique models, 26 MB). Shelob's model has no mesh of
+- Units: 83 of 85 export with animation (69 unique models, no warnings). Shelob's model has no mesh of
   its own (only hidden egg attachments); `UNIT_WILD_BUTTERFLY` has no model record.
 - Spot-checked in the viewer: Aragorn, Legolas, Gandalf, Uruk-hai, Elf Knight,
   Troll Bonecleaver, Rohan Rider, Witch-king, Frodo, Balrog.
@@ -113,5 +120,4 @@ python -m unittest -v test_lqr_export
 
 ## Not yet handled
 
-v1.0 skeletons,
 per-clip attachment visibility, animation events, effects (`.lfx`), terrain/levels.

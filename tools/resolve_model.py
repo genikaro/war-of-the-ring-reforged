@@ -33,6 +33,7 @@ import sys
 
 import lmd
 import lqr
+import lsk
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, '..'))
@@ -68,27 +69,11 @@ class FileIndex:
 
 
 def joint_names(path):
-    """Joint names of an .lsk skeleton (exact for v2.0, heuristic otherwise)."""
+    """Joint names from the v1.0/v2.0 parser, or None for an invalid file."""
     try:
         with open(path, 'rb') as f:
-            d = f.read()
-        version, count = struct.unpack_from('<fI', d, 8)
-        p = 20 + 48 * count
-        names = []
-        exact = abs(version - 2.0) < 1e-3
-        while len(names) < count and p < len(d) - 5:
-            n = struct.unpack_from('<I', d, p + 1)[0]
-            raw = d[p + 5:p + 5 + 2 * n] if d[p] == 0 and 1 < n < 128 else b''
-            text = raw.decode('utf-16-le', 'replace').rstrip('\0')
-            if raw and text.isprintable() and raw[-2:] == b'\0\0':
-                names.append(text)
-                p += 5 + 2 * n + (16 if exact else 0)
-            elif exact:
-                return None
-            else:
-                p += 1
-        return names if len(names) == count else None
-    except (OSError, struct.error):
+            return [joint.name for joint in lsk.parse(f.read()).joints]
+    except (OSError, ValueError, struct.error):
         return None
 
 

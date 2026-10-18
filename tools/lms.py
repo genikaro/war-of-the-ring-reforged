@@ -1,8 +1,8 @@
-"""Parser for Liquid Entertainment .lms meshes (LIQD0LMS, versions 1.1 and 2.0).
+"""Parser for Liquid Entertainment .lms meshes (LIQD0LMS, versions 1.0, 1.1 and 2.0).
 
 Layout (little endian), as reverse engineered from War of the Ring files:
     char[8]  "LIQD0LMS"
-    f32      version (1.1 or 2.0)
+    f32      version (1.0, 1.1 or 2.0)
     u32      1
     u32      triangle_count (T)
     u32      vertex_count (V)       render vertices referenced by triangles
@@ -12,7 +12,7 @@ Layout (little endian), as reverse engineered from War of the Ring files:
     str      attach joint name      u32 char count incl. NUL, UTF-16LE
     u32      position_count (P), normal_count (N), group_count (G), 0
     v2.0:    u32[n] uv count per channel (0 = unused)
-    v1.1:    u32[4] 0, then n x (u32 uv count, u32 0)
+    v1.0/1.1: u32[4] 0, then n x (u32 uv count, u32 0)
     f32[P][4] positions (w = 1)
     f32[N][4] normals (w = 1)
     i32      -1
@@ -72,7 +72,7 @@ def parse(data):
     r.p = 8
     version, _one, tris, verts, flags = r.take('fIIII')
     version = round(version, 2)
-    if version not in (1.1, 2.0):
+    if version not in (1.0, 1.1, 2.0):
         raise ValueError('unsupported LMS version %s' % version)
     skinned = flags & 1
     n = r.u32()
