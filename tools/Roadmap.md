@@ -33,7 +33,7 @@ Only the engine choice blocks progress, and only from Phase 3 on; Phases 1 and 2
 - [x] Parse v1.0 skeletons (83 files, 15 units incl. Merry and Pippin) and the one v1.0 mesh — all 247 skeletons and 2395 meshes parse; Merry and Pippin export with 21 and 19 clips respectively, including static poses; see `NOTES-legacy-assets.md`
 - [x] Export buildings: models with several state meshes and damaged texture swaps. Done: `lms2gltf.py buildings` exports 41/41; the choice's second key group turned out to be per-stage texture selection (construction, healthy, damaged, ruins; ruins drop team colour), applied in the GLB default scene and the viewer; see "Texture keys" in `NOTES-animation-states.md`
 - [ ] Decode effects (`Effects.H2O`, 405 `.lfx`), projectiles, UV animations (`UVAs.H2O`, `TextureAnimations.H2O`) and cloth (`Cloths.H2O`)
-- [ ] Find where clip events live (footsteps, hit frames, voice cues); candidates are the `SoundEvents` and `SpeechFXEvents` tables and the `.lmd` state list
+- [x] Find where clip events live (footsteps, hit frames, voice cues); candidates are the `SoundEvents` and `SpeechFXEvents` tables and the `.lmd` state list. Done: a per-model event table after the attachments, referenced by each choice's event indices; 1936 events in 122 models decode, with footstep joints, melee hit joints, SoundEvents, SpeechFX voice types, effects, projectiles and attachment show/hide named; see "Clip events" in `NOTES-animation-states.md`
 - [x] Export the database tables to JSON (one file per table) as the data source for later phases — `lqr.py export --out-dir ../converted/database`; 154 tables, 24,468 records, schema and reference index included
 
 ## Phase 2: maps and terrain

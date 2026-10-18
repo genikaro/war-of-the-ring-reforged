@@ -164,6 +164,25 @@ class Resolver:
             states.append(entry)
         return states
 
+    def event_names(self, event, joint_names, model):
+        """Clip event plus `<field>_name` for its joint, attachment and table references."""
+        out = dict(event)
+        tables = {'sound': 'SoundEvents', 'speech': 'SpeechFXEventTypes',
+                  'effect': 'Effects', 'projectile': 'Projectiles'}
+        for field, table in tables.items():
+            if field in event and table.lower() in self.db.files:
+                record = self.db[table].get(event[field])
+                out[field + '_name'] = record.name if record else None
+        if 'joint' in event:
+            j = event['joint']
+            out['joint_name'] = joint_names[j] if joint_names and 0 <= j < len(joint_names) else None
+        if 'attachment' in event:
+            models = [a for a in model.attachments if a.kind == 'model']
+            a = event['attachment']
+            record = self.models.get(models[a].id) if 0 <= a < len(models) else None
+            out['attachment_name'] = record.name if record else None
+        return out
+
     def animation_class(self, model_class):
         """Use the shipped class metadata, including its declared default state."""
         if 'modelclasses' in self.db.files:
@@ -276,6 +295,8 @@ class Resolver:
                                      'file': self.index.show(found) if found else
                                      'extracted/Models/' + sub['Filename'].replace('\\', '/')}
             out['attachments'].append(item)
+        out['secondary_events'] = m.secondary_events
+        out['events'] = None if m.events is None else [self.event_names(e, names, m) for e in m.events]
         if m.warnings:
             out['warnings'] = m.warnings
         return out

@@ -39,6 +39,16 @@ with a u32 class version (0x64..0x6a). Layout as far as decoded:
              i32, f32[8] offset (quaternion w x y z,
              position x y z, scale), then u32 0x65 + 15 bytes (models)
              or u32 0x64 (effects)
+    c8 cloth attachments: as above, tail u32 0x65 + u32 or u32 0x64
+    bounding boxes: u32 0x64, u32 n, u32[n] boxes per BBoxes.lqr layer,
+             each u32 0x65, u32 attach_to_joint, i32 joint, u8, f32[12]
+    cloth simulation records (header [13] in 1.7, [14] in 1.4..1.6) and
+             their mesh slots: not decoded; when present, events stay unread
+    c10 secondary events: u32 0x64, u32 value, f32 time
+    c11 clip events: u32 1, u32 type, f32 time (0..1 of the clip),
+             u32 size, u32 offset, u8 gameplay, u8 presentation
+    u8[c9]   event payloads; each starts with u32 type (see EVENT_TYPES)
+    ...      a final block (reader 0x5ed201), not decoded
 
     ref:     u32 0x66, u8 has_id, u32 1, u32 n, u32[n] (0 or -1),
              i32 record id, or str file path when has_id is 0
@@ -109,6 +119,12 @@ class Model:
     joint_bounds: list = field(default_factory=list)
     animation_states: list = field(default_factory=list)
     state_lookup: list = field(default_factory=list)
+    cloths: list = field(default_factory=list)            # cloth attachments, header count [8]
+    bounding_boxes: list = field(default_factory=list)
+    # Clip events (choice event_indices / secondary_event_indices point here).
+    # None when an undecoded cloth simulation block precedes them.
+    secondary_events: list = field(default_factory=list)
+    events: list = field(default_factory=list)
 
     def common_state_bits(self):
         masks = [s.mesh.state_mask for s in self.meshes] + [s.texture.state_mask for s in self.textures]
@@ -226,10 +242,88 @@ def _attachment(r, kind):
     offset = r.unpack('8f') if version >= 0x6a else (1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)
     tag = r.unpack('I')
     if tag == 0x65:
-        r.unpack('15B')
+        r.unpack('I' if kind == 'cloth' else '15B')
     elif tag != 0x64:
         raise ValueError('attachment: unknown tail 0x%x at 0x%x' % (tag, r.pos - 4))
     return Attachment(kind, rid, path, joint if to_joint else -1, offset, bool(shown), state_mask)
+
+
+# Clip event types identified from their payloads and the states that use
+# them: type -> (name, payload fields after the leading type word). Payload
+# references: joint = skeleton joint index, attachment = model-attachment index,
+# sound = SoundEvents.lqr, speech = SpeechFXEventTypes.lqr, effect = Effects.lqr,
+# projectile = Projectiles.lqr. Other types keep their raw payload.
+EVENT_TYPES = {
+    0: ('show_attachment', ('attachment',)),     # pick up a sack, draw a sword
+    1: ('hide_attachment', ('attachment',)),     # put down, throw the rock
+    4: ('melee_hit', ('damage_scale', 'joint')),
+    6: ('footstep', ('joint',)),
+    9: ('sound', ('sound',)),
+    13: ('missile_release', ('joint',)),
+    26: ('sound', ('sound',)),
+    27: ('speech', ('speech',)),                 # voice cue: attack yell, idle
+    34: ('projectile', ('joint', 'projectile')),
+    44: ('effect_at_joint', ('effect', 'joint')),
+    45: ('effect', ('effect',)),
+}
+_EVENT_FORMATS = {'damage_scale': 'f'}
+
+
+def _event(kind, payload):
+    name, fields = EVENT_TYPES.get(kind, (None, ()))
+    fmt = '<' + ''.join(_EVENT_FORMATS.get(f, 'i') for f in fields)
+    event = {'type': kind, 'name': name}
+    if fields and len(payload) >= struct.calcsize(fmt):
+        event.update(zip(fields, struct.unpack_from(fmt, payload)))
+        payload = payload[struct.calcsize(fmt):]
+    if payload:
+        event['raw'] = payload.hex()
+    return event
+
+
+def _bounding_boxes(r):
+    """Per BBoxes.lqr layer (main collision, selection, visual, ...): boxes."""
+    r.expect(0x64, 'bounding boxes')
+    boxes = []
+    for layer, count in enumerate(r.ints(r.count())):
+        for _ in range(count):
+            r.expect(0x65, 'bounding box')
+            to_joint, joint, flag = r.unpack('IiB')
+            boxes.append({'layer': layer, 'joint': joint if to_joint else -1, 'flag': flag,
+                          'vectors': list(r.unpack('12f'))})   # three vec4, meaning not checked
+    return boxes
+
+
+def _trailer(r, m):
+    """Blocks after the attachments, in the order of the Rings.exe loader (0x5ec642):
+    cloth attachments, bounding boxes (0x5c7db5), cloth simulation records
+    (0x5eb75f, header [13] in 1.7, [14] in 1.4..1.6) and their meshes, then the
+    clip events: secondary events (0x5c837b), event records (0x5b65e5) and the
+    payload blob. Each payload starts with its record's type."""
+    c = m.counts
+    m.cloths = [_attachment(r, 'cloth') for _ in range(c[8])]
+    m.bounding_boxes = _bounding_boxes(r)
+    if (c[13] if m.version >= 1.7 else c[14] if m.version >= 1.4 else 0):
+        m.secondary_events = m.events = None     # type-dispatched records, not decoded yet
+        return
+    m.secondary_events = []
+    for _ in range(c[10]):
+        r.expect(0x64, 'secondary event')
+        value, time = r.unpack('If')
+        m.secondary_events.append({'value': value, 'time': time})
+    records = [r.unpack('IIfIIBB') for _ in range(c[11])]
+    if c[9] > len(r.data) - r.pos:
+        raise ValueError('event payload exceeds model data')
+    blob = r.data[r.pos:r.pos + c[9]]
+    r.pos += c[9]
+    m.events = []
+    for version, kind, time, size, offset, sim, fx in records:
+        payload = blob[offset:offset + size]
+        if version != 1 or size < 4 or len(payload) != size or struct.unpack_from('<I', payload)[0] != kind:
+            raise ValueError('bad clip event record (type %d at payload 0x%x)' % (kind, offset))
+        # sim/fx: the two flag bytes; gameplay events (hits, releases) set the
+        # first, presentation (footsteps, sounds, voice) the second.
+        m.events.append({'time': time, 'flags': [sim, fx], **_event(kind, payload[4:])})
 
 
 def parse(data):
@@ -291,6 +385,7 @@ def parse(data):
             if not -1 <= item.joint < 1024:
                 raise ValueError('attachment joint index out of range')
             m.attachments.append(item)
+    _trailer(r, m)
     return m
 
 
@@ -333,8 +428,13 @@ def main(argv):
         for state in m.animation_states:
             print('  animation state %d: %d choices, flags 0x%x' % (state.id, len(state.choices), state.flags))
             for choice in state.choices:
-                print('    clip %d, weight %d, mesh selections %s, models %s, effects %s' % (
-                    choice.clip, choice.weight, choice.mesh_selections, choice.models.indices, choice.effects.indices))
+                print('    clip %d, weight %d, mesh selections %s, models %s, effects %s, events %s' % (
+                    choice.clip, choice.weight, choice.mesh_selections, choice.models.indices,
+                    choice.effects.indices, choice.event_indices))
+        for i, e in enumerate(m.events or []):
+            print('  event %d: t=%.3f %s' % (i, e['time'], {k: v for k, v in e.items() if k != 'time'}))
+        if m.events is None:
+            print('  events: not decoded (cloth simulation records precede them)')
         for w in m.warnings:
             print('  warning:', w)
     return 0

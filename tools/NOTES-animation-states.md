@@ -81,9 +81,8 @@ Groups occur in this order:
 The key records contain nested versioned booleans and property structures.
 The decoder exposes `shown`, raw flags, secondary flags and raw parameter
 values. Model keys consume 56 bytes after the time; effect keys 38 bytes;
-mesh/cloth keys 50 bytes. Unknown property flags are preserved. Event index
-lists are decoded, but their trailing model-level payloads and gameplay
-callbacks remain a separate investigation.
+mesh/cloth keys 50 bytes. Unknown property flags are preserved. The event
+index lists point into the model's clip event tables (see "Clip events").
 
 ## Texture keys (second additional key group)
 
@@ -104,6 +103,41 @@ Orc Mound's construction, healthy, damaged and ruins textures all on stage 0.
 
 Used by 1029 choices in 103 models: 91 building models and the 12 Battering
 Ram parts (healthy/damaged). Every keyed choice has two keys, at 0 and 1.
+
+## Clip events (footsteps, hit frames, voice cues)
+
+A choice's `event_indices` and `secondary_event_indices` point into two
+model-level tables stored after the attachments (layout in the `lmd.py`
+docstring; readers `0x5c837b` and `0x5b65e5`, the loader order is `0x5ec642`).
+Header counts: [9] payload bytes, [10] secondary events, [11] events. Times
+are fractions of the clip. Every payload starts with its record's type word,
+which the parser checks (1936 events in 122 models, all valid).
+
+| Type | Name | Payload after the type | Evidence |
+|---|---|---|---|
+| 4 | `melee_hit` | f32 damage scale, joint | 534 events; joints are weapon impact or hand joints (Aragorn `J_Sword_Impact`) |
+| 6 | `footstep` | joint | 316 events in walk/run; joints are feet, legs or calves |
+| 9, 26 | `sound` | SoundEvents id | frog croak, bat squeak, Osgiliath bridge collapse |
+| 27 | `speech` | SpeechFXEventTypes id | attack yell in melee states, idle in idle states |
+| 0, 1 | `show_attachment`, `hide_attachment` | model-attachment index | worker sacks on pick up / put down, Boulder Troll rock shown then thrown |
+| 13 | `missile_release` | joint | arrow or hand joints in missile states |
+| 34 | `projectile` | joint, Projectiles id | Giant Catapult ordnance |
+| 44, 45 | `effect_at_joint`, `effect` | Effects id (+ joint), 3 bytes | hero defeated, Balrog death and fist-slam shockwave |
+
+Unnamed types keep a `raw` payload: 5 (no payload, knockback/death/fall
+landing, at the same time as the secondary event of that choice), 15 (death,
+a spine joint), 28/29/30/43 (no payload, the SPECIAL_01..04 trigger moment),
+21 (two floats, likely camera shake), 3/11/32 (debris joints of destructible
+bridges) and a few single uses. Gondorian Blunt's show/hide events use
+indices 6..9 beyond its 6 model attachments; their namespace is open.
+
+Secondary events are `{value: 1, time}`; Aragorn's death and knockback
+choices reference them at the landing times (0.667, 0.407).
+
+The two Barad-dur models carry cloth simulation records before their events
+(type-dispatched reader `0x5eb75f`), so their events are reported as not
+decoded. `resolve_model.py --json` adds `<field>_name` for joints, attachments
+and the referenced tables.
 
 ## Concrete checks
 

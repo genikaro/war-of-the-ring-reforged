@@ -65,6 +65,9 @@ values are retained selectors, whose detailed meaning is still being studied.
 each relative to its own attachment kind. `model_tracks` and `effect_tracks`
 contain per-attachment timed keys, including `shown` values and raw flags.
 `animation_state_table` and `default_animation_state` come from `ModelClasses`.
+`events` lists the model's clip events (footsteps, melee hits, sounds, voice
+cues, effects, attachment show/hide) with normalized times and resolved names;
+each choice's `event_indices` selects the ones its clip fires.
 
 The exporter and viewer apply these masks and visibility keys. Aragorn's idle
 state selects the sword in its scabbard, while attack-ready selects the drawn
@@ -146,7 +149,9 @@ node --test test-model-appearance.mjs
 - LWT: all 162 weight files parse. glTF keeps the top 4 influences per vertex.
 - Database: all 154 tables export to JSON (24,468 records); all 2108 models resolve to existing files.
 - LMD: all 2108 models decode sequentially, including 5576 animation states,
-  5998 weighted choices, 411 joint sets and 4788 joint bounds.
+  5998 weighted choices, 411 joint sets and 4788 joint bounds, then cloth
+  attachments, 5622 bounding boxes and 1936 clip events in 122 models (the two
+  Barad-dur models stop at their undecoded cloth simulation records).
 - Buildings: 41 of 41 export (40 unique models, 36 with texture keys). One
   warning: two Dark Foundry ore parts name an attach joint their skeleton lacks.
 - Units: 84 of 85 export with animation (69 unique models, no warnings). Shelob now

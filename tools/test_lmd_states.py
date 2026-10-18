@@ -97,9 +97,20 @@ def attachment(record_id, effect=False, legacy=False):
     return data + (pack('I', 0x64) if effect else pack('I', 0x65) + bytes(15))
 
 
-def model_bytes(legacy=False, placeholder=False):
+def trailer(events=False):
+    """Bounding boxes, then (optionally) one secondary event and two clip events."""
+    if not events:
+        return pack('II', 0x64, 0)
+    data = pack('III', 0x64, 1, 1) + pack('IIiB', 0x65, 1, 4, 0) + pack('12f', *range(12))
+    data += pack('IIf', 0x64, 1, 0.6)
+    data += pack('IIfIIBB', 1, 6, 0.25, 8, 0, 0, 1) + pack('IIfIIBB', 1, 4, 0.5, 12, 8, 1, 0)
+    return data + pack('Ii', 6, 3) + pack('Ifi', 4, 1.0, 7)
+
+
+def model_bytes(legacy=False, placeholder=False, events=False):
     counts = [2, int(placeholder), 0 if placeholder else 2, 0 if placeholder else 2,
-              0 if placeholder else 2, 0, 2, 1, 0, 0, 0, 0, int(placeholder), 0, 0, 105 if placeholder else 0]
+              0 if placeholder else 2, 0, 2, 1, 0, 20 * events, int(events), 2 * events,
+              int(placeholder), 0, 0, 105 if placeholder else 0]
     if legacy:
         counts = counts[:13]
     data = b'LIQD0LMD' + pack('fI2B', 1.2 if legacy else 1.7, 1, 1, 0)
@@ -117,7 +128,7 @@ def model_bytes(legacy=False, placeholder=False):
             data += reference(record) + pack('II2B', 0x65, 2, 1, 0)
     data += state_block(1 if legacy else 2, materials=not placeholder)
     data += attachment(501, legacy=legacy) + attachment(502, legacy=legacy)
-    return data + attachment(601, effect=True, legacy=legacy)
+    return data + attachment(601, effect=True, legacy=legacy) + trailer(events)
 
 
 class StateTests(unittest.TestCase):
@@ -150,6 +161,21 @@ class StateTests(unittest.TestCase):
         self.assertEqual(attack.event_keys[0]['value'], 42)
         self.assertEqual(attack.secondary_keys[0]['values'], [5, -1])
         self.assertEqual(attack.secondary_keys[0]['types'], [2, 3])
+
+    def test_bounding_boxes_and_typed_clip_events(self):
+        model = lmd.parse(model_bytes(events=True))
+        self.assertEqual(model.bounding_boxes[0]['layer'], 0)
+        self.assertEqual(model.bounding_boxes[0]['joint'], 4)
+        self.assertEqual(model.secondary_events, [{'value': 1, 'time': 0.6000000238418579}])
+        step, hit = model.events
+        self.assertEqual((step['name'], step['joint'], step['flags']), ('footstep', 3, [0, 1]))
+        self.assertEqual((hit['name'], hit['damage_scale'], hit['joint'], hit['flags']), ('melee_hit', 1.0, 7, [1, 0]))
+        self.assertEqual(model.animation_states[1].choices[0].event_indices, [9])
+        # A payload must start with its record's type.
+        bad = bytearray(model_bytes(events=True))
+        bad[-12] = 5
+        with self.assertRaises(ValueError):
+            lmd.parse(bytes(bad))
 
     def test_legacy_choice_and_attachment_versions(self):
         model = lmd.parse(model_bytes(legacy=True))
