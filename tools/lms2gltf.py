@@ -11,10 +11,11 @@ Modes:
              plus index.json for the viewer.
     files    manual export of given meshes with one texture.
 
-Attachments hidden by default in the game are left out unless
---all-attachments is given: those flagged not shown in the .lmd, alternates
-on the same joint that carry extra state bits (blood, upgrade levels L2/L3),
-and "..._IN_SCABBARD" when the drawn weapon is attached as well.
+All state-controlled geometry is retained. The default glTF scene uses the
+class's declared idle state, with level 1 gear and blood off. The viewer uses
+extras.wotrAppearance to switch meshes and attachments, including timed keys.
+--level and --blood set the preview configuration; --all-attachments exposes
+all model attachments for debugging. Effects and cloth are not yet exported.
 
 Team colour: parts with a *_Mask.dds use Materials/Team Color.lmt, two D3D9
 fixed-function stages: stage 0 MODULATE(texture, lit diffuse), stage 1
@@ -42,6 +43,7 @@ from PIL import Image
 import lms
 import lsk
 import lwt
+import model_appearance
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 # ponytail: TeamColors.lqr TEAM_COLOR_RED (record 0) copied, not read; per-player colour is the engine's job.
@@ -114,6 +116,7 @@ class Exporter:
         self._texture_for = {}
         self._frames = {}
         self.log = []
+        self.appearance = None
 
     # -- buffers -------------------------------------------------------
     def _view(self, data, target=None):
@@ -209,14 +212,30 @@ class Exporter:
             for node, track in zip(joints, clip.tracks):
                 if not track.times:
                     continue
-                times = self.accessor([t * clip.duration for t in track.times], 'f', 'SCALAR', 5126, minmax=True)
+                key_times = [t * clip.duration for t in track.times]
+                hold_end = key_times[-1] < clip.duration
+                if hold_end:
+                    key_times.append(clip.duration)
+                times = self.accessor(key_times, 'f', 'SCALAR', 5126, minmax=True)
                 for path, keys, conv, fmt, kind in (
                         ('rotation', track.rotations, to_gltf_quat, '4f', 'VEC4'),
                         ('translation', track.positions, to_gltf_axes, '3f', 'VEC3')):
                     if keys:
-                        out = self.accessor([conv(k) for k in keys], fmt, kind, 5126)
+                        values = [conv(k) for k in keys]
+                        if hold_end:
+                            values.append(values[-1])
+                        out = self.accessor(values, fmt, kind, 5126)
                         samplers.append({'input': times, 'output': out, 'interpolation': 'LINEAR'})
                         channels.append({'sampler': len(samplers) - 1, 'target': {'node': node, 'path': path}})
+            if not channels and joints:
+                # Static idle clips still have a duration and can carry timed
+                # appearance keys. glTF requires at least one animation channel.
+                times = [0, clip.duration] if clip.duration > 0 else [0]
+                value = list(to_gltf_axes(skel.joints[0].offset))
+                samplers.append({'input': self.accessor(times, 'f', 'SCALAR', 5126, minmax=True),
+                                 'output': self.accessor([value] * len(times), '3f', 'VEC3', 5126),
+                                 'interpolation': 'STEP'})
+                channels.append({'sampler': 0, 'target': {'node': joints[0], 'path': 'translation'}})
             if channels:
                 self.animations.append({'name': clip_prefix + clip.name, 'samplers': samplers, 'channels': channels})
         return joints, len(self.skins) - 1
@@ -281,6 +300,8 @@ class Exporter:
             gltf['skins'] = self.skins
         if self.animations:
             gltf['animations'] = self.animations
+        if self.appearance is not None:
+            gltf['extras'] = {'wotrAppearance': self.appearance}
         js = json.dumps(gltf, separators=(',', ':')).encode()
         js += b' ' * (-len(js) % 4)
         binary = bytes(self.bin) + b'\0' * (-len(self.bin) % 4)
@@ -297,52 +318,6 @@ class Exporter:
 
 def _file(entry):
     return os.path.join(ROOT, entry['file']) if entry and entry.get('exists') else None
-
-
-def _default_parts(res):
-    """Mesh parts of the default state: the lowest state bit when the model has several."""
-    states = res.get('states')
-    if not states:
-        return res['parts']
-    first = min(int(b) for b in states)
-    return [p for p in res['parts'] if not p.get('states') or first in p['states']]
-
-
-def _hidden_attachments(attachments):
-    """Indices of model attachments the game does not show by default."""
-    models = [(i, a) for i, a in enumerate(attachments) if a['kind'] == 'model']
-    hidden = set()
-    # Default state: the bit most attachments carry (ties: lowest bit).
-    counts = [sum(1 for _, a in models if a['state_mask'] >> b & 1) for b in range(32)]
-    if max(counts, default=0):
-        default_bit = 1 << counts.index(max(counts))
-        hidden |= {i for i, a in models if not a['state_mask'] & default_bit}
-    # Alternates on one joint, compared even with ones hidden by their flag:
-    # keep the plain one (blood loses to the bare weapon), else the one with
-    # the lowest extra bit (upgrade level 1).
-    by_joint = {}
-    for i, a in models:
-        if i not in hidden:
-            by_joint.setdefault(a['joint'], []).append((i, a['state_mask']))
-    hidden |= {i for i, a in models if not a['shown']}
-    for group in by_joint.values():
-        if len(group) < 2:
-            continue
-        common = ~0
-        for _, mask in group:
-            common &= mask
-        extras = [(i, mask & ~common) for i, mask in group]
-        if any(extra == 0 for _, extra in extras):
-            hidden |= {i for i, extra in extras if extra}
-        else:
-            low = min(extra & -extra for _, extra in extras)
-            hidden |= {i for i, extra in extras if not extra & low}
-    names = {a['model'].get('model') for i, a in models if i not in hidden}
-    for i, a in models:
-        name = a['model'].get('model') or ''
-        if name.endswith('_IN_SCABBARD') and name[:-len('_IN_SCABBARD')] in names:
-            hidden.add(i)
-    return hidden
 
 
 def _scale(res):
@@ -363,20 +338,24 @@ def _offset_node(name, offset, rel_scale):
     return node
 
 
-def _add_model(ex, res, parent, ctx, all_attachments, depth=0, on_joint=False):
+def _add_model(ex, res, parent, ctx, owner=None, attachment=None, depth=0, on_joint=False):
     """Add one resolved model under node `parent`. ctx = (skeleton, joint nodes, skin) or None.
     Model scales in the database are absolute, so attachments get the ratio to their parent."""
     name = res.get('model') or os.path.basename(res.get('file', '?'))
+    index = len(ex.appearance['models'])
+    appearance = model_appearance.instance(res, owner, attachment, '' if depth == 0 else name + '/')
+    ex.appearance['models'].append(appearance)
     skel_entry = res['skeletons'][0] if res.get('skeletons') else None
     if skel_entry and _file(skel_entry):
         try:
-            skel = lsk.parse(open(_file(skel_entry), 'rb').read())
+            with open(_file(skel_entry), 'rb') as f:
+                skel = lsk.parse(f.read())
             joints, skin = ex.skeleton(skel, parent, '' if depth == 0 else name + '/')
             ctx = (skel, joints, skin)
         except ValueError as e:
             ex.log.append('%s: skeleton skipped (%s), static export' % (name, e))
             ctx = None
-    for part in _default_parts(res):
+    for slot, part in enumerate(res['parts']):
         mesh_file = _file(part['mesh'])
         if not mesh_file:
             ex.log.append('%s: missing mesh %s' % (name, part['mesh'].get('file')))
@@ -384,7 +363,8 @@ def _add_model(ex, res, parent, ctx, all_attachments, depth=0, on_joint=False):
         weights = _file(part.get('weights'))
         texture, mask = _file(part.get('texture')), _file(part.get('mask'))
         try:
-            m = lms.parse(open(mesh_file, 'rb').read())
+            with open(mesh_file, 'rb') as f:
+                m = lms.parse(f.read())
             if weights and ctx and m.skinned:
                 ex.mesh(m, texture, weights, ctx[2], len(ctx[0].joints), mask_path=mask)
             else:
@@ -392,35 +372,42 @@ def _add_model(ex, res, parent, ctx, all_attachments, depth=0, on_joint=False):
                 if not on_joint and ctx and m.attach:     # rigid part that names its joint
                     anchor = ex.bone_frame(ctx, ctx[0].joint_index(m.attach))
                 ex.mesh(m, texture, parent=anchor, mask_path=mask)
+            # mesh() appends exactly one leaf node, even for root-level skins.
+            appearance['parts'][slot] = len(ex.nodes) - 1
         except (ValueError, struct.error, StopIteration) as e:
             ex.log.append('%s: part %s skipped (%s)' % (name, os.path.basename(mesh_file), e))
-    attachments = res.get('attachments', [])
-    hidden = set() if all_attachments else _hidden_attachments(attachments)
+    attachments = [a for a in res.get('attachments', []) if a['kind'] == 'model']
     for i, a in enumerate(attachments):
-        if a['kind'] != 'model' or i in hidden or 'parts' not in a['model']:
+        if 'parts' not in a['model']:
             continue
         sub = a['model']
         on = a['joint'] >= 0 and ctx is not None and a['joint'] < len(ctx[1])
         anchor = ex.bone_frame(ctx, a['joint']) if on else parent
         rel = [c / p for c, p in zip(_scale(sub), _scale(res))]
         node = ex.node(_offset_node(sub.get('model') or 'attachment', a['offset'], rel), anchor)
-        _add_model(ex, sub, node, ctx, all_attachments, depth + 1, on)
+        _add_model(ex, sub, node, ctx, index, i, depth + 1, on)
 
 
-def convert_model(resolver, key, out_path, all_attachments=False):
+def convert_model(resolver, key, out_path, all_attachments=False, level=1, blood=False):
+    if level not in range(1, 5):
+        raise ValueError('gear level must be between 1 and 4')
     res = resolver.resolve(key)
     ex = Exporter()
+    ex.appearance = {'version': 1, 'flags': model_appearance.flag_policy(resolver.db['ModelFlags']),
+                     'config': {'level': level, 'blood': blood, 'allAttachments': all_attachments},
+                     'models': []}
     root = ex.node({'name': res.get('model') or key, 'scale': list(_scale(res))})
-    _add_model(ex, res, root, None, all_attachments)
+    _add_model(ex, res, root, None)
     if not ex.meshes:
         raise ValueError('no mesh could be exported: ' + '; '.join(ex.log))
+    model_appearance.default_scene(ex, ex.appearance)
     size = ex.write(out_path)
     return {'model': res.get('model'), 'bytes': size, 'meshes': len(ex.meshes),
             'joints': sum(len(s['joints']) for s in ex.skins),
             'clips': [a['name'] for a in ex.animations], 'warnings': ex.log}
 
 
-def convert_all_units(out_dir, all_attachments=False):
+def convert_all_units(out_dir, all_attachments=False, level=1, blood=False):
     import resolve_model
     resolver = resolve_model.Resolver()
     units = sorted(resolver.db['Units'], key=lambda r: r.name)
@@ -436,7 +423,7 @@ def convert_all_units(out_dir, all_attachments=False):
             if rec.name not in done:
                 path = os.path.join(out_dir, rec.name + '.glb')
                 try:
-                    done[rec.name] = convert_model(resolver, rec.name, path, all_attachments)
+                    done[rec.name] = convert_model(resolver, rec.name, path, all_attachments, level, blood)
                     done[rec.name]['file'] = os.path.basename(path)
                 except Exception as e:            # keep going, report per unit
                     done[rec.name] = {'error': '%s: %s' % (type(e).__name__, e)}
@@ -481,9 +468,13 @@ def main():
     p.add_argument('name', help='UNIT_..., MODEL_..., Models id or .lmd path')
     p.add_argument('--out', required=True)
     p.add_argument('--all-attachments', action='store_true')
+    p.add_argument('--level', type=int, choices=range(1, 5), default=1, help='preview gear level (default: 1)')
+    p.add_argument('--blood', action='store_true', help='include state-enabled blood overlays')
     p = sub.add_parser('units')
     p.add_argument('--out-dir', required=True)
     p.add_argument('--all-attachments', action='store_true')
+    p.add_argument('--level', type=int, choices=range(1, 5), default=1, help='preview gear level (default: 1)')
+    p.add_argument('--blood', action='store_true', help='include state-enabled blood overlays')
     p = sub.add_parser('files')
     p.add_argument('meshes', nargs='+', help='mesh.lms or mesh.lms=weights.lwt')
     p.add_argument('--texture', required=True)
@@ -492,13 +483,13 @@ def main():
     a = ap.parse_args()
     if a.mode == 'model':
         import resolve_model
-        info = convert_model(resolve_model.Resolver(), a.name, a.out, a.all_attachments)
+        info = convert_model(resolve_model.Resolver(), a.name, a.out, a.all_attachments, a.level, a.blood)
         print('wrote %s: %d bytes, %d meshes, %d joints, %d clips' % (
             a.out, info['bytes'], info['meshes'], info['joints'], len(info['clips'])))
         for w in info['warnings']:
             print('warning:', w)
     elif a.mode == 'units':
-        convert_all_units(a.out_dir, a.all_attachments)
+        convert_all_units(a.out_dir, a.all_attachments, a.level, a.blood)
     else:
         convert_files(a.meshes, a.texture, a.out, a.skeleton)
     return 0

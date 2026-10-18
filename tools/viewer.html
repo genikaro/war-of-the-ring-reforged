@@ -8,9 +8,8 @@
   :root { --bg: #20242b; --fg: #d8dde5; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px system-ui, sans-serif; overflow: hidden; }
   #info { position: absolute; top: 8px; left: 12px; pointer-events: none; }
-  #units { position: absolute; top: 30px; left: 12px; display: none; }
-  #clips { position: absolute; top: 56px; left: 12px; display: none; }
-  #team { position: absolute; top: 82px; left: 12px; display: none; }
+  #controls { position: absolute; top: 30px; left: 12px; display: flex; flex-direction: column; align-items: start; gap: 5px; }
+  #controls > * { display: none; max-width: calc(100vw - 24px); }
 </style>
 <script type="importmap">
 { "imports": {
@@ -21,13 +20,19 @@
 </head>
 <body>
 <div id="info"></div>
-<select id="units"></select>
-<select id="clips"></select>
-<select id="team"></select>
+<div id="controls">
+<select id="units" aria-label="Unit"></select>
+<select id="states" aria-label="Animation state"></select>
+<select id="clips" aria-label="Animation choice or clip"></select>
+<select id="level" aria-label="Gear level"></select>
+<label id="blood"><input type="checkbox"> Blood overlays</label>
+<select id="team" aria-label="Team colour"></select>
+</div>
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { restoreAppearance } from './model-appearance.mjs';
 
 const params = new URLSearchParams(location.search);
 // ?index= points at the index.json written by "lms2gltf.py units"; ?model= overrides the unit.
@@ -42,6 +47,7 @@ fetch(indexUrl).then(r => r.ok ? r.json() : []).then(entries => {
     select.add(new Option(`${e.unit}  (${e.clips.length} clips)`, indexDir + e.file));
   }
   if (!select.options.length) return;
+  if (![...select.options].some(o => o.value === url)) select.add(new Option(url.split('/').pop(), url));
   select.value = url;
   select.onchange = () => {
     const next = new URLSearchParams({ index: indexUrl, model: select.value });
@@ -66,26 +72,81 @@ scene.add(sun);
 const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.01, 100);
 const controls = new OrbitControls(camera, renderer.domElement);
 const clock = new THREE.Clock();
-let mixer = null;
-// ?clip=Name picks a clip, ?t=0.5 freezes it at that fraction of its duration.
-const freeze = params.has('t') ? parseFloat(params.get('t')) : null;
+let mixer = null, appearance = null, activeChoice = null, activeAction = null, previewConfig = null;
+// ?state=ID|NAME, ?choice=N or ?clip=Name; ?t=0.5 freezes a normalized clip time.
+const requestedTime = Number(params.get('t'));
+const freeze = params.has('t') && Number.isFinite(requestedTime) ? Math.min(1, Math.max(0, requestedTime)) : null;
+
+function applyAppearance() {
+  const time = freeze ?? (activeAction && activeAction.getClip().duration > 0 ?
+    activeAction.time / activeAction.getClip().duration : 0);
+  appearance?.apply(activeChoice, time, previewConfig);
+}
 
 function setupClips(root, clips) {
-  if (!clips.length) return;
   mixer = new THREE.AnimationMixer(root);
-  const select = document.getElementById('clips');
-  for (const c of clips) select.add(new Option(`${c.name} (${c.duration.toFixed(2)}s)`, c.name));
-  const play = name => {
+  const select = document.getElementById('clips'), states = document.getElementById('states');
+  const model = appearance?.data.models[0];
+  const namedStates = model?.states ?? [];
+  for (const s of namedStates) states.add(new Option(s.name || `State ${s.id}`, String(s.id)));
+  states.add(new Option('Skeleton clips (default appearance)', 'raw'));
+  const selectedState = () => namedStates.find(s => String(s.id) === states.value);
+  const play = () => {
     mixer.stopAllAction();
-    const clip = clips.find(c => c.name === name);
-    const action = mixer.clipAction(clip).play();
-    if (freeze !== null) { action.paused = true; action.time = freeze * clip.duration; mixer.update(0); }
+    activeAction = null;
+    const state = selectedState();
+    activeChoice = state?.choices[Number(select.value)] ?? null;
+    const clip = clips.find(c => c.name === (state ? activeChoice?.clip : select.value));
+    if (clip) {
+      activeAction = mixer.clipAction(clip).play();
+      if (freeze !== null) { activeAction.paused = true; activeAction.time = freeze * clip.duration; }
+    }
+    mixer.update(0);
+    applyAppearance();
   };
-  const wanted = params.get('clip');
-  select.value = clips.some(c => c.name === wanted) ? wanted : clips[0].name;
-  select.onchange = () => play(select.value);
-  select.style.display = 'block';
-  play(select.value);
+  const fill = (wantedClip = null, wantedChoice = null) => {
+    select.replaceChildren();
+    const state = selectedState();
+    if (state) {
+      state.choices.forEach((c, i) => select.add(new Option(
+        `${c.clip || 'Static'} (weight ${c.weight}/${state.totalWeight})`, String(i))));
+      const index = wantedChoice ?? state.choices.findIndex(c => wantedClip ? c.clip === wantedClip : c.weight > 0);
+      select.value = String(index >= 0 && index < state.choices.length ? index : 0);
+    } else {
+      for (const c of clips) select.add(new Option(`${c.name} (${c.duration.toFixed(2)}s)`, c.name));
+      select.value = clips.some(c => c.name === wantedClip) ? wantedClip : clips[0]?.name;
+    }
+    select.style.display = select.options.length ? 'block' : 'none';
+    play();
+  };
+  const wanted = params.get('state'), wantedClip = params.get('clip');
+  let initial = namedStates.find(s => s.name === wanted || String(s.id) === wanted) ??
+    namedStates.find(s => s.id === model?.defaultState);
+  if (!wanted && wantedClip && !initial?.choices.some(c => c.clip === wantedClip)) {
+    initial = namedStates.find(s => s.choices.some(c => c.clip === wantedClip));
+  }
+  states.value = initial ? String(initial.id) : 'raw';
+  states.style.display = namedStates.length ? 'block' : 'none';
+  states.onchange = () => fill();
+  select.onchange = play;
+  const choice = params.has('choice') ? Number(params.get('choice')) : null;
+  fill(wantedClip, Number.isInteger(choice) ? choice : null);
+}
+
+function setupConfiguration() {
+  if (!appearance) return;
+  previewConfig = {...appearance.data.config};
+  const level = document.getElementById('level'), blood = document.querySelector('#blood input');
+  for (let i = 1; i <= 4; i++) level.add(new Option(`Gear level ${i}`, i));
+  const wantedLevel = Number(params.get('level'));
+  if (Number.isInteger(wantedLevel) && wantedLevel >= 1 && wantedLevel <= 4) previewConfig.level = wantedLevel;
+  if (params.has('blood')) previewConfig.blood = params.get('blood') === '1';
+  level.value = String(previewConfig.level);
+  blood.checked = previewConfig.blood;
+  level.onchange = () => { previewConfig.level = Number(level.value); applyAppearance(); };
+  blood.onchange = () => { previewConfig.blood = blood.checked; applyAppearance(); };
+  level.style.display = 'block';
+  document.getElementById('blood').style.display = 'block';
 }
 
 // TeamColors.lqr. Team colour parts carry their mask as emissiveMap; the colour is the emissive.
@@ -110,25 +171,32 @@ function setupTeam(root) {
   apply(select.value);
 }
 
-new GLTFLoader().load(url, gltf => {
-  const root = gltf.scene;
-  scene.add(root);
-  root.traverse(o => { if (o.isSkinnedMesh) o.frustumCulled = false; });
-  setupClips(root, gltf.animations);
-  setupTeam(root);
-  const box = new THREE.Box3().setFromObject(root);
-  const size = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
-  const extent = Math.max(4, Math.ceil(Math.max(size.x, size.z) * 1.5));
-  scene.add(new THREE.GridHelper(extent, extent * 4, 0x556070, 0x3a404a));
-  let tris = 0;
-  root.traverse(o => { if (o.isMesh) tris += o.geometry.index.count / 3; });
-  const yaw = parseFloat(params.get('yaw') || '0') * Math.PI / 180;
-  const dist = Math.max(size.x, size.y, size.z) * 1.8;
-  camera.position.set(center.x + Math.sin(yaw) * dist, center.y + size.y * 0.15, center.z + Math.cos(yaw) * dist);
-  controls.target.copy(center);
-  controls.update();
-  info.textContent = `${url.split('/').pop()}  |  ${tris} triangles  |  ${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)} m`;
+new GLTFLoader().load(url, async gltf => {
+  try {
+    const root = gltf.scene;
+    appearance = await restoreAppearance(gltf);
+    scene.add(root);
+    root.traverse(o => { if (o.isSkinnedMesh) o.frustumCulled = false; });
+    setupConfiguration();
+    setupClips(root, gltf.animations);
+    setupTeam(root);
+    root.updateMatrixWorld(true);
+    const box = new THREE.Box3();
+    root.traverseVisible(o => { if (o.isMesh) box.expandByObject(o); });
+    if (box.isEmpty()) box.setFromCenterAndSize(new THREE.Vector3(), new THREE.Vector3(1, 1, 1));
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const extent = Math.max(4, Math.ceil(Math.max(size.x, size.z) * 1.5));
+    scene.add(new THREE.GridHelper(extent, extent * 4, 0x556070, 0x3a404a));
+    let tris = 0;
+    root.traverse(o => { if (o.isMesh) tris += o.geometry.index.count / 3; });
+    const yaw = parseFloat(params.get('yaw') || '0') * Math.PI / 180;
+    const dist = Math.max(size.x, size.y, size.z) * 1.8;
+    camera.position.set(center.x + Math.sin(yaw) * dist, center.y + size.y * 0.15, center.z + Math.cos(yaw) * dist);
+    controls.target.copy(center);
+    controls.update();
+    info.textContent = `${url.split('/').pop()}  |  ${tris} total triangles  |  ${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)} m`;
+  } catch (err) { info.textContent = 'Failed to prepare ' + url + ': ' + err.message; }
 }, undefined, err => { info.textContent = 'Failed to load ' + url + ': ' + err.message; });
 
 addEventListener('resize', () => {
@@ -139,6 +207,7 @@ addEventListener('resize', () => {
 renderer.setAnimationLoop(() => {
   const dt = clock.getDelta();
   if (mixer && freeze === null) mixer.update(dt);
+  applyAppearance();
   controls.update();
   renderer.render(scene, camera);
 });

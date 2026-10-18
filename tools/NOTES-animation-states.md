@@ -3,7 +3,8 @@
 The `.lmd` state block is decoded in `lmd_states.py`, consumed by `lmd.py`,
 and annotated with database state names and skeleton clip names by
 `resolve_model.py`. It is distinct from the resource slots' configuration
-bitmasks; both kinds of data are needed for the eventual appearance renderer.
+bitmasks; both kinds of data feed the exporter/viewer appearance controller
+described in `NOTES-model-appearance.md`.
 
 ## Evidence and executable readers
 
@@ -97,9 +98,10 @@ callbacks remain a separate investigation.
   Arrow keys toggle hidden/shown/hidden/hidden at `0`, `0.285`, `0.683`, `1`.
 - Beast Lair construction 00 enables mesh 0; healthy, damaged and badly
   damaged enable meshes 3, 4 and 5 respectively.
-- All mesh/material/texture/attachment records match the previous parser.
-  Regenerating units yields 83 animated units, no warnings and byte-identical
-  GLBs. Applying the decoded appearance is the next roadmap item.
+- At the parser milestone, all mesh/material/texture/attachment records matched
+  the previous parser: 83 animated units, no warnings and byte-identical GLBs.
+  The following appearance milestone applies these states and exports 84 units,
+  including Shelob; see `NOTES-model-appearance.md`.
 - Synthetic regressions cover both choice versions, sparse IDs, weighted
   choices, all property groups, corrupt/truncated data and a meshless skeleton
   whose joint indices contain misleading state-marker byte patterns.

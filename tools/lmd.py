@@ -45,7 +45,8 @@ with a u32 class version (0x64..0x6a). Layout as far as decoded:
 
 state_mask is a bit set of model configurations (unit upgrade levels,
 variations), separate from the decoded animation-state IDs and visibility
-masks. The configuration bits' gameplay meanings are still under research.
+masks. Bit names come from ModelFlags.lqr; full gameplay flag operations are
+separate from the level/blood preview policy in model_appearance.py.
 Joint names come from the skeleton (.lsk), see resolve_model.py.
 
 Usage:

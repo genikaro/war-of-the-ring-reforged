@@ -2,7 +2,7 @@
 
 Oct 18, 2026 · @Evgenii
 
-The unit asset pipeline is done (83 of 85 units export as animated glTF); next come the remaining asset gaps and the maps, then a playable skirmish sandbox in a new engine once the engine is chosen.
+The unit asset pipeline exports 84 of 85 units as animated glTF, including decoded gear visibility; next come the remaining asset gaps and the maps, then a playable skirmish sandbox in a new engine once the engine is chosen.
 
 ## Roadmap
 
@@ -29,8 +29,8 @@ Only the engine choice blocks progress, and only from Phase 3 on; Phases 1 and 2
 
 - [x] Apply team colour: additive and unlit, texture × light + mask × team colour (decoded from Team Color.lmt), using the `*_Mask.dds` (744 parts); exported as glTF emissive, the viewer has a team colour picker
 - [x] Decode the `.lmd` animation state list, to get per-clip attachment visibility (sword drawn or sheathed) and building states (construction, healthy, damaged, ruins) — 5576 states / 5998 weighted choices in all 2108 models; resolver exposes named states, clips, mesh selectors and attachment timelines; see `NOTES-animation-states.md`
-- [ ] Replace the inferred default-gear rules with the decoded ones
-- [x] Parse v1.0 skeletons (83 files, 15 units incl. Merry and Pippin) and the one v1.0 mesh — all 247 skeletons and 2395 meshes parse; Merry and Pippin export with 19 clips each; see `NOTES-legacy-assets.md`
+- [x] Replace the inferred default-gear rules with the decoded ones — GLB default scenes use the declared idle state; the viewer switches state/choice meshes and attachments, including timed visibility; named level/blood preview settings replace mask-frequency and filename guesses; Shelob now exports (84/85 units); see `NOTES-model-appearance.md`
+- [x] Parse v1.0 skeletons (83 files, 15 units incl. Merry and Pippin) and the one v1.0 mesh — all 247 skeletons and 2395 meshes parse; Merry and Pippin export with 21 and 19 clips respectively, including static poses; see `NOTES-legacy-assets.md`
 - [ ] Export buildings: models with several state meshes and damaged texture swaps
 - [ ] Decode effects (`Effects.H2O`, 405 `.lfx`), projectiles, UV animations (`UVAs.H2O`, `TextureAnimations.H2O`) and cloth (`Cloths.H2O`)
 - [ ] Find where clip events live (footsteps, hit frames, voice cues); candidates are the `SoundEvents` and `SpeechFXEvents` tables and the `.lmd` state list

@@ -32,8 +32,10 @@ Export every unit plus `index.json` for the viewer:
 python lms2gltf.py units --out-dir ../converted/units
 ```
 
-Add `--all-attachments` to either command to include the attachments the game hides
-by default. The old manual mode is `lms2gltf.py files` (see its `--help`).
+All state-controlled meshes and model attachments are retained in the GLB. Its
+default scene uses the class's declared idle state. Add `--level 2` or `--blood`
+to set the preview configuration, or `--all-attachments` to expose every model
+attachment for debugging. The old manual mode is `lms2gltf.py files` (see its `--help`).
 
 Viewer: serve the repo root (`.claude/launch.json` config `viewer`) and open
 `http://localhost:8765/tools/viewer.html` (config `viewer-alt` serves on 8767 when 8765 is taken).
@@ -57,12 +59,27 @@ each relative to its own attachment kind. `model_tracks` and `effect_tracks`
 contain per-attachment timed keys, including `shown` values and raw flags.
 `animation_state_table` and `default_animation_state` come from `ModelClasses`.
 
-Aragorn's idle state selects the sword in its scabbard, while attack-ready
-selects the drawn sword. The Uruk-hai missile state includes arrow visibility
-changes at 0, 0.285, 0.683 and 1.0 of the clip. Building states select different
-construction, healthy, damaged and ruins meshes. Configuration masks still
-gate gear variants independently. Applying this decoded appearance data to
-the GLB exporter/viewer is the next roadmap task.
+The exporter and viewer apply these masks and visibility keys. Aragorn's idle
+state selects the sword in its scabbard, while attack-ready selects the drawn
+sword. The Uruk-hai missile state toggles the arrow at 0, 0.285, 0.683 and 1.0
+of the clip. Shelob's state enables her body and legs despite their default
+hidden flags. Building states select construction, healthy, damaged and ruins
+meshes; damaged texture swaps are still pending.
+
+The viewer provides state, weighted-choice, gear-level and blood controls.
+It starts at the class's declared default state and first positive-weight
+choice. Query options: `?state=UNIT_ANIM_STATE_ATTACK_READY`, `?choice=0`,
+`?clip=G_Aragorn_Idle_02`, `?t=0.5` (freeze at a normalized time), `?level=2`,
+`?blood=1`. Weights are displayed for inspection; this viewer does not sample
+choices randomly. Selecting raw skeleton clips uses the default appearance.
+
+Visibility animation is stored in `extras.wotrAppearance` v1, with source slot
+indices, mesh-node bindings and normalized STEP keys. Generic glTF viewers
+show the default appearance; this project's viewer restores the retained
+hidden mesh nodes and switches their visibility. Nested models use their own
+default state; independent nested clip playback is pending. Effects, cloth,
+unknown property parameters and gameplay flag operations are not rendered.
+See `NOTES-model-appearance.md` for the metadata contract and preview policy.
 
 ## Database JSON
 
@@ -107,6 +124,7 @@ Run all parser and exporter regression tests (synthetic fixtures, no game assets
 
 ```bash
 python -m unittest discover -v
+node --test test-model-appearance.mjs
 ```
 
 ## Status
@@ -115,14 +133,14 @@ python -m unittest discover -v
   (`.dds` textures, Ogg Vorbis speech/music, WAV effects, Bink `.bik` movies).
 - LMS: all 2395 meshes parse, including the v1.0 Grasslands Tree 02.
 - LSK: all 247 skeletons parse to the exact byte (164 v2.0, 83 v1.0).
-  Merry and Pippin now export with 19 clips each. Legacy child lists are checked
+  Merry and Pippin export with 21 and 19 clips, including static poses. Legacy child lists are checked
   against joint parents, and the resolver reads joint names through this parser.
 - LWT: all 162 weight files parse. glTF keeps the top 4 influences per vertex.
 - Database: all 154 tables export to JSON (24,468 records); all 2108 models resolve to existing files.
 - LMD: all 2108 models decode sequentially, including 5576 animation states,
   5998 weighted choices, 411 joint sets and 4788 joint bounds.
-- Units: 83 of 85 export with animation (69 unique models, no warnings). Shelob's model has no mesh of
-  its own (only hidden egg attachments); `UNIT_WILD_BUTTERFLY` has no model record.
+- Units: 84 of 85 export with animation (69 unique models, no warnings). Shelob now
+  includes her body and 27 leg/head parts; only `UNIT_WILD_BUTTERFLY` lacks a model record.
 - Spot-checked in the viewer: Aragorn, Legolas, Gandalf, Uruk-hai, Elf Knight,
   Troll Bonecleaver, Rohan Rider, Witch-king, Frodo, Balrog.
 
@@ -132,10 +150,11 @@ python -m unittest discover -v
 - Rigid attachments are authored in their joint's bind orientation (the `.lsk`
   third array), so each joint gets a "frame" node with that rotation.
 - A mesh is skinned only if its own flags say so; some heads list weights but are rigid.
-- Default attachment visibility is inferred: the `.lmd` "shown" flag, the most common
-  state bit (drops blood overlays, keeps upgrade level 1), and `*_IN_SCABBARD` hidden
-  when the drawn weapon is attached. The game's own per-clip show/hide rules are not
-  decoded yet.
+- Default attachment visibility comes from the class's idle state. State masks and
+  timed keys override the static `.lmd` "shown" flag; that flag is the fallback for
+  models without choices. Gear level and blood use named `ModelFlags.lqr` tags.
+- Static clips are retained with constant channels, and shorter bone tracks hold
+  their last value to the declared duration, keeping visibility timelines aligned.
 - Team colour (`Materials/Team Color.lmt`, D3D9 fixed-function stages) is additive and
   unlit: `texture * lighting + mask * teamColour`, and the diffuse is black under the
   mask. Exported as glTF emissive: `emissiveTexture` = `*_Mask.dds`, `emissiveFactor` =
@@ -149,5 +168,5 @@ python -m unittest discover -v
 
 ## Not yet handled
 
-Applying decoded per-clip appearance in the exporter/viewer, animation event
-payloads, effects (`.lfx`), terrain/levels.
+Building texture swaps, animation event payloads, effects (`.lfx`), cloth,
+independent nested-model animation, full gameplay flag operations, terrain/levels.

@@ -234,7 +234,8 @@ class Resolver:
         states = m.states()
         for i, slot in enumerate(m.meshes):
             part = {'mesh': self._entry(self.meshes, 'Meshes', slot.mesh.id, slot.mesh.path),
-                    'weights': self._entry(self.weights, 'Weights', slot.weight, slot.weight_path)}
+                    'weights': self._entry(self.weights, 'Weights', slot.weight, slot.weight_path),
+                    'state_mask': slot.mesh.state_mask}
             cand = [j for j in m.textures_for_mesh(i) if tex_entries[j]]
             cand.sort(key=lambda j: (tex_entries[j]['channel'] or 0, j))
             diffuse = [j for j in cand if tex_entries[j]['role'] == 'diffuse']
