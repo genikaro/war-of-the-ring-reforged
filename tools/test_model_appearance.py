@@ -99,6 +99,19 @@ class AppearanceTests(unittest.TestCase):
         self.assertEqual(model['declaredDefaultState'], 'MISSING')
         self.assertIsNone(appearance.default_choice(appearance.instance({'parts': []})))
 
+    def test_texture_keys_select_slots_per_stage(self):
+        # Orc Mound ruins: slot 3 (ruins) + 5 (black mask); unflagged and -1 keep the default.
+        flags, values = [1, 1] + [0] * 14, [3, 5] + [-1] * 14
+        keys = [{'time': 0.0, 'flags': flags, 'values': values},
+                {'time': 1.0, 'flags': flags, 'values': [-1] * 16},
+                {'time': 1.0, 'flags': [0] * 16, 'values': [7] * 16}]
+        choice = {'textureKeys': appearance.texture_keys(keys)}
+        self.assertEqual(choice['textureKeys'][0], [0.0, [3, 5]])
+        self.assertEqual(appearance.texture_slots(choice, 0), [3, 5])
+        self.assertEqual(appearance.texture_slots(choice, 1), [3, 5])
+        self.assertEqual(appearance.texture_slots({'textureKeys': []}), [-1, -1])
+        self.assertEqual(appearance.texture_slots(None), [-1, -1])
+
     def test_missing_slots_keep_their_source_indices(self):
         d = data()
         d['models'][0]['parts'][0] = None

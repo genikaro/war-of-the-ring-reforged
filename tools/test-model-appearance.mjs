@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {defaultChoice, visibleNodes, restoreAppearance} from './model-appearance.mjs';
+import {defaultChoice, visibleNodes, restoreAppearance, textureSlots} from './model-appearance.mjs';
 
 function fixture() {
   const idle = {clip: 'Idle', weight: 86, meshes: [0], models: [0], meshTracks: [], modelTracks: []};
@@ -66,4 +66,27 @@ test('restore hidden mesh leaves and update all nodes, including node zero', asy
   controller.apply(null, 0);
   assert.deepEqual(nodes.map(n => n.visible), [true, true, false, false]);
   assert.equal(await restoreAppearance({parser: {json: {}}}), null);
+});
+
+test('texture keys swap per-instance material copies and fall back to defaults', async () => {
+  const d = fixture(), [attack, idle] = d.models[0].states.map(s => s.choices[0]);
+  idle.textureKeys = [[0, [1, 2]], [1, [-1, -1]]];          // damaged + mask; end key keeps
+  attack.textureKeys = [];
+  d.models[0].textures = [10, 11, 12];
+  const shared = {map: 'default', emissiveMap: 'mask0', clone() { return {...this}; }};
+  const mesh = {isMesh: true, material: shared, visible: true, traverse(f) { f(this); }};
+  const nodes = [mesh, ...Array.from({length: 3}, () => ({visible: true}))];
+  const textures = {10: {name: 'healthy'}, 11: {name: 'damaged'}, 12: {name: 'mask'}};
+  const gltf = {parser: {json: {extras: {wotrAppearance: d}},
+    getDependency: async (type, i) => type === 'texture' ? textures[i] : nodes[i]}, scene: {add() {}}};
+  const controller = await restoreAppearance(gltf);
+  assert.notEqual(mesh.material, shared);
+  assert.deepEqual(textureSlots(idle, 1), [1, 2]);
+  controller.apply(null, 0);
+  assert.equal(mesh.material.map.name, 'damaged');
+  assert.equal(mesh.material.emissiveMap.name, 'mask');
+  controller.apply(attack, .5);
+  assert.equal(mesh.material.map, 'default');
+  assert.equal(mesh.material.emissiveMap, 'mask0');
+  assert.equal(shared.map, 'default');
 });

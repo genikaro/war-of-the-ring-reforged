@@ -32,6 +32,13 @@ Export every unit plus `index.json` for the viewer:
 python lms2gltf.py units --out-dir ../converted/units
 ```
 
+Buildings work the same way (`Buildings.lqr`); open the viewer with
+`?index=../converted/buildings/index.json` to pick them:
+
+```bash
+python lms2gltf.py buildings --out-dir ../converted/buildings
+```
+
 All state-controlled meshes and model attachments are retained in the GLB. Its
 default scene uses the class's declared idle state. Add `--level 2` or `--blood`
 to set the preview configuration, or `--all-attachments` to expose every model
@@ -64,7 +71,8 @@ state selects the sword in its scabbard, while attack-ready selects the drawn
 sword. The Uruk-hai missile state toggles the arrow at 0, 0.285, 0.683 and 1.0
 of the clip. Shelob's state enables her body and legs despite their default
 hidden flags. Building states select construction, healthy, damaged and ruins
-meshes; damaged texture swaps are still pending.
+meshes, and their texture keys swap the matching textures (ruins drop the team
+colour mask); see "Texture keys" in `NOTES-animation-states.md`.
 
 The viewer provides state, weighted-choice, gear-level and blood controls.
 It starts at the class's declared default state and first positive-weight
@@ -139,6 +147,8 @@ node --test test-model-appearance.mjs
 - Database: all 154 tables export to JSON (24,468 records); all 2108 models resolve to existing files.
 - LMD: all 2108 models decode sequentially, including 5576 animation states,
   5998 weighted choices, 411 joint sets and 4788 joint bounds.
+- Buildings: 41 of 41 export (40 unique models, 36 with texture keys). One
+  warning: two Dark Foundry ore parts name an attach joint their skeleton lacks.
 - Units: 84 of 85 export with animation (69 unique models, no warnings). Shelob now
   includes her body and 27 leg/head parts; only `UNIT_WILD_BUTTERFLY` lacks a model record.
 - Spot-checked in the viewer: Aragorn, Legolas, Gandalf, Uruk-hai, Elf Knight,

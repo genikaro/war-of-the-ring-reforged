@@ -36,6 +36,27 @@ def visibility_tracks(tracks):
             for track in tracks]
 
 
+def texture_keys(keys):
+    """The choice's second trailing key group selects textures per material stage.
+
+    Each key has 16 stage entries; a set flag makes the value a texture slot
+    index into the model's texture list. Only stages 0 (diffuse) and 1 (team
+    colour mask) are ever keyed. Buildings and siege parts swap construction,
+    healthy, damaged and ruins textures this way; ruins pair with a black mask.
+    """
+    return [[key['time'], [v if f and v >= 0 else -1 for f, v in zip(key['flags'][:2], key['values'][:2])]]
+            for key in keys]
+
+
+def texture_slots(choice, time=0):
+    """STEP evaluation from the model's default textures (-1) at every time."""
+    slots = [-1, -1]
+    for key_time, stages in (choice or {}).get('textureKeys', []):
+        if key_time <= time:
+            slots = [new if new >= 0 else old for new, old in zip(stages, slots)]
+    return slots
+
+
 def instance(res, parent=None, attachment=None, clip_prefix=''):
     """One model instance, retaining source slot indices even for missing files."""
     attachments = [a for a in res.get('attachments', []) if a['kind'] == 'model']
@@ -51,6 +72,7 @@ def instance(res, parent=None, attachment=None, clip_prefix=''):
                 'models': choice['models']['indices'],
                 'meshTracks': visibility_tracks(choice['mesh_tracks']),
                 'modelTracks': visibility_tracks(choice['model_tracks']),
+                'textureKeys': texture_keys(choice.get('secondary_keys', [])),
             })
         states.append({'id': state['id'], 'name': state['name'],
                        'totalWeight': state['total_weight'], 'choices': choices})
@@ -65,6 +87,7 @@ def instance(res, parent=None, attachment=None, clip_prefix=''):
         'parts': [None] * len(res['parts']),
         'partFlags': [p.get('state_mask', 0) for p in res['parts']],
         'attachments': [{'shown': a['shown'], 'flags': a['state_mask']} for a in attachments],
+        'textures': [],         # texture slot -> glTF texture index, filled for keyed models
         'states': states,
     }
 

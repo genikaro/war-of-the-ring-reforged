@@ -75,8 +75,8 @@ Groups occur in this order:
 3. Model attachment properties, one target per model bitset element.
 4. Effect attachment properties, one target per effect bitset element.
 5. Cloth properties, one target per cloth bitset element.
-6. Two additional event-key groups, each with its own count. The second
-   retains raw flag/type/value arrays; its gameplay meaning remains open.
+6. Two additional event-key groups, each with its own count. The second is
+   the texture selection (`secondary_keys`, see below).
 
 The key records contain nested versioned booleans and property structures.
 The decoder exposes `shown`, raw flags, secondary flags and raw parameter
@@ -84,6 +84,26 @@ values. Model keys consume 56 bytes after the time; effect keys 38 bytes;
 mesh/cloth keys 50 bytes. Unknown property flags are preserved. Event index
 lists are decoded, but their trailing model-level payloads and gameplay
 callbacks remain a separate investigation.
+
+## Texture keys (second additional key group)
+
+Every texture slot in a model stores 16 stage flags (`TextureSlot.channels`),
+and every key of this group stores 16 `(flag, value, type)` entries: one per
+material stage. A set flag makes the value an index into the model's texture
+slot list, so the key binds that texture to the stage. A flagged `-1` keeps
+the current texture. Only stages 0 (diffuse) and 1 (team colour mask) are
+keyed, and `type` is always 0. Several slots may share a stage, for example
+Orc Mound's construction, healthy, damaged and ruins textures all on stage 0.
+
+| Orc Mound state | Stage 0 | Stage 1 |
+|---|---|---|
+| Construction 00 to 02 | 0 `E_Construction_01` | 4 `E_Orc_Mound_Mask` |
+| Idle / training healthy | 1 `E_Orc_Mound_Healthy` | 4 mask |
+| Idle / training damaged, badly damaged | 2 `E_Orc_Mound_Damaged` | 4 mask |
+| Ruins | 3 `E_Ruins_01` | 5 `Black_2_by_2_Square` (no team colour) |
+
+Used by 1029 choices in 103 models: 91 building models and the 12 Battering
+Ram parts (healthy/damaged). Every keyed choice has two keys, at 0 and 1.
 
 ## Concrete checks
 

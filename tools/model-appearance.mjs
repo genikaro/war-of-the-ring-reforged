@@ -35,6 +35,16 @@ export function visibleNodes(data, choice = null, time = 0, config = data.config
   return result;
 }
 
+// Texture keys select a texture slot per material stage (0 diffuse, 1 team mask);
+// -1 keeps the exported default. STEP-evaluated from the default every time.
+export function textureSlots(choice, time) {
+  let slots = [-1, -1];
+  for (const [t, stages] of choice?.textureKeys ?? []) {
+    if (t <= time) slots = slots.map((old, i) => stages[i] >= 0 ? stages[i] : old);
+  }
+  return slots;
+}
+
 export async function restoreAppearance(gltf) {
   const data = gltf.parser.json.extras?.wotrAppearance;
   if (!data || data.version !== 1) return null;
@@ -53,7 +63,32 @@ export async function restoreAppearance(gltf) {
       if (node !== null) nodes.set(node, await gltf.parser.getDependency('node', node));
     }
   }
+  // Keyed models get their own material copies, so one instance's textures
+  // cannot leak into another model that shares an exported material.
+  const swaps = [];
+  for (const [i, model] of data.models.entries()) {
+    if (!model.textures?.some(t => t !== null)) continue;
+    const textures = await Promise.all(model.textures.map(t => t === null ? null : gltf.parser.getDependency('texture', t)));
+    const materials = [];
+    for (const node of model.parts) {
+      nodes.get(node)?.traverse(o => {
+        if (!o.isMesh) return;
+        o.material = o.material.clone();
+        materials.push({material: o.material, map: o.material.map, emissiveMap: o.material.emissiveMap});
+      });
+    }
+    for (const t of textures) if (t && materials[0]?.map) t.colorSpace = materials[0].map.colorSpace;
+    swaps.push({model: i, textures, materials});
+  }
   return {data, apply(choice, time, config) {
     for (const [node, shown] of visibleNodes(data, choice, time, config)) nodes.get(node).visible = shown;
+    for (const {model, textures, materials} of swaps) {
+      const current = model === 0 && choice ? choice : defaultChoice(data.models[model]);
+      const [base, mask] = textureSlots(current, model === 0 ? time : 0);
+      for (const m of materials) {
+        m.material.map = textures[base] ?? m.map;
+        if (m.emissiveMap) m.material.emissiveMap = textures[mask] ?? m.emissiveMap;
+      }
+    }
   }};
 }

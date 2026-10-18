@@ -61,10 +61,22 @@ Each model instance contains:
 - `partFlags`: original resource tags for each mesh slot.
 - `attachments`: `{shown, flags}` in **model-only** attachment order; effect
   slots do not shift these indices.
+- `textures`: the model's texture slots mapped to glTF texture indices (null
+  for slots no key uses); empty for models without texture keys.
 - `states`: `{id, name, totalWeight, choices}`.
 - Each choice: `clip` (exported animation name or null), `weight`, `meshes`
   (raw mesh selectors), `models` (enabled model-attachment indices),
-  `meshTracks` and `modelTracks` (per-slot lists of `[normalizedTime, shown]`).
+  `meshTracks` and `modelTracks` (per-slot lists of `[normalizedTime, shown]`),
+  `textureKeys` (`[normalizedTime, [stage0Slot, stage1Slot]]`, `-1` keeps the
+  exported material's texture; see `NOTES-animation-states.md`).
+
+Texture keys swap whole-model textures: stage 0 is the base colour texture and
+stage 1 the team colour mask (emissive texture), the latter only for Team
+Color materials. The exported materials use the default state's choice at time
+zero, so Orc Mound's default scene shows its healthy texture rather than the
+first stage-0 slot (construction). The viewer clones a keyed model's materials
+per instance and STEP-evaluates the keys from those defaults on every frame,
+so a state without keys restores the default textures.
 
 The viewer reattaches hidden mesh leaves through the GLTFLoader node bindings
 and updates `visible` on every mesh, including skinned meshes stored at the
@@ -77,9 +89,9 @@ ending before the clip's declared duration repeat their last value at the end.
 This preserves the correct clock even for a clip with no bone motion or only
 one pose key. Choice weights are shown but not sampled randomly in the viewer.
 
-Nested models use their own default appearance at time zero. Their independent
-animation playback, effects, cloth, property parameters other than visibility,
-and damaged/corrupted texture swaps remain future tasks. An engine importer
+Nested models use their own default appearance (and default textures) at time
+zero. Their independent animation playback, effects, cloth and property
+parameters other than visibility remain future tasks. An engine importer
 must interpret this metadata to get dynamic gear; generic glTF clip playback
 alone retains the default gear.
 
@@ -93,11 +105,16 @@ alone retains the default gear.
   visible geometry, and retain all referenced root-state skeleton clips.
 - Browser checks: Aragorn sheathed idle vs drawn attack-ready; Uruk-hai arrow
   present at 0.5 and absent at 0.8; Shelob renders; Beast Lair healthy vs initial
-  construction switches meshes. These are viewer checks; the Phase 1 gate's
-  comparison against original in-game screenshots remains open.
-- 42 Python tests and 6 Node tests cover parser/exporter regressions, default
+  construction switches meshes. Orc Mound construction, healthy, damaged and
+  ruins textures (ruins without team colour); Barracks healthy vs badly
+  damaged. These are viewer checks; the Phase 1 gate's comparison against
+  original in-game screenshots remains open.
+- 41/41 buildings export (40 unique models, 36 with texture keys). One warning:
+  two Dark Foundry ore parts name an attach joint missing from their skeleton.
+- 43 Python tests and 7 Node tests cover parser/exporter regressions, default
   selection, time-zero keys, backwards seeks/loops, mesh disappearance, named
-  configuration flags, hidden ancestors, static duration and GLB restoration.
+  configuration flags, hidden ancestors, static duration, GLB restoration and
+  texture keys (per-instance material copies, fallback to defaults).
 
 ```bash
 python -B -m unittest discover -q -s tools

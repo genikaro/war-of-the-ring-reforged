@@ -355,6 +355,21 @@ def _add_model(ex, res, parent, ctx, owner=None, attachment=None, depth=0, on_jo
         except ValueError as e:
             ex.log.append('%s: skeleton skipped (%s), static export' % (name, e))
             ctx = None
+    # Texture keys (model_appearance.texture_keys) swap whole-model textures per
+    # state. Embed every keyed slot and start from the default state's choice.
+    slot_files = [_file(t) for t in res.get('textures', [])]
+    keyed = {}
+    for state in appearance['states']:
+        for choice in state['choices']:
+            for _, stages in choice['textureKeys']:
+                for stage, tex in enumerate(stages):
+                    if 0 <= tex < len(slot_files) and slot_files[tex]:
+                        keyed.setdefault(tex, stage)
+    if keyed:
+        appearance['textures'] = [ex.texture(slot_files[t], keep_alpha=keyed[t] == 0)[0] if t in keyed else None
+                                  for t in range(len(slot_files))]
+    base, team_mask = model_appearance.texture_slots(model_appearance.default_choice(appearance))
+    team = 'MATERIAL_TEAM_COLOR' in res.get('materials', [])
     for slot, part in enumerate(res['parts']):
         mesh_file = _file(part['mesh'])
         if not mesh_file:
@@ -362,6 +377,10 @@ def _add_model(ex, res, parent, ctx, owner=None, attachment=None, depth=0, on_jo
             continue
         weights = _file(part.get('weights'))
         texture, mask = _file(part.get('texture')), _file(part.get('mask'))
+        if base in keyed:
+            texture = slot_files[base]
+        if team and team_mask in keyed:
+            mask = slot_files[team_mask]
         try:
             with open(mesh_file, 'rb') as f:
                 m = lms.parse(f.read())
@@ -407,16 +426,17 @@ def convert_model(resolver, key, out_path, all_attachments=False, level=1, blood
             'clips': [a['name'] for a in ex.animations], 'warnings': ex.log}
 
 
-def convert_all_units(out_dir, all_attachments=False, level=1, blood=False):
+def convert_all_units(out_dir, all_attachments=False, level=1, blood=False, table='Units'):
+    """Every record of Units.lqr (or Buildings.lqr): one .glb per model plus index.json."""
     import resolve_model
     resolver = resolve_model.Resolver()
-    units = sorted(resolver.db['Units'], key=lambda r: r.name)
+    units = sorted(resolver.db[table], key=lambda r: r.name)
     done, index = {}, []
     start = time.time()
     for unit in units:
         entry = {'unit': unit.name}
         try:
-            rec, _ = resolver.lookup(unit.name)
+            rec = resolver.models.get(unit['Model'])
             if rec is None:
                 raise ValueError('no model record')
             entry['model'] = rec.name
@@ -439,8 +459,8 @@ def convert_all_units(out_dir, all_attachments=False, level=1, blood=False):
         json.dump(index, f, indent=1)
     ok = sum(1 for e in index if 'file' in e)
     warned = sum(1 for e in index if e.get('warnings'))
-    print('\n%d of %d units exported (%d unique models, %d with warnings) in %.0fs' % (
-        ok, len(index), len(done), warned, time.time() - start))
+    print('\n%d of %d %s exported (%d unique models, %d with warnings) in %.0fs' % (
+        ok, len(index), table.lower(), len(done), warned, time.time() - start))
 
 
 def convert_files(mesh_specs, texture_path, out_path, skeleton_path=None):
@@ -470,11 +490,12 @@ def main():
     p.add_argument('--all-attachments', action='store_true')
     p.add_argument('--level', type=int, choices=range(1, 5), default=1, help='preview gear level (default: 1)')
     p.add_argument('--blood', action='store_true', help='include state-enabled blood overlays')
-    p = sub.add_parser('units')
-    p.add_argument('--out-dir', required=True)
-    p.add_argument('--all-attachments', action='store_true')
-    p.add_argument('--level', type=int, choices=range(1, 5), default=1, help='preview gear level (default: 1)')
-    p.add_argument('--blood', action='store_true', help='include state-enabled blood overlays')
+    for mode in ('units', 'buildings'):
+        p = sub.add_parser(mode)
+        p.add_argument('--out-dir', required=True)
+        p.add_argument('--all-attachments', action='store_true')
+        p.add_argument('--level', type=int, choices=range(1, 5), default=1, help='preview gear level (default: 1)')
+        p.add_argument('--blood', action='store_true', help='include state-enabled blood overlays')
     p = sub.add_parser('files')
     p.add_argument('meshes', nargs='+', help='mesh.lms or mesh.lms=weights.lwt')
     p.add_argument('--texture', required=True)
@@ -488,8 +509,8 @@ def main():
             a.out, info['bytes'], info['meshes'], info['joints'], len(info['clips'])))
         for w in info['warnings']:
             print('warning:', w)
-    elif a.mode == 'units':
-        convert_all_units(a.out_dir, a.all_attachments, a.level, a.blood)
+    elif a.mode in ('units', 'buildings'):
+        convert_all_units(a.out_dir, a.all_attachments, a.level, a.blood, a.mode.capitalize())
     else:
         convert_files(a.meshes, a.texture, a.out, a.skeleton)
     return 0
