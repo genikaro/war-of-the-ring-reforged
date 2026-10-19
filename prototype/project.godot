@@ -1,0 +1,23 @@
+; Source project only. The importer creates the local asset cache.
+config_version=5
+
+[application]
+config/name="War of the Ring Reforged — Prototype"
+run/main_scene="res://Main.tscn"
+config/features=PackedStringArray("4.7", "C#", "GL Compatibility")
+
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=800
+window/stretch/mode="canvas_items"
+
+[dotnet]
+project/assembly_name="Reforged"
+
+[physics]
+common/physics_ticks_per_second=20
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.025, 0.035, 0.045, 1)

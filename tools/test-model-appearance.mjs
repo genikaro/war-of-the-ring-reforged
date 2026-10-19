@@ -38,6 +38,26 @@ test('mesh disappearance keys, including exact endpoint', () => {
   assert.equal(visibleNodes(d, choice, 0).get(0), true);
 });
 
+test('cloth visibility restores on backwards seeks and obeys the owner gate', async () => {
+  const d = fixture(), choice = d.models[0].states[0].choices[0];
+  d.models[0].cloths = [{node: 4, shown: false, flags: 0}];
+  d.models[2].cloths = [{node: 5, shown: true, flags: 0}];
+  choice.cloths = [0];
+  choice.clothTracks = [[[0, true], [.5, false]]];
+  const nodes = Array.from({length: 6}, () => ({visible: true}));
+  const controller = await restoreAppearance({parser: {json: {extras: {wotrAppearance: d}},
+    getDependency: async (_, i) => nodes[i]}, scene: {add() {}}});
+  controller.apply(choice, .25);
+  assert.equal(nodes[4].visible, true);
+  assert.equal(nodes[5].visible, true);
+  controller.apply(choice, .5);
+  assert.equal(nodes[4].visible, false);
+  controller.apply(choice, .1);
+  assert.equal(nodes[4].visible, true);
+  controller.apply(null, 0);
+  assert.equal(nodes[5].visible, false);
+});
+
 test('level and blood selection uses named flags and permits masks with multiple levels', () => {
   const d = fixture();
   d.models[0].partFlags[0] = 1 | 32 | 64;

@@ -92,9 +92,12 @@ class Resolver:
         self.skeletons = self.db['Skeletons']
         self.materials = self.db['Materials']
         self.effects = self.db['Effects']
+        self.cloths = self.db['Cloths']
         self.model_by_file = {r['Filename'].replace('\\', '/').lower(): r for r in self.models}
         self._joints = {}
         self._clips = {}
+        self._cloth_data = {}
+        self._uva_data = {}
 
     # -- single records ------------------------------------------------
     def _entry(self, table, folder, rid, path=''):
@@ -132,6 +135,18 @@ class Resolver:
 
     def texture(self, rid, path=''):
         return self._entry(self.textures, 'Textures', rid, path)
+
+    def uva(self, rid):
+        if rid not in self._uva_data:
+            import texture_animation
+            entry = self._entry(self.db['UVAs'], 'UVAs', rid)
+            if entry and entry['exists']:
+                path = os.path.join(ROOT, entry['file'])
+                with open(path, 'rb') as f:
+                    entry['asset'] = texture_animation.parse_uva(f.read())
+                entry['texture'] = self.texture(entry['asset']['texture'])
+            self._uva_data[rid] = entry
+        return self._uva_data[rid]
 
     def joints(self, skeleton_file):
         if skeleton_file not in self._joints:
@@ -297,6 +312,22 @@ class Resolver:
             out['attachments'].append(item)
         out['secondary_events'] = m.secondary_events
         out['events'] = None if m.events is None else [self.event_names(e, names, m) for e in m.events]
+        out['cloths'] = []
+        for a in m.cloths:
+            import cth
+            entry = self._entry(self.cloths, 'Cloths', a.id, a.path)
+            if entry and entry['exists']:
+                file = entry['file']
+                if file not in self._cloth_data:
+                    with open(os.path.join(ROOT, file), 'rb') as f:
+                        self._cloth_data[file] = cth.parse(f.read())
+                entry['asset'] = self._cloth_data[file]
+                entry['uvas'] = [self.uva(rid) if rid >= 0 else None for rid in entry['asset']['uvas']]
+            out['cloths'].append({'cloth': entry,
+                                  'joint': a.joint, 'offset': list(a.offset),
+                                  'shown': a.shown, 'state_mask': a.state_mask})
+        out['cloth_collisions'] = m.cloth_collisions
+        out['cloth_collision_groups'] = m.cloth_collision_groups
         if m.warnings:
             out['warnings'] = m.warnings
         return out
@@ -323,6 +354,8 @@ def missing_files(res, effects=True):
             out += missing_files(a['model'], effects)
         elif effects:
             check(a.get('effect'))
+    for a in res.get('cloths', []):
+        check(a.get('cloth'))
     return out
 
 

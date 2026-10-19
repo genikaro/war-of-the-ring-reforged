@@ -186,16 +186,29 @@ new GLTFLoader().load(url, async gltf => {
     if (box.isEmpty()) box.setFromCenterAndSize(new THREE.Vector3(), new THREE.Vector3(1, 1, 1));
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
+    const focus = params.get('focus')?.split(',').map(Number);
+    if (focus?.length === 3 && focus.every(Number.isFinite)) center.fromArray(focus);
+    const world = gltf.parser.json.extras?.wotrWorld;
     const extent = Math.max(4, Math.ceil(Math.max(size.x, size.z) * 1.5));
-    scene.add(new THREE.GridHelper(extent, extent * 4, 0x556070, 0x3a404a));
+    if (!world) scene.add(new THREE.GridHelper(extent, extent * 4, 0x556070, 0x3a404a));
     let tris = 0;
     root.traverse(o => { if (o.isMesh) tris += o.geometry.index.count / 3; });
     const yaw = parseFloat(params.get('yaw') || '0') * Math.PI / 180;
-    const dist = Math.max(size.x, size.y, size.z) * 1.8;
-    camera.position.set(center.x + Math.sin(yaw) * dist, center.y + size.y * 0.15, center.z + Math.cos(yaw) * dist);
+    const requestedDistance = Number(params.get('distance'));
+    const dist = requestedDistance > 0 && Number.isFinite(requestedDistance) ? requestedDistance : Math.max(size.x, size.y, size.z) * 1.8;
+    const pitch = parseFloat(params.get('pitch') || (world ? '50' : '0')) * Math.PI / 180;
+    camera.near = Math.max(0.01, dist / 10000);
+    camera.far = Math.max(100, dist * 5);
+    camera.updateProjectionMatrix();
+    camera.position.set(center.x + Math.sin(yaw) * Math.cos(pitch) * dist,
+      center.y + Math.sin(pitch) * dist + size.y * 0.15,
+      center.z + Math.cos(yaw) * Math.cos(pitch) * dist);
     controls.target.copy(center);
     controls.update();
-    info.textContent = `${url.split('/').pop()}  |  ${tris} total triangles  |  ${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)} m`;
+    const clothCount = appearance?.data.models.reduce((n, m) => n + (m.cloths?.length ?? 0), 0) ?? 0;
+    info.textContent = `${url.split('/').pop()}  |  ${tris} total triangles  |  ${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)} m` +
+      (clothCount ? `  |  ${clothCount} cloth surfaces (initial pose)` : '') +
+      (world ? `  |  ${world.placed_objects} placed objects, ${world.water.length} lakes, ${world.decals?.length ?? 0} decals` : '');
   } catch (err) { info.textContent = 'Failed to prepare ' + url + ': ' + err.message; }
 }, undefined, err => { info.textContent = 'Failed to load ' + url + ': ' + err.message; });
 

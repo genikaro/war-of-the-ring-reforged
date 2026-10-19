@@ -1,5 +1,9 @@
 # Level containers and editor concepts
 
+The inventory below describes the initial conservative reader. The new
+`world_scene.py`/`wor2gltf.py` pipeline decodes the terrain/placement/pathing/lake
+prefixes of all 54 maps and renders Helm's Deep; see `NOTES-world-scenes.md`.
+
 `wor.py` inventories the shipped levels without changing the source install.
 It reads world metadata, the minimap and the compressed terrain vertex grid,
 then locates and validates the interned world-name table. Remaining byte ranges
@@ -172,9 +176,10 @@ not document the binary format. Relevant chapters:
   coexist; ambient sounds may be points or connected lines with inner/outer
   attenuation ranges.
 
-Next steps: walk the terrain-layer/coordinate records sequentially, decode
-placement records and resolve their name indices/database references, then
-decode passability, water and camera/marker records before scene export.
+Phase 2 now extends this initial inventory through EOF: terrain painting,
+placements, passability, water, camera/marker records and decals decode in
+`world_scene.py`. See `NOTES-world-scenes.md` for scene exports and current
+validation, and `prototype/README.md` above this folder for the Godot sandbox.
 
 ## Validation
 

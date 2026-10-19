@@ -51,6 +51,18 @@ def data():
 
 
 class AppearanceTests(unittest.TestCase):
+    def test_cloth_state_visibility_seeking_and_parent_gate(self):
+        d = data()
+        model = d['models'][0]
+        model['cloths'] = [{'node': 20, 'shown': False, 'flags': 0}]
+        current = model['states'][1]['choices'][0]
+        current.update(cloths=[0], clothTracks=[[[0, True], [.5, False]]])
+        self.assertTrue(appearance.visible_nodes(d, current, .25)[20])
+        self.assertFalse(appearance.visible_nodes(d, current, .5)[20])
+        self.assertTrue(appearance.visible_nodes(d, current, .1)[20])
+        d['models'][2]['cloths'] = [{'node': 21, 'shown': True, 'flags': 0}]
+        self.assertFalse(appearance.visible_nodes(d)[21])
+
     def test_declared_idle_and_hidden_attachment_override(self):
         d = data()
         self.assertEqual(d['models'][0]['defaultState'], 35)

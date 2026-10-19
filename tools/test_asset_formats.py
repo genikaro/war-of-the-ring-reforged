@@ -67,7 +67,12 @@ def mesh_bytes(version, textured=True, bad_usage=False):
         data += pack('3I', *indices)
     for usage in [(2, 1, 1) if bad_usage else (1, 1, 1), (3,), (3,)] + ([(1, 1, 1)] if textured else []):
         data += pack('%dI' % len(usage), *usage) + pack('3I', 0, 1, 2)
-    return data + string('Triangle')
+    data += string('Triangle') + pack('IIfI', 1, 0, 0, 0)
+    if version == 2.0:
+        data += pack('4I', 0, 0, 0, 0) + pack('%dI' % len(channels), *([0] * len(channels)))
+    if version >= 1.1:
+        data += pack('BI', 1, 0x2a2)
+    return data
 
 
 class SkeletonTests(unittest.TestCase):
@@ -158,6 +163,20 @@ class SkeletonTests(unittest.TestCase):
 
 
 class MeshTests(unittest.TestCase):
+    def test_zero_normals_repaired_from_geometry_and_degenerate_fallback(self):
+        mesh = lms.parse(mesh_bytes(2.0))
+        mesh.normals[0] = (0, 0, 0)
+        positions, normals, uvs, triangles, _ = lms2gltf.flatten(mesh)
+        self.assertTrue(all(abs(sum(v * v for v in normal) - 1) < 1e-6 for normal in normals))
+        a, b, c = [positions[i] for i in triangles[0]]
+        edge1 = [b[k] - a[k] for k in range(3)]
+        edge2 = [c[k] - a[k] for k in range(3)]
+        face = (edge1[1]*edge2[2] - edge1[2]*edge2[1], edge1[2]*edge2[0] - edge1[0]*edge2[2],
+                edge1[0]*edge2[1] - edge1[1]*edge2[0])
+        self.assertGreater(sum(x*y for x, y in zip(face, normals[0])), 0)
+        mesh.positions = [(0, 0, 0)] * len(mesh.positions)
+        self.assertEqual(lms2gltf.flatten(mesh)[1], [(0, 1, 0)] * 3)
+
     def test_all_versions_decode_the_same_geometry(self):
         mesh = lms.parse(mesh_bytes(1.0))
         for version in [1.1, 2.0]:

@@ -1,6 +1,21 @@
 # WotR asset tools (proof of concept)
 
-Python 3.13 + Pillow. Run from this folder.
+Python 3.13 + Pillow; map export also uses NumPy. Run from this folder.
+
+## Current playable prototype
+
+The Godot 4 C# sandbox loads Helm's Deep and twelve animated units. From the
+repository root, run `./prototype/run.ps1`; see [setup and controls](../prototype/README.md).
+Phase 2 is complete. Phase 3 is in progress, with reliable squad navigation
+next; [the roadmap](Roadmap.md) records the acceptance criteria and remaining
+animation/audio/importer work. Original-game screenshot comparison is deferred.
+
+Latest verification (Oct 19, 2026): 86 Python tests, eight JavaScript tests,
+15 C# simulation checks and the Godot input/combat smoke test pass. Generated
+assets, previews, validation reports and portable tools stay in ignored
+`converted/`; original and extracted assets are excluded from source control.
+
+## Asset tools
 
 | Script | Purpose |
 |---|---|
@@ -11,7 +26,12 @@ Python 3.13 + Pillow. Run from this folder.
 | `lwt.py` | `.lwt` skin weight parser. |
 | `lqr.py`, `lmd.py`, `resolve_model.py` | Database tables (including JSON export), `.lmd` models, and name to file resolution. See `NOTES-database.md`. |
 | `lmd_states.py` | Decoded weighted animation choices, mesh selectors, attachment visibility and property tracks inside `.lmd` models. See `NOTES-animation-states.md`. |
+| `lfx.py`, `lpo.py`, `cth.py`, `texture_animation.py` | Effects, projectile timelines, cloth particle grids and UV/texture animations. See `NOTES-presentation-assets.md`. |
+| `presentation_assets.py`, `verify_phase1.py` | Export presentation formats with typed dependencies; audit conversion coverage and the remaining visual gate. |
 | `lms2gltf.py` | Export to `.glb`: one unit by name, all units, or hand-picked files. |
+| `world_scene.py`, `terrain_set.py`, `mpl.py`, `map_decals.py` | Terrain, placements/decals, navigation geometry, lakes, palettes and the world tail. See `NOTES-world-scenes.md`. |
+| `wor2gltf.py`, `verify_phase2.py` | Export Helm's Deep as one GLB; audit all 54 maps and the rendered scene. |
+| `prepare_prototype.py` | Build a hashed local runtime cache for the Godot C# sandbox; optionally extract the owner's install. |
 | `viewer.html` | three.js viewer with unit and clip pickers (`?clip=Name`, `?t=0.5` freezes a frame). |
 
 Extract the archives once:
@@ -88,9 +108,34 @@ Visibility animation is stored in `extras.wotrAppearance` v1, with source slot
 indices, mesh-node bindings and normalized STEP keys. Generic glTF viewers
 show the default appearance; this project's viewer restores the retained
 hidden mesh nodes and switches their visibility. Nested models use their own
-default state; independent nested clip playback is pending. Effects, cloth,
-unknown property parameters and gameplay flag operations are not rendered.
+default state; independent nested clip playback is pending. Cloth renders its
+initial particle surface with state visibility and separate diffuse/team-mask
+UVs; its physical records remain in node extras. Effects retain references,
+visibility and event metadata. Particle/cloth simulation, unknown property
+parameters and gameplay flag operations are not rendered.
 See `NOTES-model-appearance.md` for the metadata contract and preview policy.
+
+## Presentation assets and Phase 1 audit
+
+```bash
+python presentation_assets.py export --out-dir ../converted/presentation
+python lms2gltf.py projectiles --out-dir ../converted/projectiles
+python verify_phase1.py
+```
+
+All 1507 files in Effects, Projectiles, UVAs, TextureAnimations and Cloths parse
+to EOF and export to JSON with known database references. The presentation
+exporter returns failure if references are missing: this install has two stale
+UI texture references, reported explicitly in its index. The Phase 1 audit
+separates source gaps from conversion errors. Projectiles have 33 model GLBs
+and four data-only definitions; the viewer can use `?index=../converted/projectiles/index.json`.
+GLBs preview models and initial cloth, while JSON retains the parameters for a
+future simulator. See `NOTES-presentation-assets.md` for layouts and limitations.
+
+`converted/phase1-report.json` records conversion coverage and the original-game
+screenshot comparison deferred by the project owner until after Phase 2.
+Phase 1 implementation is complete. Independent glTF validation and
+its content-hash checks are documented in the notes.
 
 ## Level inventory
 
@@ -174,13 +219,20 @@ node --test test-model-appearance.mjs
 - Database: all 154 tables export to JSON (24,468 records); all 2108 models resolve to existing files.
 - LMD: all 2108 models decode sequentially, including 5576 animation states,
   5998 weighted choices, 411 joint sets and 4788 joint bounds, then cloth
-  attachments, 5622 bounding boxes and 1936 clip events in 122 models (the two
-  Barad-dur models stop at their undecoded cloth simulation records).
+  attachments, 5622 bounding boxes, 109 cloth attachments, 114 cloth collision
+  volumes, 38 groups and 1938 clip events. Every model reaches its event table.
 - Buildings: 41 of 41 export (40 unique models, 36 with texture keys). One
   warning: two Dark Foundry ore parts name an attach joint their skeleton lacks.
-- Levels: 54 of 54 inventoried with verified terrain CRCs, 5,208,066 elevation
-  samples and 64,639 interned names. Texture layers and placed world records
-  remain opaque; the editor guide's concepts are summarized in `NOTES-levels.md`.
+  Cloth exports initial particle surfaces with atlas UVs, team masks and state visibility.
+- Presentation assets: 405 effects, 37 projectiles, 1027 UVAs, 2 texture sequences
+  and 36 cloths export structured JSON. All 142 generated unit/building/projectile
+  GLBs pass Khronos validation with zero errors and warnings.
+- Levels: all 54 maps decode through EOF; 59,850 model
+  placements, 1,022 effects and 752 decals resolve. Helm's Deep exports 105 ground textures,
+  all 767 placement nodes and two lakes; four navigation helpers are retained
+  but hidden. Birth of the Uruk-Hai adds a validated scene with ten decals.
+  MPL edge/index semantics are verified; two cyclic source tables are flagged.
+  See `NOTES-world-scenes.md` for commands and limits.
 - Units: 84 of 85 export with animation (69 unique models, no warnings). Shelob now
   includes her body and 27 leg/head parts; only `UNIT_WILD_BUTTERFLY` lacks a model record.
 - Spot-checked in the viewer: Aragorn, Legolas, Gandalf, Uruk-hai, Elf Knight,
@@ -210,6 +262,12 @@ node --test test-model-appearance.mjs
 
 ## Not yet handled
 
-Effects (`.lfx`), cloth, unnamed animation-event types, independent nested-model
-animation, full gameplay flag operations, terrain layers/decals, object placement,
-water, passability and map scene export.
+Particle/trail rendering, cloth wind/collision simulation, unnamed effect and
+gameplay parameters, unnamed animation-event types, independent nested-model
+animation, full gameplay flag operations, custom maps with secondary terrain painting,
+ground graph query semantics and runtime marker/camera/sound behavior.
+Decals render on terrain at initial size; dynamic resizing/fading and projection
+onto water/objects remain runtime work. Two source bridge MPL matrices contain cycles.
+Water previews preserve painted surfaces and opacity without animated shaders.
+Phase 1's original-game screenshot
+comparison is deferred until after Phase 2, when the project owner will capture references.

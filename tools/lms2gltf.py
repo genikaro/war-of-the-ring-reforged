@@ -9,13 +9,16 @@ Modes:
              skeleton, riders with their own skeleton).
     units    run "model" for every Units.lqr record, write one .glb per model
              plus index.json for the viewer.
+    buildings  same for Buildings.lqr, including initial cloth surfaces.
+    projectiles  retain projectile definitions and export their model previews.
     files    manual export of given meshes with one texture.
 
 All state-controlled geometry is retained. The default glTF scene uses the
 class's declared idle state, with level 1 gear and blood off. The viewer uses
 extras.wotrAppearance to switch meshes and attachments, including timed keys.
 --level and --blood set the preview configuration; --all-attachments exposes
-all model attachments for debugging. Effects and cloth are not yet exported.
+all model attachments for debugging. Cloth exports its initial particle grid;
+effects retain references and visibility timelines, without particle simulation.
 
 Team colour: parts with a *_Mask.dds use Materials/Team Color.lmt, two D3D9
 fixed-function stages: stage 0 MODULATE(texture, lit diffuse), stage 1
@@ -80,11 +83,27 @@ def flatten(mesh):
         e2 = [pc[k] - pa[k] for k in range(3)]
         fn = (e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0])
         vn = [nrm[a][k] + nrm[b][k] + nrm[c][k] for k in range(3)]
-        agree += 1 if sum(fn[k] * vn[k] for k in range(3)) > 0 else -1
+        dot = sum(fn[k] * vn[k] for k in range(3))
+        agree += 1 if dot > 0 else -1 if dot < 0 else 0
     if agree < 0:
         tris = [[a, c, b] for a, b, c in tris]
-    # Stored normals have w = 1 and are unit length; renormalise after rounding.
-    nrm = [tuple(c / (math.sqrt(sum(k * k for k in n)) or 1.0) for c in n) for n in nrm]
+    # Several shipped meshes have zero normals (Qamara's knife, Goblin Hovel,
+    # Arcane Library). glTF requires unit normals. Reconstruct missing ones
+    # from adjacent triangles; isolated/degenerate vertices use the up axis.
+    missing = {i for i, normal in enumerate(nrm) if not any(normal)}
+    if missing:
+        accumulated = {i: [0.0, 0.0, 0.0] for i in missing}
+        for a, b, c in tris:
+            e1 = [pos[b][k] - pos[a][k] for k in range(3)]
+            e2 = [pos[c][k] - pos[a][k] for k in range(3)]
+            normal = (e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2],
+                      e1[0] * e2[1] - e1[1] * e2[0])
+            for vertex in (a, b, c):
+                if vertex in missing:
+                    accumulated[vertex] = [x + y for x, y in zip(accumulated[vertex], normal)]
+        for vertex, normal in accumulated.items():
+            nrm[vertex] = normal if any(normal) else (0.0, 1.0, 0.0)
+    nrm = [tuple(c / math.sqrt(sum(k * k for k in n)) for c in n) for n in nrm]
     return pos, nrm, uv, tris, agree < 0
 
 
@@ -117,6 +136,7 @@ class Exporter:
         self._frames = {}
         self.log = []
         self.appearance = None
+        self.extras = {}
 
     # -- buffers -------------------------------------------------------
     def _view(self, data, target=None):
@@ -185,6 +205,42 @@ class Exporter:
         self.materials.append(mat)
         self._material_for[key] = len(self.materials) - 1
         return self._material_for[key]
+
+    def cloth(self, entry, parent):
+        """Initial cloth grid, with its own atlas rectangles and retained physics.
+
+        This surface has no wind solver. Its state visibility is evaluated by
+        wotrAppearance; particle/spring data remains available to an engine.
+        """
+        import cth
+        asset = entry['asset']
+        positions, uvs, triangles = cth.surface(asset)
+        stages = entry['uvas']
+        diffuse = stages[0] if stages else None
+        mask = stages[1] if len(stages) > 1 else None
+        texture = _file(diffuse.get('texture')) if diffuse else None
+        mask_file = _file(mask.get('texture')) if mask else None
+        material = self.material(texture, mask_file)
+        # Cloth uses different atlas rectangles per stage. Avoid modifying a
+        # material also used by ordinary model meshes.
+        mat = dict(self.materials[material])
+        mat.update(doubleSided=True, name=(entry.get('name') or 'cloth'))
+        if mask_file:
+            mat['emissiveTexture'] = {**mat['emissiveTexture'], 'texCoord': 1}
+        self.materials.append(mat)
+        attributes = {'POSITION': self.accessor([to_gltf_axes(p) for p in positions], '3f', 'VEC3', 5126, 34962, True)}
+        for stage, uva in enumerate([diffuse, mask]):
+            if uva and 'asset' in uva:
+                x, y, w, h = uva['asset']['rect']
+                mapped = [(x + u * w, y + v * h) for u, v in uvs]
+            else:
+                mapped = uvs
+            attributes['TEXCOORD_%d' % stage] = self.accessor(mapped, '2f', 'VEC2', 5126, 34962)
+        indices = self.accessor([i for triangle in triangles for i in triangle], 'H', 'SCALAR', 5123, 34963)
+        self.meshes.append({'name': entry.get('name') or 'cloth', 'primitives': [
+            {'attributes': attributes, 'indices': indices, 'material': len(self.materials) - 1}]})
+        return self.node({'name': entry.get('name') or 'cloth', 'mesh': len(self.meshes) - 1,
+                          'extras': {'wotrCloth': asset, 'preview': 'initial particle grid; no wind simulation'}}, parent)
 
     def skeleton(self, skel, parent=None, clip_prefix=''):
         """Add joint nodes, a skin and one animation per clip; return (joint nodes, skin)."""
@@ -300,8 +356,11 @@ class Exporter:
             gltf['skins'] = self.skins
         if self.animations:
             gltf['animations'] = self.animations
+        extras = dict(self.extras)
         if self.appearance is not None:
-            gltf['extras'] = {'wotrAppearance': self.appearance}
+            extras['wotrAppearance'] = self.appearance
+        if extras:
+            gltf['extras'] = extras
         js = json.dumps(gltf, separators=(',', ':')).encode()
         js += b' ' * (-len(js) % 4)
         binary = bytes(self.bin) + b'\0' * (-len(self.bin) % 4)
@@ -405,13 +464,23 @@ def _add_model(ex, res, parent, ctx, owner=None, attachment=None, depth=0, on_jo
         rel = [c / p for c, p in zip(_scale(sub), _scale(res))]
         node = ex.node(_offset_node(sub.get('model') or 'attachment', a['offset'], rel), anchor)
         _add_model(ex, sub, node, ctx, index, i, depth + 1, on)
+    for i, a in enumerate(res.get('cloths', [])):
+        entry = a['cloth']
+        if not entry or not entry.get('asset'):
+            ex.log.append('%s: missing cloth %s' % (name, entry))
+            continue
+        on = a['joint'] >= 0 and ctx is not None and a['joint'] < len(ctx[1])
+        anchor = ex.bone_frame(ctx, a['joint']) if on else parent
+        node = ex.node(_offset_node(entry.get('name') or 'cloth', a['offset'], (1, 1, 1)), anchor)
+        appearance['cloths'][i]['node'] = ex.cloth(entry, node)
 
 
-def convert_model(resolver, key, out_path, all_attachments=False, level=1, blood=False):
+def convert_model(resolver, key, out_path, all_attachments=False, level=1, blood=False, extras=None):
     if level not in range(1, 5):
         raise ValueError('gear level must be between 1 and 4')
     res = resolver.resolve(key)
     ex = Exporter()
+    ex.extras = extras or {}
     ex.appearance = {'version': 1, 'flags': model_appearance.flag_policy(resolver.db['ModelFlags']),
                      'config': {'level': level, 'blood': blood, 'allAttachments': all_attachments},
                      'models': []}
@@ -424,6 +493,53 @@ def convert_model(resolver, key, out_path, all_attachments=False, level=1, blood
     return {'model': res.get('model'), 'bytes': size, 'meshes': len(ex.meshes),
             'joints': sum(len(s['joints']) for s in ex.skins),
             'clips': [a['name'] for a in ex.animations], 'warnings': ex.log}
+
+
+def convert_projectiles(out_dir):
+    """Static model previews plus original projectile timelines (no flight simulation)."""
+    import lpo
+    import presentation_assets
+    import resolve_model
+    resolver = resolve_model.Resolver()
+    os.makedirs(out_dir, exist_ok=True)
+    index = []
+    for record in sorted(resolver.db['Projectiles'], key=lambda r: r.name):
+        row = {'unit': record.name, 'model': None, 'clips': []}
+        try:
+            path = resolver.index.find('Projectiles', record['Filename'])
+            if not path:
+                raise ValueError('missing projectile source')
+            with open(path, 'rb') as f:
+                projectile = lpo.parse(f.read())
+            refs = presentation_assets.resolve_references(resolver, 'Projectiles', projectile)
+            models = [key for key in projectile['resource_keys'] if key['kind'] == 0 and key['id'] >= 0]
+            definition = resolver.resolve(str(models[0]['id'])) if models else None
+            def has_geometry(model):
+                return bool(model.get('parts') or model.get('cloths') or any(
+                    has_geometry(a['model']) for a in model.get('attachments', []) if a['kind'] == 'model'))
+            filename = record.name + '.json'
+            with open(os.path.join(out_dir, filename), 'w', encoding='utf-8') as f:
+                json.dump({'format_version': 1, 'asset': projectile, 'references': refs,
+                           'model_definition': definition}, f, indent=2, allow_nan=False)
+            row['data'] = filename
+            if definition and has_geometry(definition):
+                name = record.name + '.glb'
+                row.update(convert_model(resolver, str(models[0]['id']), os.path.join(out_dir, name),
+                                         extras={'wotrProjectile': projectile}))
+                row['file'] = name
+            elif definition:
+                row.update(model=definition['model'], preview='effect-only model; skeleton and effects in JSON')
+            else:
+                row['preview'] = 'effect only' if any(key['kind'] == 1 for key in projectile['resource_keys']) else 'no visual resource'
+        except (OSError, ValueError, KeyError) as error:
+            row['error'] = str(error)
+        index.append(row)
+    with open(os.path.join(out_dir, 'index.json'), 'w', encoding='utf-8') as f:
+        json.dump(index, f, indent=2, allow_nan=False)
+    errors = sum('error' in row for row in index)
+    print('%d/%d projectile records decoded; %d model previews; %d errors' % (
+        len(index) - errors, len(index), sum('file' in row for row in index), errors))
+    return int(bool(errors))
 
 
 def convert_all_units(out_dir, all_attachments=False, level=1, blood=False, table='Units'):
@@ -496,6 +612,8 @@ def main():
         p.add_argument('--all-attachments', action='store_true')
         p.add_argument('--level', type=int, choices=range(1, 5), default=1, help='preview gear level (default: 1)')
         p.add_argument('--blood', action='store_true', help='include state-enabled blood overlays')
+    p = sub.add_parser('projectiles')
+    p.add_argument('--out-dir', required=True)
     p = sub.add_parser('files')
     p.add_argument('meshes', nargs='+', help='mesh.lms or mesh.lms=weights.lwt')
     p.add_argument('--texture', required=True)
@@ -511,6 +629,8 @@ def main():
             print('warning:', w)
     elif a.mode in ('units', 'buildings'):
         convert_all_units(a.out_dir, a.all_attachments, a.level, a.blood, a.mode.capitalize())
+    elif a.mode == 'projectiles':
+        return convert_projectiles(a.out_dir)
     else:
         convert_files(a.meshes, a.texture, a.out, a.skeleton)
     return 0

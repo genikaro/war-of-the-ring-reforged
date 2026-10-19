@@ -73,6 +73,11 @@ def instance(res, parent=None, attachment=None, clip_prefix=''):
                 'meshTracks': visibility_tracks(choice['mesh_tracks']),
                 'modelTracks': visibility_tracks(choice['model_tracks']),
                 'textureKeys': texture_keys(choice.get('secondary_keys', [])),
+                'cloths': choice.get('cloths', {}).get('indices', []),
+                'clothTracks': visibility_tracks(choice.get('cloth_tracks', [])),
+                'effects': choice.get('effects', {}).get('indices', []),
+                'effectTracks': visibility_tracks(choice.get('effect_tracks', [])),
+                'eventIndices': choice.get('event_indices', []),
             })
         states.append({'id': state['id'], 'name': state['name'],
                        'totalWeight': state['total_weight'], 'choices': choices})
@@ -88,6 +93,12 @@ def instance(res, parent=None, attachment=None, clip_prefix=''):
         'partFlags': [p.get('state_mask', 0) for p in res['parts']],
         'attachments': [{'shown': a['shown'], 'flags': a['state_mask']} for a in attachments],
         'textures': [],         # texture slot -> glTF texture index, filled for keyed models
+        'cloths': [{'node': None, 'shown': a['shown'], 'flags': a['state_mask']}
+                   for a in res.get('cloths', [])],
+        'effects': [a for a in res.get('attachments', []) if a['kind'] == 'effect'],
+        'events': res.get('events', []),
+        'clothCollisions': res.get('cloth_collisions', []),
+        'clothCollisionGroups': res.get('cloth_collision_groups', []),
         'states': states,
     }
 
@@ -126,6 +137,13 @@ def visible_nodes(data, choice=None, time=0):
             if current:
                 shown = shown_at(shown, current['meshTracks'], slot, t)
             visible[node] = enabled and shown and configuration_visible(model['partFlags'][slot], policy, config)
+        for slot, cloth in enumerate(model.get('cloths', [])):
+            if cloth['node'] is None:
+                continue
+            shown = slot in current.get('cloths', []) if current else cloth['shown']
+            if current:
+                shown = shown_at(shown, current.get('clothTracks', []), slot, t)
+            visible[cloth['node']] = enabled and shown and configuration_visible(cloth['flags'], policy, config)
         gates = []
         for slot, attachment in enumerate(model['attachments']):
             shown = slot in current['models'] if current else attachment['shown']

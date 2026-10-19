@@ -27,6 +27,11 @@ export function visibleNodes(data, choice = null, time = 0, config = data.config
       const shown = current ? shownAt(current.meshes[slot] !== -1, current.meshTracks, slot, t) : true;
       result.set(node, enabled && shown && configured(model.partFlags[slot], data.flags, config));
     });
+    (model.cloths ?? []).forEach((cloth, slot) => {
+      if (cloth.node === null) return;
+      const shown = current ? shownAt((current.cloths ?? []).includes(slot), current.clothTracks ?? [], slot, t) : cloth.shown;
+      result.set(cloth.node, enabled && shown && configured(cloth.flags, data.flags, config));
+    });
     gates.push(model.attachments.map((a, slot) => {
       const shown = current ? shownAt(current.models.includes(slot), current.modelTracks, slot, t) : a.shown;
       return enabled && (config.allAttachments || (shown && configured(a.flags, data.flags, config)));
@@ -59,7 +64,7 @@ export async function restoreAppearance(gltf) {
   }
   const nodes = new Map();
   for (const model of data.models) {
-    for (const node of model.parts) {
+    for (const node of [...model.parts, ...(model.cloths ?? []).map(c => c.node)]) {
       if (node !== null) nodes.set(node, await gltf.parser.getDependency('node', node));
     }
   }

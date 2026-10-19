@@ -64,6 +64,7 @@ class World:
     metadata: dict
     minimap: bytes
     heights: list
+    vertices: bytes = b''
 
 
 def name_table(data, start):
@@ -175,7 +176,7 @@ def parse(data):
             section('world_records_and_trailing_data', names_end, len(data), False),
         ],
     }
-    return World(metadata, minimap, heights)
+    return World(metadata, minimap, heights, vertices)
 
 
 def relative_path(name):

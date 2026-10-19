@@ -9,3 +9,9 @@ __pycache__/
 *.py[cod]
 .venv/
 .pytest_cache/
+
+# Godot/.NET generated caches; imported game content stays local
+.godot/
+**/bin/
+**/obj/
+/prototype/Assets/

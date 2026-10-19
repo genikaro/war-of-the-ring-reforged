@@ -132,6 +132,21 @@ def model_bytes(legacy=False, placeholder=False, events=False):
 
 
 class StateTests(unittest.TestCase):
+    def test_cloth_collision_shapes_and_groups_do_not_hide_events(self):
+        data = bytearray(model_bytes(events=True))
+        struct.pack_into('<II', data, 0x12 + 13 * 4, 1, 1)
+        # Insert the collision block between bounding boxes and event tables.
+        event_table_size = 12 + 2 * 22 + 20
+        at = len(data) - event_table_size
+        collision = pack('fi', 1, 0) + string('Cloth sphere') + pack('8f2i', 0, 0, 0, 1, 1, 0, 0, 0, 0, -1)
+        collision += pack('IfiBI6f', 100, .95, 0, 1, 100, 0, 0, 0, 1, .5, .1)
+        group = pack('fII', 1.1, 1, 0) + string('Cloth collision group') + pack('2If', 0, 0, 1)
+        data[at:at] = collision + group
+        model = lmd.parse(bytes(data))
+        self.assertEqual(model.cloth_collisions[0]['name'], 'Cloth sphere')
+        self.assertEqual(model.cloth_collision_groups[0]['indices'], [0])
+        self.assertEqual([event['name'] for event in model.events], ['footstep', 'melee_hit'])
+
     def test_sparse_ids_weighted_choices_and_visibility(self):
         model = lmd.parse(model_bytes())
         self.assertEqual([s.id for s in model.animation_states], [35, 2])

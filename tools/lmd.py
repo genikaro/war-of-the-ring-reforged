@@ -42,8 +42,8 @@ with a u32 class version (0x64..0x6a). Layout as far as decoded:
     c8 cloth attachments: as above, tail u32 0x65 + u32 or u32 0x64
     bounding boxes: u32 0x64, u32 n, u32[n] boxes per BBoxes.lqr layer,
              each u32 0x65, u32 attach_to_joint, i32 joint, u8, f32[12]
-    cloth simulation records (header [13] in 1.7, [14] in 1.4..1.6) and
-             their mesh slots: not decoded; when present, events stay unread
+    cloth collision volumes (header [13] in 1.7, [14] in 1.4..1.6):
+             named sphere/box/cylinder/capsule shapes, followed by indexed groups
     c10 secondary events: u32 0x64, u32 value, f32 time
     c11 clip events: u32 1, u32 type, f32 time (0..1 of the clip),
              u32 size, u32 offset, u8 gameplay, u8 presentation
@@ -121,8 +121,9 @@ class Model:
     state_lookup: list = field(default_factory=list)
     cloths: list = field(default_factory=list)            # cloth attachments, header count [8]
     bounding_boxes: list = field(default_factory=list)
+    cloth_collisions: list = field(default_factory=list)
+    cloth_collision_groups: list = field(default_factory=list)
     # Clip events (choice event_indices / secondary_event_indices point here).
-    # None when an undecoded cloth simulation block precedes them.
     secondary_events: list = field(default_factory=list)
     events: list = field(default_factory=list)
 
@@ -296,16 +297,28 @@ def _bounding_boxes(r):
 
 def _trailer(r, m):
     """Blocks after the attachments, in the order of the Rings.exe loader (0x5ec642):
-    cloth attachments, bounding boxes (0x5c7db5), cloth simulation records
+    cloth attachments, bounding boxes (0x5c7db5), cloth collision volumes
     (0x5eb75f, header [13] in 1.7, [14] in 1.4..1.6) and their meshes, then the
     clip events: secondary events (0x5c837b), event records (0x5b65e5) and the
     payload blob. Each payload starts with its record's type."""
     c = m.counts
     m.cloths = [_attachment(r, 'cloth') for _ in range(c[8])]
     m.bounding_boxes = _bounding_boxes(r)
-    if (c[13] if m.version >= 1.7 else c[14] if m.version >= 1.4 else 0):
-        m.secondary_events = m.events = None     # type-dispatched records, not decoded yet
-        return
+    collision_count = c[13] if m.version >= 1.7 else c[14] if m.version >= 1.4 else 0
+    m.cloth_collisions = [_cloth_collision(r) for _ in range(collision_count)]
+    group_count = c[14] if m.version >= 1.7 else c[15] if m.version >= 1.4 else 0
+    for _ in range(group_count):
+        version = round(r.unpack('f'), 1)
+        if version not in (1.0, 1.1):
+            raise ValueError('unsupported cloth collision group version')
+        group = {'version': version, 'indices': r.ints(r.count())}
+        if version >= 1.1:
+            group.update(name=r.str(), flags=list(r.unpack('II')))
+        if r.unpack('f') != 1.0:
+            raise ValueError('unsupported cloth collision group tail')
+        if any(i >= collision_count for i in group['indices']):
+            raise ValueError('cloth collision group index outside table')
+        m.cloth_collision_groups.append(group)
     m.secondary_events = []
     for _ in range(c[10]):
         r.expect(0x64, 'secondary event')
@@ -324,6 +337,26 @@ def _trailer(r, m):
         # sim/fx: the two flag bytes; gameplay events (hits, releases) set the
         # first, presentation (footsteps, sounds, voice) the second.
         m.events.append({'time': time, 'flags': [sim, fx], **_event(kind, payload[4:])})
+
+
+def _cloth_collision(r):
+    """Named collision volumes used by attached cloth (loader 0x5eb75f)."""
+    if r.unpack('f') != 1.0:
+        raise ValueError('unsupported cloth collision version')
+    kind = r.unpack('i')
+    result = {'type': kind, 'name': r.str(), 'position': list(r.unpack('4f')),
+              'rotation': list(r.unpack('4f')), 'flags': list(r.unpack('2i'))}
+    if kind == -1:
+        return result
+    if kind not in (0, 1, 3, 4):
+        raise ValueError('unsupported cloth collision shape %d' % kind)
+    r.expect(100, 'cloth collision properties')
+    result.update(friction=r.unpack('f'), shape_type=r.unpack('i'), enabled=bool(r.unpack('B')))
+    r.expect(100, 'cloth collision shape')
+    # Sphere: vec4 + two scalars. Box: three vec4s + scalar.
+    # Cylinder and capsule: two vec4s + five scalars.
+    result['shape'] = list(r.unpack('%df' % (6 if kind == 0 else 13)))
+    return result
 
 
 def parse(data):

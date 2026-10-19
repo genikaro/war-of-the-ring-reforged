@@ -134,9 +134,10 @@ indices 6..9 beyond its 6 model attachments; their namespace is open.
 Secondary events are `{value: 1, time}`; Aragorn's death and knockback
 choices reference them at the landing times (0.667, 0.407).
 
-The two Barad-dur models carry cloth simulation records before their events
-(type-dispatched reader `0x5eb75f`), so their events are reported as not
-decoded. `resolve_model.py --json` adds `<field>_name` for joints, attachments
+The records before events are now decoded cloth collision volumes and groups
+(type-dispatched reader `0x5eb75f`), including the Barad-dur models. All 2108
+models reach their event tables: 1938 events. See `NOTES-presentation-assets.md`.
+`resolve_model.py --json` adds `<field>_name` for joints, attachments
 and the referenced tables.
 
 ## Concrete checks
