@@ -122,12 +122,12 @@ public partial class CommandPanel : Control
     }
 
     public static string OrderName(OrderKind kind) => kind switch { OrderKind.AttackMove => "Attack-move",OrderKind.HoldGround => "Hold Ground",OrderKind.ForceAttack => "Force Attack",_ => kind.ToString() };
-    private static string PortraitName(string name) => name switch { "Aragorn" => "Portrait_G_Aragorn","Elf Knight" => "Portrait_G_Elven_Knight",_ => "Portrait_E_Uruk_Hai" };
+    private static string PortraitName(string name) => name switch { "Aragorn" => "Portrait_G_Aragorn","Elf Knight" or "Elven Knight" => "Portrait_G_Elven_Knight",_ => "Portrait_E_Uruk_Hai" };
 
     public void Refresh(IReadOnlyList<SimUnit> units,Func<int,string> name,OrderKind? pending,bool paused,IReadOnlyList<int[]>? groups = null,int allies = 0,int enemies = 0)
     {
         bool available = units.Count > 0;
-        _title.Text = units.Count == 1 ? name(units[0].Id)+$"   Health {units[0].Health}/100" : available
+        _title.Text = units.Count == 1 ? name(units[0].Id)+$"   Health {units[0].Health}/{units[0].MaxHealth}" : available
             ? $"{units.Count} selected   "+string.Join(" · ",units.GroupBy(u => name(u.Id)).Select(g => $"{g.Count()} {g.Key}")) : "Select your forces";
         _order.Text = available ? string.Join(" · ",units.GroupBy(u => u.Order).Select(g => $"{OrderName(g.Key)} ({g.Count()})"))
             + (units.Sum(u => u.OrderQueue.Count) > 0 ? $"   +{units.Sum(u => u.OrderQueue.Count)} queued" : "") : "Ctrl + number: assign group · Shift + number: add units";
@@ -151,8 +151,9 @@ public partial class CommandPanel : Control
         }
         foreach (var unit in units)
         {
-            var portrait = _portraits[unit.Id]; portrait.Health.Size = new(46*Math.Clamp(unit.Health/100f,0,1),4);
-            portrait.Button.TooltipText = $"{name(unit.Id)} #{unit.Id+1} · {unit.Health}/100\n{OrderName(unit.Order)}"
+            var portrait = _portraits[unit.Id]; portrait.Health.Size = new(46*Math.Clamp(unit.Health/(float)unit.MaxHealth,0,1),4);
+            portrait.Button.TooltipText = $"{name(unit.Id)} #{unit.Id+1} · {unit.Health}/{unit.MaxHealth}\n{OrderName(unit.Order)}"
+                + $"\nArmor {unit.Definition.ArmorMilli/1000.0:0.###} · {unit.Definition.DpsMilli/1000.0:0.###} DPS · {unit.Definition.DamageTypeName.Replace("DAMAGE_TYPE_","")}"
                 + (unit.OrderQueue.Count > 0 ? "\nQueue: "+string.Join(" → ",unit.OrderQueue.Select(o => OrderName(o.Kind))) : "")
                 + "\nClick to select. Shift-click removes from selection.";
         }

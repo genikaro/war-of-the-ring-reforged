@@ -94,6 +94,10 @@ automatically. Attack and Attack-move acquire connected enemies within the
 existing 10,000 mm prototype awareness radius, with distance then unit ID as
 deterministic tie breakers. Melee reach remains the existing 2,000 mm prototype
 rule with terrain/layer checks. These values do not establish original rules.
+Imported stats and animation-timed melee are described in [combat notes](COMBAT.md).
+Replacing an order cancels pending hits while preserving remaining recovery;
+queuing an order preserves the current swing. Health bars use each type's source
+maximum; portrait tooltips show imported armor, DPS and damage classification.
 
 Stop and Hold Ground preserve the exact current position. On a constrained
 deck segment the physical reservation stays held while stationary. A later
@@ -138,10 +142,11 @@ full original binding/layout fidelity remain subsequent work.
 
 ## Validation
 
-- 217 synthetic checks: original regressions, contextual Attack/neutral target
+- 243 synthetic checks: original regressions, timed melee, contextual Attack/neutral target
   checks, order/group checks and responsive
   layout checks through 4K, ultrawide and narrow windows.
-- 20 additional real-cache checks retain map navigation, traffic and spawn safety.
+- 31 additional real-cache checks retain map navigation, traffic and spawn safety,
+  and cover imported definitions and four repeatable duels.
 - `-CommandSmoke`: 23 actual Godot panel/input checks, including the four-button
   bottom-row layout and working hidden Move/Stop controls; report in
   `converted/prototype/command-smoke-report.json`.

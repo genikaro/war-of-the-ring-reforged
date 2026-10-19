@@ -24,8 +24,9 @@ polish is deferred. The original console artwork, scalable HUD, control groups,
 queued waypoints and explicit orders are implemented. The bottom action row is
 Attack, Hold, Guard, Patrol. Attack/A resolves by target: enemy pursuit,
 neutral/friendly force attack, or ground attack-move. Move and Stop work without
-visible buttons. Source-driven combat for these
-three unit types remains the next milestone. See [command behavior and reference notes](COMMANDS.md).
+visible buttons. These three types now use imported health, armor, melee DPS and
+animation-timed hit events, with weapon visibility and impact sounds. See
+[combat rules and approximations](COMBAT.md) and [command behavior](COMMANDS.md).
 
 Combat reserves separate reachable attack positions around each target, keeps
 allied spacing, and parks excess attackers outside the melee ring. Settled
@@ -66,6 +67,9 @@ To update just the squads and camera in an existing cache:
 ```powershell
 python tools/prepare_prototype.py --demo-only
 ```
+
+To refresh imported combat rules, equipment bindings and impact sounds in an
+existing cache, run `python tools/prepare_prototype.py --rules-only`.
 
 For another owner's install, provide its folder (containing `Database/`
 and `Archives/`). Extraction verifies CRCs and paths; the install is read only:
@@ -118,6 +122,7 @@ checked before loading. Never distribute the local cache with the project.
 ./prototype/run.ps1 -Smoke
 ./prototype/run.ps1 -MotionSmoke
 ./prototype/run.ps1 -CombatSmoke
+./prototype/run.ps1 -MeleeSmoke
 ./prototype/run.ps1 -CommandSmoke
 ./prototype/run.ps1 -OrdersSmoke
 ./prototype/run.ps1 -SurfaceSmoke
@@ -125,7 +130,7 @@ checked before loading. Never distribute the local cache with the project.
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --movement-benchmark converted/prototype/movement-after.json
 ```
 
-The simulation runner has no Godot or test-package dependency. Its 217 checks cover
+The simulation runner has no Godot or test-package dependency. Its 243 checks cover
 blocked routes, unreachable areas, adjacent-cell paths, deterministic ties,
 terrain interpolation, repeatable command playback, movement, combat,
 ownership and non-overlapping units, stationary-blocker detours, a six-unit
@@ -175,7 +180,10 @@ Extended checks cover ten editable groups, additive assignments, death pruning,
 queued formation routes, patrol resumption, guard following/leashes and ward
 death, friendly force attacks, and proportional HUD layouts through 4K and
 ultrawide sizes.
-The optional cache check adds twenty checks: runtime
+Melee checks cover timed windup/hits/recovery, cancellation, retargeting,
+multi-hit damage, armor/pair policies, fractional health and attacker limits.
+The optional cache check adds 31 checks, including four repeatable source-unit
+duels and imported definitions. Navigation checks retain runtime
 layers reproduce the static ground snapshot, all placed building centers are
 blocked, and all six friendly units visit each of Helm's Deep's four walkable
 surfaces without overlap and reach every order. Opposing six-unit squads also
@@ -195,6 +203,9 @@ and combat checks, writing `converted/prototype/motion-smoke-report.json`.
 The combat smoke test selects squads with number keys, sends all three friendly
 squads into combat through actual mouse input, and requires all three to fight
 without physical overlaps. Its report is `converted/prototype/combat-smoke-report.json`.
+The melee smoke test adds source stats, exact hit timing, animation seeks,
+equipment changes and impact playback. It writes `melee-smoke-report.json` and
+`melee-hit-trace.json`; source-unit duel evidence is in `melee-duels-report.json`.
 The command smoke test exercises actual panel buttons and hotkeys across all
 three blue squads. Its 23 checks cover the four bottom-row actions, target-dependent
 Attack/A, hidden Move/Stop controls, targeted and immediate orders, disabled
@@ -351,7 +362,9 @@ units inside single-file passages others must cross can still wait. Continuous
 movement through mixed wide/narrow routes and free-angle elevated motion remain
 open. The larger 6-to-14-unit stress suite has not been revalidated for this pass.
 
-Rules are placeholders: 100 HP, 12 melee damage, one-second cooldown, 3 m/s.
+The three demo types use imported stats and animation-timed melee. Armor math,
+event-scale normalization and effective range remain documented approximations;
+see [combat notes](COMBAT.md). Movement remains 3 m/s.
 Enemies acquire nearby reachable targets; attacked units retaliate. Attack orders
 retain nearby combat intent after a target dies; move orders clear it. Melee
 requires a supported route between attacker and target, so walls and disconnected
@@ -359,8 +372,8 @@ floors cannot become attack shortcuts. Settled allies keep 1.1 m spacing, and
 approaching allies keep 1 m where possible, allowing already crowded units to
 separate. The hard body diameter stays 700 mm. This is not the
 original combat/economy or skirmish AI. Unit states choose original idle/run/
-attack/death clips; Phase 1's complete attachment/texture event timelines still
-need an engine adapter. Audio, particles, water animation, cloth simulation,
+ready/attack/death clips; supported equipment visibility and impact sounds
+now have adapters. Complete texture/effect events, voices, particles, water animation, cloth simulation,
 in-game install selection and production importer packaging remain open.
 The command log and integer core make repeatability testable; cross-platform
 lockstep/networking is not claimed to be implemented.

@@ -69,6 +69,33 @@ def adapt(path):
     gltf, binary = load_glb(path)
     binary, changed = in_place(gltf, binary)
     gltf.setdefault('extras', {})['wotrPrototype'] = {'in_place_locomotion': changed}
+    restore_meshes(gltf)
+    write_glb(path,gltf,binary)
+    return changed
+
+
+def restore_meshes(gltf):
+    """Godot must import hidden equipment before runtime can switch its state."""
+    appearance = gltf.get('extras',{}).get('wotrAppearance',{})
+    for hidden in appearance.get('hiddenNodes',[]):
+        if hidden['parent'] is None:
+            children = gltf['scenes'][gltf.get('scene',0)].setdefault('nodes',[])
+        else:
+            children = gltf['nodes'][hidden['parent']].setdefault('children',[])
+        if hidden['node'] not in children:
+            children.append(hidden['node'])
+    for index,node in enumerate(gltf['nodes']):
+        if 'mesh' in node:
+            node['name'] = 'WotrMesh_' + str(index)
+
+
+def restore_geometry(path):
+    from wor2gltf import load_glb
+    path = Path(path); gltf,binary = load_glb(path)
+    restore_meshes(gltf); write_glb(path,gltf,binary)
+
+
+def write_glb(path,gltf,binary):
     js = json.dumps(gltf, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
     js += b' ' * (-len(js) % 4)
     binary += bytes(-len(binary) % 4)
@@ -76,4 +103,3 @@ def adapt(path):
     result += struct.pack('<2I', len(js), 0x4e4f534a) + js
     result += struct.pack('<2I', len(binary), 0x004e4942) + binary
     path.write_bytes(result)
-    return changed

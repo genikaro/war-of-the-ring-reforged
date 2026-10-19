@@ -7,8 +7,10 @@ Python 3.13 + Pillow; map export also uses NumPy. Run from this folder.
 The Godot 4 C# sandbox loads Helm's Deep and 36 animated units in six squads. It
 starts framing the units; keys 1/2/3 select the three blue squads. From the
 repository root, run `./prototype/run.ps1`; see [setup and controls](../prototype/README.md).
-Phase 2 is complete and the movement/spacing prototype is accepted. The next
-milestone is source-driven melee combat. The original console art, scalable HUD,
+Phase 2 is complete and the movement/spacing prototype is accepted. The three
+demo types now have [imported melee stats and timed attacks](../prototype/COMBAT.md),
+equipment visibility and impact sounds; original formulas remain partly unverified.
+The original console art, scalable HUD,
 four bottom-row actions with contextual Attack/A, hidden Move/Stop controls,
 queued waypoints and editable groups 1–0 are implemented;
 [the roadmap](Roadmap.md) records the sequence and deferred engine work.
@@ -24,8 +26,8 @@ for fidelity validation.
 The [prototype comparison](../references/original-game/PROTOTYPE-REVIEW.md)
 documents the corrected rendering imports and remaining gaps.
 
-Latest verification (Oct 19, 2026): 120 Python tests, eight JavaScript tests,
-217 synthetic C# checks, twenty real-map obstacle/navigation/demo checks, 40
+Latest verification (Oct 19, 2026): 129 Python tests, eight JavaScript tests,
+243 synthetic C# checks, 31 cache combat/navigation/demo checks, 40
 actual command/group/HUD input checks, the
 54-map walker mask audit and the Godot
 input/combat (including all three blue squads fighting with separated bodies), interpolated movement/turning, deck/underpass picking and obstacle
@@ -37,6 +39,8 @@ assets, previews, validation reports and portable tools stay in ignored
 
 | Script | Purpose |
 |---|---|
+| `combat_rules.py` | Export traced definitions, fixed-tick melee events and impact sounds for the three demo types. |
+| `pcm_audio.py` | Decode selected mono Microsoft ADPCM impact WAVs to PCM without an external codec. |
 | `h2o.py` | List/extract Liquid Entertainment `.H2O` archives (v6). Format notes in the module docstring. |
 | `blast.py` | PKWARE DCL "implode" decompressor used by H2O. |
 | `lms.py` | `.lms` mesh parser (v1.0, v1.1 and v2.0). Format notes in the module docstring. |

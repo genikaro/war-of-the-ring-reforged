@@ -10,6 +10,8 @@ public partial class Main : Node3D
 {
     private SimWorld? _world;
     private bool _loadFailed;
+    private CombatRules _rules = CombatRules.Probe;
+    private readonly Dictionary<string,JsonElement> _appearanceData = [];
     private NavigationPicker _picker = null!;
     private Camera3D _camera = null!;
     private Label _status = null!;
@@ -73,6 +75,8 @@ public partial class Main : Node3D
         public float DesiredYaw;
         public Vector3 RingPosition = new(float.PositiveInfinity, 0, 0);
         public float RingYaw;
+        public int AttackSerial = -1;
+        public UnitAppearance? Appearance;
     }
 
     public override void _Ready()
@@ -97,6 +101,7 @@ public partial class Main : Node3D
             if (arg == "--obstacle-smoke") _obstacleSmoke = true;
             if (arg == "--command-smoke") _commandSmoke = true;
             if (arg == "--orders-smoke") _ordersSmoke = true;
+            if (arg == "--melee-smoke") { _meleeSmoke = _combatSmoke = _smoke = true; }
         }
         _hud.Visible = !_hideHud;
         if (_cache == "") _cache = System.IO.Path.GetFullPath(ProjectSettings.GlobalizePath("res://../converted/prototype"));
@@ -131,6 +136,9 @@ public partial class Main : Node3D
         }
         if (manifest.TryGetProperty("team_colors", out var colors))
             _teamColors = colors.EnumerateArray().Select(c => new Color(c[0].GetSingle(), c[1].GetSingle(), c[2].GetSingle())).ToArray();
+        string rulesPath = manifest.GetProperty("combat_rules").GetString()!;
+        _rules = CombatRules.Parse(System.IO.File.ReadAllText(System.IO.Path.Combine(_cache,rulesPath)));
+        LoadCombatAudio(ReadJson(rulesPath));
         var nav = ReadJson("navigation.json");
         byte[] bytes = System.IO.File.ReadAllBytes(System.IO.Path.Combine(_cache, "heights.bin"));
         int[] heights = new int[bytes.Length / 4];
@@ -145,7 +153,7 @@ public partial class Main : Node3D
             dynamic ? _obstacleLayers.EnumerateArray().Select(o => new NavigationObstacle(o.GetProperty("id").GetInt32(),
                 o.GetProperty("nodes").EnumerateArray().Select(n => n.GetInt32()).ToArray(),
                 o.GetProperty("edges").EnumerateArray().Select(e => new NavigationEdge(e[0].GetInt32(), e[1].GetInt32())).ToArray())).ToArray() : null);
-        _world = new SimWorld(navigation);
+        _world = new SimWorld(navigation,_rules);
         _picker = NavigationPicker.FromCache(navigation, nav);
         var map = LoadGlb(manifest.GetProperty("map").GetString()!); AddChild(map);
         var gate = Descendants(map).OfType<Node3D>().FirstOrDefault(n => n.Name.ToString() == "MAIN_GATE");
@@ -181,9 +189,9 @@ public partial class Main : Node3D
             int team = spawn.GetProperty("team").GetInt32(), cell = spawn.GetProperty("cell").GetInt32();
             bool primary = team == 0 && _primarySquad.Count < 6;
             if (_surfaceSmoke && primary) { cell = navigation.Nearest(surfaceStart, surfaceSpawns); surfaceSpawns.Add(cell); }
-            var unit = _world.Spawn(team, cell);
-            if (primary) _primarySquad.Add(unit.Id);
             var model = manifest.GetProperty("models")[spawn.GetProperty("model").GetInt32()];
+            var unit = _world.Spawn(team, cell,_rules.Units[model.GetProperty("unit").GetString()!]);
+            if (primary) _primarySquad.Add(unit.Id);
             var root = new Node3D { Name = "Unit_" + unit.Id, PhysicsInterpolationMode = Node.PhysicsInterpolationModeEnum.Off };
             AddChild(root); root.Position = UnitPosition(unit);
             var modelKey = (model.GetProperty("file").GetString()!,team);
@@ -196,7 +204,23 @@ public partial class Main : Node3D
                     AlbedoColor = new Color("e9c22d"), CullMode = BaseMaterial3D.CullModeEnum.Disabled,
                     ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
             root.AddChild(ring);
-            _views[unit.Id] = new UnitView(root, ring, Descendants(visual).OfType<AnimationPlayer>().FirstOrDefault(), model);
+            if (!_appearanceData.ContainsKey(modelKey.Item1)) _appearanceData[modelKey.Item1] = UnitAppearance.Read(System.IO.Path.Combine(_cache,modelKey.Item1));
+            var appearance = new UnitAppearance(visual,_appearanceData[modelKey.Item1]);
+            appearance.Apply(model.GetProperty("idle").GetString()!,0);
+            var player = Descendants(visual).OfType<AnimationPlayer>().FirstOrDefault()
+                ?? throw new InvalidOperationException("Missing animation player for "+unit.Definition.Name);
+            foreach (string clip in unit.Definition.Attacks.Select(a => a.Clip).Append(unit.Definition.ReadyClip))
+                if (!player.GetAnimationList().Any(a => a == clip || a.EndsWith('/'+clip)))
+                    throw new InvalidOperationException("Missing combat animation: "+clip);
+            if (_meleeSmoke && unit.Definition.Id == 16)
+            {
+                var idle = appearance.VisibleNodes;
+                appearance.Apply(unit.Definition.ReadyClip,0); var ready = appearance.VisibleNodes;
+                appearance.Apply(unit.Definition.Attacks[0].Clip,0); var attack = appearance.VisibleNodes;
+                appearance.Apply(model.GetProperty("idle").GetString()!,0);
+                _equipmentStatesVerified = !idle.SequenceEqual(ready) && ready.SequenceEqual(attack) && idle.SequenceEqual(appearance.VisibleNodes);
+            }
+            _views[unit.Id] = new UnitView(root,ring,player,model) { Appearance = appearance };
         }
         _spawnCount = _world.Units.Count;
         _friendlySquads.AddRange(_world.Units.Where(u => u.Team == 0).Select(u => u.Id).Chunk(6));
@@ -310,7 +334,8 @@ public partial class Main : Node3D
             if (key.Keycode == Key.Space)
             {
                 _paused = !_paused;
-                foreach (var view in _views.Values) if (view.Player != null) view.Player.SpeedScale = _paused ? 0 : 1;
+                foreach (var (id,view) in _views) if (view.Player != null) view.Player.SpeedScale = _paused || _world.Units[id].StrikeActive ? 0 : 1;
+                foreach (var player in _impactPlayers) player.StreamPaused = _paused;
             }
             if (key.Keycode == Key.Escape)
             {
@@ -483,6 +508,7 @@ public partial class Main : Node3D
     {
         if (_world is null || _loadFailed || _paused) return;
         _world.Step();
+        PresentCombatEvents();
         if (_pendingObstacle >= 0)
         {
             bool applied = _world.Navigation.IsObstacleActive(_pendingObstacle) == _pendingObstacleActive;
@@ -505,24 +531,30 @@ public partial class Main : Node3D
                 int dx = next.X-previous.X, dz = next.Z-previous.Z;
                 if (dx != 0 || dz != 0) view.DesiredYaw = Mathf.Atan2(-dx,dz);
             }
-            string state = unit.Health <= 0 ? "death" : unit.Attacking ? "attack" : unit.Moving ? "walk" : "idle";
+            string state = unit.Health <= 0 ? "death" : unit.StrikeActive ? "attack" : unit.Moving ? "walk" : unit.Target >= 0 ? "ready" : "idle";
             if (unit.Moving) _movingSeen++;
             if (unit.Moving && unit.FreeMovement) _freeMovementSeen++;
             if (unit.Attacking) _attackingSeen++;
             if (unit.Attacking && unit.Team == 0)
                 for (int squad = 0; squad < _friendlySquads.Count; squad++)
                     if (_friendlySquads[squad].Contains(unit.Id)) _squadsFought.Add(squad);
-            string clip = view.Model.GetProperty(state).GetString() ?? "";
-            if (view.Player != null && clip != "" && clip != view.Clip)
+            string clip = state == "attack" ? unit.Definition.Attacks[unit.AttackVariant].Clip
+                : state == "ready" ? unit.Definition.ReadyClip : view.Model.GetProperty(state).GetString() ?? "";
+            bool restartAttack = unit.StrikeActive && view.AttackSerial != unit.AttackSerial;
+            if (view.Player != null && clip != "" && (clip != view.Clip || restartAttack))
             {
                 string? animation = view.Player.GetAnimationList().FirstOrDefault(a => a == clip || a.EndsWith('/' + clip));
                 if (animation != null)
                 {
                     var resource = view.Player.GetAnimation(animation);
-                    resource.LoopMode = state == "death" ? Animation.LoopModeEnum.None : Animation.LoopModeEnum.Linear;
-                    view.Player.Play(animation, 0.12); view.Clip = clip;
+                    resource.LoopMode = state is "death" or "attack" ? Animation.LoopModeEnum.None : Animation.LoopModeEnum.Linear;
+                    if (restartAttack) view.Player.Stop();
+                    view.Player.Play(animation,state == "attack" ? 0 : 0.12); view.Clip = clip;
                 }
             }
+            if (view.Player != null) view.Player.SpeedScale = unit.StrikeActive ? 0 : 1;
+            view.AttackSerial = unit.AttackSerial;
+            if (!unit.StrikeActive) view.Appearance?.Apply(clip,0);
             if (unit.Health <= 0) view.Died = true;
         }
         if (_combatSmoke)
@@ -554,6 +586,9 @@ public partial class Main : Node3D
                 float after = Mathf.Abs(Mathf.AngleDifference(yaw,view.DesiredYaw));
                 if (before > .01f && after < before && after > .001f) _turningSeen++;
                 view.Root.Rotation = new(0,yaw,0);
+                SeekAttack(unit,view,fraction);
+                if (!unit.StrikeActive && view.Player != null && view.Player.CurrentAnimation.ToString().Length > 0 && view.Player.CurrentAnimationLength > 0)
+                    view.Appearance?.Apply(view.Clip,view.Player.CurrentAnimationPosition/view.Player.CurrentAnimationLength);
             }
         foreach (var unit in _world.Units)
         {
@@ -613,9 +648,7 @@ public partial class Main : Node3D
         else if (!_smoke && !_commandSmoke && !_ordersSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
     }
 
-    private string UnitName(int id) => _views[id].Model.GetProperty("unit").GetString() switch {
-        "UNIT_G_HERO_ARAGORN" => "Aragorn", "UNIT_G_ELF_KNIGHT" => "Elf Knight",
-        "UNIT_E_URUK_HAI" => "Uruk-hai", _ => "Unit" };
+    private string UnitName(int id) => _world!.Units[id].Definition.DisplayName;
 
     private void Pan(float right, float forward)
     {
@@ -752,7 +785,15 @@ public partial class Main : Node3D
         _finishing = true;
         var report = new { ticks = _world!.Tick, units = _world.Units.Count, moving_samples = _movingSeen,
             free_movement_samples = _freeMovementSeen,
-            attack_samples = _attackingSeen, damage = _world.Units.Sum(u => 100-u.Health),
+            attack_samples = _attackingSeen, damage = _world.Units.Sum(u => u.MaxHealth-u.Health),
+            strike_starts = _strikeStarts,hit_events = _strikeHits,cancelled_strikes = _strikeCancels,
+            attack_seek_samples = _attackSeekSamples, impact_samples = _impactSamples,
+            equipment_changes = _views.Values.Sum(v => v.Appearance?.Changes ?? 0), rules_sha256 = _rules.Hash,
+            equipment_idle_ready_verified = _equipmentStatesVerified,
+            source_units = _world.Units.Select(u => u.Definition.Id).Distinct().Order().ToArray(),
+            source_health = _rules.Units.Values.Select(u => u.MaxHealth).Order().ToArray(),
+            hit_timing = _combatTrace.Where(e => e.Kind == CombatEventKind.Hit).All(e =>
+                e.Tick-e.StartTick == _world.Units[e.Unit].Definition.Attacks[e.Attack].Hits[e.Hit].Tick),
             animated_units = _views.Values.Count(v => v.Player != null && v.Clip != ""),
             input_selection = _inputSelectionPassed, input_move = _inputMovePassed, input_attack = _inputAttackPassed,
             input_camera = _inputCameraPassed, input_pause = _inputPausePassed,
@@ -762,15 +803,20 @@ public partial class Main : Node3D
             turning_samples = _turningSeen, interpolated_samples = _interpolatedSeen,
             friendly_squads_fought = _squadsFought.Count, combat_spacing = _combatSpacingPassed, input_squad_keys = _squadKeysPassed,
             map_loaded = true, initial_digest = _initialDigest, final_digest = _world.StateDigest() };
-        string path = System.IO.Path.Combine(_cache, _combatSmoke ? "combat-smoke-report.json" : _motionSmoke ? "motion-smoke-report.json" : "smoke-report.json");
+        string path = System.IO.Path.Combine(_cache, _meleeSmoke ? "melee-smoke-report.json" : _combatSmoke ? "combat-smoke-report.json" : _motionSmoke ? "motion-smoke-report.json" : "smoke-report.json");
         System.IO.File.WriteAllText(path, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+        string traceName = _meleeSmoke ? "melee-hit-trace.json" : _motionSmoke ? "motion-hit-trace.json" : "combat-hit-trace.json";
+        System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,traceName),JsonSerializer.Serialize(_combatTrace));
         bool passed = report.units == _spawnCount && report.moving_samples > 0 && report.attack_samples > 0 && report.damage > 0 && report.animated_units == _spawnCount
             && report.input_selection && report.input_move && report.input_attack && report.input_camera && report.input_pause
             && report.input_map_views && report.presentation_import && report.free_movement_samples > 0;
         if (_motionSmoke) passed &= report.turning_samples > 0 && report.interpolated_samples > 0;
         if (_combatSmoke) passed &= report.friendly_squads_fought == 3 && report.combat_spacing && report.input_squad_keys;
+        if (_meleeSmoke) passed &= report.source_units.SequenceEqual(new[] {3,16,34}) && report.source_health.SequenceEqual(new[] {240,350,485})
+            && report.hit_timing && report.hit_events > 0 && report.strike_starts > 0 && report.attack_seek_samples > 0
+            && report.impact_samples > 0 && report.equipment_changes > 0 && report.equipment_idle_ready_verified;
         GD.Print("SANDBOX_SMOKE " + JsonSerializer.Serialize(report));
-        GetTree().Quit(passed ? 0 : 1);
+        _ = FinishCombatAudio(passed ? 0 : 1);
     }
 
     private async Task CaptureFrame(bool quit)

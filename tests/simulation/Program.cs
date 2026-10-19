@@ -20,6 +20,7 @@ ResponsivenessChecks.Run(Check);
 CombatChecks.Run(Check);
 OrderChecks.Run(Check);
 ExtendedOrderChecks.Run(Check);
+MeleeChecks.Run(Check);
 
 var allowed = Enumerable.Repeat(true, 80).ToArray();
 for (int z = 0; z < 7; z++) allowed[z * 10 + 4] = false;
@@ -274,6 +275,7 @@ Check(!transitBuild.Navigation.IsObstacleActive(1), "replacement order cannot er
 if (cacheArg >= 0)
 {
     string cache = args[cacheArg+1];
+    MeleeChecks.Cached(Check,cache);
     var nav = JsonDocument.Parse(File.ReadAllText(Path.Combine(cache, "navigation.json"))).RootElement;
     var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(cache, "manifest.json"))).RootElement;
     byte[] rawHeights = File.ReadAllBytes(Path.Combine(cache, "heights.bin"));

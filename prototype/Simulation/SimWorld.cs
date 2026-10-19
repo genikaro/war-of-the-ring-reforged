@@ -13,7 +13,17 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int TransitNode { get; internal set; } = -1;
     public long TravelProgress { get; internal set; }
     public List<MovementSample> Movement { get; } = [];
-    public int Health { get; internal set; } = 100;
+    private long _healthMilli = 100_000;
+    public int Health { get => (int)((_healthMilli+999)/1000); internal set => _healthMilli = Math.Max(0,(long)value*1000); }
+    public long HealthMilli { get => _healthMilli; internal set => _healthMilli = Math.Max(0,value); }
+    public UnitDefinition Definition { get; internal set; } = UnitDefinition.Probe;
+    public int MaxHealth => Definition.MaxHealth;
+    public int AttackStartTick { get; internal set; } = -1;
+    public int AttackVictim { get; internal set; } = -1;
+    public int AttackVariant { get; internal set; } = -1;
+    public int AttackSerial { get; internal set; }
+    public int NextHit { get; internal set; }
+    public bool StrikeActive => AttackStartTick >= 0;
     public int Target { get; internal set; } = -1;
     public int Cooldown { get; internal set; }
     public List<int> Path { get; internal set; } = [];
@@ -54,10 +64,11 @@ public sealed record SimCommand(int Tick, int Sequence, int Team, int[] Units, i
 public sealed record SimObstacleCommand(int Tick, int Sequence, int Obstacle, bool Active);
 
 /// <summary>20 Hz integer simulation. No renderer, wall clock, random state or Godot APIs.</summary>
-public sealed partial class SimWorld(GridNavigation navigation)
+public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rules = null)
 {
     public const int TicksPerSecond = 20;
     public GridNavigation Navigation { get; } = navigation;
+    public CombatRules Rules { get; } = rules ?? CombatRules.Probe;
     public List<SimUnit> Units { get; } = [];
     public List<SimCommand> Commands { get; } = [];
     public List<SimObstacleCommand> ObstacleCommands { get; } = [];
@@ -65,12 +76,14 @@ public sealed partial class SimWorld(GridNavigation navigation)
     private int _sequence;
     private int _navigationRevision = navigation.Revision;
 
-    public SimUnit Spawn(int team, int cell)
+    public SimUnit Spawn(int team, int cell,UnitDefinition? definition = null)
     {
         if (!Navigation.CanStand(cell)) throw new ArgumentException("Spawn cell is blocked");
         var (x, z) = Navigation.Center(cell);
         int y = Navigation.NodeHeight(cell);
-        var candidate = new SimUnit(Units.Count,team,x,z) { Node = cell,Y = y };
+        definition ??= UnitDefinition.Probe; definition.Validate();
+        var candidate = new SimUnit(Units.Count,team,x,z) { Node = cell,Y = y,Definition = definition,
+            HealthMilli = (long)definition.MaxHealth*1000*definition.StartingHealthPercent/100 };
         if (!CanReserveMovement(candidate,cell) || OccupiedNodes(-1).Contains(cell) || Units.Any(u => u.Health > 0
             && DistanceSquared(x, z, u.X, u.Z) + (long)(y-u.Y)*(y-u.Y) < 700L*700))
             throw new ArgumentException("Spawn cell occupied");
@@ -148,6 +161,7 @@ public sealed partial class SimWorld(GridNavigation navigation)
                 continue;
             }
             if (!activating) unit.OrderQueue.Clear();
+            CancelStrike(unit);
             if (free && unit.TransitNode >= 0 && unit.TransitNode < Navigation.GroundCount
                 && FreeGround(unit.Node) && FreeGround(unit.TransitNode)) unit.GroundSegment = true;
             if (command.Kind is OrderKind.Stop or OrderKind.HoldGround) RebaseCombatGround(unit);
@@ -353,6 +367,7 @@ public sealed partial class SimWorld(GridNavigation navigation)
 
     public void Step()
     {
+        CombatEvents.Clear();
         var actions = Commands.Where(c => c.Tick == Tick).Select(c => (c.Sequence, Action: (Action)(() => Apply(c))))
             .Concat(ObstacleCommands.Where(c => c.Tick == Tick)
                 .Select(c => (c.Sequence, Action: (Action)(() => ApplyObstacle(c)))));
@@ -386,6 +401,7 @@ public sealed partial class SimWorld(GridNavigation navigation)
             unit.Moving = unit.Attacking = false;
             if (unit.Health <= 0)
             {
+                CancelStrike(unit);
                 unit.Order = OrderKind.Idle; unit.OrderDestination = unit.OrderTarget = -1;
                 unit.OrderQueue.Clear();
                 unit.Target = unit.Goal = unit.AttackNode = unit.CombatTarget = -1;
@@ -518,8 +534,9 @@ public sealed partial class SimWorld(GridNavigation navigation)
 
     public string StateDigest()
     {
-        var text = Tick + ":" + Navigation.Revision + ":" + string.Join(',', Navigation.ObstacleIds.Where(Navigation.IsObstacleActive))
+        var text = Rules.Hash + ":" + Tick + ":" + Navigation.Revision + ":" + string.Join(',', Navigation.ObstacleIds.Where(Navigation.IsObstacleActive))
             + ":" + string.Join(";", Units.Select(u => $"{u.Id},{u.Team},{u.X},{u.Y},{u.Z},{u.Node},{u.TransitNode},{u.TravelProgress},{u.Health},{u.Target},{u.Cooldown},{u.Waypoint},{u.Goal},{u.BlockedTicks},{u.YieldFor},{u.YieldGoal},{u.OrderSequence},{u.ReturningToRest},{u.FreeMovement},{u.GroundSegment},{u.GroundStartX},{u.GroundStartY},{u.GroundStartZ},{u.AvoidanceTicks},{u.AttackNode},{u.CombatTarget},{u.CombatPlanTick},{u.CombatWaiting},{u.AutoEngage},{u.Order},{u.OrderDestination},{u.OrderTarget},{u.PatrolStart},{u.PatrolEnd},{u.PatrolForward},{u.GuardPlanTick},{u.GuardOrigin}:{string.Join(',', u.Path)}:{string.Join('|',u.OrderQueue.Select(o => $"{o.Kind},{o.Cell},{o.Target},{o.Sequence}"))}"));
+        text += ":"+string.Join(';',Units.Select(u => $"{u.Definition.Id},{u.HealthMilli},{u.AttackStartTick},{u.AttackVictim},{u.AttackVariant},{u.AttackSerial},{u.NextHit}"));
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
     }
 }

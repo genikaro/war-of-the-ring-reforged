@@ -2,7 +2,7 @@
 
 Updated Oct 19, 2026 · @Evgenii
 
-Phases 1 and 2 implementation are complete. All 54 maps decode through EOF, including 752 decals. Helm's Deep and a decal-heavy Birth of the Uruk-Hai scene render and validate. An initial reference review has corrected prototype rendering bugs; controlled original-game fidelity validation remains open. The user has accepted Phase 3's movement and combat-spacing baseline. The command panel and explicit orders are implemented. The next milestone is the first data-driven combat slice in the Godot 4 C# sandbox (engine chosen Oct 19).
+Phases 1 and 2 implementation are complete. All 54 maps decode through EOF, including 752 decals. Helm's Deep and a decal-heavy Birth of the Uruk-Hai scene render and validate. An initial reference review has corrected prototype rendering bugs; controlled original-game fidelity validation remains open. The user has accepted Phase 3's movement and combat-spacing baseline. The command panel, explicit orders and first imported melee slice are implemented in the Godot 4 C# sandbox (engine chosen Oct 19). Original armor/range formulas and controlled combat comparisons remain open; the following gameplay milestone is one ranged unit with projectile resolution.
 
 An [original-game reference library](../references/original-game/README.md) now
 contains 74 saved images, the original manual and addendum, editor help and
@@ -14,14 +14,16 @@ The [prototype reference review](../references/original-game/PROTOTYPE-REVIEW.md
 corrects missing runtime mipmaps, ignored lake vertex colours, spawned team
 colours and selection disks. F1/F2/F3 views and capture metadata make further
 comparisons repeatable. Lighting, weather, water animation, original UI and
-animation-event/appearance adaptation remain open.
+the complete animation-event/appearance adaptation remain open. The three demo
+types now have the melee-event and equipment-visibility subset described below.
 
 ## Current checkpoint
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
-Latest checks: 120 Python tests, eight JavaScript tests and 217 synthetic C# checks
-pass. Twenty additional cache checks cover runtime masks matching the initial
+Latest checks: 129 Python tests, eight JavaScript tests and 243 synthetic C# checks
+pass. Thirty-one additional cache checks include imported combat definitions,
+four repeated duels and runtime masks matching the initial
 snapshot, all ten building centers being
 blocked and all six friendly units traversing the four Helm's Deep surfaces
 without overlap, plus opposing six-unit squads swapping between the clearing
@@ -70,8 +72,18 @@ and stationary orders never chase. Names, health, tooltips, active orders and
 disabled commands are visible. Twenty-two actual Godot input checks cover all
 three blue squads, cancellation, pause/resume and dead selections. The
 [command notes](../prototype/COMMANDS.md) record behavior, original references,
-intentional shortcut/layout differences and remaining limits. Stats and hit
-timing still use prototype combat.
+intentional shortcut/layout differences and remaining limits.
+
+The three types now use imported health (485/350/240), armor, melee DPS,
+classification and attacker caps. Original clip durations and `.lmd` hit events
+drive integer windup, damage and recovery. Cancellation retains cooldown;
+multi-hit damage preserves cycle DPS. Rendering seeks from simulation state;
+equipment visibility and three converted impact sounds are connected. The
+[combat notes](../prototype/COMBAT.md) record provenance and explicit armor,
+range and event-scale approximations. Four source-unit duels replay identically.
+The melee Godot check records 200 correctly timed hits over 420 ticks with all
+three squads fighting safely; a 4K capture was inspected. Original-game formula
+and duel comparisons remain open.
 
 ## Accepted baseline: movement and combat spacing
 
@@ -85,7 +97,7 @@ combat fidelity. Further movement/spacing polish is deferred. Revisit it only
 for regressions or when verified combat ranges, unit sizes or new gameplay
 actually require a change.
 
-## Next milestone: unit commands and first data-driven combat
+## Implemented milestone: unit commands and first data-driven combat
 
 **Goal:** use the command panel to control a small battle between the existing
 Aragorn, Elf Knight and Uruk-hai types, with distinct imported stats and attacks
@@ -109,7 +121,7 @@ whose damage lands at the appropriate point in the animation.
    - Verify cancellation during combat, Hold versus chasing, Attack-move
      resumption, mixed selections, dead units and identical replay state for
      equivalent button/hotkey/contextual orders.
-2. **Replace the three demo types' placeholder stats with imported definitions.**
+2. **Implemented: replace the three demo types' placeholder stats with imported definitions.**
    - Resolve `Units` to `Weapons`, `DamageTypes`, `UnitToUnitModifiers` and model
      data. Export a minimal hashed runtime rules cache from the owner's existing
      data. Keep source IDs/provenance; quantize values at the adapter boundary
@@ -117,14 +129,14 @@ whose damage lands at the appropriate point in the animation.
    - Start with base health, armor, melee weapon, damage classification, range
      and the supported attacker limit. The source `Units` records already give
      base health of 485 for Aragorn, 350 for Elf Knight and 240 for Uruk-hai;
-     all three currently use the prototype's 100 HP instead.
+     all three now use these imported maxima instead of the former 100 HP.
    - Recover or explicitly document each field's interpretation. The linked
      melee weapons store `CuttingDamagePerSecond`, not per-hit damage. Their
      `MaximumRange` values are 1.0 for Aragorn and 0.5 for the other two: establish
      world scale, body-radius and range-origin semantics before using these as
      center-to-center reach. Do not shrink the accepted spacing based on an
      unverified interpretation.
-3. **Add the deterministic melee attack lifecycle and matching presentation.**
+3. **Implemented with documented approximations: deterministic melee and matching presentation.**
    - Model attack preparation, hit timing, recovery, cancellation, target death
      and retargeting. Consume the decoded `.lmd` melee-hit events and damage
      scales through a runtime adapter; convert clip times to fixed simulation
@@ -138,7 +150,7 @@ whose damage lands at the appropriate point in the animation.
    - Connect the required attack-ready/weapon visibility states. Add the small
      set of hit/attack sounds needed to read these fights; the complete event,
      effects, cloth and voice adapters remain subsequent work.
-4. **Validate the complete slice in the current demo.**
+4. **Implemented regression validation; original-game comparison remains open.**
    - Exercise all initial orders through the actual UI across the three blue
      squads. Retain safe movement, waiting attackers and deterministic command
      playback while health and damage differ by unit type.
@@ -268,26 +280,28 @@ The engine is chosen. Remaining choices can be made as their implementation appr
 
 **Gate:** a skirmish sandbox on one map where you select units, order them to move and attack, and they path, animate and fight with placeholder rules.
 
-**Status (Oct 19): playable baseline accepted; console and basic orders implemented.** `prototype/run.ps1` launches 36 animated units in six squads with original console art, a scalable four-button bottom row (Attack, Hold, Guard, Patrol), target-dependent Attack/A, hidden Move/Stop controls, editable groups and queued waypoints. The integer 20 Hz core passes 217 synthetic checks plus twenty map/demo checks; 40 command/group input checks and existing combat/motion/picking checks cover actual Godot dispatch. The user accepts current movement and spacing. Advanced navigation, complete animation-state/event adaptation, audio and importer packaging remain deferred; proceed to the Phase 4 combat-data and hit-timing slice. See `prototype/README.md`.
+**Status (Oct 19): playable baseline accepted; commands and first imported melee implemented.** `prototype/run.ps1` launches 36 animated units in six squads with original console art, a scalable four-button bottom row (Attack, Hold, Guard, Patrol), target-dependent Attack/A, hidden Move/Stop controls, editable groups and queued waypoints. The integer 20 Hz core passes 243 synthetic checks plus 31 cache combat/map/demo checks; 40 command/group input checks and combat/motion/picking checks cover actual Godot dispatch. The user accepts current movement and spacing. Imported melee definitions, animation-timed damage, equipment visibility and impact sounds are connected. Original formula validation, advanced navigation, complete presentation and importer packaging remain open. See `prototype/README.md` and `prototype/COMBAT.md`.
 
 - [x] Settle the engine: Godot 4 with C#; current local cache is generated from the owner's install, with no assets in source control. Production asset-delivery packaging remains open.
 - [ ] Package the first-run importer: `prepare_prototype.py --install` now extracts/verifies source archives and writes a hashed runtime cache; in-game install selection and production packaging remain.
 - [x] Load a map scene and units; RTS camera (pan, zoom, rotate), selection box, move and attack orders
-- [ ] Complete animation state adaptation: initial idle/run/attack/death clips play; original attachment, texture and event timelines still need the Godot adapter.
+- [ ] Complete animation state adaptation: idle/run/ready/attack/death clips and the three demo types' melee/equipment visibility subset play; complete attachment, texture and event timelines remain open.
 - [x] Establish prototype navigation and combat spacing (accepted): eight-way layered A*, any-angle wide-ground movement, immediate redirects, formation assignment, mesh entrances/elevation, swept-body clearance, off-center walkway nodes, removable/restorable footprints, deck/underpass picking, congestion replanning, chained yielding and individual combat/waiting positions work. Six-unit traversal and six-versus-six walkway swaps pass. Advanced cases remain in the deferred navigation section; full original-game pathing fidelity is not claimed.
-- [x] Implement the selected-unit command panel and explicit Move/Attack/Attack-move/Stop/Hold Ground states, with shared button/hotkey/contextual dispatch, independent intent, cancellation, health, tooltips and replay checks. The combat-data adapter remains Phase 4 work.
+- [x] Implement the selected-unit command panel and explicit Move/Attack/Attack-move/Stop/Hold Ground states, with shared button/hotkey/contextual dispatch, independent intent, cancellation, health, tooltips and replay checks. A bounded three-type combat adapter is now implemented as the first Phase 4 slice.
 - [x] Fixed-step integer simulation separate from rendering: 20 Hz core, tick commands, stable ordering and repeatability tests; lockstep networking remains later work.
-- [ ] Audio: Ogg speech and music, WAV effects, triggered by clip events from Phase 1
+- [ ] Audio: the three melee impact variants are connected; Ogg speech/music and the complete clip-event effects/voice system remain open.
 
 ## Phase 4: game rules
 
 **Gate:** a skirmish against a scripted opponent that plays like the original: same costs, build times, damage outcomes and unit counters.
 
-**Next slice:** complete the combat-data and attack-timing parts of the milestone
-above for the three existing demo types. Establish supported data semantics before
-expanding to ranged combat, powers, the economy and production.
+**Current slice implemented:** the three demo types use traced definitions and
+fixed-tick melee events, with repeatable duel and Godot evidence. Armor, range
+and event-scale interpretations remain explicit approximations pending original
+comparisons. The following gameplay slice is one ranged unit and deterministic
+projectile/hit resolution, before powers, economy and production.
 
-- [ ] Load unit, weapon, building, spell and technique stats from the JSON tables (`Units`, `Weapons`, `Buildings`, `Spells`, `Techniques`, `UnitToUnitModifiers`, `BattleGear`, `HeroExperiences`)
+- [ ] Load unit, weapon, building, spell and technique stats from the JSON tables (`Units`, `Weapons`, `Buildings`, `Spells`, `Techniques`, `UnitToUnitModifiers`, `BattleGear`, `HeroExperiences`); three demo units' base melee definitions and pair-rule support are implemented.
 - [ ] Economy: resources, workers, building and training queues, places of power
 - [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them
 - [ ] Heroes, fate powers and spells (`SpellAndEventAndActions` chains events to actions)

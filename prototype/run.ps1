@@ -6,6 +6,7 @@ param(
     [switch]$CombatSmoke,
     [switch]$CommandSmoke,
     [switch]$OrdersSmoke,
+    [switch]$MeleeSmoke,
     [switch]$SurfaceSmoke,
     [switch]$ObstacleSmoke,
     [ValidateSet('squad', 'fortress', 'overview')]
@@ -35,7 +36,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 if ($LASTEXITCODE -ne 0) { throw 'C# build failed' }
 $arguments = @('--path', $PSScriptRoot)
 if ($Resolution) { $arguments += @('--resolution',$Resolution) }
-if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
+if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $MeleeSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
     $renderRate = if ($MotionSmoke) { '80' } else { '20' }
     if (-not $CapturePath) { $arguments += '--headless' }
     $arguments += @('--fixed-fps', $renderRate)
@@ -48,6 +49,7 @@ if ($MotionSmoke) { $arguments += '--motion-smoke' }
 if ($CombatSmoke) { $arguments += '--combat-smoke' }
 if ($CommandSmoke) { $arguments += '--command-smoke' }
 if ($OrdersSmoke) { $arguments += '--orders-smoke' }
+if ($MeleeSmoke) { $arguments += '--melee-smoke' }
 if ($SurfaceSmoke) { $arguments += '--surface-smoke' }
 if ($ObstacleSmoke) { $arguments += '--obstacle-smoke' }
 if ($CapturePath) { $arguments += "--capture=$([System.IO.Path]::GetFullPath($CapturePath))" }

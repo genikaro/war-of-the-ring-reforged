@@ -17,6 +17,7 @@ import prototype_assets
 import prototype_navigation
 import prototype_obstacles
 import prototype_interface
+import combat_rules
 from lms2gltf import convert_model
 from resolve_model import Resolver
 import wor
@@ -100,7 +101,7 @@ def prepare(output, install=None):
         if not (db_path / 'Models.lqr').is_file():
             raise ValueError('installation has no Database/Models.lqr')
         for name in ['Cloths', 'Effects', 'Levels', 'Materials', 'Meshes', 'MeshPathLookups',
-                     'Models', 'Skeletons', 'TerrainSets', 'TextureAnimations', 'Textures', 'UVAs', 'Weights']:
+                     'Models', 'Skeletons', 'SoundEffects', 'TerrainSets', 'TextureAnimations', 'Textures', 'UVAs', 'Weights']:
             source = install / 'Archives' / (name + '.H2O')
             # Validate paths before using the archive extractor.
             archive = h2o.H2OArchive(str(source))
@@ -172,12 +173,15 @@ def prepare(output, install=None):
                                  for channel in ['Red', 'Green', 'Blue']]
                                 for name in ['TEAM_COLOR_BLUE', 'TEAM_COLOR_RED']],
                 'models': models, 'spawns': spawns, 'groups': groups, 'camera_cell': camera_cell,
-                'rules': 'Prototype: 100 HP, 12 melee damage, 1 second cooldown, 3 m/s movement, integer positions at 20 Hz.',
+                'rules': 'Imported melee stats and fixed-tick clip hits; see combat/rules.json Policy for approximations.',
                 'source_sha256': scene['world'].metadata['sha256']}
     prototype_interface.export(output,resolver)
+    combat_rules.export(output,resolver)
     manifest['interface'] = 'interface/index.json'
+    manifest['combat_rules'] = 'combat/rules.json'
     files = [output / 'map/scene.glb', output / 'navigation.json', output / 'heights.bin'] + [output / m['file'] for m in models]
     files += sorted((output / 'interface').glob('*'))
+    files += [p for p in sorted((output/'combat').rglob('*')) if p.is_file()]
     manifest['files'] = {str(p.relative_to(output)).replace('\\', '/'): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     index = [{'unit': manifest['name'], 'file': manifest['map'], 'clips': []}]
@@ -192,8 +196,13 @@ if __name__ == '__main__':
     parser.add_argument('--install', type=Path)
     parser.add_argument('--demo-only', action='store_true', help='Refresh squads and camera in an existing local cache without reconverting assets')
     parser.add_argument('--ui-only', action='store_true', help='Extract original HUD artwork into an existing cache')
+    parser.add_argument('--rules-only', action='store_true', help='Refresh imported combat rules, equipment geometry and impact sounds')
     args = parser.parse_args()
-    if args.ui_only:
+    if args.rules_only:
+        if args.install or args.demo_only or args.ui_only:
+            parser.error('--rules-only requires an existing cache and no other preparation mode')
+        combat_rules.refresh(args.out)
+    elif args.ui_only:
         if args.install or args.demo_only:
             parser.error('--ui-only uses an existing cache and cannot be combined with --install or --demo-only')
         prototype_interface.refresh(args.out)

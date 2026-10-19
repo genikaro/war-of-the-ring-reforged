@@ -2,7 +2,7 @@ namespace Reforged.Simulation;
 
 public sealed partial class SimWorld
 {
-    private const int AttackRange = 2000, CombatSpacing = 1100;
+    private const int CombatSpacing = 1100;
 
     private void RebaseCombatGround(SimUnit unit)
     {
@@ -13,9 +13,9 @@ public sealed partial class SimWorld
         }
     }
 
-    private bool MeleeReach(int node, int x, int y, int z, SimUnit target)
+    private bool MeleeReach(int node, int x, int y, int z, SimUnit target,int range = 2000)
     {
-        if (DistanceSquared(x,z,target.X,target.Z)+(long)(y-target.Y)*(y-target.Y) > (long)AttackRange*AttackRange) return false;
+        if (DistanceSquared(x,z,target.X,target.Z)+(long)(y-target.Y)*(y-target.Y) > (long)range*range) return false;
         if (node < Navigation.GroundCount && target.Node < Navigation.GroundCount)
             return Navigation.CanTraverseGroundPoints(x,z,target.X,target.Z);
         // Keep the validated links on decks; nearby disconnected layers or a
@@ -53,7 +53,7 @@ public sealed partial class SimWorld
             if (range >= (long)CombatSpacing*CombatSpacing && range <= 4500L*4500
                 && Navigation.IsConnected(unit.Node,item.Node) && CombatPositionFree(unit,item.Node))
             {
-                bool waiting = !MeleeReach(item.Node,x,y,z,target);
+                bool waiting = !MeleeReach(item.Node,x,y,z,target,unit.Definition.ReachMm);
                 candidates.Add((item.Node,waiting,DistanceSquared(x,z,unit.X,unit.Z)+(long)(y-unit.Y)*(y-unit.Y)));
             }
             if (item.Depth >= 5) continue;
@@ -96,7 +96,7 @@ public sealed partial class SimWorld
         if (unit.Order == OrderKind.ForceAttack && unit.OrderTarget < 0 && unit.Goal >= 0) return false;
         bool released = false;
         if (unit.Target >= 0 && (Units[unit.Target].Health <= 0 || (HoldsPosition(unit)
-            && !MeleeReach(unit.Node,unit.X,unit.Y,unit.Z,Units[unit.Target]))))
+            && !MeleeReach(unit.Node,unit.X,unit.Y,unit.Z,Units[unit.Target],unit.Definition.ReachMm))))
         {
             bool explicitForce = unit.Order == OrderKind.ForceAttack && unit.OrderTarget >= 0;
             if (unit.OrderTarget == unit.Target) unit.OrderTarget = -1;
@@ -110,7 +110,7 @@ public sealed partial class SimWorld
         {
             var enemy = Units.Where(u => u.Team != unit.Team && u.Health > 0 && SeparationSquared(unit,u) <= 10_000L*10_000
                 && Navigation.IsConnected(unit.Node,u.Node) && MayAcquire(unit,u)
-                && (!HoldsPosition(unit) || MeleeReach(unit.Node,unit.X,unit.Y,unit.Z,u)))
+                && (!HoldsPosition(unit) || MeleeReach(unit.Node,unit.X,unit.Y,unit.Z,u,unit.Definition.ReachMm)))
                 .OrderBy(u => SeparationSquared(unit,u)).ThenBy(u => u.Id).FirstOrDefault();
             if (enemy != null) unit.Target = enemy.Id;
         }
@@ -121,25 +121,25 @@ public sealed partial class SimWorld
             return HoldsPosition(unit);
         }
         var target = Units[unit.Target];
-        if (MeleeReach(unit.Node,unit.X,unit.Y,unit.Z,target) && (HoldsPosition(unit) || RoomToFight(unit)))
+        bool inReach = MeleeReach(unit.Node,unit.X,unit.Y,unit.Z,target,unit.Definition.ReachMm);
+        bool canFight = inReach && (HoldsPosition(unit) || RoomToFight(unit));
+        if (canFight && !AttackerSlot(unit,target)) { CancelStrike(unit); unit.CombatWaiting = true; return true; }
+        if (canFight)
         {
             RebaseCombatGround(unit);
             unit.Path.Clear(); unit.Waypoint = 0; unit.Goal = -1;
             unit.FreeMovement = false; unit.AttackNode = unit.Node; unit.CombatTarget = target.Id;
             unit.CombatWaiting = false; unit.BlockedTicks = 0; unit.Attacking = true;
-            if (unit.Cooldown == 0)
-            {
-                target.Health = Math.Max(0,target.Health-12); unit.Cooldown = 20;
-                Retaliate(target,unit);
-            }
+            Strike(unit,target);
             return true;
         }
+        CancelStrike(unit);
         if (HoldsPosition(unit)) return true;
         bool valid = unit.AttackNode >= 0 && Navigation.CanStand(unit.AttackNode);
         if (valid && !unit.CombatWaiting)
         {
             var (x,z) = Navigation.Center(unit.AttackNode);
-            valid = MeleeReach(unit.AttackNode,x,Navigation.NodeHeight(unit.AttackNode),z,target);
+            valid = MeleeReach(unit.AttackNode,x,Navigation.NodeHeight(unit.AttackNode),z,target,unit.Definition.ReachMm);
         }
         bool replan = unit.CombatTarget != target.Id || unit.CombatPlanTick < 0
             || (Tick-unit.CombatPlanTick >= 6 && (!valid || unit.CombatWaiting || unit.BlockedTicks >= 3 || unit.Goal < 0));

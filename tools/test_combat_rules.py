@@ -1,0 +1,78 @@
+import io
+import struct
+import unittest
+import wave
+
+from combat_rules import attack_choice, quantize
+import combat_rules
+import prototype_assets
+from pcm_audio import decode_ms_adpcm
+
+
+def adpcm(payload=b'\x17', recent=0, older=0, delta=16, coefficient=(256,0), total=4):
+    block = struct.pack('<Bhhh',0,delta,recent,older)+payload
+    fmt = struct.pack('<HHIIHHHHHhh',2,1,44100,0,len(block),4,8,2+len(payload)*2,1,*coefficient)
+    def chunk(name,value):
+        return name+struct.pack('<I',len(value))+value+b'\0'*(len(value)&1)
+    body = b'WAVE'+chunk(b'fmt ',fmt)+chunk(b'fact',struct.pack('<I',total))+chunk(b'data',block)
+    return b'RIFF'+struct.pack('<I',len(body))+body
+
+
+class CombatAdapterTests(unittest.TestCase):
+    def test_event_ticks_ceil_source_fraction(self):
+        result = attack_choice({'clip_name':'swing','weight':1,'event_indices':[0,1]},[
+            {'name':'melee_hit','time':.5,'damage_scale':1},
+            {'name':'melee_hit','time':1,'damage_scale':.5}],1.53)
+        self.assertEqual(result['DurationTicks'],31)
+        self.assertEqual([(h['Tick'],h['Scale']) for h in result['Hits']],[(16,1000000),(30,500000)])
+
+    def test_invalid_events_fail(self):
+        for fraction in (-1,1.1,float('nan')):
+            with self.assertRaises(ValueError):
+                attack_choice({'clip_name':'x','weight':1,'event_indices':[0]},[
+                    {'name':'melee_hit','time':fraction,'damage_scale':1}],1)
+        with self.assertRaises(ValueError):
+            attack_choice({'clip_name':'x','weight':1,'event_indices':[]},[],1)
+
+    def test_quantization_is_explicit(self):
+        self.assertEqual(quantize(.0005),1)
+        with self.assertRaises(ValueError):
+            quantize(float('inf'))
+
+    def test_protected_outputs_fail_before_reading_sources(self):
+        for directory in ('extracted/cache','TLOTR - War of the Ring/cache'):
+            with self.assertRaisesRegex(ValueError,'outside'):
+                combat_rules.export(combat_rules.ROOT/directory)
+
+    def test_equipment_restore_is_idempotent_and_preserves_bones(self):
+        data = {'nodes':[{'name':'bone','children':[1]},{'name':'body','mesh':0},{'mesh':1},{'mesh':2}],
+                'scenes':[{'nodes':[0]}], 'extras':{'wotrAppearance':{'hiddenNodes':[{'node':2,'parent':0},{'node':3,'parent':None}]}}}
+        prototype_assets.restore_meshes(data); prototype_assets.restore_meshes(data)
+        self.assertEqual(data['nodes'][0],{'name':'bone','children':[1,2]})
+        self.assertEqual(data['scenes'][0]['nodes'],[0,3])
+        self.assertEqual([n['name'] for n in data['nodes'][1:]],['WotrMesh_1','WotrMesh_2','WotrMesh_3'])
+
+    def samples(self,source):
+        with wave.open(io.BytesIO(decode_ms_adpcm(source))) as pcm:
+            self.assertEqual((pcm.getnchannels(),pcm.getsampwidth(),pcm.getframerate()),(1,2,44100))
+            payload = pcm.readframes(pcm.getnframes())
+            return struct.unpack('<'+'h'*(len(payload)//2),payload)
+
+    def test_adpcm_seed_order_signed_nibbles_and_adaptation(self):
+        self.assertEqual(self.samples(adpcm(b'\x18',recent=10,older=-20)),(-20,10,26,-102))
+        self.assertEqual(self.samples(adpcm(b'\x77')), (0,0,112,378))
+
+    def test_adpcm_prediction_truncates_toward_zero(self):
+        self.assertEqual(self.samples(adpcm(b'\x00',recent=-3,coefficient=(64,0))),(0,-3,0,0))
+
+    def test_adpcm_clips_and_trims_fact_samples(self):
+        self.assertEqual(self.samples(adpcm(b'\x77',recent=32760,total=3)),(0,32760,32767))
+
+    def test_adpcm_rejects_truncation_and_bad_header(self):
+        for source in (adpcm()[:-1],adpcm(total=100),adpcm(delta=-1),b'not a wav'):
+            with self.assertRaises(ValueError):
+                decode_ms_adpcm(source)
+
+
+if __name__ == '__main__':
+    unittest.main()

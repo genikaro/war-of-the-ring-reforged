@@ -16,6 +16,7 @@ public sealed partial class SimWorld
 
     private void ReleaseCombat(SimUnit unit)
     {
+        CancelStrike(unit);
         RebaseCombatGround(unit);
         unit.Target = unit.Goal = unit.AttackNode = unit.CombatTarget = unit.CombatPlanTick = -1;
         unit.CombatWaiting = false; unit.Path.Clear(); unit.Waypoint = 0;
@@ -103,7 +104,7 @@ public sealed partial class SimWorld
         // A force move keeps its destination even when struck. A stationary
         // order can return blows within reach, but can never start a pursuit.
         if (victim.Health <= 0 || victim.Order == OrderKind.Move) return;
-        if (HoldsPosition(victim) && !MeleeReach(victim.Node,victim.X,victim.Y,victim.Z,attacker)) return;
+        if (HoldsPosition(victim) && !MeleeReach(victim.Node,victim.X,victim.Y,victim.Z,attacker,victim.Definition.ReachMm)) return;
         victim.AutoEngage = !HoldsPosition(victim);
         if (victim.Target < 0) victim.Target = attacker.Id;
     }
