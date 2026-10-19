@@ -50,6 +50,7 @@ checked before loading. Never distribute the local cache with the project.
 | Left-click / drag | Select friendly units |
 | Shift + selection | Add to selection |
 | Right-click terrain | Move the selection in a small formation |
+| Ctrl + right-click | Order movement on terrain beneath bridges and walkways |
 | Right-click an enemy | Attack, approaching when outside melee range |
 | Alt + right-click a placed obstacle | Remove it; click the same space again to restore it |
 | WASD / middle-drag | Pan the camera |
@@ -69,7 +70,7 @@ checked before loading. Never distribute the local cache with the project.
 ./prototype/run.ps1 -ObstacleSmoke
 ```
 
-The simulation runner has no Godot or test-package dependency. Its 48 checks cover
+The simulation runner has no Godot or test-package dependency. Its 62 checks cover
 blocked routes, unreachable areas, adjacent-cell paths, deterministic ties,
 terrain interpolation, repeatable command playback, movement, combat,
 ownership and non-overlapping units, stationary-blocker detours, a six-unit
@@ -82,6 +83,8 @@ Obstacle checks cover overlapping footprints, separate floors, blocked surface
 edges, route invalidation and recovery, deterministic obstacle commands, and
 safe restoration around standing units and units in transit. Replacement orders
 retain the occupied physical segment until the unit reaches a cell center.
+Input geometry checks cover stacked decks, ground below overpasses, slopes,
+map boundaries, ray range and shared triangle edges far from the origin.
 The optional cache check adds fourteen checks: runtime layers reproduce the
 static ground snapshot, all placed building centers are
 blocked, and all six friendly units visit each of Helm's Deep's four walkable
@@ -91,8 +94,9 @@ the actual map and twelve models, dispatches mouse/key events through the
 viewport, and checks selection, move/attack picking, zoom, pause/resume,
 animation and damage over 420 fixed ticks. Its report is
 `converted/prototype/smoke-report.json`.
-The surface smoke test places six units on an elevated deck and dispatches a
-right-click order. The obstacle smoke test removes and restores an obstacle
+The surface smoke test places six units on an elevated deck, dispatches a
+right-click order, then checks Ctrl + right-click terrain picking with the same
+screen position. The obstacle smoke test removes and restores an obstacle
 through actual Alt + right-click input and verifies its visibility each time.
 
 For a rendered capture (opens the engine, saves a frame, then exits):
@@ -139,8 +143,14 @@ around the unit center, conservatively enclosing its circular body. Triangle
 subtraction checks the whole footprint; overlapping triangles cannot conceal
 gaps. Support must match the local slope and interpolated height within 150 mm,
 so lower floors cannot fill holes in a deck. This conservative one-meter raster
-can omit narrow routes. Mouse orders pick the
-highest sampled surface in a column; picking beneath an overpass remains open.
+can omit narrow routes. Mouse orders intersect source terrain and walkable mesh
+triangles. Ctrl + right-click bypasses decks to target terrain beneath them.
+Grid traversal limits terrain queries to cells crossed by the ray; precise
+triangle calculations avoid cracks along shared edges. The input adapter uses
+floating-point geometry and quantizes its result into an integer node command;
+this math does not run inside simulation stepping. Mesh-edge clicks snap to a
+nearby node on the clicked source surface. These are navigation queries;
+rendered props and water do not occlude movement picking.
 Units retain their surface node and integer elevation; collision and melee use
 vertical separation. Congested units wait before entering occupied waypoints
 and retry routes around occupied cells after ten blocked ticks (half a second).

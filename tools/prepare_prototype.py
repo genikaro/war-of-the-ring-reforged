@@ -92,8 +92,10 @@ def prepare(output, install=None):
            'source_category': category['name'],
            'policy': 'Painted walker bits interpreted as allowed cells, with independently removable per-object collision masks. Original auxiliary masks and portal query semantics remain unverified.'}
     spacing = scene['world'].metadata['terrain']['cell_size']
+    surfaces = prototype_navigation.placed_surfaces(scene, resolver)
     nav.update(prototype_navigation.build(width, height, spacing,
-               source_allowed, scene['world'].heights, prototype_navigation.placed_surfaces(scene, resolver)))
+               source_allowed, scene['world'].heights, surfaces))
+    nav['picking_surfaces'] = surfaces
     nav['runtime_obstacles'] = prototype_obstacles.runtime_layers(width, height, spacing,
         source_allowed, scene['world'].heights, nav['surface_nodes'], footprints)
     (output / 'navigation.json').write_text(json.dumps(nav, indent=2) + '\n')

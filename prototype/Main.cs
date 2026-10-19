@@ -2,10 +2,12 @@ using Godot;
 using Reforged.Simulation;
 using System.Text.Json;
 using System.Buffers.Binary;
+using Reforged.Input;
 
 public partial class Main : Node3D
 {
     private SimWorld? _world;
+    private NavigationPicker _picker = null!;
     private Camera3D _camera = null!;
     private Label _status = null!;
     private Label _selection = null!;
@@ -23,6 +25,8 @@ public partial class Main : Node3D
     private string _cache = "", _capture = "";
     private bool _smoke;
     private bool _surfaceSmoke;
+    private bool _surfacePicked;
+    private Vector2 _surfaceSmokePoint;
     private bool _obstacleSmoke, _obstacleRemoved;
     private int _obstacleSmokeId = -1;
     private Vector2 _obstacleSmokePoint;
@@ -101,6 +105,7 @@ public partial class Main : Node3D
                 o.GetProperty("nodes").EnumerateArray().Select(n => n.GetInt32()).ToArray(),
                 o.GetProperty("edges").EnumerateArray().Select(e => new NavigationEdge(e[0].GetInt32(), e[1].GetInt32())).ToArray())).ToArray() : null);
         _world = new SimWorld(navigation);
+        _picker = NavigationPicker.FromCache(navigation, nav);
         var map = LoadGlb(manifest.GetProperty("map").GetString()!); AddChild(map);
         if (dynamic)
             foreach (var obstacle in _obstacleLayers.EnumerateArray())
@@ -175,7 +180,7 @@ public partial class Main : Node3D
         title.AddThemeFontSizeOverride("font_size", 20); lines.AddChild(title);
         _status = new Label { Text = "Loading local assets…" }; lines.AddChild(_status);
         lines.AddChild(new Label { Text = "WASD pan · Q/E rotate · Wheel zoom · Middle-drag pan · Space pause · Esc clear" });
-        lines.AddChild(new Label { Text = "Alt + right-click an obstacle to remove or restore it" });
+        lines.AddChild(new Label { Text = "Ctrl + right-click ground below bridges · Alt + right-click remove/restore obstacle" });
         _selection = new Label { Text = "" }; lines.AddChild(_selection);
         var reset = new Button { Text = "Restart sandbox", Position = new Vector2(18, 182) };
         _hud.AddChild(reset); reset.Pressed += () => GetTree().ReloadCurrentScene();
@@ -196,7 +201,7 @@ public partial class Main : Node3D
             }
             if (mouse.ButtonIndex == MouseButton.Right && mouse.Pressed)
             {
-                if (mouse.AltPressed) ToggleObstacle(mouse.Position); else Order(mouse.Position);
+                if (mouse.AltPressed) ToggleObstacle(mouse.Position); else Order(mouse.Position, mouse.CtrlPressed);
             }
         }
         if (input is InputEventMouseMotion motion)
@@ -228,30 +233,27 @@ public partial class Main : Node3D
         }
     }
 
-    private void Order(Vector2 mouse)
+    private void Order(Vector2 mouse, bool groundOnly = false)
     {
         var enemy = _world!.Units.Where(u => u.Team != 0 && u.Health > 0 && !_camera.IsPositionBehind(UnitPosition(u)))
             .OrderBy(u => _camera.UnprojectPosition(UnitPosition(u) + Vector3.Up).DistanceSquaredTo(mouse)).FirstOrDefault();
-        if (enemy != null && _camera.UnprojectPosition(UnitPosition(enemy) + Vector3.Up).DistanceTo(mouse) < 24)
+        if (!groundOnly && enemy != null && _camera.UnprojectPosition(UnitPosition(enemy) + Vector3.Up).DistanceTo(mouse) < 24)
         {
             _world.Enqueue(0, _selected, enemy.Node, enemy.Id);
             _status.Text = "Attack order issued"; return;
         }
         Vector3 origin = _camera.ProjectRayOrigin(mouse), direction = _camera.ProjectRayNormal(mouse);
-        for (float t = 0; t < 1500; t += 0.5f)
+        var hit = _picker.Pick(new(-origin.X, origin.Y, origin.Z), new(-direction.X, direction.Y, direction.Z), groundOnly);
+        if (hit == null) return;
+        int goal = _world.Navigation.Nearest(hit.Node);
+        if (goal >= 0)
         {
-            Vector3 point = origin + direction * t;
-            int x = (int)(-point.X * 1000), z = (int)(point.Z * 1000), cell = _world.Navigation.Cell(x, z);
-            if (cell < 0 || point.Y * 1000 > _world.Navigation.PickHeight(x, z)) continue;
-            int goal = _world.Navigation.Nearest(_world.Navigation.TopNode(x, z));
-            if (goal >= 0)
-            {
-                _world.Enqueue(0, _selected, goal);
-                _status.Text = "Move order issued";
-                _hud.Destination = _camera.UnprojectPosition(new Vector3(-x/1000f, _world.Navigation.PickHeight(x,z)/1000f, z/1000f)); _hud.DestinationTime = 0.7f;
-            }
-            return;
+            _world.Enqueue(0, _selected, goal);
+            _status.Text = groundOnly ? "Ground move order issued" : "Move order issued";
+            _hud.Destination = _camera.UnprojectPosition(new Vector3(-hit.Position.X, hit.Position.Y, hit.Position.Z));
+            _hud.DestinationTime = 0.7f;
         }
+        else _status.Text = "No walkable space at this point";
     }
 
     private void ToggleObstacle(Vector2 mouse)
@@ -355,14 +357,21 @@ public partial class Main : Node3D
         {
             _selected.UnionWith(_world.Units.Where(u => u.Team == 0).Select(u => u.Id));
             var unit = _world.Units[0];
-            var screen = _camera.UnprojectPosition(UnitPosition(unit));
+            _surfaceSmokePoint = _camera.UnprojectPosition(UnitPosition(unit));
             GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true,
-                Position = screen, GlobalPosition = screen }, true);
+                Position = _surfaceSmokePoint, GlobalPosition = _surfaceSmokePoint }, true);
         }
         if (_surfaceSmoke && _frames == 7)
         {
-            bool passed = _world.Commands.Any(c => c.Cell >= _world.Navigation.GroundCount && c.Units.Length == 6);
-            GD.Print("SURFACE_PICK_SMOKE " + passed); GetTree().Quit(passed ? 0 : 1);
+            _surfacePicked = _world.Commands.Any(c => c.Cell >= _world.Navigation.GroundCount && c.Units.Length == 6);
+            GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true, CtrlPressed = true,
+                Position = _surfaceSmokePoint, GlobalPosition = _surfaceSmokePoint }, true);
+        }
+        if (_surfaceSmoke && _frames == 9)
+        {
+            bool ground = _world.Commands.LastOrDefault() is { Target: -1 } command && command.Cell < _world.Navigation.GroundCount;
+            GD.Print("SURFACE_PICK_SMOKE " + _surfacePicked); GD.Print("UNDERPASS_PICK_SMOKE " + ground);
+            GetTree().Quit(_surfacePicked && ground ? 0 : 1);
         }
         if (_smoke) SmokeInput();
         if (_smoke && _capture != "" && _frames == 60) _ = CaptureFrame(false);

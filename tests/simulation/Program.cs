@@ -5,6 +5,7 @@ int passed = 0;
 void Check(bool value, string name) { if (!value) throw new Exception(name); passed++; }
 GridNavigation Grid(int width = 10, int height = 8, bool[]? allowed = null)
     => new(width, height, 1000, allowed ?? Enumerable.Repeat(true, width * height).ToArray(), new int[(width + 1) * (height + 1)]);
+NavigationPickerChecks.Run(Check);
 
 var allowed = Enumerable.Repeat(true, 80).ToArray();
 for (int z = 0; z < 7; z++) allowed[z * 10 + 4] = false;
