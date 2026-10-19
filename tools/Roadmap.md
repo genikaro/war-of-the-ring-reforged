@@ -8,11 +8,12 @@ Phases 1 and 2 implementation are complete. All 54 maps decode through EOF, incl
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
-Latest checks: 109 Python tests, eight JavaScript tests and 68 synthetic C# checks
-pass. Fourteen additional cache checks cover runtime masks matching the initial
+Latest checks: 109 Python tests, eight JavaScript tests and 80 synthetic C# checks
+pass. Sixteen additional cache checks cover runtime masks matching the initial
 snapshot, all ten building centers being
 blocked and all six friendly units traversing the four Helm's Deep surfaces
-without overlap. The cache contains
+without overlap, plus opposing squads swapping between the clearing and a
+walkway. The cache contains
 1,207 separate surface nodes and 39 terrain entrances, preserving elevation
 and 350 mm body support along mesh edges.
 Godot builds without warnings or errors; input and combat pass over 420 fixed
@@ -45,7 +46,13 @@ GLBs validated without errors or warnings. Original-game fidelity remains unveri
    pass. Formation slots now stay in the destination's connected region rather
    than snapping onto nearby disconnected patches. Region queries update after
    obstacle changes; unreachable replacement orders recenter moving units.
-   Corridors without passing space and complex gridlocks remain limited.
+   Opposing three-unit squads pass wide bays and single-entry three-cell pockets,
+   including reversed orders, cancellation and recorded command playback.
+   Movement endpoints stay reserved in transit. Refuges fill from the back,
+   remain stable while approached, and can relocate after a route changes.
+   Extra formation slots avoid nearby cut points so arrivals leave room for
+   other traffic; idle yielders settle nearby if their old spot is claimed.
+   Corridors without passing space wait safely; larger gridlocks need more coverage.
 3. Connect original animation events to equipment changes, footsteps,
    attack impacts and voices.
 4. Package the importer with an in-game installation picker.

@@ -21,6 +21,7 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int YieldFor { get; internal set; } = -1;
     public int YieldGoal { get; internal set; } = -1;
     public int OrderSequence { get; internal set; } = -1;
+    public bool ReturningToRest { get; internal set; }
 }
 
 public sealed record SimCommand(int Tick, int Sequence, int Team, int[] Units, int Cell, int Target = -1);
@@ -43,7 +44,8 @@ public sealed class SimWorld(GridNavigation navigation)
         if (!Navigation.CanStand(cell)) throw new ArgumentException("Spawn cell is blocked");
         var (x, z) = Navigation.Center(cell);
         int y = Navigation.NodeHeight(cell);
-        if (Units.Any(u => u.Health > 0 && DistanceSquared(x, z, u.X, u.Z) + (long)(y-u.Y)*(y-u.Y) < 700L*700))
+        if (Units.Any(u => u.Health > 0 && (u.Node == cell || u.TransitNode == cell
+            || DistanceSquared(x, z, u.X, u.Z) + (long)(y-u.Y)*(y-u.Y) < 700L*700)))
             throw new ArgumentException("Spawn cell occupied");
         var unit = new SimUnit(Units.Count, team, x, z) { Node = cell, Y = y }; Units.Add(unit); return unit;
     }
@@ -84,6 +86,7 @@ public sealed class SimWorld(GridNavigation navigation)
                 && Units[command.Target].Health > 0 ? command.Target : -1;
             unit.Path.Clear(); unit.Goal = -1; unit.BlockedTicks = 0;
             unit.OrderSequence = command.Sequence;
+            unit.ReturningToRest = false;
             unit.YieldFor = unit.YieldGoal = -1;
             foreach (var yielding in Units.Where(u => u.YieldFor == id))
             {
@@ -91,7 +94,7 @@ public sealed class SimWorld(GridNavigation navigation)
                 yielding.Path.Clear(); yielding.Waypoint = 0; yielding.BlockedTicks = 10;
             }
             if (anchor < 0 || !Navigation.IsConnected(unit.Node,anchor)) continue;
-            int goal = Navigation.Nearest(anchor, reserved, connectedTo: anchor);
+            int goal = reserved.Count == 0 ? anchor : Navigation.FormationSlot(anchor, reserved);
             if (goal < 0) continue;
             reserved.Add(goal);
             unit.Path = Navigation.FindPath(unit.Node, goal);
@@ -112,7 +115,7 @@ public sealed class SimWorld(GridNavigation navigation)
             && u.Goal < 0 && u.Target < 0 && u.YieldFor < 0 && u.OrderSequence == waiting.OrderSequence
             && u.OrderSequence >= 0 && route.Contains(u.Node)))
         {
-            var occupied = Units.Where(u => u.Id != parked.Id && u.Health > 0).Select(u => u.Node).ToHashSet();
+            var occupied = OccupiedNodes(parked.Id);
             var onward = Navigation.FindPath(parked.Node, waiting.Goal, occupied);
             if (onward.Count == 0) continue;
             parked.Goal = waiting.Goal; waiting.Goal = parked.Node;
@@ -121,18 +124,17 @@ public sealed class SimWorld(GridNavigation navigation)
             return;
         }
         foreach (var other in Units.Where(u => u.Id != waiting.Id && u.Team == waiting.Team
-            && u.Health > 0 && u.Target < 0 && u.YieldFor < 0))
+            && u.Health > 0 && u.Target < 0 && (u.YieldFor < 0 || u.YieldFor == waiting.Id)))
         {
+            if (other.YieldFor >= 0 && (other.TransitNode >= 0 || other.Node != other.YieldGoal)) continue;
             var (wx, wz) = Navigation.Center(waiting.Goal);
             int resume = other.Goal >= 0 ? other.Goal : other.Node;
             var (ox, oz) = Navigation.Center(resume);
-            if (other.Goal >= 0 && (long)(wx - waiting.X) * (ox - other.X)
+            if (other.YieldFor < 0 && other.Goal >= 0 && (long)(wx - waiting.X) * (ox - other.X)
                 + (long)(wz - waiting.Z) * (oz - other.Z) >= 0) continue;
             int cell = other.Node;
             if (!route.Contains(cell)) continue;
-            if (Units.Any(u => u.YieldFor == other.Id)) continue;
-            var occupied = Units.Where(u => u.Id != other.Id && u.Health > 0)
-                .Select(u => u.Node).ToHashSet();
+            var occupied = OccupiedNodes(other.Id);
             occupied.Remove(cell);
             var reserved = Units.Where(u => u.YieldGoal >= 0).Select(u => u.YieldGoal)
                 .Concat(Units.Where(u => u.Goal >= 0).Select(u => u.Goal)).ToHashSet();
@@ -145,9 +147,27 @@ public sealed class SimWorld(GridNavigation navigation)
                 if (!route.Contains(candidate) && !reserved.Contains(candidate)
                     && Navigation.FindPath(candidate, resume, new HashSet<int> { waiting.Goal }).Count > 0)
                 {
+                    // Fill a single-entry refuge from the back, keeping its
+                    // mouth available for the rest of the oncoming squad.
+                    var pockets = new Queue<(int Node,int Depth)>(); pockets.Enqueue((candidate,0));
+                    var pocketSeen = new HashSet<int> { candidate };
+                    int refuge = candidate, bestDepth = 0;
+                    while (pockets.TryDequeue(out var pocket))
+                    {
+                        if (pocket.Depth > bestDepth || (pocket.Depth == bestDepth && pocket.Node < refuge))
+                        { refuge = pocket.Node; bestDepth = pocket.Depth; }
+                        if (pocket.Depth >= 8) continue;
+                        foreach (int next in Navigation.Neighbors(pocket.Node))
+                            if (Navigation.CanStand(next) && !route.Contains(next) && !occupied.Contains(next)
+                                && !reserved.Contains(next) && pocketSeen.Add(next)) pockets.Enqueue((next,pocket.Depth+1));
+                    }
+                    other.ReturningToRest |= other.Goal < 0;
                     other.Goal = resume;
-                    other.YieldFor = waiting.Id; other.YieldGoal = candidate;
-                    other.Path = Navigation.FindPath(cell, candidate, occupied);
+                    // Keep existing refuges held for the new priority unit,
+                    // instead of letting a dependent pin this blocker in place.
+                    foreach (var dependent in Units.Where(u => u.YieldFor == other.Id)) dependent.YieldFor = waiting.Id;
+                    other.YieldFor = waiting.Id; other.YieldGoal = refuge;
+                    other.Path = Navigation.FindPath(cell, refuge, occupied);
                     other.Waypoint = 0; other.BlockedTicks = 0;
                     return;
                 }
@@ -156,6 +176,10 @@ public sealed class SimWorld(GridNavigation navigation)
             }
         }
     }
+
+    private HashSet<int> OccupiedNodes(int except)
+        => Units.Where(u => u.Id != except && u.Health > 0)
+            .SelectMany(u => u.TransitNode >= 0 ? new[] { u.Node,u.TransitNode } : new[] { u.Node }).ToHashSet();
 
     public void Step()
     {
@@ -189,6 +213,18 @@ public sealed class SimWorld(GridNavigation navigation)
                     unit.Path = Navigation.FindPath(unit.Node, unit.Goal);
                     unit.Waypoint = 0; unit.BlockedTicks = 0;
                 }
+            }
+            if (unit.ReturningToRest && unit.YieldFor < 0 && unit.Goal >= 0 && unit.Target < 0
+                && (!Navigation.CanStand(unit.Goal) || Units.Any(u => u.Id != unit.Id && u.Health > 0
+                    && (u.Goal == unit.Goal || (u.Goal < 0 && u.Node == unit.Goal)))))
+            {
+                // An idle blocker has no explicit destination to defend. If a
+                // convoy parks in its old spot, settle in nearby free space.
+                var reserved = OccupiedNodes(unit.Id);
+                reserved.UnionWith(Units.Where(u => u.Id != unit.Id && u.Health > 0 && u.Goal >= 0).Select(u => u.Goal));
+                int rest = Navigation.Nearest(unit.Goal,reserved,connectedTo: unit.Node);
+                unit.Goal = rest >= 0 ? rest : unit.Node;
+                unit.Path = Navigation.FindPath(unit.Node,unit.Goal); unit.Waypoint = 0;
             }
             if (unit.Cooldown > 0) unit.Cooldown--;
             if (unit.Team == 1 && unit.Target < 0)
@@ -224,8 +260,7 @@ public sealed class SimWorld(GridNavigation navigation)
             if (unit.Goal >= 0 && unit.BlockedTicks >= 10)
             {
                 int start = unit.Node;
-                var blocked = Units.Where(u => u.Id != unit.Id && u.Health > 0)
-                    .Select(u => u.Node).ToHashSet();
+                var blocked = OccupiedNodes(unit.Id);
                 blocked.Remove(start);
                 unit.Path = Navigation.FindPath(start, unit.YieldGoal >= 0 ? unit.YieldGoal : unit.Goal, blocked);
                 unit.Waypoint = 0; unit.BlockedTicks = 0;
@@ -249,7 +284,8 @@ public sealed class SimWorld(GridNavigation navigation)
                 // Wait before entering an occupied waypoint, keeping queues at
                 // cell centers so replanning cannot strand several units in one cell.
                 if (Units.Any(other => other.Id != unit.Id && other.Health > 0
-                    && DistanceSquared(x, z, other.X, other.Z) + (long)(y-other.Y)*(y-other.Y) < 700L * 700)) break;
+                    && (other.Node == nextNode || other.TransitNode == nextNode
+                        || DistanceSquared(x, z, other.X, other.Z) + (long)(y-other.Y)*(y-other.Y) < 700L * 700))) break;
                 int movement = Math.Min(distance, budget);
                 int nx = unit.X + Math.Sign(dx) * Math.Min(Math.Abs(dx), movement);
                 int nz = unit.Z + Math.Sign(dz) * Math.Min(Math.Abs(dz), movement - Math.Min(Math.Abs(dx), movement));
@@ -270,7 +306,7 @@ public sealed class SimWorld(GridNavigation navigation)
                 if (unit.Node == (unit.YieldGoal >= 0 ? unit.YieldGoal : unit.Goal)
                     && unit.X == gx && unit.Z == gz)
                 {
-                    if (unit.YieldFor < 0) unit.Goal = -1;
+                    if (unit.YieldFor < 0) { unit.Goal = -1; unit.ReturningToRest = false; }
                     unit.BlockedTicks = 0;
                 }
                 else unit.BlockedTicks = unit.Moving ? 0 : unit.BlockedTicks + 1;
@@ -288,7 +324,7 @@ public sealed class SimWorld(GridNavigation navigation)
     public string StateDigest()
     {
         var text = Tick + ":" + Navigation.Revision + ":" + string.Join(',', Navigation.ObstacleIds.Where(Navigation.IsObstacleActive))
-            + ":" + string.Join(";", Units.Select(u => $"{u.Id},{u.Team},{u.X},{u.Y},{u.Z},{u.Node},{u.TransitNode},{u.Health},{u.Target},{u.Cooldown},{u.Waypoint},{u.Goal},{u.BlockedTicks},{u.YieldFor},{u.YieldGoal},{u.OrderSequence}:{string.Join(',', u.Path)}"));
+            + ":" + string.Join(";", Units.Select(u => $"{u.Id},{u.Team},{u.X},{u.Y},{u.Z},{u.Node},{u.TransitNode},{u.Health},{u.Target},{u.Cooldown},{u.Waypoint},{u.Goal},{u.BlockedTicks},{u.YieldFor},{u.YieldGoal},{u.OrderSequence},{u.ReturningToRest}:{string.Join(',', u.Path)}"));
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
     }
 }

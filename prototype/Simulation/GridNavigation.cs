@@ -22,6 +22,7 @@ public sealed class GridNavigation
     private readonly Dictionary<int, int> _blockedNodes = [];
     private readonly Dictionary<(int, int), int> _blockedEdges = [];
     private int[]? _components;
+    private readonly Dictionary<int,bool> _bottlenecks = [];
     public int Revision { get; private set; }
     public IEnumerable<int> ObstacleIds => _obstacles.Keys.Order();
 
@@ -83,6 +84,7 @@ public sealed class GridNavigation
         foreach (var edge in obstacle.Edges) Count(_blockedEdges, (edge.A, edge.B));
         if (active) _activeObstacles.Add(id); else _activeObstacles.Remove(id);
         _components = null;
+        _bottlenecks.Clear();
         Revision++;
     }
 
@@ -114,7 +116,8 @@ public sealed class GridNavigation
         int node = TopNode(x, z);
         return node >= GroundCount ? NodeHeight(node) : GroundHeight(x, z);
     }
-    public int Nearest(int cell, IReadOnlySet<int>? excluded = null, int radius = 24, int connectedTo = -1)
+    public int Nearest(int cell, IReadOnlySet<int>? excluded = null, int radius = 24, int connectedTo = -1,
+        bool avoidBottlenecks = false)
     {
         if (cell < 0 || cell >= NodeCount) return -1;
         if (cell >= GroundCount)
@@ -124,7 +127,8 @@ public sealed class GridNavigation
             while (queue.TryDequeue(out var item))
             {
                 if (CanStand(item.Node) && CanReserve(item.Node, excluded)
-                    && (connectedTo < 0 || IsConnected(item.Node,connectedTo))) return item.Node;
+                    && (connectedTo < 0 || IsConnected(item.Node,connectedTo))
+                    && (!avoidBottlenecks || !IsBottleneck(item.Node))) return item.Node;
                 if (item.Depth >= radius) continue;
                 foreach (int next in Neighbors(item.Node))
                     if (CanStand(next) && seen.Add(next)) queue.Enqueue((next, item.Depth+1));
@@ -137,9 +141,51 @@ public sealed class GridNavigation
         {
             int id = z * Width + x, d = (x-cx)*(x-cx) + (z-cz)*(z-cz);
             if (d < distance && CanStand(id) && CanReserve(id, excluded)
-                && (connectedTo < 0 || IsConnected(id,connectedTo))) { best = id; distance = d; }
+                && (connectedTo < 0 || IsConnected(id,connectedTo))
+                && (!avoidBottlenecks || !IsBottleneck(id))) { best = id; distance = d; }
         }
         return best;
+    }
+
+    public int FormationSlot(int anchor, IReadOnlySet<int> reserved)
+    {
+        // Extra formation slots should leave passage entrances open when a
+        // non-cutting alternative is no more than one additional cell away.
+        int nearest = Nearest(anchor,reserved,connectedTo: anchor);
+        if (nearest < 0 || !IsBottleneck(nearest)) return nearest;
+        long DistanceSquared(int id)
+        {
+            long dx = Column(id)%Width-Column(anchor)%Width, dz = Column(id)/Width-Column(anchor)/Width;
+            return dx*dx+dz*dz;
+        }
+        long closest = DistanceSquared(nearest);
+        int radius = 0;
+        while ((long)radius*radius < closest) radius++;
+        int alternative = Nearest(anchor,reserved,radius+1,anchor,true);
+        if (alternative < 0) return nearest;
+        // sqrt(candidate) <= sqrt(closest)+1, using integer arithmetic only.
+        long excess = DistanceSquared(alternative)-closest-1;
+        return excess <= 0 || excess*excess <= 4*closest ? alternative : nearest;
+    }
+
+    public bool IsBottleneck(int node)
+    {
+        if (!CanStand(node)) return false;
+        if (_bottlenecks.TryGetValue(node,out bool cached)) return cached;
+        var neighbors = Neighbors(node).Where(n => n != node && CanStand(n)).ToHashSet();
+        if (neighbors.Count < 2) return _bottlenecks[node] = false;
+        int first = neighbors.Min(); neighbors.Remove(first);
+        var queue = new Queue<int>(); queue.Enqueue(first);
+        var seen = new HashSet<int> { node,first };
+        while (queue.TryDequeue(out int current))
+            foreach (int next in Neighbors(current))
+                if (CanStand(next) && seen.Add(next))
+                {
+                    neighbors.Remove(next);
+                    if (neighbors.Count == 0) return _bottlenecks[node] = false;
+                    queue.Enqueue(next);
+                }
+        return _bottlenecks[node] = true;
     }
 
     private bool CanReserve(int node, IReadOnlySet<int>? reserved)

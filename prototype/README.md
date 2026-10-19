@@ -70,7 +70,7 @@ checked before loading. Never distribute the local cache with the project.
 ./prototype/run.ps1 -ObstacleSmoke
 ```
 
-The simulation runner has no Godot or test-package dependency. Its 68 checks cover
+The simulation runner has no Godot or test-package dependency. Its 80 checks cover
 blocked routes, unreachable areas, adjacent-cell paths, deterministic ties,
 terrain interpolation, repeatable command playback, movement, combat,
 ownership and non-overlapping units, stationary-blocker detours, a six-unit
@@ -88,10 +88,15 @@ map boundaries, ray range and shared triangle edges far from the origin.
 Formation regressions cover disconnected patches near the destination,
 connectivity changes after obstacle updates, and stopping at a cell center
 after an unreachable or invalid replacement order.
-The optional cache check adds fourteen checks: runtime layers reproduce the
+Traffic checks cover two opposing three-unit squads using wide bays and
+single-entry pockets, reversed command order, cancellation during yielding,
+recorded command playback, movement endpoint reservations and bottleneck cache
+invalidation. They check occupied endpoints and physical overlap every tick.
+The optional cache check adds sixteen checks: runtime layers reproduce the
 static ground snapshot, all placed building centers are
 blocked, and all six friendly units visit each of Helm's Deep's four walkable
-surfaces without overlap and reach every order.
+surfaces without overlap and reach every order. Opposing three-unit squads
+also swap between the clearing and the second walkable helper.
 The headless Godot smoke test loads
 the actual map and twelve models, dispatches mouse/key events through the
 viewport, and checks selection, move/attack picking, zoom, pause/resume,
@@ -156,7 +161,10 @@ nearby node on the clicked source surface. These are navigation queries;
 rendered props and water do not occlude movement picking.
 Units retain their surface node and integer elevation; collision and melee use
 vertical separation. Congested units wait before entering occupied waypoints
-and retry routes around occupied cells after ten blocked ticks (half a second).
+and reserve both movement endpoints until reaching the next cell center,
+preserving a safe retreat point if an order changes. Detours and refuge searches
+respect these reservations. Congested units retry routes around occupied cells
+after ten blocked ticks (half a second).
 Temporarily sealed routes retain their destinations and retry; statically
 unreachable orders end without a route. This deterministic grid policy passes
 the six-unit gate test. Opposing friendly move orders can request a reachable
@@ -164,14 +172,25 @@ side pocket: one unit holds there until the other finishes, then resumes its
 original order. Refuge choices must leave a route around the other's final
 destination. Stable unit/cell ordering makes this repeatable; changing the
 priority order releases its yielding partner. Combat units do not request
-yielding. Idle friendly blockers can also yield and return. Early arrivals in
+yielding. Idle friendly blockers can also yield and return; if a convoy parks in
+their old spot, they settle in nearby free space. Explicit move goals remain
+intact. Early arrivals in
 the same squad order exchange formation slots when they block unfinished slots.
 Formation slots stay in the destination's connected region, so nearby islands
 cannot consume a slot and strand part of a squad. Region queries are cached and
 invalidated when obstacle masks change. Unreachable or invalid replacement
 orders return a moving unit to its last cell center before stopping.
-Refuges avoid other units' reserved destinations. Corridors without passing space wait safely, and complex multi-unit
-gridlocks still need broader coordination. Full local avoidance remains open.
+The first unit honors the clicked destination. Extra slots prefer nearby cells
+that do not cut the navigation graph, within one additional cell of the closest
+available slot; otherwise they use the closest slot. Obstacle updates invalidate
+the cached cut-point classifications.
+Refuges avoid other units' reserved destinations and fill deeper off-route space
+first, searching up to eight graph edges beyond the pocket entrance. Assigned
+refuges remain stable during travel. A settled yielder can relocate if it blocks
+its priority unit's changed route, and dependent holds transfer when their own
+priority unit must yield. This passes the opposing three-unit pocket tests and
+the real-map crossing. Corridors without passing space wait safely; larger and
+more varied gridlocks still need broader coverage. Full local avoidance remains open.
 
 Rules are placeholders: 100 HP, 12 melee damage, one-second cooldown, 3 m/s.
 Enemies acquire nearby targets; attacked units retaliate. This is not the

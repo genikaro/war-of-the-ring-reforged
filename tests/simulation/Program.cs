@@ -6,6 +6,7 @@ void Check(bool value, string name) { if (!value) throw new Exception(name); pas
 GridNavigation Grid(int width = 10, int height = 8, bool[]? allowed = null)
     => new(width, height, 1000, allowed ?? Enumerable.Repeat(true, width * height).ToArray(), new int[(width + 1) * (height + 1)]);
 NavigationPickerChecks.Run(Check);
+TrafficChecks.Run(Check);
 
 var allowed = Enumerable.Repeat(true, 80).ToArray();
 for (int z = 0; z < 7; z++) allowed[z * 10 + 4] = false;
@@ -300,5 +301,23 @@ if (cacheArg >= 0)
         Check(realWorld.Units.All(u => u.Goal < 0), "real map six-unit formation finishes: "+destination.Surface);
         Console.WriteLine($"MAP_NAV {destination.Surface}: six units arrived, target height {realNav.NodeHeight(destination.Node)} mm");
     }
+    var crossingDestination = destinations.First(d => d.Surface.Contains("Mesh 04"));
+    var mapTraffic = new SimWorld(realNav);
+    var clearing = manifest.GetProperty("spawns").EnumerateArray().Where(s => s.GetProperty("team").GetInt32() == 0)
+        .Take(3).Select(s => s.GetProperty("cell").GetInt32()).ToArray();
+    foreach (int cell in clearing) mapTraffic.Spawn(0,cell);
+    var deckSlots = new HashSet<int>();
+    for (int i = 0; i < 3; i++)
+    {
+        int slot = realNav.Nearest(crossingDestination.Node,deckSlots);
+        deckSlots.Add(slot); mapTraffic.Spawn(0,slot);
+    }
+    mapTraffic.Enqueue(0,[0,1,2],crossingDestination.Node); mapTraffic.Enqueue(0,[3,4,5],clearing[0]);
+    for (int tick = 0; tick < 8000 && (tick == 0 || mapTraffic.Units.Any(u => u.Goal >= 0)); tick++) Advance(mapTraffic,1);
+    if (mapTraffic.Units.Any(u => u.Goal >= 0))
+        Console.WriteLine("MAP_TRAFFIC " + string.Join(";",mapTraffic.Units.Select(u => $"{u.Id} {u.Node} goal{u.Goal} yield{u.YieldFor}/{u.YieldGoal}")));
+    Check(mapTraffic.Units.All(u => u.Goal < 0 && u.YieldFor < 0), "opposing three-unit squads finish on a real map walkway");
+    Check(mapTraffic.Units.Take(3).Any(u => u.Node == crossingDestination.Node)
+        && mapTraffic.Units.Skip(3).Any(u => u.Node == clearing[0]), "real-map traffic preserves both orders' destinations");
 }
 Console.WriteLine($"{passed} total simulation checks passed");
