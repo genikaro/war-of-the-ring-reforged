@@ -73,7 +73,9 @@ public partial class Main : Node3D
 
     private Node3D LoadGlb(string relative)
     {
-        var document = new GltfDocument(); var state = new GltfState();
+        // Release import-only native resources while the engine is still running.
+        using var document = new GltfDocument();
+        using var state = new GltfState();
         var error = document.AppendFromFile(System.IO.Path.Combine(_cache, relative), state);
         if (error != Error.Ok) throw new InvalidOperationException($"Cannot load {relative}: {error}");
         return document.GenerateScene(state) as Node3D ?? throw new InvalidOperationException("glTF scene has no 3D root");
