@@ -10,6 +10,13 @@ Phase 2 is complete. Phase 3 is in progress, with reliable squad navigation
 next; [the roadmap](Roadmap.md) records the acceptance criteria and remaining
 animation/audio/importer work. Original-game screenshot comparison is deferred.
 
+Original-game research references are in the
+[reference library](../references/original-game/README.md): 74 saved images,
+the manual and addendum, browsable editor help, campaign recording links and
+per-file source/checksum records. The [gallery](../references/original-game/gallery.html)
+opens locally. Controlled, matching original-game captures are still needed
+for fidelity validation.
+
 Latest verification (Oct 19, 2026): 115 Python tests, eight JavaScript tests,
 124 synthetic C# checks, eighteen real-map obstacle/navigation checks, the
 54-map walker mask audit and the Godot

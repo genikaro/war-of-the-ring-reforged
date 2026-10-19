@@ -4,6 +4,12 @@ Updated Oct 19, 2026 · @Evgenii
 
 Phases 1 and 2 implementation are complete. All 54 maps decode through EOF, including 752 decals. Helm's Deep and a decal-heavy Birth of the Uruk-Hai scene render and validate. Original-game screenshot comparison remains deferred by the project owner. Phase 3 now has a running Godot 4 C# sandbox (engine chosen Oct 19).
 
+An [original-game reference library](../references/original-game/README.md) now
+contains 74 saved images, the original manual and addendum, editor help and
+campaign recording links, with provenance and checksums. Prerelease and
+unversioned references are labeled; collecting them does not complete the
+controlled original-game screenshot comparison or verify gameplay fidelity.
+
 ## Current checkpoint
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
