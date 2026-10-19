@@ -8,7 +8,7 @@ Phases 1 and 2 implementation are complete. All 54 maps decode through EOF, incl
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
-Latest checks: 109 Python tests, eight JavaScript tests and 80 synthetic C# checks
+Latest checks: 113 Python tests, eight JavaScript tests and 94 synthetic C# checks
 pass. Sixteen additional cache checks cover runtime masks matching the initial
 snapshot, all ten building centers being
 blocked and all six friendly units traversing the four Helm's Deep surfaces
@@ -16,6 +16,8 @@ without overlap, plus opposing squads swapping between the clearing and a
 walkway. The cache contains
 1,207 separate surface nodes and 39 terrain entrances, preserving elevation
 and 350 mm body support along mesh edges.
+Eight-way weighted routes now use straight diagonal motion at the same speed as
+cardinal moves, with blocked-corner checks and swept-body crossing reservations.
 Godot builds without warnings or errors; input and combat pass over 420 fixed
 ticks. An elevated preview was inspected, and actual Godot right-click dispatch
 selects a surface node and terrain beneath it in a separate headless check. The original four sandbox

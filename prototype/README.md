@@ -70,7 +70,7 @@ checked before loading. Never distribute the local cache with the project.
 ./prototype/run.ps1 -ObstacleSmoke
 ```
 
-The simulation runner has no Godot or test-package dependency. Its 80 checks cover
+The simulation runner has no Godot or test-package dependency. Its 94 checks cover
 blocked routes, unreachable areas, adjacent-cell paths, deterministic ties,
 terrain interpolation, repeatable command playback, movement, combat,
 ownership and non-overlapping units, stationary-blocker detours, a six-unit
@@ -88,6 +88,9 @@ map boundaries, ray range and shared triangle edges far from the origin.
 Formation regressions cover disconnected patches near the destination,
 connectivity changes after obstacle updates, and stopping at a cell center
 after an unreachable or invalid replacement order.
+Directional checks cover weighted diagonal routes, blocked corners and flank
+edges, equal movement speed, mid-diagonal cancellation, crossing diagonals and
+repeatable fractional progress.
 Traffic checks cover two opposing three-unit squads using wide bays and
 single-entry pockets, reversed command order, cancellation during yielding,
 recorded command playback, movement endpoint reservations and bottleneck cache
@@ -116,7 +119,16 @@ For a rendered capture (opens the engine, saves a frame, then exits):
 ## Boundaries of this milestone
 
 The simulation runs at 20 Hz, with integer millimeter positions, integer HP,
-tick-based cooldowns and stable unit/cell ordering. A* uses four neighbors;
+tick-based cooldowns and stable unit/cell ordering. A* uses eight directions,
+with integer 1000/1414 edge costs and an octile heuristic. Ground diagonals
+require both neighboring flank cells and their connecting edges to be clear.
+Walkway diagonal links pass the full swept-body coverage check. Motion follows
+the line between endpoints at 3 m/s using integer micrometer progress, so
+diagonals have the same speed as straight moves. Crossing move segments reserve
+their swept body corridor, with integer segment-distance checks and separate
+height ranges. Units can pass beside a stationary flank unit when their bodies
+have enough space, while blocked terrain corners remain closed. Endpoint
+reservations still preserve retreat after an order change;
 nearby units block overlapping movement. Godot camera, animation and rendering
 do not feed timing or floating-point values back into simulation stepping.
 UI hit positions are quantized into cell commands before the next fixed tick.
@@ -161,7 +173,7 @@ nearby node on the clicked source surface. These are navigation queries;
 rendered props and water do not occlude movement picking.
 Units retain their surface node and integer elevation; collision and melee use
 vertical separation. Congested units wait before entering occupied waypoints
-and reserve both movement endpoints until reaching the next cell center,
+and reserve both movement endpoints and their body corridor until reaching the next cell center,
 preserving a safe retreat point if an order changes. Detours and refuge searches
 respect these reservations. Congested units retry routes around occupied cells
 after ten blocked ticks (half a second).

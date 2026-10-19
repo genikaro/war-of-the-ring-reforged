@@ -62,6 +62,22 @@ class PrototypeNavigationTests(unittest.TestCase):
         triangles = [[[x, z, z] for x, z, _ in t] for t in rectangle(0, 2, .15, .85)]
         self.assertTrue(nav.covers_body([.5, .5, .5], [1.5, .5, .5], triangles))
 
+    def test_diagonal_sweep_uses_its_hull_instead_of_the_bounding_rectangle(self):
+        from prototype_obstacles import hull
+        a, b = [.5,.5,0], [1.5,1.5,0]
+        polygon = hull([(p[0]+x*.4,p[1]+z*.4) for p in [a,b] for x in [-1,1] for z in [-1,1]])
+        triangles = [[[x,z,0] for x,z in [polygon[0],polygon[i],polygon[i+1]]] for i in range(1,len(polygon)-1)]
+        self.assertTrue(nav.covers_body(a,b,triangles))
+        graph = nav.build(2,2,1,[0]*4,[0]*9,[{'name': 'diagonal', 'triangles': triangles}])
+        self.assertEqual([n['cell'] for n in graph['surface_nodes']], [0,3])
+        self.assertEqual([n['links'] for n in graph['surface_nodes']], [[5],[4]])
+
+    def test_diagonal_body_cannot_cross_an_off_center_hole(self):
+        triangles = (rectangle(0,3,0,.9)+rectangle(0,3,.91,3)
+                     +rectangle(0,1.15,.9,.91)+rectangle(1.16,3,.9,.91))
+        self.assertTrue(nav.covers_segment([.5,.5,0],[2.5,2.5,0],triangles))
+        self.assertFalse(nav.covers_body([.5,.5,0],[2.5,2.5,0],triangles))
+
     def test_bridge_has_only_height_matched_terrain_entrances(self):
         result = nav.build(4, 1, 1, [1, 1, 1, 1], [0]*10,
                            [{'name': 'ramp', 'triangles': rectangle(0, 4, 0, 1, 0, 2)}])

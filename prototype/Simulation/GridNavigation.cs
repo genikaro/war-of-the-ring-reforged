@@ -4,7 +4,7 @@ public sealed record SurfaceCell(int Cell, int Height, int[] Links);
 public sealed record NavigationEdge(int A, int B);
 public sealed record NavigationObstacle(int Id, int[] Nodes, NavigationEdge[] Edges);
 
-/// <summary>Integer A* over four-neighbor terrain and separate mesh layers. Stable node-ID ties.</summary>
+/// <summary>Integer A* over eight-neighbor terrain and separate mesh layers. Stable node-ID ties.</summary>
 public sealed class GridNavigation
 {
     public int Width { get; }
@@ -181,6 +181,7 @@ public sealed class GridNavigation
             foreach (int next in Neighbors(current))
                 if (CanStand(next) && seen.Add(next))
                 {
+                    if (MovementNodes(current,next).Contains(node)) { seen.Remove(next); continue; }
                     neighbors.Remove(next);
                     if (neighbors.Count == 0) return _bottlenecks[node] = false;
                     queue.Enqueue(next);
@@ -220,7 +221,72 @@ public sealed class GridNavigation
     }
 
     public IEnumerable<int> Neighbors(int id)
-        => TopologyNeighbors(id).Where(n => !_blockedEdges.ContainsKey((Math.Min(id,n), Math.Max(id,n))));
+        => TopologyNeighbors(id).Where(n => EdgeOpen(id,n));
+
+    private bool ClearEdge(int a, int b) => !_blockedEdges.ContainsKey((Math.Min(a,b), Math.Max(a,b)));
+
+    private bool EdgeOpen(int a, int b)
+    {
+        if (!ClearEdge(a,b)) return false;
+        if (a >= GroundCount || b >= GroundCount || a%Width == b%Width || a/Width == b/Width) return true;
+        int sideA = a/Width*Width+b%Width, sideB = b/Width*Width+a%Width;
+        return CanStand(sideA) && CanStand(sideB) && ClearEdge(a,sideA) && ClearEdge(sideA,b)
+            && ClearEdge(a,sideB) && ClearEdge(sideB,b);
+    }
+
+    public int EdgeCost(int a, int b)
+        => Column(a)%Width != Column(b)%Width && Column(a)/Width != Column(b)/Width ? 1414 : 1000;
+
+    public int[] MovementNodes(int from, int to = -1)
+    {
+        if (to < 0) return [from];
+        var columns = SweptColumns(from,to);
+        if (from < GroundCount && to < GroundCount) return columns;
+        int low = Math.Min(NodeHeight(from),NodeHeight(to))-700, high = Math.Max(NodeHeight(from),NodeHeight(to))+700;
+        var nodes = new HashSet<int> { from,to };
+        foreach (int column in columns)
+        {
+            if (NodeHeight(column) > low && NodeHeight(column) < high) nodes.Add(column);
+            if (_surfaceColumns.TryGetValue(column,out var layers))
+                foreach (int node in layers) if (NodeHeight(node) > low && NodeHeight(node) < high) nodes.Add(node);
+        }
+        return nodes.Order().ToArray();
+    }
+
+    private int[] SweptColumns(int a, int b)
+    {
+        var (ax,az) = Center(a); var (bx,bz) = Center(b);
+        long dx = bx-ax, dz = bz-az;
+        var cells = new List<int>();
+        int xmin = Math.Max(0,Math.Min(ax,bx)-350)/CellSize, xmax = Math.Min(Width-1,(Math.Max(ax,bx)+350)/CellSize);
+        int zmin = Math.Max(0,Math.Min(az,bz)-350)/CellSize, zmax = Math.Min(Height-1,(Math.Max(az,bz)+350)/CellSize);
+        for (int z = zmin; z <= zmax; z++)
+        for (int x = xmin; x <= xmax; x++)
+        {
+            long cross = 2*((x*(long)CellSize+CellSize/2-ax)*dz-(z*(long)CellSize+CellSize/2-az)*dx);
+            if (Math.Abs(cross) <= (CellSize+700L)*(Math.Abs(dx)+Math.Abs(dz))) cells.Add(z*Width+x);
+        }
+        return cells.ToArray();
+    }
+
+    public bool ObstacleCoversMovement(int id, int a, int b)
+    {
+        var cells = MovementNodes(a,b).ToHashSet();
+        return _obstacles[id].Nodes.Any(cells.Contains) || _obstacles[id].Edges.Any(e => cells.Contains(e.A) && cells.Contains(e.B));
+    }
+
+    public (int Low,int High) MovementHeights(int a, int b)
+    {
+        int low = Math.Min(NodeHeight(a),NodeHeight(b)), high = Math.Max(NodeHeight(a),NodeHeight(b));
+        if (a < GroundCount && b < GroundCount)
+            foreach (int cell in SweptColumns(a,b))
+            {
+                int index = cell/Width*(Width+1)+cell%Width;
+                foreach (int vertex in new[] { index,index+1,index+Width+1,index+Width+2 })
+                { low = Math.Min(low,Heights[vertex]); high = Math.Max(high,Heights[vertex]); }
+            }
+        return (low,high);
+    }
 
     private IEnumerable<int> TopologyNeighbors(int id)
     {
@@ -234,6 +300,10 @@ public sealed class GridNavigation
         if (z > 0) yield return id - Width;
         if (x + 1 < Width) yield return id + 1;
         if (z + 1 < Height) yield return id + Width;
+        if (x > 0 && z > 0) yield return id-Width-1;
+        if (x+1 < Width && z > 0) yield return id-Width+1;
+        if (x > 0 && z+1 < Height) yield return id+Width-1;
+        if (x+1 < Width && z+1 < Height) yield return id+Width+1;
         if (_groundLinks.TryGetValue(id, out var links)) foreach (int link in links) yield return link;
     }
 
@@ -243,8 +313,11 @@ public sealed class GridNavigation
         var open = new PriorityQueue<int, (int Cost, int Id)>();
         var cost = new Dictionary<int, int> { [start] = 0 };
         var previous = new Dictionary<int, int>();
-        int Heuristic(int id) => Math.Abs(Column(id) % Width - Column(goal) % Width)
-            + Math.Abs(Column(id) / Width - Column(goal) / Width);
+        int Heuristic(int id)
+        {
+            int dx = Math.Abs(Column(id)%Width-Column(goal)%Width), dz = Math.Abs(Column(id)/Width-Column(goal)/Width);
+            return 1000*Math.Max(dx,dz)+414*Math.Min(dx,dz);
+        }
         open.Enqueue(start, (Heuristic(start), start));
         var closed = new HashSet<int>();
         while (open.TryDequeue(out int cell, out _))
@@ -259,7 +332,7 @@ public sealed class GridNavigation
             foreach (int next in Neighbors(cell))
             {
                 if (!CanStand(next) || blocked?.Contains(next) == true || closed.Contains(next)) continue;
-                int candidate = cost[cell] + 1;
+                int candidate = cost[cell] + EdgeCost(cell,next);
                 if (cost.TryGetValue(next, out int old) && old <= candidate) continue;
                 cost[next] = candidate; previous[next] = cell;
                 open.Enqueue(next, (candidate + Heuristic(next), next));

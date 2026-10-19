@@ -9,6 +9,7 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int Y { get; internal set; }
     public int Node { get; internal set; }
     public int TransitNode { get; internal set; } = -1;
+    public long TravelProgress { get; internal set; }
     public int Health { get; internal set; } = 100;
     public int Target { get; internal set; } = -1;
     public int Cooldown { get; internal set; }
@@ -44,8 +45,8 @@ public sealed class SimWorld(GridNavigation navigation)
         if (!Navigation.CanStand(cell)) throw new ArgumentException("Spawn cell is blocked");
         var (x, z) = Navigation.Center(cell);
         int y = Navigation.NodeHeight(cell);
-        if (Units.Any(u => u.Health > 0 && (u.Node == cell || u.TransitNode == cell
-            || DistanceSquared(x, z, u.X, u.Z) + (long)(y-u.Y)*(y-u.Y) < 700L*700)))
+        if (OccupiedNodes(-1).Contains(cell) || Units.Any(u => u.Health > 0
+            && DistanceSquared(x, z, u.X, u.Z) + (long)(y-u.Y)*(y-u.Y) < 700L*700))
             throw new ArgumentException("Spawn cell occupied");
         var unit = new SimUnit(Units.Count, team, x, z) { Node = cell, Y = y }; Units.Add(unit); return unit;
     }
@@ -66,7 +67,7 @@ public sealed class SimWorld(GridNavigation navigation)
             foreach (var unit in Units.Where(u => u.Health > 0))
             {
                 if (Navigation.ObstacleCovers(command.Obstacle, unit.Node)) return;
-                if (unit.TransitNode >= 0 && Navigation.ObstacleCoversEdge(
+                if (unit.TransitNode >= 0 && Navigation.ObstacleCoversMovement(
                     command.Obstacle, unit.Node, unit.TransitNode)) return;
             }
         }
@@ -107,7 +108,9 @@ public sealed class SimWorld(GridNavigation navigation)
     {
         if (waiting.Target >= 0 || waiting.YieldFor >= 0) return;
         int start = waiting.Node;
-        var route = Navigation.FindPath(start, waiting.Goal).ToHashSet();
+        var path = Navigation.FindPath(start,waiting.Goal);
+        var route = path.ToHashSet();
+        foreach (var edge in path.Zip(path.Skip(1))) route.UnionWith(Navigation.MovementNodes(edge.First,edge.Second));
         // A squad's early arrivals can seal its remaining formation slots.
         // Exchange slots only within the same explicit order, and only when
         // the parked unit has a clear route to the unfinished slot.
@@ -144,8 +147,9 @@ public sealed class SimWorld(GridNavigation navigation)
             {
                 // The priority unit will park at its goal. Reject refuges that
                 // would trap the yielding unit behind that final position.
+                bool giveUpRest = (other.Goal < 0 || other.ReturningToRest) && resume == waiting.Goal;
                 if (!route.Contains(candidate) && !reserved.Contains(candidate)
-                    && Navigation.FindPath(candidate, resume, new HashSet<int> { waiting.Goal }).Count > 0)
+                    && (giveUpRest || Navigation.FindPath(candidate, resume, new HashSet<int> { waiting.Goal }).Count > 0))
                 {
                     // Fill a single-entry refuge from the back, keeping its
                     // mouth available for the rest of the oncoming squad.
@@ -162,7 +166,7 @@ public sealed class SimWorld(GridNavigation navigation)
                                 && !reserved.Contains(next) && pocketSeen.Add(next)) pockets.Enqueue((next,pocket.Depth+1));
                     }
                     other.ReturningToRest |= other.Goal < 0;
-                    other.Goal = resume;
+                    other.Goal = giveUpRest ? refuge : resume;
                     // Keep existing refuges held for the new priority unit,
                     // instead of letting a dependent pin this blocker in place.
                     foreach (var dependent in Units.Where(u => u.YieldFor == other.Id)) dependent.YieldFor = waiting.Id;
@@ -180,6 +184,21 @@ public sealed class SimWorld(GridNavigation navigation)
     private HashSet<int> OccupiedNodes(int except)
         => Units.Where(u => u.Id != except && u.Health > 0)
             .SelectMany(u => u.TransitNode >= 0 ? new[] { u.Node,u.TransitNode } : new[] { u.Node }).ToHashSet();
+
+    private bool CanReserveMovement(SimUnit unit, int to)
+    {
+        var (ax,az) = Navigation.Center(unit.Node); var (bx,bz) = Navigation.Center(to);
+        var heights = Navigation.MovementHeights(unit.Node,to);
+        foreach (var other in Units.Where(u => u.Id != unit.Id && u.Health > 0))
+        {
+            var (cx,cz) = other.TransitNode >= 0 ? Navigation.Center(other.Node) : (other.X,other.Z);
+            var (dx,dz) = other.TransitNode >= 0 ? Navigation.Center(other.TransitNode) : (other.X,other.Z);
+            var otherHeights = other.TransitNode >= 0 ? Navigation.MovementHeights(other.Node,other.TransitNode) : (other.Y,other.Y);
+            if (heights.Low-700 >= otherHeights.Item2 || otherHeights.Item1-700 >= heights.High) continue;
+            if (IntegerMotion.SegmentsNear(ax,az,bx,bz,cx,cz,dx,dz)) return false;
+        }
+        return true;
+    }
 
     public void Step()
     {
@@ -222,7 +241,8 @@ public sealed class SimWorld(GridNavigation navigation)
                 // convoy parks in its old spot, settle in nearby free space.
                 var reserved = OccupiedNodes(unit.Id);
                 reserved.UnionWith(Units.Where(u => u.Id != unit.Id && u.Health > 0 && u.Goal >= 0).Select(u => u.Goal));
-                int rest = Navigation.Nearest(unit.Goal,reserved,connectedTo: unit.Node);
+                int rest = unit.TransitNode < 0 && !reserved.Contains(unit.Node) ? unit.Node
+                    : Navigation.Nearest(unit.Goal,reserved,connectedTo: unit.Node);
                 unit.Goal = rest >= 0 ? rest : unit.Node;
                 unit.Path = Navigation.FindPath(unit.Node,unit.Goal); unit.Waypoint = 0;
             }
@@ -272,33 +292,40 @@ public sealed class SimWorld(GridNavigation navigation)
             {
                 unit.Path.Add(unit.Node); unit.Waypoint = 0;
             }
-            int budget = 150; // 3 source units per second.
+            long budget = 150_000; // Micrometers: 3 source units per second.
             while (budget > 0 && unit.Waypoint < unit.Path.Count)
             {
-                var (x, z) = Navigation.Center(unit.Path[unit.Waypoint]);
-                int nextNode = unit.Path[unit.Waypoint], y = Navigation.NodeHeight(nextNode);
-                int dx = x - unit.X, dz = z - unit.Z;
-                int distance = Math.Abs(dx) + Math.Abs(dz);
-                if (distance == 0 && y == unit.Y) { unit.Node = nextNode; unit.TransitNode = -1; unit.Waypoint++; continue; }
-                if (distance == 0) distance = Math.Abs(y-unit.Y);
-                // Wait before entering an occupied waypoint, keeping queues at
-                // cell centers so replanning cannot strand several units in one cell.
-                if (Units.Any(other => other.Id != unit.Id && other.Health > 0
-                    && (other.Node == nextNode || other.TransitNode == nextNode
-                        || DistanceSquared(x, z, other.X, other.Z) + (long)(y-other.Y)*(y-other.Y) < 700L * 700))) break;
-                int movement = Math.Min(distance, budget);
-                int nx = unit.X + Math.Sign(dx) * Math.Min(Math.Abs(dx), movement);
-                int nz = unit.Z + Math.Sign(dz) * Math.Min(Math.Abs(dz), movement - Math.Min(Math.Abs(dx), movement));
-                int ny = unit.Y + (int)((long)(y-unit.Y)*movement/distance);
-                if (unit.Node < Navigation.GroundCount && nextNode < Navigation.GroundCount)
+                int nextNode = unit.Path[unit.Waypoint];
+                if (unit.TransitNode < 0 && nextNode == unit.Node) { unit.Waypoint++; continue; }
+                bool returning = nextNode == unit.Node;
+                int transit = unit.TransitNode >= 0 ? unit.TransitNode : nextNode;
+                if (!returning && unit.TransitNode >= 0 && nextNode != transit)
+                    throw new InvalidOperationException("A changed route must first return to its reserved source");
+                if (unit.TransitNode < 0 && (OccupiedNodes(unit.Id).Contains(transit) || !CanReserveMovement(unit,transit))) break;
+                var (ax,az) = Navigation.Center(unit.Node); var (bx,bz) = Navigation.Center(transit);
+                int ay = Navigation.NodeHeight(unit.Node), by = Navigation.NodeHeight(transit);
+                long length = IntegerMotion.Length(bx-ax,by-ay,bz-az);
+                long distance = returning ? unit.TravelProgress : length-unit.TravelProgress;
+                if (distance == 0)
+                {
+                    unit.Node = nextNode; unit.TransitNode = -1; unit.TravelProgress = 0;
+                    unit.Y = Navigation.NodeHeight(nextNode); unit.Waypoint++; continue;
+                }
+                long movement = Math.Min(distance,budget);
+                long progress = unit.TravelProgress+(returning ? -movement : movement);
+                int nx = IntegerMotion.Interpolate(ax,bx,progress,length), nz = IntegerMotion.Interpolate(az,bz,progress,length);
+                int ny = IntegerMotion.Interpolate(ay,by,progress,length);
+                if (unit.Node < Navigation.GroundCount && transit < Navigation.GroundCount)
                     ny = Navigation.GroundHeight(nx, nz);
                 if (Units.Any(other => other.Id != unit.Id && other.Health > 0
                     && DistanceSquared(nx, nz, other.X, other.Z) + (long)(ny-other.Y)*(ny-other.Y) < 700L * 700)) break;
-                // Preserve the occupied physical segment across replacement
-                // orders and retreat-to-center replans.
-                if (nextNode != unit.Node) unit.TransitNode = nextNode;
+                unit.TransitNode = transit; unit.TravelProgress = progress;
                 unit.X = nx; unit.Z = nz; unit.Y = ny; unit.Moving = true; budget -= movement;
-                if (movement == distance) { unit.Node = nextNode; unit.TransitNode = -1; unit.Y = y; unit.Waypoint++; }
+                if (movement == distance)
+                {
+                    unit.Node = nextNode; unit.TransitNode = -1; unit.TravelProgress = 0;
+                    unit.Y = Navigation.NodeHeight(nextNode); unit.Waypoint++;
+                }
             }
             if (unit.Goal >= 0)
             {
@@ -324,7 +351,7 @@ public sealed class SimWorld(GridNavigation navigation)
     public string StateDigest()
     {
         var text = Tick + ":" + Navigation.Revision + ":" + string.Join(',', Navigation.ObstacleIds.Where(Navigation.IsObstacleActive))
-            + ":" + string.Join(";", Units.Select(u => $"{u.Id},{u.Team},{u.X},{u.Y},{u.Z},{u.Node},{u.TransitNode},{u.Health},{u.Target},{u.Cooldown},{u.Waypoint},{u.Goal},{u.BlockedTicks},{u.YieldFor},{u.YieldGoal},{u.OrderSequence},{u.ReturningToRest}:{string.Join(',', u.Path)}"));
+            + ":" + string.Join(";", Units.Select(u => $"{u.Id},{u.Team},{u.X},{u.Y},{u.Z},{u.Node},{u.TransitNode},{u.TravelProgress},{u.Health},{u.Target},{u.Cooldown},{u.Waypoint},{u.Goal},{u.BlockedTicks},{u.YieldFor},{u.YieldGoal},{u.OrderSequence},{u.ReturningToRest}:{string.Join(',', u.Path)}"));
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
     }
 }

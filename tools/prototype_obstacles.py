@@ -148,14 +148,31 @@ def runtime_layers(width, height, spacing, allowed, heights, nodes, footprints):
             return [x, z, terrain_height(x, z, width, spacing, heights)]
         item = nodes[node-base]; cell = item['cell']
         return [(cell % width+.5)*spacing, (cell // width+.5)*spacing, item['height_mm']/1000]
-    edges = sorted({tuple(sorted((base+i, link))) for i, n in enumerate(nodes) for link in n['links']})
+    surface_edges = {tuple(sorted((base+i, link))) for i, n in enumerate(nodes) for link in n['links']}
     result = []
     for object_id, boxes in sorted(grouped.items()):
         mask, _ = ground_mask(width, height, spacing, allowed, heights, boxes)
         blocked_nodes = [i for i, (before, after) in enumerate(zip(allowed, mask)) if before and not after]
         blocked_nodes.extend(base+i for i in range(len(nodes)) if blocked(point(base+i), point(base+i), boxes, spacing))
         blocked_set = set(blocked_nodes)
-        blocked_edges = [list(edge) for edge in edges if not blocked_set.intersection(edge)
+        edges = set(surface_edges)
+        # A steep terrain edge can cross a box's vertical interval even when
+        # both endpoint bodies are clear. Audit all local eight-way edges.
+        for box in boxes:
+            padding = spacing*1.5+RADIUS
+            xmin = max(0,math.floor((min(p[0] for p in box['polygon'])-padding)/spacing))
+            xmax = min(width-1,math.floor((max(p[0] for p in box['polygon'])+padding)/spacing))
+            zmin = max(0,math.floor((min(p[1] for p in box['polygon'])-padding)/spacing))
+            zmax = min(height-1,math.floor((max(p[1] for p in box['polygon'])+padding)/spacing))
+            for z in range(zmin,zmax+1):
+                for x in range(xmin,xmax+1):
+                    cell = z*width+x
+                    if not allowed[cell]: continue
+                    for dx,dz in [(1,0),(-1,1),(0,1),(1,1)]:
+                        nx,nz = x+dx,z+dz
+                        if 0 <= nx < width and 0 <= nz < height and allowed[nz*width+nx]:
+                            edges.add(tuple(sorted((cell,nz*width+nx))))
+        blocked_edges = [list(edge) for edge in sorted(edges) if not blocked_set.intersection(edge)
                          and blocked(point(edge[0]), point(edge[1]), boxes, spacing)]
         result.append({'id': object_id, 'name': boxes[0]['name'], 'nodes': blocked_nodes,
                        'edges': blocked_edges, 'footprints': boxes})

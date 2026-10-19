@@ -94,18 +94,17 @@ def polygon_area(polygon):
 def covers_body(a, b, triangles, radius=.35, tolerance=.15):
     """Prove a swept square body is supported by the height-matched mesh union.
 
-    Graph edges are axis aligned (or vertical). Subtract each compatible
-    triangle from the remaining rectangle, so overlapping triangles cannot
+    Subtract each compatible triangle from the swept square's convex hull,
+    so overlapping triangles cannot
     hide holes. The square conservatively encloses the circular unit body.
     Height clipping rejects support from a different floor or a sharp hump.
     """
-    if a[0] != b[0] and a[1] != b[1]:
-        raise ValueError('Body clearance requires an axis-aligned graph edge')
+    from prototype_obstacles import hull
     if a[:2] == b[:2] and abs(a[2]-b[2]) > tolerance:
         return False
     xmin, xmax = min(a[0], b[0])-radius, max(a[0], b[0])+radius
     zmin, zmax = min(a[1], b[1])-radius, max(a[1], b[1])+radius
-    remaining = [[(xmin, zmin), (xmax, zmin), (xmax, zmax), (xmin, zmax)]]
+    remaining = [hull([(p[0]+x*radius,p[1]+z*radius) for p in [a,b] for x in [-1,1] for z in [-1,1]])]
     dx, dz = b[0]-a[0], b[1]-a[1]
     length_squared = dx*dx+dz*dz
     reference = next((t for t in triangles if (y := height_at(a[0], a[1], t)) is not None
@@ -205,6 +204,9 @@ def build(width, height, spacing, allowed, heights, surfaces, footprints=()):
         if allowed[cell] and abs(ground-y) <= .25:
             node['links'].append(cell)
         adjacent = [cell] + ([cell-1] if cell % width else []) + ([cell-width] if cell >= width else [])
+        if cell >= width:
+            if cell % width: adjacent.append(cell-width-1)
+            if cell % width+1 < width: adjacent.append(cell-width+1)
         for neighbor in adjacent:
             for j in by_cell[neighbor]:
                 if j >= i:
@@ -222,7 +224,7 @@ def build(width, height, spacing, allowed, heights, surfaces, footprints=()):
     for node in nodes:
         node['links'].sort()
     return {'surface_nodes': nodes, 'surface_report': reports,
-            'surface_policy': 'Separate mesh layers at grid centers; continuous triangle coverage and 350 mm swept-square body support within 150 mm of interpolated height, <=1 cell rise per edge, <=250 mm terrain joins. Narrower-than-grid routes may be omitted.',
+            'surface_policy': 'Eight-way separate mesh layers at grid centers; continuous triangle coverage and 350 mm swept-square body support within 150 mm of interpolated height, <=1 cell rise per edge, <=250 mm terrain joins. Narrower-than-grid routes may be omitted.',
             'surface_clearance_radius_mm': round(RADIUS*1000)}
 
 

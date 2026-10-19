@@ -77,6 +77,21 @@ class PrototypeObstacleTests(unittest.TestCase):
         self.assertEqual(layer['nodes'], [])
         self.assertEqual(layer['edges'], [[1, 2]])
 
+    def test_runtime_ground_edge_cannot_cross_a_box_between_clear_endpoints(self):
+        box = {'name': 'overhang', 'object_id': 1, 'polygon': [(0,0),(2,0),(2,1),(0,1)],
+               'y_min': 3, 'y_max': 5}
+        layer = obstacles.runtime_layers(2,1,1,[1,1],[0,0,12,0,0,12],[],[box])[0]
+        self.assertEqual(layer['nodes'], [])
+        self.assertEqual(layer['edges'], [[0,1]])
+
+    def test_runtime_layer_blocks_a_diagonal_deck_edge_with_clear_endpoints(self):
+        box = {'name': 'corner', 'object_id': 1, 'polygon': [(1.49,.49),(1.51,.49),(1.51,.51),(1.49,.51)],
+               'y_min': 4, 'y_max': 6}
+        nodes = [{'cell': i, 'height_mm': 4000, 'links': ([7] if i == 0 else [4] if i == 3 else [])} for i in range(4)]
+        layer = obstacles.runtime_layers(2,2,1,[1]*4,[0]*9,nodes,[box])[0]
+        self.assertEqual(layer['nodes'], [5])
+        self.assertEqual(layer['edges'], [[4,7]])
+
 
 if __name__ == '__main__':
     unittest.main()
