@@ -113,7 +113,8 @@ scales are implementation policies, not recovered formulas. Controlled
 original-game duels or executable analysis remain required. Raw weapon ranges
 are 1.0 for Aragorn and 0.5 for the others; body/range origin semantics are
 unknown. Effective center reach therefore stays at the accepted 2,000 mm with
-wall/layer checks. Movement stays at 3 m/s. Awareness, spacing and opponent AI
+wall/layer checks. Default running stays at 3 m/s; F2 walking uses the
+[source animation ratio](MOVEMENT.md#walkrun-control--october-20-2026). Awareness, spacing and opponent AI
 remain prototype policies.
 
 ## Presentation

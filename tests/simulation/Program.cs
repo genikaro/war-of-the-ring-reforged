@@ -21,6 +21,7 @@ CombatChecks.Run(Check);
 OrderChecks.Run(Check);
 ExtendedOrderChecks.Run(Check);
 MeleeChecks.Run(Check);
+MovementModeChecks.Run(Check);
 
 var allowed = Enumerable.Repeat(true, 80).ToArray();
 for (int z = 0; z < 7; z++) allowed[z * 10 + 4] = false;

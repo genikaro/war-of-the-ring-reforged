@@ -30,7 +30,7 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
-Latest checks: 130 Python tests, eight JavaScript tests (unchanged), and 321 total
+Latest checks: 131 Python tests, eight JavaScript tests (unchanged), and 344 total
 synthetic/cache C# checks pass. Cache checks include imported combat definitions,
 four repeated duels and runtime masks matching the initial
 snapshot, all ten building centers being
@@ -74,7 +74,7 @@ source UVA crops into the hashed local cache. The console scales proportionally
 with height, supports a saved 75–150% size setting and fits 4K/ultrawide displays.
 Editable groups 1–0 support Ctrl assignment, Shift additions, recall, lead-unit
 centering and death pruning. Shift-click queues formation waypoints; queued
-orders are recorded and replayed. Twenty actual Godot input checks cover
+orders are recorded and replayed. Twenty-seven actual Godot input checks cover
 these additions, alongside 26 command checks. Explicit intent survives temporary
 combat routes; Attack-move resumes after combat, force moves ignore retaliation,
 and stationary orders never chase. Names, health, tooltips, active orders and
@@ -87,6 +87,15 @@ Debug tools now show live simulation/selection/order state, with pause/resume,
 a single paused tick, restart, camera/focus buttons, interface sizing and a
 collapsed current-controls guide. Menu visibility is independent of the guide;
 obsolete shortcut labels and the old static sandbox banner are removed.
+
+The October 20 command correction adds the agreed **F2 Walk/Run** toggle and
+original run-icon button. Mixed selections walk together; changing mode preserves
+orders, queues, targeting, swing timing and the camera. Source root-track ratios
+set walking speeds; default running stays at 3 m/s. The visible Hold label is
+now **Hold Position**. The [command behavior matrix](../references/original-game/COMMAND-BEHAVIOR-MATRIX.md)
+records evidence and intentional choices; original timing comparisons and
+Q/W/E/R abilities remain open. The 4K Walk UI was inspected; 27 Orders checks,
+26 Command checks and the unchanged 206-hit melee smoke pass.
 
 The three types now use imported health (485/350/240), armor, melee DPS,
 classification and attacker caps. Original clip durations and `.lmd` hit events
@@ -204,8 +213,8 @@ valid; they demonstrate our behavior, not equivalence to the original.
 1. **Resolve command input and bindings, then correct the prototype.**
    - Keep the confirmed bottom row: Attack, Hold Position, Guard, Patrol.
      `local-010`/`011`/`021`/`022` supply the tooltip intent. Plan to use the
-     released Hold Position label in the player UI; internal Hold Ground naming
-     need not change just to match the label.
+     released Hold Position label in the player UI; this correction is now
+     implemented. Internal HoldGround naming remains unchanged.
    - The original Attack button is **Force Attack**, including object/terrain
      targeting regardless of hostility. Compare its targeting with contextual
      right-click and the separate A/Ctrl attack-move modifiers. Record key down,
@@ -216,7 +225,9 @@ valid; they demonstrate our behavior, not equivalence to the original.
      walk/run. Do not use F1–F4 for abilities.** Keep S Stop, H Hold Position,
      G Guard and T Patrol. Q/E rotation and F1/F2/F3 camera shortcuts are now
      removed; Menu camera buttons, launch-time views and the F4 menu remain.
-     Any future enter-building shortcut must also
+     F2 and the run-icon button are now implemented; source-ratio walking leaves
+     the accepted run speed unchanged. Q/W/E/R remain reserved until abilities
+     are connected. Any future enter-building shortcut must also
      avoid R. These are intentional control differences from the original;
      Stop remains a prototype convenience until its original behavior is known.
    - Compare stationary Hold, guarding a unit/building/area, and Patrol against
@@ -407,7 +418,7 @@ deterministic projectile/hit resolution, before powers, economy and production.
 - [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them
 - [ ] Heroes, fate powers and spells (`SpellAndEventAndActions` chains events to actions)
 - [ ] Open `Rings.exe` in Ghidra to recover the formulas the tables only feed: damage, hit chance, experience, upgrade effects
-- [ ] Validate original command semantics against recorded inputs and implement the chosen Q/W/E/R ability and F2 walk/run bindings; preserve documented prototype conveniences
+- [ ] Validate original command semantics against recorded inputs and connect the reserved Q/W/E/R abilities; F2 Walk/Run and Hold Position labeling are implemented. Preserve documented prototype conveniences.
 - [ ] Record continuous reference fights and controlled health traces, then compare outcomes; the 30 local stills establish HUD/encounter observations, not timing or damage formulas
 - [ ] Skirmish visibility: explored terrain/building memory, currently visible enemy units and minimap markers; match the captured fog behavior before calling the skirmish loop complete
 

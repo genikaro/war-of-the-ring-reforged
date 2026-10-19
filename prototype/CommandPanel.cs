@@ -11,6 +11,7 @@ public partial class CommandPanel : Control
     public event Action<int,bool>? UnitChosen;
     public event Action<Vector2>? MapChosen;
     public event Action? MenuChosen;
+    public event Action? WalkRunChosen;
     private readonly Dictionary<OrderKind,Button> _buttons = [];
     private readonly Dictionary<int,(Button Button,ColorRect Health)> _portraits = [];
     private readonly Dictionary<string,Texture2D> _art = [];
@@ -26,6 +27,7 @@ public partial class CommandPanel : Control
     private TextureRect _background = null!;
     private Label _title = null!, _order = null!, _hint = null!, _armies = null!;
     private Button _menu = null!;
+    private Button _walkRun = null!;
     private BattleMinimap _map = null!;
     private string _rosterKey = "";
     private OrderKind? _cursorKind;
@@ -35,7 +37,7 @@ public partial class CommandPanel : Control
 
     public static readonly (OrderKind Kind,string Label,string Key,string Tip,string Icon)[] Commands = [
         (OrderKind.Attack,"Attack","A","Enemy: attack and pursue. Neutral/friendly: force attack. Ground: attack-move to the destination.","console_g_action_forceattack"),
-        (OrderKind.HoldGround,"Hold","H","Hold this position and fight within reach without chasing.","console_g_action_standground"),
+        (OrderKind.HoldGround,"Hold Position","H","Hold this position and fight within reach without chasing.","console_g_action_standground"),
         (OrderKind.Guard,"Guard","G","Guard a friendly unit or location; follow the unit and defend its surroundings.","console_g_action_guard"),
         (OrderKind.Patrol,"Patrol","T","Patrol between here and a destination, fighting enemies along the route.","console_g_action_patrol")
     ];
@@ -52,6 +54,9 @@ public partial class CommandPanel : Control
         Skin(_menu); _menu.Pressed += () => MenuChosen?.Invoke(); _content.AddChild(_menu);
         _map = new BattleMinimap { Position = new(14,28),Size = new(174,174),TooltipText = "Click the map to center the camera." };
         _map.Chosen += p => MapChosen?.Invoke(p); _content.AddChild(_map);
+        _walkRun = new Button { Position = new(204,154),Size = new(36,36),FocusMode = FocusModeEnum.None,
+            ExpandIcon = true,ToggleMode = true,Disabled = true };
+        Skin(_walkRun); _walkRun.Pressed += () => WalkRunChosen?.Invoke(); _content.AddChild(_walkRun);
         _title = Text("Select your forces",new(265,59),new(505,22),17); _content.AddChild(_title);
         _order = Text("",new(265,192),new(505,18),12); _content.AddChild(_order);
         _armies = Text("",new(787,8),new(229,18),12); _content.AddChild(_armies);
@@ -145,11 +150,12 @@ public partial class CommandPanel : Control
         _background.Texture = _art["console_g_background"];
         _statsBackground.Texture = _art["console_stats_background_good"];
         _menu.Icon = _art["console_g_menumenu"];
+        _walkRun.Icon = _art["console_g_run"];
         foreach (var command in Commands) _buttons[command.Kind].Icon = _art[command.Icon];
         _map.Configure(world);
     }
 
-    public static string OrderName(OrderKind kind) => kind switch { OrderKind.AttackMove => "Attack-move",OrderKind.HoldGround => "Hold Ground",OrderKind.ForceAttack => "Force Attack",_ => kind.ToString() };
+    public static string OrderName(OrderKind kind) => kind switch { OrderKind.AttackMove => "Attack-move",OrderKind.HoldGround => "Hold Position",OrderKind.ForceAttack => "Force Attack",OrderKind.ToggleWalkRun => "Walk / Run",_ => kind.ToString() };
     private static string PortraitName(string name) => name switch { "Aragorn" => "Portrait_G_Aragorn","Elf Knight" or "Elven Knight" => "Portrait_G_Elven_Knight",_ => "Portrait_E_Uruk_Hai" };
 
     public void Refresh(IReadOnlyList<SimUnit> units,Func<int,string> name,OrderKind? pending,bool paused,IReadOnlyList<int[]>? groups = null,int allies = 0,int enemies = 0)
@@ -163,6 +169,11 @@ public partial class CommandPanel : Control
         _order.Text = available ? string.Join(" · ",units.GroupBy(u => u.Order).Select(g => $"{OrderName(g.Key)} ({g.Count()})"))
             + (units.Sum(u => u.OrderQueue.Count) > 0 ? $"   +{units.Sum(u => u.OrderQueue.Count)} queued" : "") : "Ctrl + number: assign group · Shift + number: add units";
         _armies.Text = $"Allies {allies}    Enemies {enemies}";
+        _walkRun.Disabled = !available;
+        _walkRun.SetPressedNoSignal(available && units.All(u => u.Walking));
+        string pace = !available ? "No units selected" : units.All(u => u.Walking) ? "Walking" : units.Any(u => u.Walking) ? "Mixed pace" : "Running";
+        _walkRun.TooltipText = $"Walk / Run [F2] · {pace}\nSwitch selected units to walking; if all are walking, switch to running.\nCurrent orders and queued waypoints continue.";
+        if (available) _order.Text += " · "+pace;
         string key = string.Join(',',units.Select(u => u.Id));
         if (_rosterKey != key)
         {
@@ -185,6 +196,7 @@ public partial class CommandPanel : Control
             var stats = UnitHudStats.From(unit,_rules);
             var portrait = _portraits[unit.Id]; portrait.Health.Size = new(46*Math.Clamp(unit.Health/(float)unit.MaxHealth,0,1),4);
             portrait.Button.TooltipText = $"{name(unit.Id)} #{unit.Id+1} · {unit.Health}/{unit.MaxHealth}\n{OrderName(unit.Order)}"
+                + (unit.Walking ? " · Walking" : " · Running")
                 + $"\nAttack {stats.Attack} · Armor {stats.Armor} · Victories {stats.Victories}\n{stats.Type}\n{stats.Matchups}"
                 + (unit.OrderQueue.Count > 0 ? "\nQueue: "+string.Join(" → ",unit.OrderQueue.Select(o => OrderName(o.Kind))) : "")
                 + "\nClick to select. Shift-click removes from selection.";
@@ -229,6 +241,7 @@ public partial class CommandPanel : Control
     private static OrderKind? PanelCommand(OrderKind? kind) => kind is OrderKind.Attack or OrderKind.AttackMove or OrderKind.ForceAttack ? OrderKind.Attack : kind;
     public Button GroupButton(int slot) => _groups[slot];
     public Button PortraitButton(int id) => _portraits[id].Button;
+    public Button WalkRunButton => _walkRun;
     public bool CommandsAvailable => _buttons.Values.All(b => !b.Disabled);
     public bool SingleUnitDetailsVisible => _single.Visible;
     public string DisplayedVictories => _victoriesValue.Text;

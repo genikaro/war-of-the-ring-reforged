@@ -75,7 +75,7 @@ public partial class Main
         _hudScale.ValueChanged += value => { _commands.SetScalePercent(value); valueLabel.Text = $"{value:0}%"; };
         sizing.AddChild(DebugButton("Reset",() => _hudScale.Value = 100));
         var controls = new Button { Text = "Show controls", FocusMode = Control.FocusModeEnum.None }; body.AddChild(controls);
-        _help = DebugText("Selection: click or drag; Shift adds.\nGroups: Ctrl+number assigns, Shift+number adds, number recalls, double-tap centers.\nOrders: A Attack, M Move, S Stop, H Hold, G Guard, T Patrol. Shift-click queues.\nRight-click: move / attack; Ctrl adds attack-move. Esc or right-click cancels targeting.\nCamera: arrows or middle-drag pan; wheel zooms.\nTesting: Space pauses, Alt+right-click toggles an obstacle, Ctrl+Alt+right-click targets terrain beneath a bridge. F10 hides the interface.");
+        _help = DebugText("Selection: click or drag; Shift adds.\nGroups: Ctrl+number assigns, Shift+number adds, number recalls, double-tap centers.\nOrders: A Attack, M Move, S Stop, H Hold Position, G Guard, T Patrol. Shift-click queues.\nMovement: F2 toggles Walk / Run for the selection without replacing orders.\nRight-click: move / attack; Ctrl adds attack-move. Esc or right-click cancels targeting.\nCamera: arrows or middle-drag pan; wheel zooms.\nTesting: Space pauses, Alt+right-click toggles an obstacle, Ctrl+Alt+right-click targets terrain beneath a bridge. F10 hides the interface.");
         _help.Visible = false; body.AddChild(_help);
         controls.Pressed += () => { _help.Visible = !_help.Visible; controls.Text = _help.Visible ? "Hide controls" : "Show controls"; };
         body.AddChild(new HSeparator()); body.AddChild(DebugText("Last action"));
@@ -113,7 +113,7 @@ public partial class Main
         _debugSummary.Text = $"{(_paused ? "Paused" : "Running")} · Tick {world.Tick} · 20 ticks/s";
         var units = world.Units.Where(u => u.Health > 0 && _selected.Contains(u.Id)).ToArray();
         _debugSelection.Text = units.Length == 0 ? "No units selected" :
-            $"{units.Length} selected · {units.Count(u => u.StrikeActive)} attacking · {units.Sum(u => u.OrderQueue.Count)} queued orders\n"+
+            $"{units.Length} selected · {units.Count(u => u.StrikeActive)} attacking · {units.Count(u => u.Walking)} walking · {units.Sum(u => u.OrderQueue.Count)} queued orders\n"+
             string.Join(" · ",units.GroupBy(u => u.Order).Select(g => $"{CommandPanel.OrderName(g.Key)} ×{g.Count()}"));
         _debugPause.Text = _paused ? "Resume" : "Pause";
         _debugFocus.Disabled = units.Length == 0;

@@ -2,7 +2,7 @@
 
 Open-ground move orders now use the complete visible route rather than looking
 ahead six grid edges only after a bend. Integer interpolation follows that
-heading at 3 m/s. A replacement order starts from the current physical position,
+heading at 3 m/s by default. A replacement order starts from the current physical position,
 and cancellation stops there instead of walking back to an old waypoint.
 
 Each tick checks the unit's swept 350 mm body against terrain, other bodies,
@@ -22,6 +22,8 @@ formation slots. Minimizing total squared travel avoids much of the crisscross
 caused by assigning slots by unit ID. Slot spacing and connectivity checks remain.
 
 ## Reproducible comparison
+
+The comparison below uses the unchanged default running mode.
 
 The baseline is the simulation from commit `0d77058`. Both versions run the same
 `ResponsivenessChecks.Measure` fixture without Godot or rendering feedback:
@@ -102,3 +104,46 @@ Clicks still select integer navigation cells. The graph search remains eight-way
 the free-ground route follower and local steering produce the additional angles.
 The 350 mm clearance, conservative corner policy and original movement/combat
 constants have not been reverse-engineered further in this pass.
+
+## Walk/run control — October 20, 2026
+
+F2 and the original run icon beside the minimap toggle selected units' movement
+mode. A mixed selection switches to Walk; an entirely walking selection switches
+to Run. No selected units means no command. `ToggleWalkRun` is recorded against
+the explicit living unit IDs and applied in sequence at the next fixed tick,
+including after a pause. It changes no route, queue, target, windup or cooldown.
+The mode participates in the state digest and survives later orders.
+
+Running keeps the accepted **3 m/s** baseline. Walking scales that speed using
+the first positive Walk/Run state choices' `J_Position` displacement divided by
+clip duration, before prototype root-motion removal. LSK uses XY as its ground
+plane and Z as up; the importer also normalizes the Uruk joint's trailing space.
+
+| Unit | Source walk / run speed | Walk scale | Nominal prototype walk speed |
+|---|---:|---:|---:|
+| Aragorn | 2.117924 / 5.809129 | 364585 ppm | 1.093755 m/s |
+| Elven Knight | 2.465559 / 5.256238 | 469073 ppm | 1.407219 m/s |
+| Uruk-hai | 2.277097 / 5.260435 | 432872 ppm | 1.298616 m/s |
+
+These are an adapter policy, not measured original world speeds. Per-tick
+budgets truncate to whole micrometers. Aragorn's `AIApproximateRunVelocity`
+equals his walk clip's speed in this install;
+it cannot safely set runtime run speed. Uruk-hai has three Run choices; this slice
+uses the first, matching the prototype's existing run animation. Stamina and
+original default movement-mode behavior remain unverified.
+
+Rules cache `Source.Locomotion` preserves clip names, state IDs, durations, source
+speeds and joint names alongside the existing skeleton/model hashes. Refresh it
+with `python tools/prepare_prototype.py --rules-only`. The original Walk and Run
+clips already exist in the in-place model cache; no model re-export is needed.
+Synthetic probe profiles use a 50% walk scale.
+
+Motion samples share one normalized tick clock. Consumed distance is converted
+from the unit's speed budget before interpolation, so a walking unit moves
+throughout the tick. Early arrivals hold for the remaining fraction. Ground
+steering and constrained deck segments retain the same body checks and passage
+reservations. Tests cover mode changes in mid-route and mid-swing, queued orders,
+mixed selections, paused double toggles, full-tick/early-arrival playback, deck
+traversal, mixed-speed squad separation and serialized replay. The Orders smoke
+also checks both UI paths and distinct source clip playback; a 4K capture is
+saved at `converted/prototype/walk-run-4k.png`.

@@ -34,6 +34,12 @@ and Hero targets are neutral. Single selection shows the original type icon,
 Attack, Armor, Victories and live health; hover the icon for its matchups.
 Group selection retains the portrait roster. Enemy kills update Victories.
 
+**F2** or the original run icon beside the minimap switches the selection
+between walking and running. Mixed selections switch to walking together;
+toggle again to run. Orders, queued waypoints and attack timing continue.
+Running retains the accepted 3 m/s speed; walking uses the source animation
+ratio for each unit. See [movement details](MOVEMENT.md#walkrun-control--october-20-2026).
+
 Combat reserves separate reachable attack positions around each target, keeps
 allied spacing, and parks excess attackers outside the melee ring. Settled
 fighters hold position and face their target. Attack orders continue onto nearby
@@ -107,7 +113,8 @@ checked before loading. Never distribute the local cache with the project.
 | A, then left-click | Attack an enemy, force attack a neutral/friendly target, or attack-move to ground |
 | M, then left-click | Move (no visible button) |
 | S | Stop movement and pursuit; return blows within reach (no visible button) |
-| H | Hold Ground; engage within reach without chasing |
+| H | Hold Position; engage within reach without chasing |
+| F2 | Toggle Walk / Run for selected units without replacing orders |
 | G / T, then left-click | Guard / Patrol |
 | Shift + click / right-click | Queue orders and formation waypoints |
 | Alt + right-click a placed obstacle | Remove it; click the same space again to restore it |
@@ -230,14 +237,16 @@ The melee smoke test adds source stats, exact hit timing, animation seeks,
 equipment changes and impact playback. It writes `melee-smoke-report.json` and
 `melee-hit-trace.json`; source-unit duel evidence is in `melee-duels-report.json`.
 The command smoke test exercises actual panel buttons and hotkeys across all
-three blue squads. Its 23 checks cover the four bottom-row actions, target-dependent
+three blue squads. Its 26 checks cover the four bottom-row actions, target-dependent
 Attack/A, hidden Move/Stop controls, targeted and immediate orders, disabled
 commands, cancellation, mixed unit types, combat interruption, pause/resume,
 drag release over the panel and removal of dead selected units. Its report is
 `converted/prototype/command-smoke-report.json`.
-The orders smoke test adds 20 actual input checks for control groups, centering,
+The orders smoke test adds 27 actual input checks for control groups, centering,
 new commands, queues, HUD adjustment and debug pause/step/open/close controls,
-writing `converted/prototype/orders-smoke-report.json`.
+writing `converted/prototype/orders-smoke-report.json`. It also checks F2 and the
+run-icon button, original walk/run clip selection, unchanged camera/targeting,
+paused toggles and empty selection.
 Unit scenes share imported resources while each instance keeps its own skeleton
 and animation player.
 The surface smoke test places six units on an elevated deck, dispatches a
@@ -388,7 +397,8 @@ open. The larger 6-to-14-unit stress suite has not been revalidated for this pas
 
 The three demo types use imported stats and animation-timed melee. Armor math,
 event-scale normalization and effective range remain documented approximations;
-see [combat notes](COMBAT.md). Movement remains 3 m/s.
+see [combat notes](COMBAT.md). Running remains 3 m/s; walking uses the imported
+walk/run animation ratio. Original world speeds and stamina remain unverified.
 Enemies acquire nearby reachable targets; attacked units retaliate. Attack orders
 retain nearby combat intent after a target dies; move orders clear it. Melee
 requires a supported route between attacker and target, so walls and disconnected

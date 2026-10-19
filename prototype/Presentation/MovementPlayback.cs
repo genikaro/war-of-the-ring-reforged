@@ -9,7 +9,7 @@ public static class MovementPlayback
     public static RenderPosition Sample(IReadOnlyList<MovementSample> samples, double fraction)
     {
         if (samples.Count == 0) throw new ArgumentException("Movement playback needs an initial position");
-        double elapsed = Math.Clamp(fraction,0,1)*150_000;
+        double elapsed = Math.Clamp(fraction,0,1)*SimWorld.MovementTickSpan;
         var previous = samples[0];
         for (int i = 1; i < samples.Count; i++)
         {

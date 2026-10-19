@@ -34,9 +34,10 @@ supports click recall. Portrait clicks select one unit; Shift-click removes it.
 | Move | M, then left-click | Move in formation. Ignore combat and damage en route. Return to Idle on arrival. |
 | Attack | A, then left-click | Enemy: attack and pursue. Neutral/friendly: force attack. Ground: attack-move, engaging enemies and resuming the destination. |
 | Stop | S | Clear movement, target, combat position and suspended destination. Return blows if attacked within reach; never chase. |
-| Hold Ground | H | Stop at the current position and proactively attack within melee reach. Drop an out-of-range target; never chase or yield. |
+| Hold Position | H | Stop at the current position and proactively attack within melee reach. Drop an out-of-range target; never chase or yield. |
 | Guard | G, then friendly unit or terrain | Follow and defend a friendly unit, or defend a fixed location; return after an engagement. |
 | Patrol | T, then terrain | Repeatedly travel between the starting point and destination. Engage enemies and resume the route. |
+| Walk / Run | F2 or run icon beside minimap | Toggle movement mode at the next tick without replacing the active order or queue. Mixed selections walk together; an all-walking selection runs. |
 
 The visible action buttons occupy the **bottom row: Attack, Hold, Guard, Patrol**,
 left to right. Move and Stop retain their controls without visible buttons.
@@ -148,8 +149,8 @@ All images remain in ignored cache data.
 M/S bindings remain prototype choices: the original uses S as a walk/run
 modifier. A is a targeting shortcut here, where the original also supports a
 modifier. Shift+number assignment, the new group strip and centered responsive
-layout are additions. Hold Ground follows the manual's label; the addendum calls
-it Hold Position. Guard uses prototype 6 m threat and 8 m pursuit leashes and
+layout are additions. The player-facing label is now Hold Position, matching the
+addendum and local tooltip; the internal enum remains HoldGround. Guard uses prototype 6 m threat and 8 m pursuit leashes and
 replans following twice per second; original guard ranges are unverified.
 The minimap is a simplified navigation/height overview without fog of war;
 economy/resource bars, abilities, original fonts, animated Palantir/alerts and
@@ -161,9 +162,11 @@ The [30-capture session](../references/original-game/LOCAL-SESSION-2026-10-19.md
 confirms the bottom command row and captures its tooltips. It does not validate
 the current command algorithms. The [roadmap](../tools/Roadmap.md#next-milestone-original-game-command-and-combat-corrections)
 puts a focused comparison/correction pass before ranged combat. The controls
-above describe the implementation as it stands, not changes already applied.
+above describe the implementation as it stands. The
+[behavior matrix](../references/original-game/COMMAND-BEHAVIOR-MATRIX.md)
+tracks implemented corrections and unresolved comparisons.
 
-- Use **Hold Position** as the planned released-game UI label. Measure
+- **Implemented:** Hold Position is the player-facing label. Measure
   acquisition/pursuit rather than inferring them from the tooltip.
 - Compare original **Force Attack** targeting with contextual attacks and A/Ctrl
   movement modifiers before revising unified Attack/A. Record modifier press
@@ -174,6 +177,10 @@ above describe the implementation as it stands, not changes already applied.
   camera buttons, launch-time views and the F4 menu remain available.
   Reserve R for ability 4 rather than a future enter-building command. These
   intentional differences do not change the recorded original S/F1–F4 bindings.
+  **F2 is implemented** as a persistent selection Walk/Run toggle and has a
+  matching run-icon button. Source animation ratios determine walking speed;
+  default running retains 3 m/s. No camera shortcut uses F2. Q/W/E/R remain
+  reserved until hero abilities are connected.
 - Verify Guard for a friendly unit, building and terrain area, plus Patrol
   interruption/return and Hold-versus-idle behavior. Existing 6 m/8 m Guard
   leashes and automatic target policies remain unverified.
@@ -184,23 +191,26 @@ above describe the implementation as it stands, not changes already applied.
 Acceptance requires an original/prototype behavior matrix, evidenced corrections
 and focused deterministic input/replay checks. Continuous recordings or traces
 are required for timing and pursuit claims; JPEG stills establish visible UI
-intent and sampled state only. No controls changed in this planning update.
+intent and sampled state only. The label and chosen F2 binding are implemented;
+the original timing and behavior comparison gate remains open.
 
 ## Validation
 
-- 274 synthetic checks: original regressions, timed melee, type ratings, kills, contextual Attack/neutral target
+- 295 synthetic checks: original regressions, timed melee, type ratings, kills, walk/run, contextual Attack/neutral target
   checks, order/group checks and responsive
   layout checks through 4K, ultrawide and narrow windows.
-- 47 additional real-cache checks retain map navigation, traffic and spawn safety,
+- 49 additional real-cache checks retain map navigation, traffic and spawn safety,
   and cover imported definitions and four repeatable duels.
 - `-CommandSmoke`: 26 actual Godot panel/input checks, including single-unit
   stats, live victory refresh, return to the group roster and the four-button
   bottom-row layout and working hidden Move/Stop controls; report in
   `converted/prototype/command-smoke-report.json`.
-- `-OrdersSmoke`: 20 additional actual input checks for groups 1–0, additive
+- `-OrdersSmoke`: 27 additional actual input checks for groups 1–0, additive
   assignment, double-tap centering, death pruning, HUD adjustment, queued squad
   waypoints, Guard, Patrol, Force Attack and contextual Attack-move, plus debug
   menu open/close, pause/resume and exactly one paused tick with animations frozen.
+  F2/run-icon checks cover mixed selection, active targeting, original walk/run
+  clips, unchanged camera, paused double toggles and empty selection.
 - Existing combat and 80 FPS motion smoke checks retain real input, damage,
   all three friendly squads fighting, spacing and interpolation checks.
 - `-CommandSmoke -CapturePath converted/prototype/command-panel.png` saves a

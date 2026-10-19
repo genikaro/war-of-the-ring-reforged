@@ -2,6 +2,10 @@ namespace Reforged.Simulation;
 
 public sealed partial class SimWorld
 {
+    // Normalize consumed distance to one shared tick clock for rendering,
+    // including ticks that cross multiple waypoints or finish early.
+    private static long MovementElapsed(SimUnit unit,long remaining)
+        => (unit.MovementBudget-remaining)*MovementTickSpan/unit.MovementBudget;
     private static readonly (int Cos,int Sin)[] SteeringDirections = [
         (1000,0),(966,259),(966,-259),(866,500),(866,-500),
         (707,707),(707,-707),(500,866),(500,-866),(0,1000),(0,-1000),
@@ -81,7 +85,7 @@ public sealed partial class SimWorld
             unit.GroundSegment = false; unit.TransitNode = -1; unit.TravelProgress = 0;
             unit.Moving = true; budget -= step;
             unit.AvoidanceTicks++;
-            unit.Movement.Add(new(150_000-budget,nx,ny,nz,true));
+            unit.Movement.Add(new(MovementElapsed(unit,budget),nx,ny,nz,true));
             return true;
         }
         return false;
@@ -107,7 +111,7 @@ public sealed partial class SimWorld
         { if (unit.FreeMovement) SteerGround(unit,x,z,ref budget); return false; }
         unit.X = nx; unit.Y = ny; unit.Z = nz; unit.Node = Navigation.Cell(nx,nz);
         unit.TravelProgress = progress; unit.Moving = true; budget -= movement;
-        unit.Movement.Add(new(150_000-budget,nx,ny,nz,true));
+        unit.Movement.Add(new(MovementElapsed(unit,budget),nx,ny,nz,true));
         if (progress < length) return false;
         unit.Node = target; unit.TransitNode = -1; unit.TravelProgress = 0; unit.GroundSegment = false;
         return true;

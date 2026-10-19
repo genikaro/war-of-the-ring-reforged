@@ -8,6 +8,8 @@ public partial class Main
     private readonly Dictionary<string,bool> _ordersChecks = [];
     private int _orderSmokeDead;
     private int _debugPauseTick;
+    private (Vector3 Focus,float Yaw,float Distance,string View) _modeCamera;
+    private int _modeCommandCount;
     private void GroupKey(Key key,bool ctrl = false,bool shift = false)
         => GetViewport().PushInput(new InputEventKey { Keycode = key,Pressed = true,CtrlPressed = ctrl,ShiftPressed = shift },true);
 
@@ -104,8 +106,35 @@ public partial class Main
                 _ordersChecks["hud_fits_viewport"] = bounds.Position.X >= -1 && bounds.Position.Y >= -1
                     && bounds.End.X <= screen.End.X+1 && bounds.End.Y <= screen.End.Y+1;
                 break;
-            case 108:
-                var report = new { checks = _ordersChecks,passed = _ordersChecks.Count == 20 && _ordersChecks.Values.All(v => v),commands = world.Commands,
+            case 108: PushKey(Key.S); GroupKey(Key.Key1); break;
+            case 110: _modeCamera = (_focus,_yaw,_distance,_view); PushKey(Key.M); break;
+            case 112: PushKey(Key.F2); break;
+            case 115:
+                _ordersChecks["f2_walk_preserves_targeting"] = _selected.All(id => world.Units[id].Walking)
+                    && _orders.Pending == OrderKind.Move && _commands.WalkRunButton.ButtonPressed;
+                _ordersChecks["f2_preserves_camera"] = (_focus,_yaw,_distance,_view) == _modeCamera;
+                TargetPoint(Destination(15000,3000)); break;
+            case 118:
+                _ordersChecks["walk_clip_on_move"] = _selected.Any(id => world.Units[id].Moving && _views[id].Clip == world.Units[id].Definition.WalkClip)
+                    && _selected.All(id => world.Units[id].Order == OrderKind.Move);
+                if (_capture != "") _ = CaptureFrame(false);
+                break;
+            case 120: Click(_commands.WalkRunButton.GetGlobalRect().GetCenter()); break;
+            case 123:
+                _ordersChecks["panel_resumes_run"] = _selected.All(id => !world.Units[id].Walking && world.Units[id].Order == OrderKind.Move)
+                    && _selected.Any(id => world.Units[id].Moving && _views[id].Clip == world.Units[id].Definition.RunClip);
+                break;
+            case 125: PushKey(Key.Space); _debugPauseTick = world.Tick; PushKey(Key.F2); PushKey(Key.F2); break;
+            case 128:
+                _ordersChecks["paused_mode_waits_for_tick"] = world.Tick == _debugPauseTick && _selected.All(id => !world.Units[id].Walking)
+                    && world.Commands.TakeLast(2).All(c => c.Kind == OrderKind.ToggleWalkRun);
+                PushKey(Key.Space); break;
+            case 131: _ordersChecks["paused_double_toggle_replays"] = _selected.All(id => !world.Units[id].Walking); break;
+            case 133: PushKey(Key.Escape); _modeCommandCount = world.Commands.Count; break;
+            case 135: PushKey(Key.F2); break;
+            case 138:
+                _ordersChecks["empty_selection_ignores_f2"] = world.Commands.Count == _modeCommandCount && _commands.WalkRunButton.Disabled;
+                var report = new { checks = _ordersChecks,passed = _ordersChecks.Count == 27 && _ordersChecks.Values.All(v => v),commands = world.Commands,
                     final_digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"orders-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("ORDERS_SMOKE "+JsonSerializer.Serialize(report)); GetTree().Quit(report.passed ? 0 : 1); break;

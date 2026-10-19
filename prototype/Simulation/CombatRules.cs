@@ -7,7 +7,8 @@ namespace Reforged.Simulation;
 public sealed record MeleeHit(int Tick,int Scale);
 public sealed record MeleeAttack(string Clip,int Weight,int DurationTicks,MeleeHit[] Hits);
 public sealed record UnitDefinition(int Id,string Name,string DisplayName,int MaxHealth,int ArmorMilli,int DamageType,
-    string DamageTypeName,int MaxAttackers,int DpsMilli,int ReachMm,string ReadyClip,MeleeAttack[] Attacks,int StartingHealthPercent = 100)
+    string DamageTypeName,int MaxAttackers,int DpsMilli,int ReachMm,string ReadyClip,MeleeAttack[] Attacks,int StartingHealthPercent = 100,
+    int WalkScale = 500_000,string WalkClip = "",string RunClip = "")
 {
     // A stable probe profile preserves the existing navigation/spacing fixtures.
     // Actual demo units always receive a definition from the hashed rules cache.
@@ -18,6 +19,7 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
     {
         if (MaxHealth <= 0 || MaxHealth > 1_000_000 || ArmorMilli < 0 || DpsMilli < 0 || DpsMilli > 1_000_000
             || ReachMm is < 700 or > 10000 || MaxAttackers < 0 || StartingHealthPercent is <= 0 or > 100
+            || WalkScale is <= 0 or > 1_000_000
             || Attacks == null || Attacks.Length == 0 || string.IsNullOrEmpty(Name)) throw new ArgumentException("Invalid unit definition");
         foreach (var attack in Attacks)
             if (attack.Weight <= 0 || attack.DurationTicks is <= 0 or > 1200 || attack.Hits == null || attack.Hits.Length == 0

@@ -21,6 +21,24 @@ def adpcm(payload=b'\x17', recent=0, older=0, delta=16, coefficient=(256,0), tot
 
 
 class CombatAdapterTests(unittest.TestCase):
+    def test_locomotion_ratio_uses_source_xy_and_state_choices(self):
+        skeleton = SimpleNamespace(joints=[SimpleNamespace(name='J_Position ')], clips=[
+            SimpleNamespace(name='walk',duration=2,tracks=[SimpleNamespace(positions=[(0,0,0),(0,4,99)])]),
+            SimpleNamespace(name='run',duration=1,tracks=[SimpleNamespace(positions=[(0,0,0),(0,4,99)])])])
+        model = {'animation_states': [
+            {'name':'UNIT_ANIM_STATE_WALK','id':4,'choices':[{'weight':0,'clip_name':'unused'},{'weight':10,'clip_name':'walk'}]},
+            {'name':'UNIT_ANIM_STATE_RUN','id':5,'choices':[{'weight':10,'clip_name':'run'}]}]}
+        motion, scale = combat_rules.locomotion(model,skeleton)
+        self.assertEqual(scale,500000)
+        self.assertEqual(motion['Walk']['SourceSpeed'],2)
+        self.assertEqual(motion['Run']['Clip'],'run')
+        skeleton.clips[0].tracks[0].positions = [(0,0,0),(0,0,1)]
+        with self.assertRaisesRegex(ValueError,'no forward movement'):
+            combat_rules.locomotion(model,skeleton)
+        skeleton.clips[0].tracks[0].positions = [(0,0,0),(0,40,0)]
+        with self.assertRaisesRegex(ValueError,'ratio'):
+            combat_rules.locomotion(model,skeleton)
+
     def test_type_matrix_resolves_source_ids_and_all_directions(self):
         table = Mock()
         table.get.side_effect = lambda name: SimpleNamespace(id={

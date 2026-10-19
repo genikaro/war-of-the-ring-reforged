@@ -1,6 +1,6 @@
 namespace Reforged.Simulation;
 
-public enum OrderKind { Idle, Move, Attack, AttackMove, Stop, HoldGround, Guard, Patrol, ForceAttack }
+public enum OrderKind { Idle, Move, Attack, AttackMove, Stop, HoldGround, Guard, Patrol, ForceAttack, ToggleWalkRun }
 public sealed record PendingOrder(OrderKind Kind,int Cell,int Target,int Sequence);
 
 public sealed partial class SimWorld

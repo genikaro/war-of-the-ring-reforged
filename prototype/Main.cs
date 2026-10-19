@@ -260,6 +260,7 @@ public partial class Main : Node3D
         _commands = new CommandPanel(); _hud.AddChild(_commands);
         _commands.MenuChosen += ToggleDebugMenu;
         _commands.CommandChosen += ChooseCommand;
+        _commands.WalkRunChosen += ToggleWalkRun;
         _commands.GroupChosen += slot => UseGroup(slot,Input.IsPhysicalKeyPressed(Key.Ctrl),Input.IsPhysicalKeyPressed(Key.Shift));
         _commands.UnitChosen += (id,remove) => {
             _orders.Cancel();
@@ -321,6 +322,7 @@ public partial class Main : Node3D
             int groupSlot = key.Keycode == Key.Key0 ? 9 : key.Keycode is >= Key.Key1 and <= Key.Key9 ? (int)key.Keycode-(int)Key.Key1 : -1;
             if (groupSlot >= 0 && !key.AltPressed && !key.MetaPressed) UseGroup(groupSlot,key.CtrlPressed,key.ShiftPressed);
             if (key.Keycode == Key.F4) ToggleDebugMenu();
+            if (key.Keycode == Key.F2 && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed) ToggleWalkRun();
             if (key.Keycode == Key.F10) _hud.Visible = !_hud.Visible;
         }
     }
@@ -420,6 +422,15 @@ public partial class Main : Node3D
         _orders.Cancel(); _status.Text = "Command targeting cancelled";
     }
 
+    private void ToggleWalkRun()
+    {
+        if (_world == null) return;
+        var living = _selected.Where(LivingFriendly).ToArray();
+        if (living.Length == 0) return;
+        _world.Enqueue(0,living,OrderKind.ToggleWalkRun);
+        _status.Text = _paused ? "Walk / Run queued (paused)" : "Walk / Run changed";
+    }
+
     private void SendOrder(PlayerOrder order,bool queued = false)
     {
         var living = _world!.Units.Where(u => u.Team == 0 && u.Health > 0 && _selected.Contains(u.Id)).Select(u => u.Id).ToArray();
@@ -501,7 +512,7 @@ public partial class Main : Node3D
                 int dx = next.X-previous.X, dz = next.Z-previous.Z;
                 if (dx != 0 || dz != 0) view.DesiredYaw = Mathf.Atan2(-dx,dz);
             }
-            string state = unit.Health <= 0 ? "death" : unit.StrikeActive ? "attack" : unit.Moving ? "walk" : unit.Target >= 0 ? "ready" : "idle";
+            string state = unit.Health <= 0 ? "death" : unit.StrikeActive ? "attack" : unit.Moving ? (unit.Walking ? "walk" : "run") : unit.Target >= 0 ? "ready" : "idle";
             if (unit.Moving) _movingSeen++;
             if (unit.Moving && unit.FreeMovement) _freeMovementSeen++;
             if (unit.Attacking) _attackingSeen++;
@@ -509,7 +520,9 @@ public partial class Main : Node3D
                 for (int squad = 0; squad < _friendlySquads.Count; squad++)
                     if (_friendlySquads[squad].Contains(unit.Id)) _squadsFought.Add(squad);
             string clip = state == "attack" ? unit.Definition.Attacks[unit.AttackVariant].Clip
+                : state is "walk" or "run" ? (unit.Walking ? unit.Definition.WalkClip : unit.Definition.RunClip)
                 : state == "ready" ? unit.Definition.ReadyClip : view.Model.GetProperty(state).GetString() ?? "";
+            if ((state is "walk" or "run") && clip == "") clip = view.Model.GetProperty("walk").GetString() ?? "";
             bool restartAttack = unit.StrikeActive && view.AttackSerial != unit.AttackSerial;
             if (view.Player != null && clip != "" && (clip != view.Clip || restartAttack))
             {
@@ -749,6 +762,7 @@ public partial class Main : Node3D
             {
                 PushKey(key);
                 _cameraShortcutsRemoved &= _focus == focus && _yaw == yaw && _distance == distance && _view == view;
+                if (key == Key.F2) PushKey(key); // Restore pace after verifying the former camera binding.
             }
             ToggleDebugMenu();
         }

@@ -62,6 +62,34 @@ def attack_choice(choice, events, duration):
             'SourceDurationSeconds': duration, 'Hits': hits}
 
 
+def locomotion(model, skeleton):
+    """First positive state choice, matching the prototype's existing run clip.
+
+    LSK uses XY ground / Z up. AIApproximateRunVelocity is not reliable for
+    this purpose (Aragorn's value matches his walk clip in this installation).
+    """
+    joint = next(i for i, j in enumerate(skeleton.joints)
+                 if j.name.replace('_', '').replace(' ', '').lower() == 'jposition')
+    result = {}
+    for mode in ['Walk', 'Run']:
+        state = next(s for s in model['animation_states'] if s['name'] == 'UNIT_ANIM_STATE_' + mode.upper())
+        choice = next(c for c in state['choices'] if c['weight'] > 0)
+        clip = next(c for c in skeleton.clips if c.name == choice['clip_name'])
+        track = clip.tracks[joint]
+        if not track.positions or not math.isfinite(clip.duration) or clip.duration <= 0:
+            raise ValueError('invalid locomotion clip')
+        first, last = track.positions[0], track.positions[-1]
+        speed = math.hypot(last[0]-first[0], last[1]-first[1])/clip.duration
+        if not math.isfinite(speed) or speed <= 0:
+            raise ValueError('locomotion clip has no forward movement')
+        result[mode] = {'Clip': clip.name, 'StateId': state['id'], 'Joint': skeleton.joints[joint].name,
+                        'DurationSeconds': clip.duration, 'SourceSpeed': speed}
+    scale = quantize(result['Walk']['SourceSpeed']/result['Run']['SourceSpeed'], 1_000_000)
+    if not 0 < scale <= 1_000_000:
+        raise ValueError('walk/run ratio outside supported range')
+    return result, scale
+
+
 def export(output, resolver=None):
     output = Path(output).resolve()
     if any(output.is_relative_to(ROOT/p) for p in ['extracted','TLOTR - War of the Ring']):
@@ -78,6 +106,7 @@ def export(output, resolver=None):
         model = resolver.resolve(name,recurse=False)
         skeleton_path = ROOT/model['skeletons'][0]['file']
         skeleton = lsk.parse(skeleton_path.read_bytes())
+        motion, walk_scale = locomotion(model, skeleton)
         trace(ROOT/model['file']); trace(skeleton_path)
         state = next(s for s in model['animation_states'] if s['name'] == 'UNIT_ANIM_STATE_ATTACK_MELEE_01')
         durations = {clip.name: clip.duration for clip in skeleton.clips}
@@ -91,8 +120,9 @@ def export(output, resolver=None):
             'Composition': unit['CompositionType'],'WeaponId': weapon.id,'WeaponName': weapon.name,
             'DpsMilli': quantize(weapon['CuttingDamagePerSecond']), 'SourceRangeMm': quantize(weapon['MaximumRange']),
             'ReachMm': 2000,'ReadyClip': ready_clip,'Attacks': choices,
+            'WalkScale': walk_scale,'WalkClip': motion['Walk']['Clip'],'RunClip': motion['Run']['Clip'],
             'Source': {'Unit': unit.name,'ModelId': model['id'],'ModelFile': model['file'],
-                       'StateId': state['id'],'Weapon': weapon.values}})
+                       'StateId': state['id'],'Weapon': weapon.values,'Locomotion': motion}})
     ids = {u['Id'] for u in units}
     pairs = [{'From': p['FromUnit'],'To': p['ToUnit'],'Scale': quantize(p['DamageMultiplier'],1_000_000),
               'Invincible': bool(p['IsInvinicible']),'SourceId': p.id,'SourceName': p.name}
@@ -136,6 +166,7 @@ def export(output, resolver=None):
             'Ranges': 'Keep accepted 2000 mm center reach; raw weapon ranges are retained but their origin/body semantics are unverified.',
             'Types': 'Apply TypeMatchups once, then explicit unit-pair multiplier once (absent pairs 1.0). Pair invincibility takes precedence. No explicit pairs exist among the three demo types. Stacking for other roster units remains unverified.',
             'Timing': 'ceil(source duration * event fraction * 20); cycle ceil(duration*20), final hit at most cycle-1.',
+            'Movement': 'Retain accepted 3 m/s run speed. Walk speed uses the source J_Position XY displacement/duration ratio of first positive walk/run choices. Original world speed and stamina remain unverified.',
             'Unsupported': 'Upgrades, levels, regeneration, height bonuses, poison, knockback, ranged and critical deaths.'}}
     target = output/'combat/rules.json'; target.parent.mkdir(parents=True,exist_ok=True)
     target.write_text(json.dumps(data,indent=2)+'\n')

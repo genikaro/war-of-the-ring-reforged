@@ -136,6 +136,8 @@ static class MeleeChecks
     {
         var rules = CombatRules.Parse(File.ReadAllText(Path.Combine(cache,"combat/rules.json")));
         var hero = rules.Units["UNIT_G_HERO_ARAGORN"]; var knight = rules.Units["UNIT_G_ELF_KNIGHT"]; var orc = rules.Units["UNIT_E_URUK_HAI"];
+        check((hero.WalkScale,knight.WalkScale,orc.WalkScale) == (364585,469073,432872),"cached walk/run ratios derive from source root-track displacement and duration");
+        check(new[] {hero,knight,orc}.All(u => u.WalkClip.EndsWith("_Walk") && u.RunClip.EndsWith("_Run")),"cached locomotion states resolve separate original walk/run clips");
         for (int from = 0; from < 4; from++) for (int to = 0; to < 4; to++)
             check(rules.TypeScale(from,to) == Ratings[from,to]*10000,$"cached type matrix agrees with requested ratings {from}/{to}");
         check((hero.MaxHealth,knight.MaxHealth,orc.MaxHealth) == (485,350,240),"cached base health is traced to three source units");
