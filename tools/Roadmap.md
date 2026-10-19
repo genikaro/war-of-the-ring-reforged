@@ -30,8 +30,8 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
-Latest checks: 129 Python tests, eight JavaScript tests and 243 synthetic C# checks
-pass. Thirty-one additional cache checks include imported combat definitions,
+Latest checks: 130 Python tests, eight JavaScript tests (unchanged), and 321 total
+synthetic/cache C# checks pass. Cache checks include imported combat definitions,
 four repeated duels and runtime masks matching the initial
 snapshot, all ten building centers being
 blocked and all six friendly units traversing the four Helm's Deep surfaces
@@ -75,7 +75,7 @@ with height, supports a saved 75–150% size setting and fits 4K/ultrawide displ
 Editable groups 1–0 support Ctrl assignment, Shift additions, recall, lead-unit
 centering and death pruning. Shift-click queues formation waypoints; queued
 orders are recorded and replayed. Twenty actual Godot input checks cover
-these additions, alongside 23 command checks. Explicit intent survives temporary
+these additions, alongside 26 command checks. Explicit intent survives temporary
 combat routes; Attack-move resumes after combat, force moves ignore retaliation,
 and stationary orders never chase. Names, health, tooltips, active orders and
 disabled commands are visible. Twenty-two actual Godot input checks cover all
@@ -98,6 +98,14 @@ range and event-scale approximations. Four source-unit duels replay identically.
 The melee Godot check records 200 correctly timed hits over 420 ticks with all
 three squads fighting safely; a 4K capture was inspected. Original-game formula
 and duel comparisons remain open.
+
+Weapon ratings now implement the owner's 125%/75% cycle and neutral Hero damage,
+with all 16 matchups stored in the hashed rules cache. Equal types and Hero
+targets use 100%. Single selection shows the original type icon and live Attack,
+Armor and Victories, following the saved original-game HUD. Enemy lethal hits
+increment the attacker's victory counter once. See the
+[reference note](../references/original-game/COMBAT-RATINGS-2026-10-19.md) for the
+diagram, addendum confirmation, linked guide and unresolved formula policies.
 
 ## Accepted baseline: movement and combat spacing
 
@@ -372,7 +380,7 @@ The engine is chosen. Remaining choices can be made as their implementation appr
 
 **Gate:** a skirmish sandbox on one map where you select units, order them to move and attack, and they path, animate and fight with placeholder rules.
 
-**Status (Oct 19): playable baseline accepted; commands and first imported melee implemented.** `prototype/run.ps1` launches 36 animated units in six squads with original console art, a scalable four-button bottom row (Attack, Hold, Guard, Patrol), target-dependent Attack/A, hidden Move/Stop controls, editable groups and queued waypoints. The integer 20 Hz core passes 243 synthetic checks plus 31 cache combat/map/demo checks; 43 command/group/debug input checks and combat/motion/picking checks cover actual Godot dispatch. The user accepts current movement and spacing. Imported melee definitions, animation-timed damage, equipment visibility and impact sounds are connected. Original formula validation, advanced navigation, complete presentation and importer packaging remain open. See `prototype/README.md` and `prototype/COMBAT.md`.
+**Status (Oct 19): playable baseline accepted; commands and first imported melee implemented.** `prototype/run.ps1` launches 36 animated units in six squads with original console art, a scalable four-button bottom row (Attack, Hold, Guard, Patrol), target-dependent Attack/A, hidden Move/Stop controls, editable groups and queued waypoints. The integer 20 Hz core passes 321 synthetic/cache checks; 26 command checks plus existing group/debug and combat/motion/picking checks cover actual Godot dispatch. The user accepts current movement and spacing. Imported melee definitions, type ratings, kill counts, single-unit stats, animation-timed damage, equipment visibility and impact sounds are connected. Original formula validation, advanced navigation, complete presentation and importer packaging remain open. See `prototype/README.md` and `prototype/COMBAT.md`.
 
 - [x] Settle the engine: Godot 4 with C#; current local cache is generated from the owner's install, with no assets in source control. Production asset-delivery packaging remains open.
 - [ ] Package the first-run importer: `prepare_prototype.py --install` now extracts/verifies source archives and writes a hashed runtime cache; in-game install selection and production packaging remain.

@@ -1,5 +1,6 @@
 using Reforged.Simulation;
 using System.Text.Json;
+using Reforged.Presentation;
 
 static class MeleeChecks
 {
@@ -14,6 +15,11 @@ static class MeleeChecks
         return world;
     }
     private static void Advance(SimWorld world,int count) { for (int i = 0; i < count; i++) world.Step(); }
+    private static readonly int[,] Ratings = { {100,125,75,100},{75,100,125,100},{125,75,100,100},{100,100,100,100} };
+    private static DamageTypeRule[] TypeRules => Enumerable.Range(0,4).SelectMany(from =>
+        Enumerable.Range(0,4).Select(to => new DamageTypeRule(from,to,Ratings[from,to]*10000))).ToArray();
+    private static CombatRules Rules(params UnitPairRule[] pairs) => CombatRules.Parse(JsonSerializer.Serialize(new {
+        FormatVersion = 2,TicksPerSecond = 20,Units = new[] { Profile },TypeMatchups = TypeRules,Pairs = pairs }));
 
     public static void Run(Action<bool,string> check)
     {
@@ -62,12 +68,51 @@ static class MeleeChecks
         lethal.Enqueue(0,[0],OrderKind.Attack,target:1); Advance(lethal,3);
         check(lethal.Units[0].Health == 0 && !lethal.Units[0].StrikeActive,"later unit's lethal hit immediately cancels earlier unit's pending swing");
 
-        CombatRules PairRules(bool invincible) => CombatRules.Parse(JsonSerializer.Serialize(new { FormatVersion = 1,TicksPerSecond = 20,
-            Units = new[] { Profile },Pairs = new[] { new UnitPairRule(100,100,1500000,invincible) } }));
+        CombatRules PairRules(bool invincible) => Rules(new UnitPairRule(100,100,1500000,invincible));
         var pair = Fixture(victim:Profile with { ArmorMilli = 3000 },rules:PairRules(false)); Advance(pair,6);
         check(pair.Units[1].HealthMilli == 73000,"explicit pair multiplier is applied once before armor");
         var immune = Fixture(rules:PairRules(true)); Advance(immune,6);
         check(immune.Units[1].HealthMilli == 100000 && immune.CombatEvents.Any(e => e.Kind == CombatEventKind.Hit && e.DamageMilli == 0),"pair invincibility retains hit event without damage");
+
+        for (int from = 0; from < 4; from++) for (int to = 0; to < 4; to++)
+        {
+            var rated = Fixture(Profile with { DamageType = from },Profile with { DamageType = to },Rules());
+            Advance(rated,6);
+            check(rated.Units[1].HealthMilli == 100000-20000L*Ratings[from,to]/100,$"type matchup {from} -> {to} applies once at the hit");
+        }
+        check(Rules().TypeScale(-1,0) == 1000000 && Rules().TypeScale(0,99) == 1000000,"unclassified types remain neutral");
+        var stacked = Fixture(Profile with { DamageType = 0 },Profile with { DamageType = 1,ArmorMilli = 3000 },PairRules(false));
+        Advance(stacked,6); check(stacked.Units[1].HealthMilli == 65500,"type and explicit pair scales apply once each before armor");
+        var typedImmune = Fixture(Profile with { DamageType = 0 },Profile with { DamageType = 1 },PairRules(true));
+        Advance(typedImmune,6); check(typedImmune.Units[1].HealthMilli == 100000,"invincibility overrides type advantage");
+
+        var killing = Fixture(Profile with { Attacks = [new("double",1,20,[new(3,1000000),new(8,1000000)])] },Profile with { MaxHealth = 5 });
+        Advance(killing,30);
+        check(killing.Units[0].KillCount == 1 && killing.Units[1].Health == 0 && killing.Units[1].KillCount == 0,"only the lethal attacker gains one victory despite later hit events");
+        var rival = Open(); rival.Spawn(0,85,Profile); rival.Spawn(0,89,Profile); rival.Spawn(1,87,Profile with { MaxHealth = 5 });
+        rival.Units[2].Cooldown = 10000; rival.Enqueue(0,[0,1],OrderKind.Attack,target:2); Advance(rival,30);
+        check(rival.Units[0].KillCount == 1 && rival.Units[1].KillCount == 0,"simultaneous attackers credit only the first lethal hit");
+        var friendly = Open(); friendly.Spawn(0,85,Profile); friendly.Spawn(0,87,Profile with { MaxHealth = 5 });
+        friendly.Units[1].Cooldown = 10000; friendly.Enqueue(0,[0],OrderKind.ForceAttack,target:1); Advance(friendly,30);
+        check(friendly.Units[1].Health == 0 && friendly.Units[0].KillCount == 0,"friendly force attacks do not award victories");
+        string beforeKillChange = killing.StateDigest(); killing.Units[0].KillCount++;
+        check(beforeKillChange != killing.StateDigest(),"victories are included in replay state"); killing.Units[0].KillCount--;
+        var stats = UnitHudStats.From(killing.Units[0],Rules());
+        check(stats.Attack == "20" && stats.Armor == "0" && stats.Victories == "1" && stats.Health == "100/100","unit HUD reflects live simulation stats and kills");
+        check(UnitHudStats.From(world.Units[0],Rules()).Icon == "","unclassified profiles never borrow a weapon icon");
+        for (int type = 0; type < 4; type++)
+        {
+            var unit = Fixture(Profile with { DamageType = type },rules:Rules()).Units[0];
+            var typedStats = UnitHudStats.From(unit,Rules());
+            check(typedStats.Icon == "counter_marker_G_"+new[] {"slashing","piercing","blunt","hero"}[type]
+                && typedStats.Matchups.Contains("100% vs Hero"),"HUD uses original type art and neutral hero target: "+type);
+        }
+        foreach (var invalid in new[] { TypeRules.Skip(1).ToArray(),TypeRules.Append(TypeRules[0]).ToArray() })
+        {
+            try { CombatRules.Parse(JsonSerializer.Serialize(new { FormatVersion = 2,TicksPerSecond = 20,Units = new[] {Profile},TypeMatchups = invalid,Pairs = Array.Empty<UnitPairRule>() }));
+                check(false,"invalid matchup table must fail"); }
+            catch (ArgumentException) { check(true,"incomplete or duplicate matchup table rejected"); }
+        }
 
         var capped = Open(); capped.Spawn(0,85,Profile); capped.Spawn(0,89,Profile);
         capped.Spawn(2,87,Profile with { MaxAttackers = 1 }); capped.Units[2].Cooldown = 10000;
@@ -91,6 +136,8 @@ static class MeleeChecks
     {
         var rules = CombatRules.Parse(File.ReadAllText(Path.Combine(cache,"combat/rules.json")));
         var hero = rules.Units["UNIT_G_HERO_ARAGORN"]; var knight = rules.Units["UNIT_G_ELF_KNIGHT"]; var orc = rules.Units["UNIT_E_URUK_HAI"];
+        for (int from = 0; from < 4; from++) for (int to = 0; to < 4; to++)
+            check(rules.TypeScale(from,to) == Ratings[from,to]*10000,$"cached type matrix agrees with requested ratings {from}/{to}");
         check((hero.MaxHealth,knight.MaxHealth,orc.MaxHealth) == (485,350,240),"cached base health is traced to three source units");
         check((hero.DpsMilli,knight.DpsMilli,orc.DpsMilli) == (20000,10000,14000),"cached melee weapons have distinct source DPS");
         check(hero.Attacks[2].Hits.Select(h => h.Tick).SequenceEqual(new[] {13,27}) && orc.Attacks[0].Hits[0].Tick == 15,

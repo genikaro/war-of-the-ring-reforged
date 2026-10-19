@@ -140,9 +140,24 @@ public partial class Main
             case 124:
                 _commandChecks["empty_selection_after_battle"] = !_commands.CommandsAvailable && _orders.Pending == null && world.Commands.Count == _commandsBeforeCancel;
                 break;
-            case 128:
+            case 128: PushKey(Key.Key1); break;
+            case 130: Click(_commands.PortraitButton(_primarySquad.Min()).GetGlobalRect().GetCenter()); break;
+            case 133:
+                _commandChecks["portrait_selects_single_stats"] = _selected.Count == 1 && _commands.SingleUnitDetailsVisible && _commands.DisplayedVictories == "0";
+                world.Units[_selected.Single()].KillCount = 2;
+                break;
+            case 136:
+                _commandChecks["single_victories_refresh"] = _commands.DisplayedVictories == "2";
+                world.Units[_selected.Single()].KillCount = 0;
+                break;
+            case 138: if (_capture != "") _ = CaptureFrame(false); break;
+            case 142: PushKey(Key.Key1); break;
+            case 145:
+                _commandChecks["group_restores_portrait_roster"] = _selected.Count == 5 && !_commands.SingleUnitDetailsVisible && _commands.CommandsAvailable;
+                break;
+            case 150:
                 var report = new { ticks = world.Tick, checks = _commandChecks, commands = world.Commands,
-                    final_digest = world.StateDigest(), passed = _commandChecks.Count == 23 && _commandChecks.Values.All(v => v) };
+                    final_digest = world.StateDigest(), passed = _commandChecks.Count == 26 && _commandChecks.Values.All(v => v) };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"command-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("COMMAND_SMOKE "+JsonSerializer.Serialize(report)); GetTree().Quit(report.passed ? 0 : 1);

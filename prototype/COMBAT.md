@@ -26,11 +26,29 @@ models and PCM sounds before launch. State digests include the rules hash,
 precise health and attack state.
 
 There are no explicit unit-to-unit modifiers between IDs 3, 16 and 34. Absent
-pairs use 1.0. `DamageTypes` supplies labels, not a numeric generic matchup
-matrix; no class bonus is invented. Explicit directional pair multipliers and
-invincibility are supported and tested with synthetic profiles.
+pairs use 1.0. The shipped addendum (PDF page 7) and the owner's weapon-rating
+photograph establish cutting > piercing > blunt > cutting. The owner specified
+125% for the favorable matchup, 75% for its reverse and 100% for Hero attacks.
+Equal types and attacks against Hero use a documented neutral 100% policy.
 
-Refresh an existing cache using `python tools/prepare_prototype.py --rules-only`.
+| Attacker / target | Cutting | Piercing | Blunt | Hero |
+|---|---:|---:|---:|---:|
+| Cutting | 100% | 125% | 75% | 100% |
+| Piercing | 75% | 100% | 125% | 100% |
+| Blunt | 125% | 75% | 100% | 100% |
+| Hero | 100% | 100% | 100% | 100% |
+
+Rules format 2 includes all 16 integer `TypeMatchups` and their provenance in
+the hashed cache. The parser rejects incomplete/duplicate tables; unclassified
+probe types remain neutral. Type scaling precedes explicit pair scaling and
+armor. Pair invincibility overrides damage. Stacking with explicit pair rules
+is an adapter policy; the source table has exceptions elsewhere in the roster,
+so this combination requires validation before expanding the supported units.
+The addendum does not state the numeric percentages or the full damage formula.
+See [the reference note](../references/original-game/COMBAT-RATINGS-2026-10-19.md).
+
+Refresh an existing cache using `python tools/prepare_prototype.py --rules-only`
+and `python tools/prepare_prototype.py --ui-only` for the type icons.
 A full preparation also builds these resources. Original/extracted inputs stay
 read-only; no game assets enter source control and no audio dependency is added.
 
@@ -67,7 +85,8 @@ can take released slots.
 The damage policy is explicitly approximate:
 
 ```
-rateMilli = max(0, attackerDpsMilli * pairScale / 1_000_000 - victimArmorMilli)
+typedDpsMilli = attackerDpsMilli * typeScale / 1_000_000
+rateMilli = max(0, typedDpsMilli * pairScale / 1_000_000 - victimArmorMilli)
 hitDamageMilli = rateMilli * cycleTicks * eventScale / (20 * sumOfClipHitScales)
 ```
 
@@ -75,7 +94,19 @@ Integer division truncates; damage is capped at remaining health. Invincibility
 produces a zero-damage hit. Dividing by total hit scales keeps Aragorn's
 two-event choice at its cycle DPS instead of doubling it. Fractional damage
 stays in milli-health. The HUD rounds HP upward and uses imported maximum health
-for bars; portrait tooltips show armor, DPS and classification.
+for bars. A hostile lethal hit awards exactly one `KillCount` to its attacker;
+later hits on the dead victim cannot award it again. Friendly force kills do
+not award victories. This attribution is a prototype policy; the local capture
+confirms a victory counter but does not isolate the original attribution rule.
+Kill counts are part of the state digest.
+
+Single selection now shows the portrait, name, live health bar, original damage
+type icon and a framed Attack / Armor / Victories block, following `local-020`
+and `local-025`. Attack displays the imported base weapon DPS number (the source
+field), without claiming it is damage per hit. Hovering the type icon lists all
+four percentages. Group selection retains its clickable portrait roster and
+per-unit stats tooltips. Both faction counter-marker crops are imported; the
+current Good console uses its matching gold-framed variants.
 
 **Unverified interpretations:** subtracting armor from DPS and normalizing event
 scales are implementation policies, not recovered formulas. Controlled
@@ -129,14 +160,19 @@ Uruk-hai launch/flight/impact and interruption references.
 
 ```powershell
 python -m unittest discover -s tools -p 'test_*.py'
+python tools/prepare_prototype.py --rules-only
+python tools/prepare_prototype.py --ui-only
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --cache converted/prototype
 ./prototype/run.ps1 -MeleeSmoke
 ./prototype/run.ps1 -MeleeSmoke -Resolution 3840x2160 -CapturePath converted/prototype/melee-4k.png
+./prototype/run.ps1 -CommandSmoke -Resolution 3840x2160 -CapturePath converted/prototype/unit-hud-4k.png
 ```
 
 Synthetic checks cover windup, exact hits, recovery, Stop/reissue, retargeting,
 death, moving victims, queues, multi-hit normalization, fractional health, armor,
-pair modifiers/invincibility, attacker slots and replay. Import tests cover
+all 16 type matchups, pair modifiers/invincibility, lethal attribution, attacker
+slots and replay. The command smoke checks single/group selection and live
+victory refresh; inspected 1080p and 4K captures show the stats panel. Import tests cover
 event quantization, protected outputs, idempotent equipment restoration and
 ADPCM known-sample/error cases.
 

@@ -16,6 +16,13 @@ public partial class CommandPanel : Control
     private readonly Dictionary<string,Texture2D> _art = [];
     private readonly Button[] _groups = new Button[10];
     private Control _content = null!, _roster = null!;
+    private Control _single = null!;
+    private Button _singlePortrait = null!;
+    private TextureRect _typeIcon = null!, _statsBackground = null!;
+    private ColorRect _singleHealth = null!;
+    private Label _singleHealthText = null!, _attackValue = null!, _armorValue = null!, _victoriesValue = null!;
+    private CombatRules _rules = CombatRules.Probe;
+    private int _detailUnit = -1;
     private TextureRect _background = null!;
     private Label _title = null!, _order = null!, _hint = null!, _armies = null!;
     private Button _menu = null!;
@@ -49,6 +56,25 @@ public partial class CommandPanel : Control
         _order = Text("",new(265,192),new(505,18),12); _content.AddChild(_order);
         _armies = Text("",new(787,8),new(229,18),12); _content.AddChild(_armies);
         _roster = new Control { Position = new(265,84),Size = new(505,104),MouseFilter = MouseFilterEnum.Ignore }; _content.AddChild(_roster);
+        _single = new Control { Position = new(265,59),Size = new(505,129),Visible = false,MouseFilter = MouseFilterEnum.Ignore }; _content.AddChild(_single);
+        _singlePortrait = new Button { Size = new(62,62),ExpandIcon = true,FocusMode = FocusModeEnum.None };
+        Skin(_singlePortrait); _singlePortrait.Pressed += () => UnitChosen?.Invoke(_detailUnit,Input.IsPhysicalKeyPressed(Key.Shift)); _single.AddChild(_singlePortrait);
+        _single.AddChild(Text("Health",new(0,66),new(248,18),12));
+        var healthFrame = new Panel { Position = new(0,85),Size = new(248,16),MouseFilter = MouseFilterEnum.Ignore };
+        healthFrame.AddThemeStyleboxOverride("panel",Border(new Color("282418"),new Color("bda56b"))); _single.AddChild(healthFrame);
+        _singleHealth = new ColorRect { Position = new(2,87),Size = new(244,12),Color = new Color("48972e"),MouseFilter = MouseFilterEnum.Ignore }; _single.AddChild(_singleHealth);
+        _singleHealthText = Text("",new(0,85),new(248,16),11); _singleHealthText.HorizontalAlignment = HorizontalAlignment.Center; _single.AddChild(_singleHealthText);
+        _typeIcon = new TextureRect { Position = new(270,28),Size = new(47,48),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Stop }; _single.AddChild(_typeIcon);
+        _statsBackground = new TextureRect { Position = new(333,28),Size = new(171,77),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Ignore }; _single.AddChild(_statsBackground);
+        string[] statNames = ["Attack","Armor","Victories"];
+        var statValues = new Label[3];
+        for (int row = 0; row < statNames.Length; row++)
+        {
+            _single.AddChild(Text(statNames[row],new(345,33+row*22),new(102,22),13));
+            var value = Text("",new(447,33+row*22),new(44,22),13); value.HorizontalAlignment = HorizontalAlignment.Right;
+            _single.AddChild(value); statValues[row] = value;
+        }
+        (_attackValue,_armorValue,_victoriesValue) = (statValues[0],statValues[1],statValues[2]);
         for (int slot = 0; slot < 10; slot++)
         {
             int group = slot;
@@ -108,6 +134,7 @@ public partial class CommandPanel : Control
 
     public void LoadArtwork(string cache,SimWorld world)
     {
+        _rules = world.Rules;
         var index = JsonDocument.Parse(System.IO.File.ReadAllText(System.IO.Path.Combine(cache,"interface/index.json"))).RootElement;
         foreach (var asset in index.GetProperty("assets").EnumerateObject())
         {
@@ -116,6 +143,7 @@ public partial class CommandPanel : Control
             using var image = Image.LoadFromFile(path); _art[asset.Name] = ImageTexture.CreateFromImage(image);
         }
         _background.Texture = _art["console_g_background"];
+        _statsBackground.Texture = _art["console_stats_background_good"];
         _menu.Icon = _art["console_g_menumenu"];
         foreach (var command in Commands) _buttons[command.Kind].Icon = _art[command.Icon];
         _map.Configure(world);
@@ -127,7 +155,10 @@ public partial class CommandPanel : Control
     public void Refresh(IReadOnlyList<SimUnit> units,Func<int,string> name,OrderKind? pending,bool paused,IReadOnlyList<int[]>? groups = null,int allies = 0,int enemies = 0)
     {
         bool available = units.Count > 0;
-        _title.Text = units.Count == 1 ? name(units[0].Id)+$"   Health {units[0].Health}/{units[0].MaxHealth}" : available
+        bool single = units.Count == 1;
+        _single.Visible = single; _roster.Visible = !single;
+        _title.Position = single ? new(335,59) : new(265,59); _title.Size = single ? new(435,22) : new(505,22);
+        _title.Text = single ? name(units[0].Id) : available
             ? $"{units.Count} selected   "+string.Join(" · ",units.GroupBy(u => name(u.Id)).Select(g => $"{g.Count()} {g.Key}")) : "Select your forces";
         _order.Text = available ? string.Join(" · ",units.GroupBy(u => u.Order).Select(g => $"{OrderName(g.Key)} ({g.Count()})"))
             + (units.Sum(u => u.OrderQueue.Count) > 0 ? $"   +{units.Sum(u => u.OrderQueue.Count)} queued" : "") : "Ctrl + number: assign group · Shift + number: add units";
@@ -151,11 +182,20 @@ public partial class CommandPanel : Control
         }
         foreach (var unit in units)
         {
+            var stats = UnitHudStats.From(unit,_rules);
             var portrait = _portraits[unit.Id]; portrait.Health.Size = new(46*Math.Clamp(unit.Health/(float)unit.MaxHealth,0,1),4);
             portrait.Button.TooltipText = $"{name(unit.Id)} #{unit.Id+1} · {unit.Health}/{unit.MaxHealth}\n{OrderName(unit.Order)}"
-                + $"\nArmor {unit.Definition.ArmorMilli/1000.0:0.###} · {unit.Definition.DpsMilli/1000.0:0.###} DPS · {unit.Definition.DamageTypeName.Replace("DAMAGE_TYPE_","")}"
+                + $"\nAttack {stats.Attack} · Armor {stats.Armor} · Victories {stats.Victories}\n{stats.Type}\n{stats.Matchups}"
                 + (unit.OrderQueue.Count > 0 ? "\nQueue: "+string.Join(" → ",unit.OrderQueue.Select(o => OrderName(o.Kind))) : "")
                 + "\nClick to select. Shift-click removes from selection.";
+            if (single)
+            {
+                _detailUnit = unit.Id; _singlePortrait.Icon = portrait.Button.Icon; _singlePortrait.TooltipText = portrait.Button.TooltipText;
+                _typeIcon.Texture = _art.GetValueOrDefault(stats.Icon); _typeIcon.TooltipText = stats.Type+" damage\n"+stats.Matchups;
+                _attackValue.Text = stats.Attack; _armorValue.Text = stats.Armor; _victoriesValue.Text = stats.Victories;
+                _singleHealthText.Text = stats.Health;
+                _singleHealth.Size = new(244*Math.Clamp(unit.HealthMilli/(float)(unit.MaxHealth*1000L),0,1),12);
+            }
         }
         foreach (var (kind,button) in _buttons)
         {
@@ -188,5 +228,8 @@ public partial class CommandPanel : Control
     public Button ButtonFor(OrderKind kind) => _buttons[kind];
     private static OrderKind? PanelCommand(OrderKind? kind) => kind is OrderKind.Attack or OrderKind.AttackMove or OrderKind.ForceAttack ? OrderKind.Attack : kind;
     public Button GroupButton(int slot) => _groups[slot];
+    public Button PortraitButton(int id) => _portraits[id].Button;
     public bool CommandsAvailable => _buttons.Values.All(b => !b.Disabled);
+    public bool SingleUnitDetailsVisible => _single.Visible;
+    public string DisplayedVictories => _victoriesValue.Text;
 }

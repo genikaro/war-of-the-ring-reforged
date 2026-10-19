@@ -28,6 +28,7 @@ def export(output, resolver=None):
     paths = list((source / 'Console/Main/Good').glob('*.uva'))
     paths += list((source / 'Console/ActionButtons/Good').glob('*.uva'))
     paths += [source / 'Console/Main/console_frameportrait.uva']
+    paths += list((source / 'Console/Counter Markers').glob('*.uva'))
     paths += [source / ('Console/UnitPortraits/' + name) for name in [
         'Good/Portrait_G_Aragorn.uva', 'Good/Portrait_G_Elven_Knight.uva', 'Evil/Portrait_E_Uruk_Hai.uva']]
     paths += [p for p in (source / 'Cursors/Good').glob('*.uva')

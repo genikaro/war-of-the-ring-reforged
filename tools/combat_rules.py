@@ -18,6 +18,21 @@ ROOT = Path(__file__).resolve().parent.parent
 UNITS = ['UNIT_G_HERO_ARAGORN', 'UNIT_G_ELF_KNIGHT', 'UNIT_E_URUK_HAI']
 
 
+def type_matchups(damage_types):
+    """User-specified percentages; cycle confirmed by the shipped addendum p7.
+
+    Same types and hero targets are neutral. Unknown types are left to the
+    runtime's neutral fallback rather than guessed from a unit/weapon name.
+    """
+    ids = {name: damage_types.get('DAMAGE_TYPE_' + name).id
+           for name in ['CUTTING', 'PIERCING', 'BLUNT', 'HERO']}
+    strong = {(ids['CUTTING'], ids['PIERCING']), (ids['PIERCING'], ids['BLUNT']),
+              (ids['BLUNT'], ids['CUTTING'])}
+    return [{'From': a, 'To': b, 'Scale': 1_250_000 if (a, b) in strong
+             else 750_000 if (b, a) in strong else 1_000_000}
+            for a in ids.values() for b in ids.values()]
+
+
 def quantize(value, scale=1000):
     if not math.isfinite(value):
         raise ValueError('non-finite rules value')
@@ -109,12 +124,17 @@ def export(output, resolver=None):
                 'MaxSimultaneous': event['MaxSimultaneous'], 'Conversion': 'mono Microsoft ADPCM to 16-bit PCM'})
     for name in ['Units','Weapons','DamageTypes','UnitToUnitModifiers','WeaponEffects','WeaponImpactTypes','SoundEvents','SoundEffects']:
         trace(resolver.db.files[name.lower()])
-    data = {'FormatVersion': 1,'TicksPerSecond': 20,'Units': units,'Pairs': pairs,'Sounds': sounds,
+    data = {'FormatVersion': 2,'TicksPerSecond': 20,'Units': units,'Pairs': pairs,'Sounds': sounds,
+        'TypeMatchups': type_matchups(resolver.db['DamageTypes']),
+        'TypeMatchupSource': {'Cycle': 'Shipped English manual addendum, PDF page 7; owner weapon-rating photograph.',
+                            'Percentages': 'Owner request, 2026-10-19: advantage 125%, disadvantage 75%, heroes 100%.',
+                            'NeutralPolicy': 'Same type and attacks against Hero: 100%.',
+                            'Guide': 'https://gamefaqs.gamespot.com/pc/563555-the-lord-of-the-rings-war-of-the-ring/faqs/29079'},
         'Sources': sources,'Policy': {
-            'Armor': 'Approximation: subtract armor points from DPS after the pair multiplier; clamp rate at zero.',
+            'Armor': 'Approximation: subtract armor points from DPS after type and explicit pair multipliers; clamp rate at zero.',
             'Damage': 'Distribute DPS * quantized cycle duration across hit events in proportion to source damage_scale.',
             'Ranges': 'Keep accepted 2000 mm center reach; raw weapon ranges are retained but their origin/body semantics are unverified.',
-            'Types': 'Retain source DamageType. Use explicit unit-pair multipliers once; absent pairs are 1.0. No invented generic type bonus.',
+            'Types': 'Apply TypeMatchups once, then explicit unit-pair multiplier once (absent pairs 1.0). Pair invincibility takes precedence. No explicit pairs exist among the three demo types. Stacking for other roster units remains unverified.',
             'Timing': 'ceil(source duration * event fraction * 20); cycle ceil(duration*20), final hit at most cycle-1.',
             'Unsupported': 'Upgrades, levels, regeneration, height bonuses, poison, knockback, ranged and critical deaths.'}}
     target = output/'combat/rules.json'; target.parent.mkdir(parents=True,exist_ok=True)

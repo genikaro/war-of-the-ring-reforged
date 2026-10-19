@@ -53,12 +53,20 @@ public sealed partial class SimWorld
             int index = unit.NextHit++;
             if (target.Health <= 0 || unit.Target != target.Id || !MeleeReach(unit.Node,unit.X,unit.Y,unit.Z,target,unit.Definition.ReachMm)) continue;
             var pair = Rules.Pair(unit.Definition.Id,target.Definition.Id);
-            long rate = Math.Max(0,(long)unit.Definition.DpsMilli*pair.Scale/1_000_000-target.Definition.ArmorMilli);
+            int typeScale = Rules.TypeScale(unit.Definition.DamageType,target.Definition.DamageType);
+            long typedDps = (long)unit.Definition.DpsMilli*typeScale/1_000_000;
+            long rate = Math.Max(0,typedDps*pair.Scale/1_000_000-target.Definition.ArmorMilli);
             long damage = pair.Invincible ? 0 : rate*attack.DurationTicks*attack.Hits[index].Scale/(TicksPerSecond*attack.Hits.Sum(h => (long)h.Scale));
             damage = Math.Min(damage,target.HealthMilli); target.HealthMilli -= damage;
             CombatEvents.Add(new(Tick,CombatEventKind.Hit,unit.Id,target.Id,unit.AttackVariant,index,damage,
                 unit.AttackStartTick,target.X,target.Y,target.Z));
-            if (target.Health <= 0) CancelStrike(target);
+            if (target.Health <= 0)
+            {
+                // This hit crossed zero; later events skip dead targets. Only
+                // hostile kills count, including enemy kills by neutral teams.
+                if (damage > 0 && target.Team != unit.Team) unit.KillCount++;
+                CancelStrike(target);
+            }
             Retaliate(target,unit);
         }
     }

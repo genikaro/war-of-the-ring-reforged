@@ -28,6 +28,7 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
 }
 
 public sealed record UnitPairRule(int From,int To,int Scale,bool Invincible);
+public sealed record DamageTypeRule(int From,int To,int Scale);
 
 public sealed class CombatRules
 {
@@ -35,13 +36,21 @@ public sealed class CombatRules
     public string Hash { get; private set; } = "probe-v1";
     public Dictionary<string,UnitDefinition> Units { get; } = [];
     private readonly Dictionary<(int From,int To),UnitPairRule> _pairs = [];
+    private readonly Dictionary<(int From,int To),int> _types = [];
 
     public static CombatRules Parse(string json)
     {
         using var document = JsonDocument.Parse(json); var root = document.RootElement;
-        if (root.GetProperty("FormatVersion").GetInt32() != 1 || root.GetProperty("TicksPerSecond").GetInt32() != SimWorld.TicksPerSecond)
+        if (root.GetProperty("FormatVersion").GetInt32() != 2 || root.GetProperty("TicksPerSecond").GetInt32() != SimWorld.TicksPerSecond)
             throw new ArgumentException("Unsupported combat rules");
         var rules = new CombatRules { Hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json))) };
+        foreach (var item in root.GetProperty("TypeMatchups").EnumerateArray())
+        {
+            var type = item.Deserialize<DamageTypeRule>() ?? throw new ArgumentException("Missing damage type matchup");
+            if (type.From is < 0 or > 3 || type.To is < 0 or > 3 || type.Scale is < 0 or > 10_000_000
+                || !rules._types.TryAdd((type.From,type.To),type.Scale)) throw new ArgumentException("Invalid damage type matchup");
+        }
+        if (rules._types.Count != 16) throw new ArgumentException("Incomplete damage type matchups");
         foreach (var item in root.GetProperty("Units").EnumerateArray())
         {
             var unit = item.Deserialize<UnitDefinition>() ?? throw new ArgumentException("Missing unit definition");
@@ -57,4 +66,5 @@ public sealed class CombatRules
     }
 
     public UnitPairRule Pair(int from,int to) => _pairs.GetValueOrDefault((from,to),new(from,to,1_000_000,false));
+    public int TypeScale(int from,int to) => _types.GetValueOrDefault((from,to),1_000_000);
 }

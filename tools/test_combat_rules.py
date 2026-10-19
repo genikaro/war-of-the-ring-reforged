@@ -2,6 +2,8 @@ import io
 import struct
 import unittest
 import wave
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 from combat_rules import attack_choice, quantize
 import combat_rules
@@ -19,6 +21,17 @@ def adpcm(payload=b'\x17', recent=0, older=0, delta=16, coefficient=(256,0), tot
 
 
 class CombatAdapterTests(unittest.TestCase):
+    def test_type_matrix_resolves_source_ids_and_all_directions(self):
+        table = Mock()
+        table.get.side_effect = lambda name: SimpleNamespace(id={
+            'DAMAGE_TYPE_CUTTING': 0,'DAMAGE_TYPE_PIERCING': 1,
+            'DAMAGE_TYPE_BLUNT': 2,'DAMAGE_TYPE_HERO': 3}[name])
+        matrix = combat_rules.type_matchups(table)
+        self.assertEqual(len(matrix),16)
+        self.assertEqual([[r['Scale'] for r in matrix if r['From'] == a] for a in range(4)], [
+            [1000000,1250000,750000,1000000], [750000,1000000,1250000,1000000],
+            [1250000,750000,1000000,1000000], [1000000,1000000,1000000,1000000]])
+
     def test_event_ticks_ceil_source_fraction(self):
         result = attack_choice({'clip_name':'swing','weight':1,'event_indices':[0,1]},[
             {'name':'melee_hit','time':.5,'damage_scale':1},

@@ -28,6 +28,12 @@ visible buttons. These three types now use imported health, armor, melee DPS and
 animation-timed hit events, with weapon visibility and impact sounds. See
 [combat rules and approximations](COMBAT.md) and [command behavior](COMMANDS.md).
 
+Weapon ratings now follow cutting > piercing > blunt > cutting: 125% in the
+favorable direction, 75% in reverse, and 100% for Hero attacks. Equal types
+and Hero targets are neutral. Single selection shows the original type icon,
+Attack, Armor, Victories and live health; hover the icon for its matchups.
+Group selection retains the portrait roster. Enemy kills update Victories.
+
 Combat reserves separate reachable attack positions around each target, keeps
 allied spacing, and parks excess attackers outside the melee ring. Settled
 fighters hold position and face their target. Attack orders continue onto nearby
@@ -70,6 +76,8 @@ python tools/prepare_prototype.py --demo-only
 
 To refresh imported combat rules, equipment bindings and impact sounds in an
 existing cache, run `python tools/prepare_prototype.py --rules-only`.
+Existing caches also need `python tools/prepare_prototype.py --ui-only` for the
+new type icons. Rules format 2 requires regenerating older combat caches.
 
 For another owner's install, provide its folder (containing `Database/`
 and `Archives/`). Extraction verifies CRCs and paths; the install is read only:

@@ -102,7 +102,9 @@ rule with terrain/layer checks. These values do not establish original rules.
 Imported stats and animation-timed melee are described in [combat notes](COMBAT.md).
 Replacing an order cancels pending hits while preserving remaining recovery;
 queuing an order preserves the current swing. Health bars use each type's source
-maximum; portrait tooltips show imported armor, DPS and damage classification.
+maximum. Single selection shows the original type icon, Attack, Armor and
+Victories beside the portrait and health bar. The type icon's tooltip lists
+the four damage percentages. Group portraits retain these stats in tooltips.
 
 Stop and Hold Ground preserve the exact current position. On a constrained
 deck segment the physical reservation stays held while stationary. A later
@@ -186,12 +188,13 @@ intent and sampled state only. No controls changed in this planning update.
 
 ## Validation
 
-- 243 synthetic checks: original regressions, timed melee, contextual Attack/neutral target
+- 274 synthetic checks: original regressions, timed melee, type ratings, kills, contextual Attack/neutral target
   checks, order/group checks and responsive
   layout checks through 4K, ultrawide and narrow windows.
-- 31 additional real-cache checks retain map navigation, traffic and spawn safety,
+- 47 additional real-cache checks retain map navigation, traffic and spawn safety,
   and cover imported definitions and four repeatable duels.
-- `-CommandSmoke`: 23 actual Godot panel/input checks, including the four-button
+- `-CommandSmoke`: 26 actual Godot panel/input checks, including single-unit
+  stats, live victory refresh, return to the group roster and the four-button
   bottom-row layout and working hidden Move/Stop controls; report in
   `converted/prototype/command-smoke-report.json`.
 - `-OrdersSmoke`: 20 additional actual input checks for groups 1–0, additive
