@@ -62,10 +62,14 @@ checked before loading. Never distribute the local cache with the project.
 ./prototype/run.ps1 -Smoke
 ```
 
-The simulation runner has no Godot or test-package dependency. It checks
+The simulation runner has no Godot or test-package dependency. Its 27 checks cover
 blocked routes, unreachable areas, adjacent-cell paths, deterministic ties,
 terrain interpolation, repeatable command playback, movement, combat,
-ownership and non-overlapping units. The headless Godot smoke test loads
+ownership and non-overlapping units, stationary-blocker detours, a six-unit
+narrow gate, waiting-route replacement and resuming after a corridor clears.
+They also cover opposing units using a siding, repeatable yielding, opposing
+three-unit groups in open space and replacing an order during yielding.
+The headless Godot smoke test loads
 the actual map and twelve models, dispatches mouse/key events through the
 viewport, and checks selection, move/attack picking, zoom, pause/resume,
 animation and damage over 420 fixed ticks. Its report is
@@ -89,8 +93,17 @@ Movement currently interprets the saved painted walker bits as allowed cells.
 This is a prototype policy, not a claim of original-game passability fidelity.
 Auxiliary ground masks, obstacle footprint updates, portal/bridge entrances,
 walkable mesh elevation and the two invalid source bridge matrices still need
-navigation integration. Congested units can wait; full local avoidance and
-replanning are future work.
+navigation integration. Congested units wait before entering occupied waypoints
+and retry routes around occupied cells after ten blocked ticks (half a second).
+Temporarily sealed routes retain their destinations and retry; statically
+unreachable orders end without a route. This deterministic grid policy passes
+the six-unit gate test. Opposing friendly move orders can request a reachable
+side pocket: one unit holds there until the other finishes, then resumes its
+original order. Refuge choices must leave a route around the other's final
+destination. Stable unit/cell ordering makes this repeatable; changing the
+priority order releases its yielding partner. Combat units do not request
+yielding. Corridors without passing space wait safely, and complex multi-unit
+gridlocks still need broader coordination. Full local avoidance remains open.
 
 Rules are placeholders: 100 HP, 12 melee damage, one-second cooldown, 3 m/s.
 Enemies acquire nearby targets; attacked units retaliate. This is not the

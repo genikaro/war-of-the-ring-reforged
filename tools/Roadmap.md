@@ -9,7 +9,10 @@ Phases 1 and 2 implementation are complete. All 54 maps decode through EOF, incl
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
 Latest checks: 86 Python tests, eight JavaScript tests and 15 independent C#
-simulation checks pass. Godot builds without warnings or errors; input and
+simulation checks passed at that checkpoint. Navigation now passes 27 simulation
+checks, including stationary-blocker detours, a six-unit narrow gate and resuming
+after a corridor clears, opposing units using a siding, opposing groups in open
+space and order changes during yielding. Godot builds without warnings or errors; input and
 combat checks pass over 420 fixed ticks. Rendered and headless runs produce
 the same final simulation digest. The four sandbox GLBs validate without
 errors or warnings. Original-game visual fidelity remains unverified.
@@ -18,8 +21,12 @@ errors or warnings. Original-game visual fidelity remains unverified.
 
 1. Verify the original walker masks and integrate building footprints,
    bridge entrances and elevated walkable geometry.
-2. Add congestion replanning and squad spacing so narrow passages do not
-   leave units waiting indefinitely.
+2. Complete coordinated yielding for opposing traffic and squad spacing.
+   Basic congestion replanning is implemented: occupied waypoints wait, routes
+   retry around occupied cells after ten blocked ticks, and cleared corridors
+   resume. Opposing friendly move orders now use reachable side pockets and
+   resume their original destinations. Six-unit gate and opposing-traffic tests
+   pass; corridors without passing space and complex gridlocks remain limited.
 3. Connect original animation events to equipment changes, footsteps,
    attack impacts and voices.
 4. Package the importer with an in-game installation picker.

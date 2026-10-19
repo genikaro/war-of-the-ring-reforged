@@ -45,4 +45,96 @@ var ownership = new SimWorld(Grid()); var enemy = ownership.Spawn(1, 11);
 ownership.Enqueue(0, [enemy.Id], 18); ownership.Step();
 Check(enemy.X == 1500 && enemy.Path.Count == 0, "commands cannot control another team");
 try { ownership.Spawn(0, 11); Check(false, "occupied spawn must fail"); } catch (ArgumentException) { passed++; }
+void Advance(SimWorld world, int ticks)
+{
+    for (int tick = 0; tick < ticks; tick++)
+    {
+        world.Step();
+        foreach (var a in world.Units.Where(u => u.Health > 0))
+        foreach (var b in world.Units.Where(u => u.Health > 0 && u.Id > a.Id))
+            if (SimWorld.DistanceSquared(a.X, a.Z, b.X, b.Z) < 700L * 700)
+                throw new Exception("congestion produced overlapping units");
+        if (world.Units.Any(u => !world.Navigation.CanStand(world.Navigation.Cell(u.X, u.Z))))
+            throw new Exception("congestion crossed blocked terrain");
+    }
+}
+
+SimWorld Detour()
+{
+    var world = new SimWorld(Grid());
+    world.Spawn(0, 11); world.Spawn(0, 14);
+    world.Enqueue(0, [0], 18); Advance(world, 160);
+    return world;
+}
+var detour = Detour();
+Check(detour.Navigation.Cell(detour.Units[0].X, detour.Units[0].Z) == 18
+    && detour.Units[0].Goal == -1, "move detours around a stationary unit and finishes");
+Check(detour.StateDigest() == Detour().StateDigest(), "congestion replay is deterministic");
+
+var gateCells = Enumerable.Repeat(true, 80).ToArray();
+for (int z = 0; z < 8; z++) if (z != 4) gateCells[z * 10 + 4] = false;
+var squad = new SimWorld(Grid(allowed: gateCells));
+foreach (int cell in new[] { 11, 21, 31, 51, 61, 71 }) squad.Spawn(0, cell);
+squad.Enqueue(0, squad.Units.Select(u => u.Id), 48);
+Advance(squad, 600);
+Check(squad.Units.All(u => u.Goal == -1 && u.X > 5000), "six-unit squad completes a narrow gate order");
+
+var corridor = new SimWorld(Grid(6, 1));
+corridor.Spawn(0, 0); corridor.Spawn(0, 2);
+corridor.Enqueue(0, [0], 5); Advance(corridor, 80);
+Check(corridor.Units[0].Goal == 5 && !corridor.Units[0].Moving, "temporary sealed corridor retains its order");
+corridor.Enqueue(0, [1], 4); Advance(corridor, 80);
+// The blocker stops short of the destination, so the route remains sealed.
+corridor.Enqueue(0, [0], 0); Advance(corridor, 80);
+Check(corridor.Units[0].Goal == -1 && corridor.Units[0].X == 500, "new order replaces a waiting route");
+
+var sealedWorld = new SimWorld(Grid(allowed: allowed)); sealedWorld.Spawn(0, 11);
+sealedWorld.Enqueue(0, [0], 18); Advance(sealedWorld, 30);
+Check(sealedWorld.Units[0].Goal == -1 && sealedWorld.Units[0].Path.Count == 0,
+    "statically unreachable move ends cleanly");
+var pocketCells = new bool[12];
+for (int cell = 0; cell < 6; cell++) pocketCells[cell] = true;
+pocketCells[8] = true;
+var pocket = new SimWorld(Grid(6, 2, pocketCells));
+pocket.Spawn(0, 0); pocket.Spawn(0, 2);
+pocket.Enqueue(0, [0], 5); Advance(pocket, 80);
+pocket.Enqueue(0, [1], 8); Advance(pocket, 160);
+Check(pocket.Units[0].Goal == -1 && pocket.Units[0].X == 5500,
+    "waiting route resumes after blocker leaves a sealed corridor");
+SimWorld Passing(bool siding)
+{
+    var cells = new bool[21];
+    for (int i = 7; i < 14; i++) cells[i] = true;
+    cells[3] = siding;
+    var world = new SimWorld(Grid(7, 3, cells));
+    world.Spawn(0, 8); world.Spawn(0, 12);
+    world.Enqueue(0, [0], 12); world.Enqueue(0, [1], 8);
+    Advance(world, 400); return world;
+}
+var passing = Passing(true);
+Check(passing.Units.All(u => u.Goal < 0 && u.YieldFor < 0)
+    && passing.Units[0].X == 5500 && passing.Units[1].X == 1500,
+    "opposing units use a siding and resume original destinations");
+Check(passing.StateDigest() == Passing(true).StateDigest(), "yielding replay is deterministic");
+var noSiding = Passing(false);
+Check(noSiding.Units.All(u => u.Goal >= 0 && u.YieldFor < 0),
+    "corridor without passing space waits without discarding orders");
+var crossing = new SimWorld(Grid(12, 5));
+foreach (int cell in new[] { 13, 25, 37, 22, 34, 46 }) crossing.Spawn(0, cell);
+crossing.Enqueue(0, [0, 1, 2], 34); crossing.Enqueue(0, [3, 4, 5], 25);
+Advance(crossing, 700);
+Check(crossing.Units.All(u => u.Goal < 0), "opposing three-unit groups finish in open passing space");
+
+var cancelCells = new bool[21];
+for (int i = 7; i < 14; i++) cancelCells[i] = true;
+cancelCells[3] = true;
+var cancel = new SimWorld(Grid(7, 3, cancelCells));
+cancel.Spawn(0, 8); cancel.Spawn(0, 12);
+cancel.Enqueue(0, [0], 12); cancel.Enqueue(0, [1], 8);
+for (int tick = 0; tick < 100 && cancel.Units.All(u => u.YieldFor < 0); tick++) Advance(cancel, 1);
+var yieldingUnit = cancel.Units.Single(u => u.YieldFor >= 0);
+int priorityId = yieldingUnit.YieldFor;
+cancel.Enqueue(0, [priorityId], 13); Advance(cancel, 1);
+Check(yieldingUnit.YieldFor < 0 && yieldingUnit.Goal >= 0,
+    "replacing priority order releases its yielding partner without losing the partner's goal");
 Console.WriteLine($"{passed} simulation checks passed; replay digest {first.StateDigest()}");
