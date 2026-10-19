@@ -21,6 +21,7 @@ public sealed class GridNavigation
     private readonly HashSet<int> _activeObstacles = [];
     private readonly Dictionary<int, int> _blockedNodes = [];
     private readonly Dictionary<(int, int), int> _blockedEdges = [];
+    private int[]? _components;
     public int Revision { get; private set; }
     public IEnumerable<int> ObstacleIds => _obstacles.Keys.Order();
 
@@ -81,6 +82,7 @@ public sealed class GridNavigation
         foreach (int node in obstacle.Nodes) Count(_blockedNodes, node);
         foreach (var edge in obstacle.Edges) Count(_blockedEdges, (edge.A, edge.B));
         if (active) _activeObstacles.Add(id); else _activeObstacles.Remove(id);
+        _components = null;
         Revision++;
     }
 
@@ -112,7 +114,7 @@ public sealed class GridNavigation
         int node = TopNode(x, z);
         return node >= GroundCount ? NodeHeight(node) : GroundHeight(x, z);
     }
-    public int Nearest(int cell, IReadOnlySet<int>? excluded = null, int radius = 24)
+    public int Nearest(int cell, IReadOnlySet<int>? excluded = null, int radius = 24, int connectedTo = -1)
     {
         if (cell < 0 || cell >= NodeCount) return -1;
         if (cell >= GroundCount)
@@ -121,7 +123,8 @@ public sealed class GridNavigation
             var seen = new HashSet<int> { cell };
             while (queue.TryDequeue(out var item))
             {
-                if (CanStand(item.Node) && CanReserve(item.Node, excluded)) return item.Node;
+                if (CanStand(item.Node) && CanReserve(item.Node, excluded)
+                    && (connectedTo < 0 || IsConnected(item.Node,connectedTo))) return item.Node;
                 if (item.Depth >= radius) continue;
                 foreach (int next in Neighbors(item.Node))
                     if (CanStand(next) && seen.Add(next)) queue.Enqueue((next, item.Depth+1));
@@ -133,7 +136,8 @@ public sealed class GridNavigation
         for (int x = Math.Max(0, cx - radius); x <= Math.Min(Width - 1, cx + radius); x++)
         {
             int id = z * Width + x, d = (x-cx)*(x-cx) + (z-cz)*(z-cz);
-            if (CanStand(id) && CanReserve(id, excluded) && d < distance) { best = id; distance = d; }
+            if (d < distance && CanStand(id) && CanReserve(id, excluded)
+                && (connectedTo < 0 || IsConnected(id,connectedTo))) { best = id; distance = d; }
         }
         return best;
     }
@@ -148,6 +152,25 @@ public sealed class GridNavigation
             if ((long)(x-ox)*(x-ox) + (long)(z-oz)*(z-oz) + (long)(y-oy)*(y-oy) < 700L*700) return false;
         }
         return true;
+    }
+
+    public bool IsConnected(int a, int b)
+    {
+        if (!CanStand(a) || !CanStand(b)) return false;
+        if (a == b) return true;
+        if (_components == null)
+        {
+            _components = new int[NodeCount]; Array.Fill(_components,-1);
+        }
+        if (_components[a] < 0)
+        {
+            var queue = new Queue<int>(); queue.Enqueue(a); _components[a] = a;
+            while (queue.TryDequeue(out int node))
+                foreach (int next in Neighbors(node))
+                    if (CanStand(next) && _components[next] < 0)
+                    { _components[next] = a; queue.Enqueue(next); }
+        }
+        return _components[a] == _components[b];
     }
 
     public IEnumerable<int> Neighbors(int id)
@@ -170,7 +193,7 @@ public sealed class GridNavigation
 
     public List<int> FindPath(int start, int goal, IReadOnlySet<int>? blocked = null)
     {
-        if (!CanStand(start) || !CanStand(goal) || blocked?.Contains(goal) == true) return [];
+        if (!IsConnected(start,goal) || blocked?.Contains(goal) == true) return [];
         var open = new PriorityQueue<int, (int Cost, int Id)>();
         var cost = new Dictionary<int, int> { [start] = 0 };
         var previous = new Dictionary<int, int>();

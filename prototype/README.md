@@ -70,7 +70,7 @@ checked before loading. Never distribute the local cache with the project.
 ./prototype/run.ps1 -ObstacleSmoke
 ```
 
-The simulation runner has no Godot or test-package dependency. Its 62 checks cover
+The simulation runner has no Godot or test-package dependency. Its 68 checks cover
 blocked routes, unreachable areas, adjacent-cell paths, deterministic ties,
 terrain interpolation, repeatable command playback, movement, combat,
 ownership and non-overlapping units, stationary-blocker detours, a six-unit
@@ -85,6 +85,9 @@ safe restoration around standing units and units in transit. Replacement orders
 retain the occupied physical segment until the unit reaches a cell center.
 Input geometry checks cover stacked decks, ground below overpasses, slopes,
 map boundaries, ray range and shared triangle edges far from the origin.
+Formation regressions cover disconnected patches near the destination,
+connectivity changes after obstacle updates, and stopping at a cell center
+after an unreachable or invalid replacement order.
 The optional cache check adds fourteen checks: runtime layers reproduce the
 static ground snapshot, all placed building centers are
 blocked, and all six friendly units visit each of Helm's Deep's four walkable
@@ -163,6 +166,10 @@ destination. Stable unit/cell ordering makes this repeatable; changing the
 priority order releases its yielding partner. Combat units do not request
 yielding. Idle friendly blockers can also yield and return. Early arrivals in
 the same squad order exchange formation slots when they block unfinished slots.
+Formation slots stay in the destination's connected region, so nearby islands
+cannot consume a slot and strand part of a squad. Region queries are cached and
+invalidated when obstacle masks change. Unreachable or invalid replacement
+orders return a moving unit to its last cell center before stopping.
 Refuges avoid other units' reserved destinations. Corridors without passing space wait safely, and complex multi-unit
 gridlocks still need broader coordination. Full local avoidance remains open.
 

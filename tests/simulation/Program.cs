@@ -166,6 +166,25 @@ slots.Enqueue(0, [0, 1], 5); Advance(slots, 120);
 Check(slots.Units.All(u => u.Goal < 0) && slots.Units[0].Node == 4 && slots.Units[1].Node == 5,
     "early squad arrival exchanges its slot to keep a narrow formation reachable");
 
+var islandCells = new bool[21];
+for (int i = 14; i < 21; i++) islandCells[i] = true;
+islandCells[6] = true;
+var islandFormation = new SimWorld(Grid(7,3,islandCells));
+foreach (int cell in new[] { 14,15,16 }) islandFormation.Spawn(0,cell);
+islandFormation.Enqueue(0,[0,1,2],20); islandFormation.Step();
+Check(islandFormation.Units.All(u => u.Goal >= 0), "formation slots avoid a nearby disconnected island");
+Advance(islandFormation,200);
+Check(islandFormation.Units.All(u => u.Goal < 0 && u.Node >= 18), "entire squad reaches connected slots near its destination");
+
+foreach (int destination in new[] { 6,-1 })
+{
+    var interrupted = new SimWorld(Grid(7,3,islandCells));
+    interrupted.Spawn(0,14); interrupted.Enqueue(0,[0],20); Advance(interrupted,3);
+    interrupted.Enqueue(0,[0],destination); Advance(interrupted,30);
+    Check(interrupted.Units[0].Goal < 0 && interrupted.Units[0].X == 500 && interrupted.Units[0].TransitNode < 0,
+        "unreachable or invalid replacement order returns a moving unit to its last cell center");
+}
+
 int cacheArg = Array.IndexOf(args, "--cache");
 var overlap = new GridNavigation(3, 1, 1000, [true, true, false], new int[8], null,
     [new(10, [1, 2], []), new(20, [1], [])]);
@@ -211,6 +230,9 @@ Check(dynamicCorridor.Units[0].Node == 6 && dynamicCorridor.Units[0].Goal < 0,
     "removal resumes a dynamically sealed order");
 dynamicCorridor.EnqueueObstacle(1, true); Advance(dynamicCorridor, 1);
 Check(dynamicCorridor.Navigation.IsObstacleActive(1), "restoring a cleared footprint succeeds");
+Check(!dynamicCorridor.Navigation.IsConnected(0,6), "restoring a footprint invalidates cached region connectivity");
+dynamicCorridor.EnqueueObstacle(1, false); Advance(dynamicCorridor,1);
+Check(dynamicCorridor.Navigation.IsConnected(0,6), "removing a footprint reconnects cached formation regions");
 
 var occupiedBuild = DynamicWorld(3, 1, 1);
 occupiedBuild.EnqueueObstacle(1, false); occupiedBuild.Step(); occupiedBuild.Spawn(0, 1);

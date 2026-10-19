@@ -74,6 +74,7 @@ public sealed class SimWorld(GridNavigation navigation)
     private void Apply(SimCommand command)
     {
         var reserved = new HashSet<int>();
+        int anchor = Navigation.Nearest(command.Cell);
         foreach (int id in command.Units)
         {
             if (id < 0 || id >= Units.Count) continue;
@@ -89,7 +90,8 @@ public sealed class SimWorld(GridNavigation navigation)
                 yielding.YieldFor = yielding.YieldGoal = -1;
                 yielding.Path.Clear(); yielding.Waypoint = 0; yielding.BlockedTicks = 10;
             }
-            int goal = Navigation.Nearest(command.Cell, reserved);
+            if (anchor < 0 || !Navigation.IsConnected(unit.Node,anchor)) continue;
+            int goal = Navigation.Nearest(anchor, reserved, connectedTo: anchor);
             if (goal < 0) continue;
             reserved.Add(goal);
             unit.Path = Navigation.FindPath(unit.Node, goal);
@@ -228,6 +230,12 @@ public sealed class SimWorld(GridNavigation navigation)
                 unit.Path = Navigation.FindPath(start, unit.YieldGoal >= 0 ? unit.YieldGoal : unit.Goal, blocked);
                 unit.Waypoint = 0; unit.BlockedTicks = 0;
                 if (unit.Path.Count == 0) RequestYield(unit);
+            }
+            // An unreachable replacement order can discard the old route in
+            // mid-step. Finish retreating to the last center before stopping.
+            if (unit.TransitNode >= 0 && unit.Path.Count == 0)
+            {
+                unit.Path.Add(unit.Node); unit.Waypoint = 0;
             }
             int budget = 150; // 3 source units per second.
             while (budget > 0 && unit.Waypoint < unit.Path.Count)
