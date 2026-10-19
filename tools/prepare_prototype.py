@@ -14,6 +14,7 @@ import struct
 
 import h2o
 import prototype_assets
+import prototype_navigation
 from lms2gltf import convert_model
 from resolve_model import Resolver
 import wor
@@ -67,6 +68,7 @@ def prepare(output, install=None):
     map_dir = output / 'map'
     wor2gltf.export(source, map_dir, resolver)
     scene = world_scene.parse(source.read_bytes())
+    world_scene.resolve_objects(scene, resolver.db)
     category = next(c for c in scene['pathing']['categories'] if c['name'] == 'PATHING_CATEGORY_WALKER')
     width, height = category['grid']
     words = category['painted']['words']
@@ -82,6 +84,8 @@ def prepare(output, install=None):
            'allowed_base64': base64.b64encode(allowed).decode('ascii'),
            'source_category': category['name'],
            'policy': 'Prototype interprets the saved painted walker bits as allowed cells; original auxiliary masks/portal queries and mesh entrances are not simulated.'}
+    nav.update(prototype_navigation.build(width, height, scene['world'].metadata['terrain']['cell_size'],
+               allowed, scene['world'].heights, prototype_navigation.placed_surfaces(scene, resolver)))
     (output / 'navigation.json').write_text(json.dumps(nav, indent=2) + '\n')
     heights = [round(h * 1000) for h in scene['world'].heights]
     (output / 'heights.bin').write_bytes(struct.pack('<%di' % len(heights), *heights))

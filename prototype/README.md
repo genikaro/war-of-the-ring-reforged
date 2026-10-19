@@ -4,8 +4,9 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, five Elf
 Knights and six Uruk-hai. Select friendly units, issue move/attack orders and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
-The next milestone is reliable squad navigation through gates, bridges and
-elevated walkways, including obstacle footprints and congestion replanning.
+Squads now traverse layered walkable geometry with terrain entrances and
+congestion replanning. Obstacle footprints and original mask semantics remain
+the next navigation tasks.
 The remaining Phase 3 work and acceptance criteria are in
 [the local roadmap](../tools/Roadmap.md).
 
@@ -59,16 +60,21 @@ checked before loading. Never distribute the local cache with the project.
 
 ```powershell
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --cache converted/prototype
 ./prototype/run.ps1 -Smoke
 ```
 
-The simulation runner has no Godot or test-package dependency. Its 27 checks cover
+The simulation runner has no Godot or test-package dependency. Its 34 checks cover
 blocked routes, unreachable areas, adjacent-cell paths, deterministic ties,
 terrain interpolation, repeatable command playback, movement, combat,
 ownership and non-overlapping units, stationary-blocker detours, a six-unit
 narrow gate, waiting-route replacement and resuming after a corridor clears.
 They also cover opposing units using a siding, repeatable yielding, opposing
 three-unit groups in open space and replacing an order during yielding.
+Layered checks cover ramp heights, explicit bridge entrances, separated floors,
+surface picking, formation spacing and slot exchanges after an early arrival.
+The optional cache check adds twelve checks: all six friendly units visit each
+of Helm's Deep's four walkable surfaces without overlap and reach every order.
 The headless Godot smoke test loads
 the actual map and twelve models, dispatches mouse/key events through the
 viewport, and checks selection, move/attack picking, zoom, pause/resume,
@@ -91,9 +97,18 @@ UI hit positions are quantized into cell commands before the next fixed tick.
 
 Movement currently interprets the saved painted walker bits as allowed cells.
 This is a prototype policy, not a claim of original-game passability fidelity.
-Auxiliary ground masks, obstacle footprint updates, portal/bridge entrances,
-walkable mesh elevation and the two invalid source bridge matrices still need
-navigation integration. Congested units wait before entering occupied waypoints
+Auxiliary ground masks and obstacle footprint updates still need navigation
+integration. Walkable helpers append separate nodes to the ground grid; the
+current cache has 1,492 surface nodes and 51 height-matched terrain entrances.
+Links require continuous triangle coverage with at most 150 mm deviation from
+the interpolated height, no more than one cell of rise, and terrain joins within
+250 mm. Source model scale and placement transforms match the rendered scene.
+The original MPL route codes are unused, including the two cyclic bridge tables.
+This conservative one-meter raster can omit narrow routes and does not yet
+provide clearance for the full unit body along mesh edges. Mouse orders pick the
+highest sampled surface in a column; picking beneath an overpass remains open.
+Units retain their surface node and integer elevation; collision and melee use
+vertical separation. Congested units wait before entering occupied waypoints
 and retry routes around occupied cells after ten blocked ticks (half a second).
 Temporarily sealed routes retain their destinations and retry; statically
 unreachable orders end without a route. This deterministic grid policy passes
@@ -102,7 +117,9 @@ side pocket: one unit holds there until the other finishes, then resumes its
 original order. Refuge choices must leave a route around the other's final
 destination. Stable unit/cell ordering makes this repeatable; changing the
 priority order releases its yielding partner. Combat units do not request
-yielding. Corridors without passing space wait safely, and complex multi-unit
+yielding. Idle friendly blockers can also yield and return. Early arrivals in
+the same squad order exchange formation slots when they block unfinished slots.
+Refuges avoid other units' reserved destinations. Corridors without passing space wait safely, and complex multi-unit
 gridlocks still need broader coordination. Full local avoidance remains open.
 
 Rules are placeholders: 100 HP, 12 melee damage, one-second cooldown, 3 m/s.

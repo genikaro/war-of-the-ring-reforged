@@ -10,8 +10,9 @@ Phase 2 is complete. Phase 3 is in progress, with reliable squad navigation
 next; [the roadmap](Roadmap.md) records the acceptance criteria and remaining
 animation/audio/importer work. Original-game screenshot comparison is deferred.
 
-Latest verification (Oct 19, 2026): 86 Python tests, eight JavaScript tests,
-15 C# simulation checks and the Godot input/combat smoke test pass. Generated
+Latest verification (Oct 19, 2026): 93 Python tests, eight JavaScript tests,
+34 synthetic C# checks, twelve real-map squad navigation checks and the Godot
+input/combat and elevated-picking smoke tests pass. Generated
 assets, previews, validation reports and portable tools stay in ignored
 `converted/`; original and extracted assets are excluded from source control.
 

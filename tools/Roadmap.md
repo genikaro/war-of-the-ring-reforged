@@ -8,19 +8,22 @@ Phases 1 and 2 implementation are complete. All 54 maps decode through EOF, incl
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
-Latest checks: 86 Python tests, eight JavaScript tests and 15 independent C#
-simulation checks passed at that checkpoint. Navigation now passes 27 simulation
-checks, including stationary-blocker detours, a six-unit narrow gate and resuming
-after a corridor clears, opposing units using a siding, opposing groups in open
-space and order changes during yielding. Godot builds without warnings or errors; input and
-combat checks pass over 420 fixed ticks. Rendered and headless runs produce
-the same final simulation digest. The four sandbox GLBs validate without
-errors or warnings. Original-game visual fidelity remains unverified.
+Latest checks: 93 Python tests, eight JavaScript tests and 34 synthetic C# checks
+pass. Twelve additional cache checks send all six friendly units through each
+of the four Helm's Deep walkable surfaces without overlap. The cache contains
+1,492 separate surface nodes and 51 terrain entrances, preserving elevation.
+Godot builds without warnings or errors; input and combat pass over 420 fixed
+ticks. An elevated preview was inspected, and actual Godot right-click dispatch
+selects a surface node in a separate headless check. The original four sandbox
+GLBs validated without errors or warnings. Original-game fidelity remains unverified.
 
 ## Next milestone: reliable squad navigation
 
-1. Verify the original walker masks and integrate building footprints,
-   bridge entrances and elevated walkable geometry.
+1. Verify the original walker masks and integrate building footprints.
+   Bridge/walkway geometry now uses a layered grid with continuous triangle
+   coverage, height-matched terrain entrances and integer elevation. The stored
+   MPL route codes are unused. Full body clearance and picking under overpasses
+   remain open; narrow routes can be omitted by the one-meter raster.
 2. Complete coordinated yielding for opposing traffic and squad spacing.
    Basic congestion replanning is implemented: occupied waypoints wait, routes
    retry around occupied cells after ten blocked ticks, and cleared corridors
@@ -92,7 +95,7 @@ The engine is chosen. Remaining choices can be made as their implementation appr
 - [ ] Package the first-run importer: `prepare_prototype.py --install` now extracts/verifies source archives and writes a hashed runtime cache; in-game install selection and production packaging remain.
 - [x] Load a map scene and units; RTS camera (pan, zoom, rotate), selection box, move and attack orders
 - [ ] Complete animation state adaptation: initial idle/run/attack/death clips play; original attachment, texture and event timelines still need the Godot adapter.
-- [ ] Complete navigation: initial A* on saved walker bits and overlap prevention work; auxiliary masks, obstacles, mesh entrances/elevation and congestion replanning remain.
+- [ ] Complete navigation: layered A*, mesh entrances/elevation, congestion replanning and cooperative yielding work; six-unit traversal of all four Helm's Deep walkable helpers passes. Original mask semantics, obstacle footprints, body clearance and complex gridlocks remain.
 - [x] Fixed-step integer simulation separate from rendering: 20 Hz core, tick commands, stable ordering and repeatability tests; lockstep networking remains later work.
 - [ ] Audio: Ogg speech and music, WAV effects, triggered by clip events from Phase 1
 

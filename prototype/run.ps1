@@ -2,7 +2,9 @@ param(
     [string]$GodotPath,
     [string]$DotnetPath,
     [switch]$Smoke,
-    [string]$CapturePath
+    [switch]$SurfaceSmoke,
+    [string]$CapturePath,
+    [string]$CachePath
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
@@ -22,9 +24,11 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 & $DotnetPath build (Join-Path $PSScriptRoot 'Reforged.csproj') --nologo
 if ($LASTEXITCODE -ne 0) { throw 'C# build failed' }
 $arguments = @('--path', $PSScriptRoot)
-if ($Smoke) { $arguments += @('--headless', '--fixed-fps', '20') }
+if ($Smoke -or $SurfaceSmoke) { $arguments += @('--headless', '--fixed-fps', '20') }
 $arguments += '--'
 if ($Smoke) { $arguments += '--smoke' }
+if ($SurfaceSmoke) { $arguments += '--surface-smoke' }
 if ($CapturePath) { $arguments += "--capture=$([System.IO.Path]::GetFullPath($CapturePath))" }
+if ($CachePath) { $arguments += "--cache=$([System.IO.Path]::GetFullPath($CachePath))" }
 & $GodotPath @arguments
 exit $LASTEXITCODE

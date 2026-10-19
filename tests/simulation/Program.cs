@@ -1,4 +1,5 @@
 using Reforged.Simulation;
+using System.Text.Json;
 
 int passed = 0;
 void Check(bool value, string name) { if (!value) throw new Exception(name); passed++; }
@@ -52,9 +53,9 @@ void Advance(SimWorld world, int ticks)
         world.Step();
         foreach (var a in world.Units.Where(u => u.Health > 0))
         foreach (var b in world.Units.Where(u => u.Health > 0 && u.Id > a.Id))
-            if (SimWorld.DistanceSquared(a.X, a.Z, b.X, b.Z) < 700L * 700)
+            if (SimWorld.SeparationSquared(a, b) < 700L * 700)
                 throw new Exception("congestion produced overlapping units");
-        if (world.Units.Any(u => !world.Navigation.CanStand(world.Navigation.Cell(u.X, u.Z))))
+        if (world.Units.Any(u => !world.Navigation.CanStand(u.Node)))
             throw new Exception("congestion crossed blocked terrain");
     }
 }
@@ -137,4 +138,72 @@ int priorityId = yieldingUnit.YieldFor;
 cancel.Enqueue(0, [priorityId], 13); Advance(cancel, 1);
 Check(yieldingUnit.YieldFor < 0 && yieldingUnit.Goal >= 0,
     "replacing priority order releases its yielding partner without losing the partner's goal");
-Console.WriteLine($"{passed} simulation checks passed; replay digest {first.StateDigest()}");
+
+var layered = new GridNavigation(5, 1, 1000, [true, false, true, false, true], new int[12], [
+    new(0, 0, [0, 6]), new(1, 500, [5, 7]), new(2, 1000, [6, 8]),
+    new(3, 500, [7, 9]), new(4, 0, [4, 8])]);
+Check(layered.FindPath(0, 4).SequenceEqual(new[] { 0, 5, 6, 7, 8, 9, 4 }), "bridge uses explicit terrain entrances");
+Check(layered.FindPath(2, 7).Count == 0, "ground below a bridge cannot jump onto its deck");
+Check(layered.TopNode(2500, 500) == 7 && layered.Nearest(7, new HashSet<int> { 7 }) >= 5,
+    "deck picking and formation stay on connected surface nodes");
+var bridgeWorld = new SimWorld(layered); bridgeWorld.Spawn(0, 0);
+bridgeWorld.Enqueue(0, [0], 4);
+bool elevated = false, bridgeHeightsValid = true;
+for (int i = 0; i < 100; i++)
+{
+    bridgeWorld.Step(); elevated |= bridgeWorld.Units[0].Y >= 900;
+    bridgeHeightsValid &= bridgeWorld.Units[0].Y >= 0 && bridgeWorld.Units[0].Y <= 1000;
+}
+Check(bridgeHeightsValid, "bridge height remains on ramp");
+Check(elevated && bridgeWorld.Units[0].Node == 4 && bridgeWorld.Units[0].Y == 0
+    && bridgeWorld.Units[0].Goal < 0, "unit climbs bridge and descends to terrain");
+var stacked = new SimWorld(new GridNavigation(1, 1, 1000, [true], new int[4], [new(0, 4000, [])]));
+stacked.Spawn(0, 0); stacked.Spawn(1, 1); Advance(stacked, 50);
+Check(stacked.Units.All(u => u.Health == 100), "units on separate floors neither collide nor melee through the deck");
+var slots = new SimWorld(Grid(6, 1)); slots.Spawn(0, 0); slots.Spawn(0, 4);
+slots.Enqueue(0, [0, 1], 5); Advance(slots, 120);
+Check(slots.Units.All(u => u.Goal < 0) && slots.Units[0].Node == 4 && slots.Units[1].Node == 5,
+    "early squad arrival exchanges its slot to keep a narrow formation reachable");
+
+int cacheArg = Array.IndexOf(args, "--cache");
+if (cacheArg >= 0)
+{
+    string cache = args[cacheArg+1];
+    var nav = JsonDocument.Parse(File.ReadAllText(Path.Combine(cache, "navigation.json"))).RootElement;
+    var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(cache, "manifest.json"))).RootElement;
+    byte[] rawHeights = File.ReadAllBytes(Path.Combine(cache, "heights.bin"));
+    int[] realHeights = Enumerable.Range(0, rawHeights.Length/4)
+        .Select(i => System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(rawHeights.AsSpan(i*4, 4))).ToArray();
+    var surfaceJson = nav.GetProperty("surface_nodes").EnumerateArray().ToArray();
+    var realNav = new GridNavigation(nav.GetProperty("width").GetInt32(), nav.GetProperty("height").GetInt32(),
+        nav.GetProperty("cell_size_mm").GetInt32(), Convert.FromBase64String(nav.GetProperty("allowed_base64").GetString()!)
+            .Select(b => b != 0).ToArray(), realHeights,
+        surfaceJson.Select(s => new SurfaceCell(s.GetProperty("cell").GetInt32(), s.GetProperty("height_mm").GetInt32(),
+            s.GetProperty("links").EnumerateArray().Select(n => n.GetInt32()).ToArray())).ToArray());
+    var realWorld = new SimWorld(realNav);
+    foreach (var item in manifest.GetProperty("spawns").EnumerateArray().Where(s => s.GetProperty("team").GetInt32() == 0))
+        realWorld.Spawn(0, item.GetProperty("cell").GetInt32());
+    var destinations = surfaceJson.Select((s, i) => (Surface: s.GetProperty("surface").GetString()!, Node: realNav.GroundCount+i))
+        .GroupBy(s => s.Surface).Select(g => g.OrderByDescending(s => {
+            var (x, z) = realNav.Center(s.Node); return realNav.NodeHeight(s.Node)-realNav.GroundHeight(x,z);
+        }).ThenBy(s => s.Node).First()).ToArray();
+    foreach (var destination in destinations)
+    {
+        var route = realNav.FindPath(realWorld.Units[0].Node, destination.Node);
+        Check(route.Count > 0 && route.Zip(route.Skip(1)).All(p => realNav.Neighbors(p.First).Contains(p.Second)),
+            "real map surface route is reachable: "+destination.Surface);
+        realWorld.Enqueue(0, realWorld.Units.Select(u => u.Id), destination.Node);
+        for (int i = 0; i < 6000; i++)
+        {
+            Advance(realWorld, 1);
+            if (realWorld.Units.All(u => u.Goal < 0)) break;
+        }
+        if (realWorld.Units.Any(u => u.Goal >= 0))
+            Console.WriteLine(string.Join(";", realWorld.Units.Select(u => $"{u.Id} at {u.Node} goal {u.Goal} yield {u.YieldFor}/{u.YieldGoal}")));
+        Check(realWorld.Units.Any(u => u.Node == destination.Node && u.Y == realNav.NodeHeight(destination.Node)),
+            "real map surface traversal finishes: "+destination.Surface);
+        Check(realWorld.Units.All(u => u.Goal < 0), "real map six-unit formation finishes: "+destination.Surface);
+        Console.WriteLine($"MAP_NAV {destination.Surface}: six units arrived, target height {realNav.NodeHeight(destination.Node)} mm");
+    }
+}
+Console.WriteLine($"{passed} total simulation checks passed");

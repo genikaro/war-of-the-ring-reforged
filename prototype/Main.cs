@@ -18,6 +18,7 @@ public partial class Main : Node3D
     private bool _dragging, _panning, _paused;
     private string _cache = "", _capture = "";
     private bool _smoke;
+    private bool _surfaceSmoke;
     private int _frames, _moveDestination = -1;
     private string _initialDigest = "";
     private int _movingSeen, _attackingSeen;
@@ -43,6 +44,7 @@ public partial class Main : Node3D
             if (arg.StartsWith("--cache=")) _cache = arg[8..];
             if (arg.StartsWith("--capture=")) _capture = arg[10..];
             if (arg == "--smoke") _smoke = true;
+            if (arg == "--surface-smoke") _surfaceSmoke = true;
         }
         if (_cache == "") _cache = System.IO.Path.GetFullPath(ProjectSettings.GlobalizePath("res://../converted/prototype"));
         try { LoadSandbox(); }
@@ -50,7 +52,7 @@ public partial class Main : Node3D
         {
             _status.Text = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             GD.PushError(error.ToString());
-            if (_smoke) GetTree().Quit(1);
+            if (_smoke || _surfaceSmoke) GetTree().Quit(1);
         }
     }
 
@@ -82,7 +84,10 @@ public partial class Main : Node3D
         int[] heights = new int[bytes.Length / 4];
         for (int i = 0; i < heights.Length; i++) heights[i] = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(i * 4, 4));
         var navigation = new GridNavigation(nav.GetProperty("width").GetInt32(), nav.GetProperty("height").GetInt32(),
-            nav.GetProperty("cell_size_mm").GetInt32(), Convert.FromBase64String(nav.GetProperty("allowed_base64").GetString()!).Select(b => b != 0).ToArray(), heights);
+            nav.GetProperty("cell_size_mm").GetInt32(), Convert.FromBase64String(nav.GetProperty("allowed_base64").GetString()!).Select(b => b != 0).ToArray(), heights,
+            nav.TryGetProperty("surface_nodes", out var surfaces) ? surfaces.EnumerateArray().Select(s => new SurfaceCell(
+                s.GetProperty("cell").GetInt32(), s.GetProperty("height_mm").GetInt32(),
+                s.GetProperty("links").EnumerateArray().Select(n => n.GetInt32()).ToArray())).ToArray() : null);
         _world = new SimWorld(navigation);
         AddChild(LoadGlb(manifest.GetProperty("map").GetString()!));
         var environment = new WorldEnvironment { Environment = new Godot.Environment {
@@ -100,7 +105,7 @@ public partial class Main : Node3D
             var unit = _world.Spawn(spawn.GetProperty("team").GetInt32(), spawn.GetProperty("cell").GetInt32());
             var model = manifest.GetProperty("models")[spawn.GetProperty("model").GetInt32()];
             var root = new Node3D { Name = "Unit_" + unit.Id };
-            AddChild(root); root.Position = PositionOf(unit.X, unit.Z);
+            AddChild(root); root.Position = UnitPosition(unit);
             var visual = LoadGlb(model.GetProperty("file").GetString()!); root.AddChild(visual);
             var ring = new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.65f, BottomRadius = 0.65f, Height = 0.025f },
                 Position = new Vector3(0, 0.07f, 0), MaterialOverride = new StandardMaterial3D {
@@ -126,6 +131,7 @@ public partial class Main : Node3D
     }
 
     private Vector3 PositionOf(int x, int z) => new(-x / 1000f, (_world?.Navigation.GroundHeight(x, z) ?? 0) / 1000f, z / 1000f);
+    private static Vector3 UnitPosition(SimUnit unit) => new(-unit.X / 1000f, unit.Y / 1000f, unit.Z / 1000f);
 
     private void CreateUi()
     {
@@ -184,7 +190,7 @@ public partial class Main : Node3D
         var rect = new Rect2(start, end - start).Abs();
         foreach (var unit in _world!.Units.Where(u => u.Team == 0 && u.Health > 0))
         {
-            var pos = PositionOf(unit.X, unit.Z) + Vector3.Up;
+            var pos = UnitPosition(unit) + Vector3.Up;
             if (_camera.IsPositionBehind(pos)) continue;
             var screen = _camera.UnprojectPosition(pos);
             if (rect.Size.Length() < 7 ? screen.DistanceTo(end) < 22 : rect.HasPoint(screen)) _selected.Add(unit.Id);
@@ -193,11 +199,11 @@ public partial class Main : Node3D
 
     private void Order(Vector2 mouse)
     {
-        var enemy = _world!.Units.Where(u => u.Team != 0 && u.Health > 0 && !_camera.IsPositionBehind(PositionOf(u.X, u.Z)))
-            .OrderBy(u => _camera.UnprojectPosition(PositionOf(u.X, u.Z) + Vector3.Up).DistanceSquaredTo(mouse)).FirstOrDefault();
-        if (enemy != null && _camera.UnprojectPosition(PositionOf(enemy.X, enemy.Z) + Vector3.Up).DistanceTo(mouse) < 24)
+        var enemy = _world!.Units.Where(u => u.Team != 0 && u.Health > 0 && !_camera.IsPositionBehind(UnitPosition(u)))
+            .OrderBy(u => _camera.UnprojectPosition(UnitPosition(u) + Vector3.Up).DistanceSquaredTo(mouse)).FirstOrDefault();
+        if (enemy != null && _camera.UnprojectPosition(UnitPosition(enemy) + Vector3.Up).DistanceTo(mouse) < 24)
         {
-            _world.Enqueue(0, _selected, _world.Navigation.Cell(enemy.X, enemy.Z), enemy.Id);
+            _world.Enqueue(0, _selected, enemy.Node, enemy.Id);
             _status.Text = "Attack order issued"; return;
         }
         Vector3 origin = _camera.ProjectRayOrigin(mouse), direction = _camera.ProjectRayNormal(mouse);
@@ -205,13 +211,13 @@ public partial class Main : Node3D
         {
             Vector3 point = origin + direction * t;
             int x = (int)(-point.X * 1000), z = (int)(point.Z * 1000), cell = _world.Navigation.Cell(x, z);
-            if (cell < 0 || point.Y * 1000 > _world.Navigation.GroundHeight(x, z)) continue;
-            int goal = _world.Navigation.Nearest(cell);
+            if (cell < 0 || point.Y * 1000 > _world.Navigation.PickHeight(x, z)) continue;
+            int goal = _world.Navigation.Nearest(_world.Navigation.TopNode(x, z));
             if (goal >= 0)
             {
                 _world.Enqueue(0, _selected, goal);
                 _status.Text = "Move order issued";
-                _hud.Destination = _camera.UnprojectPosition(PositionOf(x, z)); _hud.DestinationTime = 0.7f;
+                _hud.Destination = _camera.UnprojectPosition(new Vector3(-x/1000f, _world.Navigation.PickHeight(x,z)/1000f, z/1000f)); _hud.DestinationTime = 0.7f;
             }
             return;
         }
@@ -224,7 +230,7 @@ public partial class Main : Node3D
         foreach (var unit in _world.Units)
         {
             var view = _views[unit.Id];
-            Vector3 old = view.Root.Position, position = PositionOf(unit.X, unit.Z);
+            Vector3 old = view.Root.Position, position = UnitPosition(unit);
             view.Root.Position = position;
             var direction = position - old;
             if (direction.LengthSquared() > 0.00001f) view.Root.Rotation = new Vector3(0, Mathf.Atan2(direction.X, direction.Z), 0);
@@ -261,6 +267,19 @@ public partial class Main : Node3D
         _selection.Text = $"{units.Count} selected · {units.Sum(u => u.Health)} HP · {_world.Units.Count(u => u.Team == 1 && u.Health > 0)} enemies" + (_paused ? "  /  PAUSED" : "");
         _hud.DestinationTime -= dt; _hud.QueueRedraw();
         _frames++;
+        if (_surfaceSmoke && _frames == 5)
+        {
+            _selected.UnionWith(_world.Units.Where(u => u.Team == 0).Select(u => u.Id));
+            var unit = _world.Units[0];
+            var screen = _camera.UnprojectPosition(UnitPosition(unit));
+            GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true,
+                Position = screen, GlobalPosition = screen }, true);
+        }
+        if (_surfaceSmoke && _frames == 7)
+        {
+            bool passed = _world.Commands.Any(c => c.Cell >= _world.Navigation.GroundCount && c.Units.Length == 6);
+            GD.Print("SURFACE_PICK_SMOKE " + passed); GetTree().Quit(passed ? 0 : 1);
+        }
         if (_smoke) SmokeInput();
         if (_smoke && _capture != "" && _frames == 60) _ = CaptureFrame(false);
         if (_smoke && _world.Tick >= 420) FinishSmoke();
@@ -280,7 +299,7 @@ public partial class Main : Node3D
 
     private void UpdateCamera()
     {
-        _focus.Y = _world!.Navigation.GroundHeight((int)(-_focus.X * 1000), (int)(_focus.Z * 1000)) / 1000f;
+        _focus.Y = _world!.Navigation.PickHeight((int)(-_focus.X * 1000), (int)(_focus.Z * 1000)) / 1000f;
         _camera.Position = _focus + new Vector3(Mathf.Sin(_yaw) * _distance * 0.65f, _distance * 0.8f, Mathf.Cos(_yaw) * _distance * 0.65f);
         _camera.LookAt(_focus);
     }
@@ -289,7 +308,7 @@ public partial class Main : Node3D
     private void SmokeInput()
     {
         // Exercise Godot's input dispatch, including drag selection and picking.
-        var friendly = _world!.Units.Where(u => u.Team == 0).Select(u => _camera.UnprojectPosition(PositionOf(u.X, u.Z) + Vector3.Up)).ToArray();
+        var friendly = _world!.Units.Where(u => u.Team == 0).Select(u => _camera.UnprojectPosition(UnitPosition(u) + Vector3.Up)).ToArray();
         Vector2 min = new(friendly.Min(p => p.X) - 8, friendly.Min(p => p.Y) - 8);
         Vector2 max = new(friendly.Max(p => p.X) + 8, friendly.Max(p => p.Y) + 8);
         if (_frames == 5)
@@ -322,7 +341,7 @@ public partial class Main : Node3D
         if (_frames == 100)
         {
             var target = _world.Units.First(u => u.Team == 1 && u.Health > 0);
-            var screen = _camera.UnprojectPosition(PositionOf(target.X, target.Z) + Vector3.Up);
+            var screen = _camera.UnprojectPosition(UnitPosition(target) + Vector3.Up);
             GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true, Position = screen, GlobalPosition = screen }, true);
             _inputAttackPassed = _world.Commands.Any(c => c.Target >= 0 && c.Units.Length == 6);
         }
