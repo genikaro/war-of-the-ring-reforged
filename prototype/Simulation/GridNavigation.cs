@@ -263,7 +263,7 @@ public sealed class GridNavigation
         for (int z = zmin; z <= zmax; z++)
         for (int x = xmin; x <= xmax; x++)
         {
-            long cross = 2*((x*(long)CellSize+CellSize/2-ax)*dz-(z*(long)CellSize+CellSize/2-az)*dx);
+            long cross = (2*x*(long)CellSize+CellSize-2L*ax)*dz-(2*z*(long)CellSize+CellSize-2L*az)*dx;
             if (Math.Abs(cross) <= (CellSize+700L)*(Math.Abs(dx)+Math.Abs(dz))) cells.Add(z*Width+x);
         }
         return cells.ToArray();
@@ -278,7 +278,7 @@ public sealed class GridNavigation
     public (int Low,int High) MovementHeights(int a, int b)
     {
         int low = Math.Min(NodeHeight(a),NodeHeight(b)), high = Math.Max(NodeHeight(a),NodeHeight(b));
-        if (a < GroundCount && b < GroundCount)
+        if (a != b && a < GroundCount && b < GroundCount)
             foreach (int cell in SweptColumns(a,b))
             {
                 int index = cell/Width*(Width+1)+cell%Width;
@@ -286,6 +286,17 @@ public sealed class GridNavigation
                 { low = Math.Min(low,Heights[vertex]); high = Math.Max(high,Heights[vertex]); }
             }
         return (low,high);
+    }
+
+    public bool CanTraverseGround(int a, int b, IReadOnlySet<int>? occupied = null)
+    {
+        if (a < 0 || b < 0 || a >= GroundCount || b >= GroundCount) return false;
+        var (ax,az) = Center(a); var (bx,bz) = Center(b);
+        if (Math.Min(ax,bx) < 350 || Math.Min(az,bz) < 350
+            || Math.Max(ax,bx)+350L > Width*(long)CellSize || Math.Max(az,bz)+350L > Height*(long)CellSize) return false;
+        var cells = SweptColumns(a,b).ToHashSet();
+        if (cells.Any(n => !CanStand(n) || (n != a && occupied?.Contains(n) == true))) return false;
+        return !_blockedEdges.Keys.Any(e => cells.Contains(e.Item1) && cells.Contains(e.Item2));
     }
 
     private IEnumerable<int> TopologyNeighbors(int id)

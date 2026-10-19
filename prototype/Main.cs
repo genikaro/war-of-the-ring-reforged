@@ -3,6 +3,7 @@ using Reforged.Simulation;
 using System.Text.Json;
 using System.Buffers.Binary;
 using Reforged.Input;
+using Reforged.Presentation;
 
 public partial class Main : Node3D
 {
@@ -24,6 +25,8 @@ public partial class Main : Node3D
     private bool _dragging, _panning, _paused;
     private string _cache = "", _capture = "";
     private bool _smoke;
+    private bool _motionSmoke;
+    private int _turningSeen, _interpolatedSeen;
     private bool _surfaceSmoke;
     private bool _surfacePicked;
     private Vector2 _surfaceSmokePoint;
@@ -45,6 +48,7 @@ public partial class Main : Node3D
         public JsonElement Model = model;
         public string Clip = "";
         public bool Died;
+        public float DesiredYaw;
     }
 
     public override void _Ready()
@@ -55,6 +59,7 @@ public partial class Main : Node3D
             if (arg.StartsWith("--cache=")) _cache = arg[8..];
             if (arg.StartsWith("--capture=")) _capture = arg[10..];
             if (arg == "--smoke") _smoke = true;
+            if (arg == "--motion-smoke") _motionSmoke = true;
             if (arg == "--surface-smoke") _surfaceSmoke = true;
             if (arg == "--obstacle-smoke") _obstacleSmoke = true;
         }
@@ -137,7 +142,7 @@ public partial class Main : Node3D
             if (_surfaceSmoke && team == 0) { cell = navigation.Nearest(surfaceStart, surfaceSpawns); surfaceSpawns.Add(cell); }
             var unit = _world.Spawn(team, cell);
             var model = manifest.GetProperty("models")[spawn.GetProperty("model").GetInt32()];
-            var root = new Node3D { Name = "Unit_" + unit.Id };
+            var root = new Node3D { Name = "Unit_" + unit.Id, PhysicsInterpolationMode = Node.PhysicsInterpolationModeEnum.Off };
             AddChild(root); root.Position = UnitPosition(unit);
             var visual = LoadGlb(model.GetProperty("file").GetString()!); root.AddChild(visual);
             var ring = new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.65f, BottomRadius = 0.65f, Height = 0.025f },
@@ -317,10 +322,12 @@ public partial class Main : Node3D
         foreach (var unit in _world.Units)
         {
             var view = _views[unit.Id];
-            Vector3 old = view.Root.Position, position = UnitPosition(unit);
-            view.Root.Position = position;
-            var direction = position - old;
-            if (direction.LengthSquared() > 0.00001f) view.Root.Rotation = new Vector3(0, Mathf.Atan2(direction.X, direction.Z), 0);
+            if (unit.Movement.Count >= 2)
+            {
+                var previous = unit.Movement[^2]; var next = unit.Movement[^1];
+                int dx = next.X-previous.X, dz = next.Z-previous.Z;
+                if (dx != 0 || dz != 0) view.DesiredYaw = Mathf.Atan2(-dx,dz);
+            }
             view.Ring.Visible = unit.Health > 0;
             view.Ring.Scale = _selected.Contains(unit.Id) ? Vector3.One * 1.3f : Vector3.One;
             string state = unit.Health <= 0 ? "death" : unit.Attacking ? "attack" : unit.Moving ? "walk" : "idle";
@@ -345,6 +352,26 @@ public partial class Main : Node3D
     {
         if (_world is null) return;
         float dt = (float)Math.Min(delta, 0.1);
+        if (!_paused)
+            foreach (var unit in _world.Units)
+            {
+                var view = _views[unit.Id];
+                double fraction = Engine.GetPhysicsInterpolationFraction();
+                if (unit.Movement.Count > 0)
+                {
+                    var position = MovementPlayback.Sample(unit.Movement,fraction);
+                    float y = position.Terrain ? _world.Navigation.GroundHeight((int)Math.Round(position.X),(int)Math.Round(position.Z))/1000f
+                        : (float)position.Y/1000f;
+                    view.Root.Position = new(-(float)position.X/1000f,y,(float)position.Z/1000f);
+                    if (fraction > .001 && fraction < .999 && unit.Moving && view.Root.Position.DistanceSquaredTo(UnitPosition(unit)) > .000001f)
+                        _interpolatedSeen++;
+                }
+                float before = Mathf.Abs(Mathf.AngleDifference(view.Root.Rotation.Y,view.DesiredYaw));
+                float yaw = Mathf.RotateToward(view.Root.Rotation.Y,view.DesiredYaw,dt*8);
+                float after = Mathf.Abs(Mathf.AngleDifference(yaw,view.DesiredYaw));
+                if (before > .01f && after < before && after > .001f) _turningSeen++;
+                view.Root.Rotation = new(0,yaw,0);
+            }
         float right = (Input.IsPhysicalKeyPressed(Key.D) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.A) ? 1 : 0);
         float forward = (Input.IsPhysicalKeyPressed(Key.S) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.W) ? 1 : 0);
         Pan(right * dt * _distance * 0.6f, forward * dt * _distance * 0.6f);
@@ -477,11 +504,13 @@ public partial class Main : Node3D
             animated_units = _views.Values.Count(v => v.Player != null && v.Clip != ""),
             input_selection = _inputSelectionPassed, input_move = _inputMovePassed, input_attack = _inputAttackPassed,
             input_camera = _inputCameraPassed, input_pause = _inputPausePassed,
+            turning_samples = _turningSeen, interpolated_samples = _interpolatedSeen,
             map_loaded = true, initial_digest = _initialDigest, final_digest = _world.StateDigest() };
-        string path = System.IO.Path.Combine(_cache, "smoke-report.json");
+        string path = System.IO.Path.Combine(_cache, _motionSmoke ? "motion-smoke-report.json" : "smoke-report.json");
         System.IO.File.WriteAllText(path, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
         bool passed = report.units == 12 && report.moving_samples > 0 && report.attack_samples > 0 && report.damage > 0 && report.animated_units == 12
             && report.input_selection && report.input_move && report.input_attack && report.input_camera && report.input_pause;
+        if (_motionSmoke) passed &= report.turning_samples > 0 && report.interpolated_samples > 0;
         GD.Print("SANDBOX_SMOKE " + JsonSerializer.Serialize(report));
         GetTree().Quit(passed ? 0 : 1);
     }

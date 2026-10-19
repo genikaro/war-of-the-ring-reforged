@@ -2,6 +2,7 @@ param(
     [string]$GodotPath,
     [string]$DotnetPath,
     [switch]$Smoke,
+    [switch]$MotionSmoke,
     [switch]$SurfaceSmoke,
     [switch]$ObstacleSmoke,
     [string]$CapturePath,
@@ -25,9 +26,13 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 & $DotnetPath build (Join-Path $PSScriptRoot 'Reforged.csproj') --nologo
 if ($LASTEXITCODE -ne 0) { throw 'C# build failed' }
 $arguments = @('--path', $PSScriptRoot)
-if ($Smoke -or $SurfaceSmoke -or $ObstacleSmoke) { $arguments += @('--headless', '--fixed-fps', '20') }
+if ($Smoke -or $MotionSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
+    $renderRate = if ($MotionSmoke) { '80' } else { '20' }
+    $arguments += @('--headless', '--fixed-fps', $renderRate)
+}
 $arguments += '--'
-if ($Smoke) { $arguments += '--smoke' }
+if ($Smoke -or $MotionSmoke) { $arguments += '--smoke' }
+if ($MotionSmoke) { $arguments += '--motion-smoke' }
 if ($SurfaceSmoke) { $arguments += '--surface-smoke' }
 if ($ObstacleSmoke) { $arguments += '--obstacle-smoke' }
 if ($CapturePath) { $arguments += "--capture=$([System.IO.Path]::GetFullPath($CapturePath))" }

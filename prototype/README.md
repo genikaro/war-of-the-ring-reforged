@@ -66,11 +66,12 @@ checked before loading. Never distribute the local cache with the project.
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --cache converted/prototype
 ./prototype/run.ps1 -Smoke
+./prototype/run.ps1 -MotionSmoke
 ./prototype/run.ps1 -SurfaceSmoke
 ./prototype/run.ps1 -ObstacleSmoke
 ```
 
-The simulation runner has no Godot or test-package dependency. Its 94 checks cover
+The simulation runner has no Godot or test-package dependency. Its 110 checks cover
 blocked routes, unreachable areas, adjacent-cell paths, deterministic ties,
 terrain interpolation, repeatable command playback, movement, combat,
 ownership and non-overlapping units, stationary-blocker detours, a six-unit
@@ -91,6 +92,10 @@ after an unreachable or invalid replacement order.
 Directional checks cover weighted diagonal routes, blocked corners and flank
 edges, equal movement speed, mid-diagonal cancellation, crossing diagonals and
 repeatable fractional progress.
+Smoothing checks cover full-body ground shortcuts, blocked-corner detours,
+constant speed, cancellation, construction and spawn reservations, and periodic
+combat target tracking. Presentation checks follow recorded movement around
+corners and verify that rendering does not change simulation state.
 Traffic checks cover two opposing three-unit squads using wide bays and
 single-entry pockets, reversed command order, cancellation during yielding,
 recorded command playback, movement endpoint reservations and bottleneck cache
@@ -105,6 +110,9 @@ the actual map and twelve models, dispatches mouse/key events through the
 viewport, and checks selection, move/attack picking, zoom, pause/resume,
 animation and damage over 420 fixed ticks. Its report is
 `converted/prototype/smoke-report.json`.
+The motion smoke test renders at 80 FPS while simulation stays at 20 Hz. It
+requires interpolated positions and gradual turns as well as the normal input
+and combat checks, writing `converted/prototype/motion-smoke-report.json`.
 The surface smoke test places six units on an elevated deck, dispatches a
 right-click order, then checks Ctrl + right-click terrain picking with the same
 screen position. The obstacle smoke test removes and restores an obstacle
@@ -133,6 +141,18 @@ nearby units block overlapping movement. Godot camera, animation and rendering
 do not feed timing or floating-point values back into simulation stepping.
 UI hit positions are quantized into cell commands before the next fixed tick.
 
+Ground routes can skip up to six graph edges where a direct shortcut keeps a
+swept square with a 350 mm half-width on clear ground and leaves other units'
+reserved corridors free. This produces movement at arbitrary angles in open terrain.
+Already straight routes retain their short reservations. Shortcuts stop at
+layer changes; elevated decks retain their validated eight-way links, and
+combat uses short segments for frequent target tracking. Periodic pursuit
+updates finish the current reserved segment before following the new route.
+Rendering interpolates each tick's recorded movement along its actual corners
+and rotates units gradually. It follows terrain height between samples, holds
+on pause, and uses no floating-point feedback into the simulation. Native
+physics interpolation is disabled for these manually interpolated unit roots.
+
 Movement currently interprets the saved painted walker bits as allowed cells.
 This is a prototype policy, not a claim of original-game passability fidelity.
 Auxiliary ground mask semantics remain open.
@@ -146,7 +166,7 @@ boxes may be over-conservative. Unsupported or missing collision boxes fail
 cache generation. The obstacle-free graph and independent per-object node/edge
 masks allow removal and restoration at fixed simulation ticks. Overlapping
 objects retain their own blocks. Adding an obstacle is rejected if its mask
-covers a live unit or a segment the unit is crossing. Route changes bring moving
+covers a live unit or a segment the unit is crossing. Replacement orders bring moving
 units back to their last cell center before taking a new path; sealed orders
 retain their destination and resume after reopening. This sandbox control
 toggles existing placed objects; building health, construction and destruction
@@ -173,8 +193,9 @@ nearby node on the clicked source surface. These are navigation queries;
 rendered props and water do not occlude movement picking.
 Units retain their surface node and integer elevation; collision and melee use
 vertical separation. Congested units wait before entering occupied waypoints
-and reserve both movement endpoints and their body corridor until reaching the next cell center,
-preserving a safe retreat point if an order changes. Detours and refuge searches
+and reserve both movement endpoints and their body corridor until reaching the
+next cell center, preserving a safe retreat point if an order changes.
+Detours and refuge searches
 respect these reservations. Congested units retry routes around occupied cells
 after ten blocked ticks (half a second).
 Temporarily sealed routes retain their destinations and retry; statically

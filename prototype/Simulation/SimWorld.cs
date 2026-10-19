@@ -1,5 +1,7 @@
 namespace Reforged.Simulation;
 
+public readonly record struct MovementSample(long Elapsed, int X, int Y, int Z, bool Terrain = false);
+
 public sealed class SimUnit(int id, int team, int x, int z)
 {
     public int Id { get; } = id;
@@ -10,6 +12,7 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int Node { get; internal set; }
     public int TransitNode { get; internal set; } = -1;
     public long TravelProgress { get; internal set; }
+    public List<MovementSample> Movement { get; } = [];
     public int Health { get; internal set; } = 100;
     public int Target { get; internal set; } = -1;
     public int Cooldown { get; internal set; }
@@ -45,10 +48,11 @@ public sealed class SimWorld(GridNavigation navigation)
         if (!Navigation.CanStand(cell)) throw new ArgumentException("Spawn cell is blocked");
         var (x, z) = Navigation.Center(cell);
         int y = Navigation.NodeHeight(cell);
-        if (OccupiedNodes(-1).Contains(cell) || Units.Any(u => u.Health > 0
+        var candidate = new SimUnit(Units.Count,team,x,z) { Node = cell,Y = y };
+        if (!CanReserveMovement(candidate,cell) || OccupiedNodes(-1).Contains(cell) || Units.Any(u => u.Health > 0
             && DistanceSquared(x, z, u.X, u.Z) + (long)(y-u.Y)*(y-u.Y) < 700L*700))
             throw new ArgumentException("Spawn cell occupied");
-        var unit = new SimUnit(Units.Count, team, x, z) { Node = cell, Y = y }; Units.Add(unit); return unit;
+        Units.Add(candidate); return candidate;
     }
 
     public void Enqueue(int team, IEnumerable<int> units, int cell, int target = -1)
@@ -200,6 +204,24 @@ public sealed class SimWorld(GridNavigation navigation)
         return true;
     }
 
+    private void SmoothWaypoint(SimUnit unit)
+    {
+        if (unit.Target >= 0 || unit.Node >= Navigation.GroundCount || unit.Waypoint >= unit.Path.Count) return;
+        var (ax,az) = Navigation.Center(unit.Node); var (bx,bz) = Navigation.Center(unit.Path[unit.Waypoint]);
+        int firstX = bx-ax, firstZ = bz-az, best = unit.Waypoint;
+        var occupied = OccupiedNodes(unit.Id);
+        bool bends = false;
+        for (int i = unit.Waypoint+1; i < Math.Min(unit.Path.Count,unit.Waypoint+6); i++)
+        {
+            int candidate = unit.Path[i];
+            if (candidate >= Navigation.GroundCount) break;
+            var (px,pz) = Navigation.Center(unit.Path[i-1]); var (x,z) = Navigation.Center(candidate);
+            bends |= (long)firstX*(z-pz) != (long)firstZ*(x-px);
+            if (bends && Navigation.CanTraverseGround(unit.Node,candidate,occupied) && CanReserveMovement(unit,candidate)) best = i;
+        }
+        unit.Waypoint = best;
+    }
+
     public void Step()
     {
         var actions = Commands.Where(c => c.Tick == Tick).Select(c => (c.Sequence, Action: (Action)(() => Apply(c))))
@@ -221,6 +243,7 @@ public sealed class SimWorld(GridNavigation navigation)
         }
         foreach (var unit in Units)
         {
+            unit.Movement.Clear(); unit.Movement.Add(new(0,unit.X,unit.Y,unit.Z));
             unit.Moving = unit.Attacking = false;
             if (unit.Health <= 0) continue;
             if (unit.YieldFor >= 0)
@@ -270,7 +293,12 @@ public sealed class SimWorld(GridNavigation navigation)
                 }
                 else if (Tick % 10 == 0 || unit.Waypoint >= unit.Path.Count)
                 {
-                    unit.Path = Navigation.FindPath(unit.Node, target.Node);
+                    // Periodic target tracking must not reverse a valid move
+                    // every half second. Finish its reserved endpoint first.
+                    bool continuing = unit.TransitNode >= 0 && unit.Waypoint < unit.Path.Count
+                        && unit.Path[unit.Waypoint] == unit.TransitNode;
+                    unit.Path = Navigation.FindPath(continuing ? unit.TransitNode : unit.Node, target.Node);
+                    if (continuing && unit.Path.Count == 0) unit.Path.Add(unit.TransitNode);
                     unit.Goal = target.Node;
                     unit.Waypoint = 0;
                 }
@@ -297,6 +325,7 @@ public sealed class SimWorld(GridNavigation navigation)
             {
                 int nextNode = unit.Path[unit.Waypoint];
                 if (unit.TransitNode < 0 && nextNode == unit.Node) { unit.Waypoint++; continue; }
+                if (unit.TransitNode < 0) { SmoothWaypoint(unit); nextNode = unit.Path[unit.Waypoint]; }
                 bool returning = nextNode == unit.Node;
                 int transit = unit.TransitNode >= 0 ? unit.TransitNode : nextNode;
                 if (!returning && unit.TransitNode >= 0 && nextNode != transit)
@@ -321,6 +350,7 @@ public sealed class SimWorld(GridNavigation navigation)
                     && DistanceSquared(nx, nz, other.X, other.Z) + (long)(ny-other.Y)*(ny-other.Y) < 700L * 700)) break;
                 unit.TransitNode = transit; unit.TravelProgress = progress;
                 unit.X = nx; unit.Z = nz; unit.Y = ny; unit.Moving = true; budget -= movement;
+                unit.Movement.Add(new(150_000-budget,nx,ny,nz,unit.Node < Navigation.GroundCount && transit < Navigation.GroundCount));
                 if (movement == distance)
                 {
                     unit.Node = nextNode; unit.TransitNode = -1; unit.TravelProgress = 0;

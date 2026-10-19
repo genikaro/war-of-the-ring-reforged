@@ -11,8 +11,9 @@ next; [the roadmap](Roadmap.md) records the acceptance criteria and remaining
 animation/audio/importer work. Original-game screenshot comparison is deferred.
 
 Latest verification (Oct 19, 2026): 113 Python tests, eight JavaScript tests,
-94 synthetic C# checks, sixteen real-map obstacle/navigation checks and the Godot
-input/combat, deck/underpass picking and obstacle remove/restore smoke tests pass. Generated
+110 synthetic C# checks, sixteen real-map obstacle/navigation checks and the Godot
+input/combat, interpolated movement/turning, deck/underpass picking and obstacle
+remove/restore smoke tests pass. Generated
 assets, previews, validation reports and portable tools stay in ignored
 `converted/`; original and extracted assets are excluded from source control.
 

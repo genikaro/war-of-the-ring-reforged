@@ -7,6 +7,7 @@ GridNavigation Grid(int width = 10, int height = 8, bool[]? allowed = null)
     => new(width, height, 1000, allowed ?? Enumerable.Repeat(true, width * height).ToArray(), new int[(width + 1) * (height + 1)]);
 NavigationPickerChecks.Run(Check);
 DirectionalChecks.Run(Check);
+SmoothingChecks.Run(Check);
 TrafficChecks.Run(Check);
 
 var allowed = Enumerable.Repeat(true, 80).ToArray();
