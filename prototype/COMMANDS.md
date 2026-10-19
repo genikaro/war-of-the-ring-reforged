@@ -1,8 +1,9 @@
 # Original console, control groups and explicit orders
 
 Implemented Oct 19, 2026. This slice adds player orders to the accepted movement
-and combat-spacing baseline. Health, damage, range and hit cadence still use
-the existing prototype values; importing combat definitions is subsequent work.
+and combat-spacing baseline. The three demo types now use imported definitions
+and simulation-timed melee events; armor, range and event-scale interpretations
+remain approximations documented in [combat notes](COMBAT.md).
 
 ## Player controls
 
@@ -15,7 +16,7 @@ selections. Active orders and targeting are highlighted; commands disable withou
 living friendly units. Dead selections and group members are pruned automatically.
 
 The console scales uniformly with screen height, clamps to narrow windows and
-stays centered on ultrawide screens. **Menu/F4 → HUD size** adjusts it from 75% to
+stays centered on ultrawide screens. **Menu/F4 → Interface size** adjusts it from 75% to
 150%; the setting persists in `user://interface.cfg`. Resize updates are live.
 Text renders at the display resolution; original bitmap artwork remains at its
 source resolution and is filtered when enlarged.
@@ -59,9 +60,13 @@ cancels targeting. **Ctrl + right-click now issues Attack-move**, following the
 addendum's default Force-Move behavior. **Ctrl + Alt + right-click** picks terrain
 below bridges. Alt + right-click still toggles obstacles.
 
-Arrow keys and middle-drag pan the camera; Q/E rotate and the wheel zooms.
-F4 opens controls and HUD sizing. Reserving A/S/H for orders replaces the old WASD camera and H
-help bindings. The camera shifts the scene upward while the HUD is visible so
+Arrow keys and middle-drag pan the camera; Menu buttons rotate and the wheel zooms.
+Camera preset buttons remain in Menu; F1/F2/F3 and Q/E camera shortcuts are removed.
+F4 opens/closes debug tools: live selection/orders, Pause/Resume, a paused
+single-tick step, encounter restart, camera tools and interface sizing. The
+controls guide is collapsed by default; last-action feedback is separate from
+live state. Opening the menu does not pause the simulation. Reserving A/S/H for
+orders replaces the old WASD camera and H help bindings. The camera shifts the scene upward while the HUD is visible so
 the encounter stays above the command panel. F10 hides the entire HUD.
 
 ## Simulation contract
@@ -107,8 +112,16 @@ and holding units do not yield for passing traffic, so they can block a passage.
 ## Original references and deliberate differences
 
 The local [reference library](../references/original-game/README.md) contains
-the original manual and addendum. The following were checked before selecting
-labels and shortcuts:
+the original manual and addendum.
+
+The [reference audit](../references/original-game/REFERENCE-AUDIT.md) excludes
+prerelease/modified sources. Retained gameplay images show the four standard
+commands along the bottom with abilities above, but do not establish executable
+provenance. The manual's labeled interface diagram is documentation only and
+does not establish exact final icon placement. Use release assets and controlled
+captures for final UI validation.
+
+The following were checked before selecting labels and shortcuts:
 
 - Manual PDF page 21 (printed 38–39): A for Attack Move and H for Hold Ground.
 - Manual PDF pages 5 and 21: Ctrl+1–0 group assignment, number recall, and
@@ -140,6 +153,37 @@ The minimap is a simplified navigation/height overview without fog of war;
 economy/resource bars, abilities, original fonts, animated Palantir/alerts and
 full original binding/layout fidelity remain subsequent work.
 
+## Planned corrections from the local original-game session
+
+The [30-capture session](../references/original-game/LOCAL-SESSION-2026-10-19.md)
+confirms the bottom command row and captures its tooltips. It does not validate
+the current command algorithms. The [roadmap](../tools/Roadmap.md#next-milestone-original-game-command-and-combat-corrections)
+puts a focused comparison/correction pass before ranged combat. The controls
+above describe the implementation as it stands, not changes already applied.
+
+- Use **Hold Position** as the planned released-game UI label. Measure
+  acquisition/pursuit rather than inferring them from the tooltip.
+- Compare original **Force Attack** targeting with contextual attacks and A/Ctrl
+  movement modifiers before revising unified Attack/A. Record modifier press
+  and release, cancellation and the configured default movement mode.
+- **User-selected bindings: Q/W/E/R for abilities 1–4, F2 for walk/run. F1–F4
+  will not activate abilities.** Keep S Stop as a documented prototype
+  convenience. Q/E rotation and F1/F2/F3 camera shortcuts are now removed;
+  camera buttons, launch-time views and the F4 menu remain available.
+  Reserve R for ability 4 rather than a future enter-building command. These
+  intentional differences do not change the recorded original S/F1–F4 bindings.
+- Verify Guard for a friendly unit, building and terrain area, plus Patrol
+  interruption/return and Hold-versus-idle behavior. Existing 6 m/8 m Guard
+  leashes and automatic target policies remain unverified.
+- Preserve the infantry/worker/building selection distinction: statistics for
+  infantry, construction strip for workers, recruitment and purple queue progress
+  for buildings. Evil and hero/ability panels still need collection.
+
+Acceptance requires an original/prototype behavior matrix, evidenced corrections
+and focused deterministic input/replay checks. Continuous recordings or traces
+are required for timing and pursuit claims; JPEG stills establish visible UI
+intent and sampled state only. No controls changed in this planning update.
+
 ## Validation
 
 - 243 synthetic checks: original regressions, timed melee, contextual Attack/neutral target
@@ -150,9 +194,10 @@ full original binding/layout fidelity remain subsequent work.
 - `-CommandSmoke`: 23 actual Godot panel/input checks, including the four-button
   bottom-row layout and working hidden Move/Stop controls; report in
   `converted/prototype/command-smoke-report.json`.
-- `-OrdersSmoke`: 17 additional actual input checks for groups 1–0, additive
+- `-OrdersSmoke`: 20 additional actual input checks for groups 1–0, additive
   assignment, double-tap centering, death pruning, HUD adjustment, queued squad
-  waypoints, Guard, Patrol, Force Attack and contextual Attack-move.
+  waypoints, Guard, Patrol, Force Attack and contextual Attack-move, plus debug
+  menu open/close, pause/resume and exactly one paused tick with animations frozen.
 - Existing combat and 80 FPS motion smoke checks retain real input, damage,
   all three friendly squads fighting, spacing and interpolation checks.
 - `-CommandSmoke -CapturePath converted/prototype/command-panel.png` saves a

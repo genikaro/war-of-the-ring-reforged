@@ -2,17 +2,26 @@
 
 Updated Oct 19, 2026 · @Evgenii
 
-Phases 1 and 2 implementation are complete. All 54 maps decode through EOF, including 752 decals. Helm's Deep and a decal-heavy Birth of the Uruk-Hai scene render and validate. An initial reference review has corrected prototype rendering bugs; controlled original-game fidelity validation remains open. The user has accepted Phase 3's movement and combat-spacing baseline. The command panel, explicit orders and first imported melee slice are implemented in the Godot 4 C# sandbox (engine chosen Oct 19). Original armor/range formulas and controlled combat comparisons remain open; the following gameplay milestone is one ranged unit with projectile resolution.
+Phases 1 and 2 implementation are complete. All 54 maps decode through EOF, including 752 decals. Helm's Deep and a decal-heavy Birth of the Uruk-Hai scene render and validate. An initial reference review has corrected prototype rendering bugs; controlled original-game fidelity validation remains open. The user has accepted Phase 3's movement and combat-spacing baseline. The command panel, explicit orders and first imported melee slice are implemented in the Godot 4 C# sandbox (engine chosen Oct 19). The next milestone is a bounded original-game command/combat comparison and correction pass, followed by one ranged unit with projectile resolution. Original armor/range formulas remain unresolved.
 
 An [original-game reference library](../references/original-game/README.md) now
-contains 74 saved images, the original manual and addendum, editor help and
-campaign recording links, with provenance and checksums. Prerelease and
-unversioned references are labeled; collecting them does not complete the
-controlled original-game screenshot comparison or verify gameplay fidelity.
+contains 26 visually retail-compatible images, the original manual and addendum,
+editor help and recording candidates, with provenance and checksums. The
+[reference audit](../references/original-game/REFERENCE-AUDIT.md) excludes all 48
+prerelease images and modified sources from active use. Retained web captures
+have unverified provenance and are not final-build baselines; controlled
+original-game screenshot comparison and gameplay verification remain open.
+
+The [first local original-game session](../references/original-game/LOCAL-SESSION-2026-10-19.md)
+adds 30 build-identified captures from **1.01.0011**, including command tooltips,
+Good HUD, recruitment, a melee encounter and technology trees. These are
+provisional observations: installation authenticity is unverified, captures are
+1920 × 1080 JPEGs, and stills do not establish combat timing. They inform the
+next tasks below without closing the original-game fidelity gates.
 
 The [prototype reference review](../references/original-game/PROTOTYPE-REVIEW.md)
 corrects missing runtime mipmaps, ignored lake vertex colours, spawned team
-colours and selection disks. F1/F2/F3 views and capture metadata make further
+colours and selection disks. Menu/launch-time views and capture metadata make further
 comparisons repeatable. Lighting, weather, water animation, original UI and
 the complete animation-event/appearance adaptation remain open. The three demo
 types now have the melee-event and equipment-visibility subset described below.
@@ -65,7 +74,7 @@ source UVA crops into the hashed local cache. The console scales proportionally
 with height, supports a saved 75–150% size setting and fits 4K/ultrawide displays.
 Editable groups 1–0 support Ctrl assignment, Shift additions, recall, lead-unit
 centering and death pruning. Shift-click queues formation waypoints; queued
-orders are recorded and replayed. Seventeen new actual Godot input checks cover
+orders are recorded and replayed. Twenty actual Godot input checks cover
 these additions, alongside 23 command checks. Explicit intent survives temporary
 combat routes; Attack-move resumes after combat, force moves ignore retaliation,
 and stationary orders never chase. Names, health, tooltips, active orders and
@@ -73,6 +82,11 @@ disabled commands are visible. Twenty-two actual Godot input checks cover all
 three blue squads, cancellation, pause/resume and dead selections. The
 [command notes](../prototype/COMMANDS.md) record behavior, original references,
 intentional shortcut/layout differences and remaining limits.
+
+Debug tools now show live simulation/selection/order state, with pause/resume,
+a single paused tick, restart, camera/focus buttons, interface sizing and a
+collapsed current-controls guide. Menu visibility is independent of the guide;
+obsolete shortcut labels and the old static sandbox banner are removed.
 
 The three types now use imported health (485/350/240), armor, melee DPS,
 classification and attacker caps. Original clip durations and `.lmd` hit events
@@ -165,11 +179,88 @@ definitions; damage is synchronized with simulation attack timing, and the same
 order log replays identically. No navigation polish or full economy system is
 required to accept this slice.
 
-**Following milestones:** one ranged unit with projectile/hit resolution, then
-hero commands/abilities and more unit counters; follow with workers, resources,
-construction and training queues to form a complete skirmish loop. Full UI art,
-first-run installer packaging, campaign, multiplayer and broad presentation polish
-remain later work. Do not expand this first slice to all 85 unit records.
+**Following milestones:** complete the verification/correction pass below, then
+one ranged unit with projectile/hit resolution, hero commands/abilities and more
+unit counters. Follow with workers, resources, construction, training queues and
+fog of war to form a complete skirmish loop. Full UI reconstruction, first-run
+installer packaging, campaign, multiplayer and broad presentation polish remain
+later work. Do not expand this slice to all 85 unit records.
+
+## Next milestone: original-game command and combat corrections
+
+Use the [local findings](../references/original-game/LOCAL-SESSION-2026-10-19.md)
+and [capture protocol](../references/original-game/CAPTURE-CHECKLIST.md).
+Preserve the accepted movement/spacing baseline. Implementation checks remain
+valid; they demonstrate our behavior, not equivalence to the original.
+
+1. **Resolve command input and bindings, then correct the prototype.**
+   - Keep the confirmed bottom row: Attack, Hold Position, Guard, Patrol.
+     `local-010`/`011`/`021`/`022` supply the tooltip intent. Plan to use the
+     released Hold Position label in the player UI; internal Hold Ground naming
+     need not change just to match the label.
+   - The original Attack button is **Force Attack**, including object/terrain
+     targeting regardless of hostility. Compare its targeting with contextual
+     right-click and the separate A/Ctrl attack-move modifiers. Record key down,
+     key release, default move mode, cancellation and invalid-target behavior;
+     distinguish a held modifier from a persistent toggle. Do not assume the
+     current unified Attack/A dispatch is faithful.
+   - **Chosen bindings (user decision): Q/W/E/R for abilities 1–4 and F2 for
+     walk/run. Do not use F1–F4 for abilities.** Keep S Stop, H Hold Position,
+     G Guard and T Patrol. Q/E rotation and F1/F2/F3 camera shortcuts are now
+     removed; Menu camera buttons, launch-time views and the F4 menu remain.
+     Any future enter-building shortcut must also
+     avoid R. These are intentional control differences from the original;
+     Stop remains a prototype convenience until its original behavior is known.
+   - Compare stationary Hold, guarding a unit/building/area, and Patrol against
+     idle behavior: acquisition, pursuit, return, target death and replacement.
+     The current awareness/leash distances and patrol resumption remain policies.
+   - **Acceptance:** a reference-to-prototype input/behavior matrix identifies
+     each match, correction and unresolved rule. Apply evidenced corrections
+     through the existing deterministic order path, with focused input/replay
+     regressions; document intentional conveniences separately.
+2. **Measure melee instead of tuning from isolated stills.**
+   - Start with a repeatable Gondor swordsman/worker encounter to reproduce
+     `local-020`–`027`, then compare Aragorn/Elf Knight/Uruk-hai with the existing
+     demo definitions. Fix upgrades, unit level, ownership, camera and setup.
+   - The swordsman panel shows **155 HP, Attack 10, Armor 0, Victories 0** before
+     combat. Cross-check its source records and HUD meanings; Attack 10 is not
+     evidence of ten damage per hit. Keep this an isolated validation fixture,
+     not an unplanned fourth demo squad/type.
+   - Use continuous, timestamped recordings or repeatable health traces for
+     windup/hit/recovery, interruption, retaliation, retreat and regeneration.
+     HP increased between captured samples; isolate healing/regeneration before
+     inferring a rate or cause. Establish armor, range origins and event-scale
+     formulas with controlled cases or targeted executable analysis.
+   - **Acceptance:** preserve original setup, recording/trace and prototype
+     replay with an explicit discrepancy list. Correct only measured rules;
+     leave unresolved formulas labeled as approximations. Stills and synthetic
+     duel checks cannot satisfy this comparison gate on their own.
+3. **Then implement one evidenced ranged unit.**
+   - Capture the Uruk-hai missile launch, flight, impact, damage and interrupted
+     attacks continuously; connect the traced weapon/projectile/model events to
+     fixed-tick resolution. Retain presentation-only animation/audio callbacks.
+   - Follow with hero abilities using the reserved Q/W/E/R bindings. Collect Evil,
+     hero and mixed-selection panels before generalizing the Good infantry HUD.
+4. **Build the skirmish loop from the captured selection cases.**
+   - Separate infantry statistics, worker construction choices and building
+     recruitment/queue panels. Include health, armor, damage icon and victory
+     counter where supported by source data; validate counter semantics.
+   - Trace construction costs, prerequisites and stages through source data.
+     Captured checks: barracks **60 food/105 ore, 700 HP, armor 1**; swordsman
+     **50 food/0 ore, population 2**. Recruitment reserved population while
+     queued; reproduce that case and verify cancellation/refund rules separately.
+     Keep the red blocked-placement preview and purple recruitment progress.
+   - Use the captured Good technology trees to check prerequisites, then verify
+     Evil equivalents. Add fog of war with separate visibility and explored
+     memory: observed enemy units disappear under fog while known buildings
+     remain. Resource minimap symbols must not be mistaken for enemy markers.
+
+Installation/patch provenance, exact scenario filename and a matched 4:3 capture
+remain prerequisites for approving renderer expected-output images. Resolve
+those alongside gameplay research; this does not block evidence-backed command
+corrections. Keep the 26 web references, provisional local captures and future
+approved baselines distinct. Continuous timing evidence and matched scenes are
+still required for the relevant fidelity claims.
 
 ## Deferred navigation and engine work
 
@@ -230,9 +321,10 @@ reachable destinations without crossing blocked geometry or overlapping;
 unreachable orders must fail cleanly. Existing narrow-passage, opposing-group
 and repeatable-playback checks stay enabled during command/combat work.
 
-Controlled original-game captures are still needed after the initial reference
-review. Begin the command/combat slice now; deferred navigation refinements,
-complete audio/appearance adaptation and importer packaging do not block it.
+The command/combat slice is implemented. The next step is the bounded comparison
+and correction milestone above, using the first local session to target further
+measurements. Deferred navigation refinements, complete audio/appearance
+adaptation and importer packaging do not block it.
 
 ## Decisions to make
 
@@ -280,7 +372,7 @@ The engine is chosen. Remaining choices can be made as their implementation appr
 
 **Gate:** a skirmish sandbox on one map where you select units, order them to move and attack, and they path, animate and fight with placeholder rules.
 
-**Status (Oct 19): playable baseline accepted; commands and first imported melee implemented.** `prototype/run.ps1` launches 36 animated units in six squads with original console art, a scalable four-button bottom row (Attack, Hold, Guard, Patrol), target-dependent Attack/A, hidden Move/Stop controls, editable groups and queued waypoints. The integer 20 Hz core passes 243 synthetic checks plus 31 cache combat/map/demo checks; 40 command/group input checks and combat/motion/picking checks cover actual Godot dispatch. The user accepts current movement and spacing. Imported melee definitions, animation-timed damage, equipment visibility and impact sounds are connected. Original formula validation, advanced navigation, complete presentation and importer packaging remain open. See `prototype/README.md` and `prototype/COMBAT.md`.
+**Status (Oct 19): playable baseline accepted; commands and first imported melee implemented.** `prototype/run.ps1` launches 36 animated units in six squads with original console art, a scalable four-button bottom row (Attack, Hold, Guard, Patrol), target-dependent Attack/A, hidden Move/Stop controls, editable groups and queued waypoints. The integer 20 Hz core passes 243 synthetic checks plus 31 cache combat/map/demo checks; 43 command/group/debug input checks and combat/motion/picking checks cover actual Godot dispatch. The user accepts current movement and spacing. Imported melee definitions, animation-timed damage, equipment visibility and impact sounds are connected. Original formula validation, advanced navigation, complete presentation and importer packaging remain open. See `prototype/README.md` and `prototype/COMBAT.md`.
 
 - [x] Settle the engine: Godot 4 with C#; current local cache is generated from the owner's install, with no assets in source control. Production asset-delivery packaging remains open.
 - [ ] Package the first-run importer: `prepare_prototype.py --install` now extracts/verifies source archives and writes a hashed runtime cache; in-game install selection and production packaging remain.
@@ -298,15 +390,18 @@ The engine is chosen. Remaining choices can be made as their implementation appr
 **Current slice implemented:** the three demo types use traced definitions and
 fixed-tick melee events, with repeatable duel and Godot evidence. Armor, range
 and event-scale interpretations remain explicit approximations pending original
-comparisons. The following gameplay slice is one ranged unit and deterministic
-projectile/hit resolution, before powers, economy and production.
+comparisons. Next: compare and correct command semantics, bindings and measured
+melee behavior using the milestone above. Then add one ranged unit and
+deterministic projectile/hit resolution, before powers, economy and production.
 
 - [ ] Load unit, weapon, building, spell and technique stats from the JSON tables (`Units`, `Weapons`, `Buildings`, `Spells`, `Techniques`, `UnitToUnitModifiers`, `BattleGear`, `HeroExperiences`); three demo units' base melee definitions and pair-rule support are implemented.
-- [ ] Economy: resources, workers, building and training queues, places of power
+- [ ] Economy: resources, workers, building and training queues, places of power; use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
 - [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them
 - [ ] Heroes, fate powers and spells (`SpellAndEventAndActions` chains events to actions)
 - [ ] Open `Rings.exe` in Ghidra to recover the formulas the tables only feed: damage, hit chance, experience, upgrade effects
-- [ ] Record reference fights in the original game (it still runs) and compare outcomes
+- [ ] Validate original command semantics against recorded inputs and implement the chosen Q/W/E/R ability and F2 walk/run bindings; preserve documented prototype conveniences
+- [ ] Record continuous reference fights and controlled health traces, then compare outcomes; the 30 local stills establish HUD/encounter observations, not timing or damage formulas
+- [ ] Skirmish visibility: explored terrain/building memory, currently visible enemy units and minimap markers; match the captured fog behavior before calling the skirmish loop complete
 
 ## Phase 5: AI and campaign
 
@@ -325,8 +420,8 @@ projectile/hit resolution, before powers, economy and production.
 
 - [ ] Deterministic lockstep networking to replace the defunct GameSpy service
 - [ ] Replays (the original `.wrr` format is a reference for what a replay stores)
-- [ ] Interface: complete menus and original in-game console art from `Screens.H2O`, `Fonts.H2O`, `Cursors.H2O` and interface textures; functional unit commands and their panel move earlier into the next command/combat milestone
-- [ ] Settings, hotkeys (`Hotkeys.lqr`, `Controls.lqr`), widescreen and high-DPI, controller support if wanted
+- [ ] Interface: complete menus, fonts, abilities and faction/selection-specific panels from `Screens.H2O`, `Fonts.H2O`, `Cursors.H2O` and interface textures; basic commands/artwork are implemented, command compatibility is the next milestone, worker/building panels belong to the skirmish loop
+- [ ] Settings, remappable hotkeys (`Hotkeys.lqr`, `Controls.lqr`), widescreen and high-DPI, controller support if wanted; implement the chosen ability/walk-run bindings in the command pass, rather than deferring all binding work to polish. Conflicting Q/E and F1/F2/F3 camera shortcuts are already removed.
 - [ ] Modding: load extra content from folders so the community can extend it
 
 ## Risks

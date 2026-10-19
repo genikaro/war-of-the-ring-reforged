@@ -7,6 +7,7 @@ public partial class Main
     private bool _ordersSmoke;
     private readonly Dictionary<string,bool> _ordersChecks = [];
     private int _orderSmokeDead;
+    private int _debugPauseTick;
     private void GroupKey(Key key,bool ctrl = false,bool shift = false)
         => GetViewport().PushInput(new InputEventKey { Keycode = key,Pressed = true,CtrlPressed = ctrl,ShiftPressed = shift },true);
 
@@ -54,8 +55,20 @@ public partial class Main
             case 42:
                 _ordersChecks["group_panel_recall"] = _selected.Count == 11;
                 _ordersChecks["groups_do_not_issue_orders"] = world.Commands.Count == 0;
-                PushKey(Key.F1); break;
-            case 46: PushKey(Key.S); break;
+                SetCameraView("squad"); break;
+            case 43: PushKey(Key.F4); break;
+            case 44:
+                _ordersChecks["debug_menu_open"] = _toolsPanel.Visible && _debugStep.Disabled;
+                Click(_debugPause.GetGlobalRect().GetCenter()); _debugPauseTick = world.Tick; break;
+            case 45: Click(_debugStep.GetGlobalRect().GetCenter()); break;
+            case 46:
+                _ordersChecks["debug_single_step_paused"] = _paused && world.Tick == _debugPauseTick+1
+                    && _views.Values.All(v => v.Player == null || v.Player.SpeedScale == 0);
+                PushKey(Key.S); break;
+            case 47:
+                _ordersChecks["debug_single_step_paused"] &= world.Tick == _debugPauseTick+1;
+                Click(_debugPause.GetGlobalRect().GetCenter()); PushKey(Key.F4);
+                _ordersChecks["debug_resume_and_close"] = !_paused && !_toolsPanel.Visible; break;
             case 48: PushKey(Key.M); break;
             case 50: TargetPoint(Destination(15000,5000),shift:true); break;
             case 53: TargetPoint(Destination(20000,7000),shift:true); break;
@@ -92,7 +105,7 @@ public partial class Main
                     && bounds.End.X <= screen.End.X+1 && bounds.End.Y <= screen.End.Y+1;
                 break;
             case 108:
-                var report = new { checks = _ordersChecks,passed = _ordersChecks.Count == 17 && _ordersChecks.Values.All(v => v),commands = world.Commands,
+                var report = new { checks = _ordersChecks,passed = _ordersChecks.Count == 20 && _ordersChecks.Values.All(v => v),commands = world.Commands,
                     final_digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"orders-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("ORDERS_SMOKE "+JsonSerializer.Serialize(report)); GetTree().Quit(report.passed ? 0 : 1); break;

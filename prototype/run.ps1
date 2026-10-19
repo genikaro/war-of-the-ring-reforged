@@ -12,6 +12,7 @@ param(
     [ValidateSet('squad', 'fortress', 'overview')]
     [string]$View = 'squad',
     [switch]$HideHud,
+    [switch]$DebugMenu,
     [string]$CapturePath,
     [ValidatePattern('^[1-9][0-9]{2,4}x[1-9][0-9]{2,4}$')]
     [string]$Resolution,
@@ -44,6 +45,7 @@ if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke 
 $arguments += '--'
 $arguments += "--view=$View"
 if ($HideHud) { $arguments += '--hide-hud' }
+if ($DebugMenu) { $arguments += '--debug-menu' }
 if ($Smoke -or $MotionSmoke) { $arguments += '--smoke' }
 if ($MotionSmoke) { $arguments += '--motion-smoke' }
 if ($CombatSmoke) { $arguments += '--combat-smoke' }

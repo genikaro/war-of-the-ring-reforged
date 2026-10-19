@@ -41,7 +41,7 @@ public partial class CommandPanel : Control
         _background = new TextureRect { Size = new(1024,212),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Ignore };
         _content.AddChild(_background);
         _menu = new Button { Position = new(14,3),Size = new(65,18),FocusMode = FocusModeEnum.None,ExpandIcon = true,
-            TooltipText = "Menu [F4] · controls and HUD size" };
+            TooltipText = "Debug tools [F4] · pause, step, camera, interface and controls" };
         Skin(_menu); _menu.Pressed += () => MenuChosen?.Invoke(); _content.AddChild(_menu);
         _map = new BattleMinimap { Position = new(14,28),Size = new(174,174),TooltipText = "Click the map to center the camera." };
         _map.Chosen += p => MapChosen?.Invoke(p); _content.AddChild(_map);

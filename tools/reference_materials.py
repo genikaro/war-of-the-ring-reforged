@@ -1,7 +1,8 @@
 """Verify or restore cataloged original-game research copies, never the install.
 
-The manifest is relative to the repository root. Required source files can be
-restored; optional contact sheets/text/previews are local browsing aids.
+The active manifest is relative to the repository root. Required source files
+can be restored; optional contact sheets/text/previews are local browsing aids.
+Excluded media is recorded separately and is never restored by this tool.
 """
 
 from __future__ import annotations
@@ -18,6 +19,27 @@ import urllib.request
 ROOT = Path(__file__).resolve().parent.parent
 MEDIA_ROOT = ROOT / "converted/references/original-game"
 CATALOG = ROOT / "references/original-game/catalog.json"
+
+
+def validate_catalog(catalog: dict) -> None:
+    """Keep rejected or unreviewed screenshots out of the active collection."""
+    records = catalog["files"]
+    by_id = {record["id"]: record for record in records}
+    if len(by_id) != len(records):
+        raise ValueError("Duplicate reference IDs in active catalog")
+    for record in records:
+        path = media_path(record)
+        if path.is_relative_to((MEDIA_ROOT / "excluded").resolve()):
+            raise ValueError(f"{record['id']}: excluded media in active catalog")
+        if record["kind"] == "screenshot":
+            review = record.get("reference_review", {})
+            if (review.get("decision") != "retain"
+                    or review.get("status") not in {"retail-compatible", "controlled-retail"}
+                    or record.get("build_status") in {"prerelease", "modified"}):
+                raise ValueError(f"{record['id']}: screenshot needs a retail-reference review")
+        parents = record.get("parent_ids", []) + ([record["parent_id"]] if "parent_id" in record else [])
+        if any(parent not in by_id for parent in parents):
+            raise ValueError(f"{record['id']}: browsing aid refers to an inactive source")
 
 
 def media_path(record: dict) -> Path:
@@ -104,8 +126,9 @@ def main() -> int:
         "C:/Program Files/7-Zip/7z.exe" if Path("C:/Program Files/7-Zip/7z.exe").exists() else None))
     args = parser.parse_args()
     catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
-    records = catalog["files"]
     try:
+        validate_catalog(catalog)
+        records = catalog["files"]
         return verify(records) if args.action == "verify" else restore(records, args.sevenzip)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"Reference operation stopped: {error}", file=sys.stderr)

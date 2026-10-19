@@ -112,6 +112,21 @@ scheduling remain open.
 
 ## Verification and limits
 
+The [October 19 original-game session](../references/original-game/LOCAL-SESSION-2026-10-19.md)
+adds sampled encounter evidence, not a timing trace. A Gondor swordsman displays
+155 HP, Attack 10, Armor 0 and a victory counter; after combat the counter reached
+1. HP also rose between later samples. Those observations do not establish
+per-hit damage, regeneration rate/cause, armor subtraction or kill attribution.
+
+Before the ranged slice, the [roadmap](../tools/Roadmap.md#next-milestone-original-game-command-and-combat-corrections)
+calls for a repeatable swordsman/worker reference fixture and matching continuous
+recordings or health traces, followed by the current three demo types. Hold,
+retaliation, retreat, interruption and regeneration must be isolated. Cross-check
+the swordsman's source records without adding it to the demo by default. Correct
+only measured rules; the current armor/event normalization and 2 m reach stay
+explicit approximations until evidence resolves them. Projectile work then needs
+Uruk-hai launch/flight/impact and interruption references.
+
 ```powershell
 python -m unittest discover -s tools -p 'test_*.py'
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --cache converted/prototype

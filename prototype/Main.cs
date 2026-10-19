@@ -21,8 +21,6 @@ public partial class Main : Node3D
     private readonly ControlGroups _controlGroups = new();
     private int _lastGroup = -1;
     private ulong _lastGroupTime;
-    private PanelContainer _toolsPanel = null!;
-    private HSlider _hudScale = null!;
     private readonly HashSet<int> _selected = [];
     private readonly Dictionary<int, UnitView> _views = [];
     private readonly Dictionary<int, Node3D> _obstacleViews = [];
@@ -38,7 +36,6 @@ public partial class Main : Node3D
     private int _spawnCount;
     private readonly List<int[]> _friendlySquads = [];
     private readonly HashSet<int> _primarySquad = [];
-    private Label _help = null!;
     private bool _hideHud;
     private float _distance = 48, _yaw = 0.25f;
     private Vector2 _dragStart;
@@ -62,6 +59,7 @@ public partial class Main : Node3D
     private bool _inputSelectionPassed, _inputMovePassed, _inputAttackPassed;
     private bool _inputCameraPassed, _inputPausePassed;
     private bool _fortressViewPassed, _overviewPassed, _squadViewPassed;
+    private bool _cameraShortcutsRemoved;
     private int _pauseTick;
     private Vector3 _cameraBeforeInput;
     private sealed class UnitView(Node3D root, MeshInstance3D ring, AnimationPlayer? player, JsonElement model)
@@ -94,6 +92,7 @@ public partial class Main : Node3D
             }
             if (arg.StartsWith("--view=")) _view = arg[7..];
             if (arg == "--hide-hud") _hideHud = true;
+            if (arg == "--debug-menu") _openDebugMenu = true;
             if (arg == "--smoke") _smoke = true;
             if (arg == "--motion-smoke") _motionSmoke = true;
             if (arg == "--combat-smoke") { _combatSmoke = true; _smoke = true; }
@@ -105,11 +104,12 @@ public partial class Main : Node3D
         }
         _hud.Visible = !_hideHud;
         if (_cache == "") _cache = System.IO.Path.GetFullPath(ProjectSettings.GlobalizePath("res://../converted/prototype"));
-        try { LoadSandbox(); }
+        try { LoadSandbox(); if (_openDebugMenu) { _hud.Show(); _toolsPanel.Show(); RefreshDebugMenu(); } }
         catch (Exception error)
         {
             _loadFailed = true;
             _toolsPanel.Visible = true;
+            RefreshDebugMenu();
             _status.Text = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             GD.PushError(error.ToString());
             if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _capture != "") GetTree().Quit(1);
@@ -230,7 +230,6 @@ public partial class Main : Node3D
         float spanX = (_world.Units.Max(u => u.X)-_world.Units.Min(u => u.X))/1000f;
         float spanZ = (_world.Units.Max(u => u.Z)-_world.Units.Min(u => u.Z))/1000f;
         _squadDistance = Math.Max(48,Math.Max(spanX,spanZ)*1.9f);
-        _status.Text = "Helm's Deep  /  20 Hz sandbox";
         SetCameraView(_smoke || _surfaceSmoke || _obstacleSmoke ? "squad" : _view);
         if (_surfaceSmoke) _focus = UnitPosition(_world.Units[0]);
         UpdateCamera();
@@ -257,35 +256,9 @@ public partial class Main : Node3D
         _hud = new SandboxHud(); canvas.AddChild(_hud);
         _hud.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _hud.MouseFilter = Control.MouseFilterEnum.Ignore;
-        var top = new PanelContainer { Position = new Vector2(16, 16), CustomMinimumSize = new Vector2(660, 0), MouseFilter = Control.MouseFilterEnum.Ignore };
-        _toolsPanel = top; top.Visible = false;
-        var style = new StyleBoxFlat { BgColor = new Color(0.035f, 0.055f, 0.07f, 0.94f), ContentMarginLeft = 16, ContentMarginRight = 16,
-            ContentMarginTop = 12, ContentMarginBottom = 12, CornerRadiusTopLeft = 8, CornerRadiusBottomRight = 8 };
-        top.AddThemeStyleboxOverride("panel", style); _hud.AddChild(top);
-        var lines = new VBoxContainer(); top.AddChild(lines);
-        var title = new Label { Text = "WAR OF THE RING  /  REFORGED", Modulate = new Color("d8b574") };
-        title.AddThemeFontSizeOverride("font_size", 20); lines.AddChild(title);
-        _status = new Label { Text = "Loading local assets…" }; lines.AddChild(_status);
-        var buttons = new HBoxContainer(); lines.AddChild(buttons);
-        foreach (var (view, label) in new[] { ("squad", "F1 · Squad"), ("fortress", "F2 · Fortress"), ("overview", "F3 · Map") })
-        {
-            var button = new Button { Text = label }; buttons.AddChild(button);
-            button.Pressed += () => SetCameraView(view);
-        }
-        var helpButton = new Button { Text = "F4 · Controls" }; buttons.AddChild(helpButton);
-        helpButton.Pressed += () => _help.Visible = !_help.Visible;
-        var reset = new Button { Text = "Restart" }; buttons.AddChild(reset);
-        reset.Pressed += () => GetTree().ReloadCurrentScene();
-        _help = new Label { Visible = false, Text = "1–0 groups · Ctrl+number assign · Shift+number add · Double-tap center\nA Attack: enemy / neutral / friendly / ground · H Hold · G Guard · T Patrol\nM Move · S Stop · Shift-click queue · Ctrl+right-click attack-move · Ctrl+Alt+right-click terrain below bridges\nArrows / middle-drag pan · Q/E rotate · Wheel zoom · Space pause · Esc cancel / clear · Alt+right-click obstacle · F10 UI" };
-        lines.AddChild(_help);
-        var sizing = new HBoxContainer(); lines.AddChild(sizing);
-        sizing.AddChild(new Label { Text = "HUD size" });
-        _hudScale = new HSlider { MinValue = 75,MaxValue = 150,Step = 5,Value = 100,CustomMinimumSize = new(250,24) }; sizing.AddChild(_hudScale);
-        var scaleValue = new Label { Text = "100%" }; sizing.AddChild(scaleValue);
-        _hudScale.ValueChanged += value => { _commands.SetScalePercent(value); scaleValue.Text = $"{value:0}%"; };
-        var autoSize = new Button { Text = "Reset size" }; sizing.AddChild(autoSize); autoSize.Pressed += () => _hudScale.Value = 100;
+        CreateDebugMenu();
         _commands = new CommandPanel(); _hud.AddChild(_commands);
-        _commands.MenuChosen += () => _help.Visible = !_help.Visible;
+        _commands.MenuChosen += ToggleDebugMenu;
         _commands.CommandChosen += ChooseCommand;
         _commands.GroupChosen += slot => UseGroup(slot,Input.IsPhysicalKeyPressed(Key.Ctrl),Input.IsPhysicalKeyPressed(Key.Shift));
         _commands.UnitChosen += (id,remove) => {
@@ -333,9 +306,7 @@ public partial class Main : Node3D
         {
             if (key.Keycode == Key.Space)
             {
-                _paused = !_paused;
-                foreach (var (id,view) in _views) if (view.Player != null) view.Player.SpeedScale = _paused || _world.Units[id].StrikeActive ? 0 : 1;
-                foreach (var player in _impactPlayers) player.StreamPaused = _paused;
+                SetPaused(!_paused);
             }
             if (key.Keycode == Key.Escape)
             {
@@ -347,12 +318,9 @@ public partial class Main : Node3D
                 Key.S => OrderKind.Stop, Key.H => OrderKind.HoldGround, _ => null };
             command ??= key.Keycode switch { Key.G => OrderKind.Guard,Key.T => OrderKind.Patrol,_ => null };
             if (command != null && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed) ChooseCommand(command.Value);
-            if (key.Keycode == Key.F1) SetCameraView("squad");
             int groupSlot = key.Keycode == Key.Key0 ? 9 : key.Keycode is >= Key.Key1 and <= Key.Key9 ? (int)key.Keycode-(int)Key.Key1 : -1;
             if (groupSlot >= 0 && !key.AltPressed && !key.MetaPressed) UseGroup(groupSlot,key.CtrlPressed,key.ShiftPressed);
-            if (key.Keycode == Key.F2) SetCameraView("fortress");
-            if (key.Keycode == Key.F3) SetCameraView("overview");
-            if (key.Keycode == Key.F4) _help.Visible = !_help.Visible;
+            if (key.Keycode == Key.F4) ToggleDebugMenu();
             if (key.Keycode == Key.F10) _hud.Visible = !_hud.Visible;
         }
     }
@@ -506,7 +474,9 @@ public partial class Main : Node3D
 
     public override void _PhysicsProcess(double delta)
     {
-        if (_world is null || _loadFailed || _paused) return;
+        if (_world is null || _loadFailed || (_paused && !_singleStepRequested)) return;
+        _presentStep = _paused;
+        _singleStepRequested = false;
         _world.Step();
         PresentCombatEvents();
         if (_pendingObstacle >= 0)
@@ -552,7 +522,7 @@ public partial class Main : Node3D
                     view.Player.Play(animation,state == "attack" ? 0 : 0.12); view.Clip = clip;
                 }
             }
-            if (view.Player != null) view.Player.SpeedScale = unit.StrikeActive ? 0 : 1;
+            if (view.Player != null) view.Player.SpeedScale = _paused || unit.StrikeActive ? 0 : 1;
             view.AttackSerial = unit.AttackSerial;
             if (!unit.StrikeActive) view.Appearance?.Apply(clip,0);
             if (unit.Health <= 0) view.Died = true;
@@ -567,11 +537,11 @@ public partial class Main : Node3D
     {
         if (_world is null || _loadFailed) return;
         float dt = (float)Math.Min(delta, 0.1);
-        if (!_paused)
+        if (!_paused || _presentStep)
             foreach (var unit in _world.Units)
             {
                 var view = _views[unit.Id];
-                double fraction = Engine.GetPhysicsInterpolationFraction();
+                double fraction = _paused ? 1 : Engine.GetPhysicsInterpolationFraction();
                 if (unit.Movement.Count > 0)
                 {
                     var position = MovementPlayback.Sample(unit.Movement,fraction);
@@ -608,7 +578,6 @@ public partial class Main : Node3D
         float right = (Input.IsPhysicalKeyPressed(Key.Right) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Left) ? 1 : 0);
         float forward = (Input.IsPhysicalKeyPressed(Key.Down) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Up) ? 1 : 0);
         Pan(right * dt * _distance * 0.6f, forward * dt * _distance * 0.6f);
-        _yaw += ((Input.IsPhysicalKeyPressed(Key.E) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Q) ? 1 : 0)) * dt;
         UpdateCamera();
         _selected.RemoveWhere(id => id < 0 || id >= _world.Units.Count || _world.Units[id].Health <= 0 || _world.Units[id].Team != 0);
         var units = _world.Units.Where(u => _selected.Contains(u.Id)).ToList();
@@ -616,7 +585,8 @@ public partial class Main : Node3D
         _commands.Refresh(units,UnitName,_orders.Pending,_paused,
             Enumerable.Range(0,10).Select(slot => _controlGroups.Recall(slot,LivingFriendly)).ToArray(),
             _world.Units.Count(u => u.Team == 0 && u.Health > 0),_world.Units.Count(u => u.Team != 0 && u.Health > 0));
-        _toolsPanel.Visible = _help.Visible;
+        _presentStep = false;
+        if (_toolsPanel.Visible) RefreshDebugMenu();
         _hud.DestinationTime -= dt; _hud.QueueRedraw();
         _frames++;
         if (_commandSmoke) CommandSmokeInput();
@@ -688,7 +658,7 @@ public partial class Main : Node3D
             default: throw new InvalidOperationException("Unknown camera view: " + view);
         }
         UpdateCamera();
-        _status.Text = $"Helm's Deep  /  {view}";
+        _status.Text = "Camera centered on "+(view == "squad" ? "all squads" : view == "fortress" ? "the fortress" : "the whole map");
     }
 
     private bool _finishing;
@@ -771,12 +741,33 @@ public partial class Main : Node3D
             GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right,Pressed = true,
                 Position = screen,GlobalPosition = screen },true);
         }
+        if (_frames == 139)
+        {
+            var focus = _focus; var yaw = _yaw; var distance = _distance; var view = _view;
+            _cameraShortcutsRemoved = true;
+            foreach (var key in new[] { Key.F1,Key.F2,Key.F3,Key.Q,Key.E })
+            {
+                PushKey(key);
+                _cameraShortcutsRemoved &= _focus == focus && _yaw == yaw && _distance == distance && _view == view;
+            }
+            ToggleDebugMenu();
+        }
         if (_frames is 140 or 144 or 148)
-            GetViewport().PushInput(new InputEventKey { Keycode = _frames == 140 ? Key.F2 : _frames == 144 ? Key.F3 : Key.F1,
-                Pressed = true }, true);
+            Click(_cameraButtons[_frames == 140 ? "fortress" : _frames == 144 ? "overview" : "squad"].GetGlobalRect().GetCenter());
         if (_frames == 142) _fortressViewPassed = _view == "fortress" && _focus.DistanceTo(_fortressFocus) < 1;
         if (_frames == 146) _overviewPassed = _view == "overview" && _distance == 340;
-        if (_frames == 150) _squadViewPassed = _view == "squad" && _focus.DistanceTo(_squadFocus) < 1;
+        if (_frames == 150)
+        {
+            _squadViewPassed = _view == "squad" && _focus.DistanceTo(_squadFocus) < 1;
+            Click(_cameraButtons["rotate-left"].GetGlobalRect().GetCenter());
+        }
+        if (_frames == 152) _inputCameraPassed &= Mathf.IsEqualApprox(_yaw,0);
+        if (_frames == 154) Click(_cameraButtons["rotate-right"].GetGlobalRect().GetCenter());
+        if (_frames == 156)
+        {
+            _inputCameraPassed &= Mathf.IsEqualApprox(_yaw,.25f);
+            _toolsPanel.Visible = false;
+        }
     }
 
     private void FinishSmoke()
@@ -798,6 +789,8 @@ public partial class Main : Node3D
             input_selection = _inputSelectionPassed, input_move = _inputMovePassed, input_attack = _inputAttackPassed,
             input_camera = _inputCameraPassed, input_pause = _inputPausePassed,
             input_map_views = _fortressViewPassed && _overviewPassed && _squadViewPassed,
+            map_view_checks = new { squad = _squadViewPassed, fortress = _fortressViewPassed, overview = _overviewPassed },
+            camera_shortcuts_removed = _cameraShortcutsRemoved,
             presentation_import = _presentation.Imports.All(i => i.MissingMipmapsAfter == 0 && i.DisabledVertexColorsAfter == 0)
                 && _presentation.Imports[0].VertexColorSurfaces > 0 && _presentation.Imports.Skip(1).All(i => i.TeamMaterials > 0),
             turning_samples = _turningSeen, interpolated_samples = _interpolatedSeen,
@@ -809,7 +802,7 @@ public partial class Main : Node3D
         System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,traceName),JsonSerializer.Serialize(_combatTrace));
         bool passed = report.units == _spawnCount && report.moving_samples > 0 && report.attack_samples > 0 && report.damage > 0 && report.animated_units == _spawnCount
             && report.input_selection && report.input_move && report.input_attack && report.input_camera && report.input_pause
-            && report.input_map_views && report.presentation_import && report.free_movement_samples > 0;
+            && report.input_map_views && report.camera_shortcuts_removed && report.presentation_import && report.free_movement_samples > 0;
         if (_motionSmoke) passed &= report.turning_samples > 0 && report.interpolated_samples > 0;
         if (_combatSmoke) passed &= report.friendly_squads_fought == 3 && report.combat_spacing && report.input_squad_keys;
         if (_meleeSmoke) passed &= report.source_units.SequenceEqual(new[] {3,16,34}) && report.source_health.SequenceEqual(new[] {240,350,485})

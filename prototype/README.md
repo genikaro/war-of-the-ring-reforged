@@ -34,8 +34,8 @@ fighters hold position and face their target. Attack orders continue onto nearby
 enemies when their target dies. These are prototype rules, not recovered original
 combat formulas.
 
-The map starts with all six squads in view. F1 frames the units, F2 frames
-the fortress and F3 shows the full map. Runtime textures have mipmaps and
+The map starts with all six squads in view. The Menu has Squad, Fortress and Map
+camera buttons; their F1/F2/F3 shortcuts are removed. Runtime textures have mipmaps and
 anisotropic filtering, painted lake colours/opacity render correctly, and the
 spawned teams use the original blue/red colours. Selected units have hollow
 gold rings. The [reference review](../references/original-game/PROTOTYPE-REVIEW.md)
@@ -104,15 +104,30 @@ checked before loading. Never distribute the local cache with the project.
 | Shift + click / right-click | Queue orders and formation waypoints |
 | Alt + right-click a placed obstacle | Remove it; click the same space again to restore it |
 | Arrow keys / middle-drag | Pan the camera |
-| Q / E | Rotate |
+| Menu: Rotate left / Rotate right | Rotate the camera |
 | Mouse wheel | Zoom |
 | Space | Pause/resume simulation and unit animation |
 | Esc | Cancel targeting; otherwise clear selection |
 | Right-click while targeting | Cancel targeting and retain the current order |
 | Restart sandbox | Reset the encounter |
-| F1 / F2 / F3 | Frame squad / fortress / entire map |
-| F4 / console Menu button | Open controls and the saved 75–150% HUD-size setting |
+| Menu: All squads / Fortress / Whole map / Focus selection | Frame a comparison view or the current selection |
+| F4 / console Menu button | Open/close debug tools |
 | F10 | Show/hide the debug UI |
+
+Planned controls (user decision): **Q/W/E/R for abilities 1–4** and **F2 for
+walk/run**, retaining S Stop. These are intentional differences from the
+original game's bindings. Q/E rotation and F1/F2/F3 camera shortcuts have been
+removed; camera buttons and launch-time `-View` captures remain available. The
+planned abilities and walk/run actions are not implemented yet. See
+[command plans](COMMANDS.md#planned-corrections-from-the-local-original-game-session).
+
+The debug menu has live pause/tick and selected-order information, Pause/Resume,
+Step one tick (50 ms while paused), Restart encounter, camera view/rotation
+buttons, Focus selection and the saved 75–150% interface size. The current
+shortcut guide is collapsible; the last action is labeled separately from live
+state. The menu scrolls to fit above the console. Opening it does not pause play.
+Use `./prototype/run.ps1 -DebugMenu` to start with it open, including when saving
+a normal viewport capture with `-CapturePath`.
 
 ## Verification
 
@@ -212,8 +227,9 @@ Attack/A, hidden Move/Stop controls, targeted and immediate orders, disabled
 commands, cancellation, mixed unit types, combat interruption, pause/resume,
 drag release over the panel and removal of dead selected units. Its report is
 `converted/prototype/command-smoke-report.json`.
-The orders smoke test adds 17 actual input checks for control groups, centering,
-new commands, queues and HUD adjustment, writing `converted/prototype/orders-smoke-report.json`.
+The orders smoke test adds 20 actual input checks for control groups, centering,
+new commands, queues, HUD adjustment and debug pause/step/open/close controls,
+writing `converted/prototype/orders-smoke-report.json`.
 Unit scenes share imported resources while each instance keeps its own skeleton
 and animation player.
 The surface smoke test places six units on an elevated deck, dispatches a
