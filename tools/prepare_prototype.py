@@ -16,6 +16,7 @@ import h2o
 import prototype_assets
 import prototype_navigation
 import prototype_obstacles
+import prototype_interface
 from lms2gltf import convert_model
 from resolve_model import Resolver
 import wor
@@ -39,6 +40,51 @@ def connected(allowed, width, height):
         if len(component) > len(best):
             best = component
     return best
+
+
+def demo_layout(allowed, width, height, anchor):
+    """Three separated six-unit squads per side, entirely in the main region."""
+    region = connected(allowed, width, height)
+    offsets = [(x, z) for z in [0, 2] for x in [0, 2, 4]]
+    candidates = [cell for cell in sorted(region)
+                  if 1 <= cell % width < width - 5 and 1 <= cell // width < height - 3
+                  and all((cell // width + z) * width + cell % width + x in region
+                          for z in range(-1, 4) for x in range(-1, 6))]
+    spawns, groups = [], []
+    for band, dz in enumerate([0, -14, 14]):
+        for team in [0, 1]:
+            px, pz = anchor % width + team * 18, anchor // width + dz
+            chosen = None
+            for cell in sorted(candidates, key=lambda c: ((c % width - px)**2 + (c // width - pz)**2, c)):
+                cells = [cell + z * width + x for x, z in offsets]
+                if all((a % width - b['cell'] % width)**2 + (a // width - b['cell'] // width)**2
+                       >= (12 if b['team'] != team else 8)**2 for a in cells for b in spawns):
+                    chosen = cells
+                    break
+            if chosen is None:
+                raise ValueError('no separated six-squad demo layout in the main region')
+            group = len(groups)
+            groups.append({'id': group, 'team': team, 'name': ('Blue' if team == 0 else 'Red') + f' squad {band+1}',
+                           'anchor': chosen[0]})
+            for index, cell in enumerate(chosen):
+                spawns.append({'team': team, 'cell': cell, 'group': group,
+                               'model': (0 if band == 0 and index == 0 else 1) if team == 0 else 2})
+    xs, zs = [s['cell'] % width for s in spawns], [s['cell'] // width for s in spawns]
+    camera = ((min(zs) + max(zs)) // 2) * width + (min(xs) + max(xs)) // 2
+    return spawns, groups, camera
+
+
+def refresh_demo(output):
+    output = Path(output).resolve()
+    if output.is_relative_to(wor.ROOT / 'extracted') or output.is_relative_to(wor.ROOT / 'TLOTR - War of the Ring'):
+        raise ValueError('cache must be outside original and extracted data')
+    manifest = json.loads((output / 'manifest.json').read_text())
+    nav = json.loads((output / 'navigation.json').read_text())
+    allowed = base64.b64decode(nav['allowed_base64'])
+    anchor = next(s['cell'] for s in manifest['spawns'] if s['team'] == 0)
+    manifest['spawns'], manifest['groups'], manifest['camera_cell'] = demo_layout(allowed, nav['width'], nav['height'], anchor)
+    (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+    return manifest
 
 
 def prepare(output, install=None):
@@ -120,16 +166,18 @@ def prepare(output, install=None):
                        'in_place_locomotion': locomotion,
                        'idle': clip('Idle_01'), 'walk': clip('Run'),
                        'attack': clip('Attack', '01'), 'death': clip('Death') or clip('Defeated')})
-    spawns = []
-    for team in [0, 1]:
-        for index in range(6):
-            cell = anchor + (index // 3) * 2 * width + (index % 3) * 2 + team * 14
-            spawns.append({'team': team, 'cell': cell, 'model': (0 if index == 0 else 1) if team == 0 else 2})
+    spawns, groups, camera_cell = demo_layout(allowed, width, height, anchor)
     manifest = {'format_version': 1, 'name': "Helm's Deep — Skirmish Sandbox", 'map': 'map/scene.glb',
-                'models': models, 'spawns': spawns, 'camera_cell': anchor + width + 8,
+                'team_colors': [[resolver.db['TeamColors'].by_name[name][channel] / 255
+                                 for channel in ['Red', 'Green', 'Blue']]
+                                for name in ['TEAM_COLOR_BLUE', 'TEAM_COLOR_RED']],
+                'models': models, 'spawns': spawns, 'groups': groups, 'camera_cell': camera_cell,
                 'rules': 'Prototype: 100 HP, 12 melee damage, 1 second cooldown, 3 m/s movement, integer positions at 20 Hz.',
                 'source_sha256': scene['world'].metadata['sha256']}
+    prototype_interface.export(output,resolver)
+    manifest['interface'] = 'interface/index.json'
     files = [output / 'map/scene.glb', output / 'navigation.json', output / 'heights.bin'] + [output / m['file'] for m in models]
+    files += sorted((output / 'interface').glob('*'))
     manifest['files'] = {str(p.relative_to(output)).replace('\\', '/'): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     index = [{'unit': manifest['name'], 'file': manifest['map'], 'clips': []}]
@@ -142,6 +190,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, default=wor.ROOT / 'converted/prototype')
     parser.add_argument('--install', type=Path)
+    parser.add_argument('--demo-only', action='store_true', help='Refresh squads and camera in an existing local cache without reconverting assets')
+    parser.add_argument('--ui-only', action='store_true', help='Extract original HUD artwork into an existing cache')
     args = parser.parse_args()
-    prepare(args.out, args.install)
+    if args.ui_only:
+        if args.install or args.demo_only:
+            parser.error('--ui-only uses an existing cache and cannot be combined with --install or --demo-only')
+        prototype_interface.refresh(args.out)
+    elif args.demo_only:
+        if args.install:
+            parser.error('--demo-only uses an existing cache and cannot be combined with --install')
+        refresh_demo(args.out)
+    else:
+        prepare(args.out, args.install)
     print('Prepared local sandbox cache: ' + str(args.out))

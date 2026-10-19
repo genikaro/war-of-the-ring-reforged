@@ -26,13 +26,35 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int YieldGoal { get; internal set; } = -1;
     public int OrderSequence { get; internal set; } = -1;
     public bool ReturningToRest { get; internal set; }
+    public bool FreeMovement { get; internal set; }
+    public bool GroundSegment { get; internal set; }
+    public int GroundStartX { get; internal set; }
+    public int GroundStartY { get; internal set; }
+    public int GroundStartZ { get; internal set; }
+    public int MovementTick { get; internal set; } = -1;
+    public int AvoidanceTicks { get; internal set; }
+    public int AttackNode { get; internal set; } = -1;
+    public int CombatTarget { get; internal set; } = -1;
+    public int CombatPlanTick { get; internal set; } = -1;
+    public bool CombatWaiting { get; internal set; }
+    public bool AutoEngage { get; internal set; }
+    public OrderKind Order { get; internal set; }
+    public int OrderDestination { get; internal set; } = -1;
+    public int OrderTarget { get; internal set; } = -1;
+    public List<PendingOrder> OrderQueue { get; } = [];
+    public int PatrolStart { get; internal set; } = -1;
+    public int PatrolEnd { get; internal set; } = -1;
+    public bool PatrolForward { get; internal set; }
+    public int GuardPlanTick { get; internal set; } = -1;
+    public int GuardOrigin { get; internal set; } = -1;
 }
 
-public sealed record SimCommand(int Tick, int Sequence, int Team, int[] Units, int Cell, int Target = -1);
+public sealed record SimCommand(int Tick, int Sequence, int Team, int[] Units, int Cell, int Target = -1,
+    OrderKind Kind = OrderKind.Move, bool Queued = false);
 public sealed record SimObstacleCommand(int Tick, int Sequence, int Obstacle, bool Active);
 
 /// <summary>20 Hz integer simulation. No renderer, wall clock, random state or Godot APIs.</summary>
-public sealed class SimWorld(GridNavigation navigation)
+public sealed partial class SimWorld(GridNavigation navigation)
 {
     public const int TicksPerSecond = 20;
     public GridNavigation Navigation { get; } = navigation;
@@ -56,7 +78,13 @@ public sealed class SimWorld(GridNavigation navigation)
     }
 
     public void Enqueue(int team, IEnumerable<int> units, int cell, int target = -1)
-        => Commands.Add(new(Tick, _sequence++, team, units.Distinct().Order().ToArray(), cell, target));
+        => Enqueue(team, units, target >= 0 ? OrderKind.Attack : OrderKind.Move, cell, target);
+
+    public void Enqueue(int team, IEnumerable<int> units, OrderKind kind, int cell = -1, int target = -1, bool queued = false)
+    {
+        if (kind is OrderKind.Idle || !Enum.IsDefined(kind)) throw new ArgumentException("Not a player order", nameof(kind));
+        Commands.Add(new(Tick, _sequence++, team, units.Distinct().Order().ToArray(), cell, target, kind, queued));
+    }
 
     public void EnqueueObstacle(int id, bool active)
     {
@@ -71,25 +99,71 @@ public sealed class SimWorld(GridNavigation navigation)
             foreach (var unit in Units.Where(u => u.Health > 0))
             {
                 if (Navigation.ObstacleCovers(command.Obstacle, unit.Node)) return;
-                if (unit.TransitNode >= 0 && Navigation.ObstacleCoversMovement(
+                if (unit.Node < Navigation.GroundCount && Navigation.ObstacleCoversGroundBody(command.Obstacle,unit.X,unit.Z)) return;
+                if (!unit.GroundSegment && unit.TransitNode >= 0 && Navigation.ObstacleCoversMovement(
                     command.Obstacle, unit.Node, unit.TransitNode)) return;
             }
         }
         Navigation.SetObstacle(command.Obstacle, command.Active);
     }
 
-    private void Apply(SimCommand command)
+    private void Apply(SimCommand command, bool activating = false)
     {
         var reserved = new HashSet<int>();
-        int anchor = Navigation.Nearest(command.Cell);
+        bool travels = command.Kind is OrderKind.Move or OrderKind.AttackMove or OrderKind.Patrol or OrderKind.Guard
+            || (command.Kind == OrderKind.ForceAttack && command.Target < 0);
+        int anchor = travels ? Navigation.Nearest(command.Cell) : -1;
+        if (command.Kind == OrderKind.Guard && command.Target >= 0 && command.Target < Units.Count) reserved.Add(Units[command.Target].Node);
+        var ordered = command.Units.Where(id => id >= 0 && id < Units.Count).Select(id => Units[id])
+            .Where(u => u.Team == command.Team && u.Health > 0 && anchor >= 0 && Navigation.IsConnected(u.Node,anchor)).ToArray();
+        bool free = travels && ordered.All(u => Navigation.FindPath(u.Node,anchor).All(FreeGround));
+        var slots = new List<int>();
+        foreach (var unit in ordered)
+        {
+            int slot = slots.Count == 0 && !reserved.Contains(anchor) ? anchor : Navigation.FormationSlot(anchor,reserved);
+            if (slot < 0) break;
+            slots.Add(slot); reserved.Add(slot);
+        }
+        free &= slots.All(FreeGround);
+        var assignments = free ? AssignFormation(ordered,slots)
+            : ordered.Zip(slots).ToDictionary(pair => pair.First.Id,pair => pair.Second);
         foreach (int id in command.Units)
         {
             if (id < 0 || id >= Units.Count) continue;
             var unit = Units[id];
             if (unit.Team != command.Team || unit.Health <= 0) continue;
-            unit.Target = command.Target >= 0 && command.Target < Units.Count && Units[command.Target].Team != unit.Team
-                && Units[command.Target].Health > 0 ? command.Target : -1;
+            // An invalid explicit attack cannot silently become a move or erase
+            // a valid order (for example a friendly/dead target in a mixed selection).
+            if (command.Kind == OrderKind.Attack && (command.Target < 0 || command.Target >= Units.Count
+                || Units[command.Target].Team == unit.Team || Units[command.Target].Health <= 0)) continue;
+            if (command.Kind == OrderKind.ForceAttack && command.Target >= 0 && (command.Target >= Units.Count
+                || command.Target == id || Units[command.Target].Health <= 0)) continue;
+            if (command.Kind == OrderKind.Guard && command.Target >= 0 && (command.Target >= Units.Count
+                || command.Target == id || Units[command.Target].Team != unit.Team || Units[command.Target].Health <= 0)) continue;
+            if (!activating && command.Queued && command.Kind is not (OrderKind.Stop or OrderKind.HoldGround)
+                && unit.Order is not (OrderKind.Idle or OrderKind.Stop or OrderKind.HoldGround))
+            {
+                int queuedCell = travels ? assignments.GetValueOrDefault(id,-1) : command.Cell;
+                if (!travels || queuedCell >= 0) unit.OrderQueue.Add(new(command.Kind,queuedCell,command.Target,command.Sequence));
+                continue;
+            }
+            if (!activating) unit.OrderQueue.Clear();
+            if (free && unit.TransitNode >= 0 && unit.TransitNode < Navigation.GroundCount
+                && FreeGround(unit.Node) && FreeGround(unit.TransitNode)) unit.GroundSegment = true;
+            if (command.Kind is OrderKind.Stop or OrderKind.HoldGround) RebaseCombatGround(unit);
+            else RebaseGround(unit);
+            unit.FreeMovement = free && unit.TransitNode < 0;
+            unit.AvoidanceTicks = 0;
+            unit.Order = command.Kind; unit.OrderDestination = -1;
+            unit.OrderTarget = command.Kind is OrderKind.Attack or OrderKind.ForceAttack or OrderKind.Guard ? command.Target : -1;
+            unit.Target = command.Kind == OrderKind.Guard ? -1 : unit.OrderTarget;
+            unit.PatrolStart = command.Kind == OrderKind.Patrol ? unit.Node : -1;
+            unit.PatrolEnd = -1; unit.PatrolForward = true; unit.GuardPlanTick = -1;
+            unit.GuardOrigin = command.Kind == OrderKind.Guard ? anchor : -1;
+            unit.AutoEngage = unit.Target >= 0;
+            unit.AttackNode = unit.CombatTarget = unit.CombatPlanTick = -1; unit.CombatWaiting = false;
             unit.Path.Clear(); unit.Goal = -1; unit.BlockedTicks = 0;
+            unit.Waypoint = 0; unit.Moving = unit.Attacking = false;
             unit.OrderSequence = command.Sequence;
             unit.ReturningToRest = false;
             unit.YieldFor = unit.YieldGoal = -1;
@@ -98,12 +172,17 @@ public sealed class SimWorld(GridNavigation navigation)
                 yielding.YieldFor = yielding.YieldGoal = -1;
                 yielding.Path.Clear(); yielding.Waypoint = 0; yielding.BlockedTicks = 10;
             }
-            if (anchor < 0 || !Navigation.IsConnected(unit.Node,anchor)) continue;
-            int goal = reserved.Count == 0 ? anchor : Navigation.FormationSlot(anchor, reserved);
-            if (goal < 0) continue;
+            if (!travels) continue;
+            if (anchor < 0 || !Navigation.IsConnected(unit.Node,anchor)) { CompleteTravelOrder(unit); continue; }
+            int goal = assignments.GetValueOrDefault(id,-1);
+            if (goal < 0) { CompleteTravelOrder(unit); continue; }
             reserved.Add(goal);
             unit.Path = Navigation.FindPath(unit.Node, goal);
+            unit.FreeMovement &= unit.Path.All(FreeGround);
             unit.Goal = unit.Path.Count > 0 ? goal : -1;
+            unit.OrderDestination = unit.Goal;
+            if (command.Kind == OrderKind.Patrol) unit.PatrolEnd = unit.Goal;
+            if (unit.Goal < 0) CompleteTravelOrder(unit);
             unit.Waypoint = 0;
         }
     }
@@ -128,6 +207,8 @@ public sealed class SimWorld(GridNavigation navigation)
             var onward = Navigation.FindPath(parked.Node, waiting.Goal, occupied);
             if (onward.Count == 0) continue;
             parked.Goal = waiting.Goal; waiting.Goal = parked.Node;
+            RebaseGround(parked); RebaseGround(waiting);
+            parked.FreeMovement = waiting.FreeMovement = false;
             parked.Path = onward; parked.Waypoint = 0; parked.BlockedTicks = 0;
             waiting.Path = Navigation.FindPath(waiting.Node, waiting.Goal); waiting.Waypoint = 0;
             return;
@@ -141,15 +222,16 @@ public sealed class SimWorld(GridNavigation navigation)
             var (wx, wz) = Navigation.Center(destination); var (ox, oz) = Navigation.Center(resume);
             if ((long)(wx - waiting.X) * (ox - u.X) + (long)(wz - waiting.Z) * (oz - u.Z) < 0) return true;
             var ahead = Navigation.FindPath(u.Node, resume);
-            return ahead.Contains(waiting.Node) || ahead.Contains(waiting.TransitNode);
+            return ahead.Contains(waiting.Node) || (!waiting.GroundSegment && ahead.Contains(waiting.TransitNode));
         }
         bool Eligible(SimUnit u) => u.Id != waiting.Id && u.Team == waiting.Team && !priorities.Contains(u.Id)
+            && u.Order is not (OrderKind.Stop or OrderKind.HoldGround)
             && u.Health > 0 && u.Target < 0 && (u.YieldFor < 0 || u.YieldFor == waiting.Id);
         var occupants = new Dictionary<int, SimUnit>();
         foreach (var u in Units.Where(u => u.Health > 0))
         {
             occupants.TryAdd(u.Node, u);
-            if (u.TransitNode >= 0) occupants.TryAdd(u.TransitNode, u);
+            if (u.TransitNode >= 0 && !u.GroundSegment) occupants.TryAdd(u.TransitNode, u);
         }
         foreach (var other in Units.Where(Eligible))
         {
@@ -199,6 +281,7 @@ public sealed class SimWorld(GridNavigation navigation)
                     // instead of letting a dependent pin this blocker in place.
                     foreach (var dependent in Units.Where(u => u.YieldFor == mover.Id)) dependent.YieldFor = waiting.Id;
                     mover.YieldFor = waiting.Id; mover.YieldGoal = refuge;
+                    RebaseGround(mover); mover.FreeMovement = false;
                     mover.Path = Navigation.FindPath(mover.Node, refuge, occupied);
                     mover.Waypoint = 0; mover.BlockedTicks = 0;
                     return;
@@ -218,7 +301,7 @@ public sealed class SimWorld(GridNavigation navigation)
     private bool Passed(SimUnit unit, SimUnit priority)
     {
         if (unit.TransitNode >= 0 || unit.Node != unit.YieldGoal || priority.YieldFor >= 0 || (Tick + unit.Id) % 10 != 0) return false;
-        var ahead = RouteCells(priority.TransitNode >= 0 ? priority.TransitNode : priority.Node, priority.Goal);
+        var ahead = RouteCells(priority.TransitNode >= 0 && !priority.GroundSegment ? priority.TransitNode : priority.Node, priority.Goal);
         ahead.Add(priority.Node);
         return !RouteCells(unit.Node, unit.Goal).Overlaps(ahead);
     }
@@ -233,7 +316,7 @@ public sealed class SimWorld(GridNavigation navigation)
 
     private HashSet<int> OccupiedNodes(int except)
         => Units.Where(u => u.Id != except && u.Health > 0)
-            .SelectMany(u => u.TransitNode >= 0 ? new[] { u.Node,u.TransitNode } : new[] { u.Node }).ToHashSet();
+            .SelectMany(u => u.TransitNode >= 0 && !u.GroundSegment ? new[] { u.Node,u.TransitNode } : new[] { u.Node }).ToHashSet();
 
     private bool CanReserveMovement(SimUnit unit, int to)
     {
@@ -241,9 +324,9 @@ public sealed class SimWorld(GridNavigation navigation)
         var heights = Navigation.MovementHeights(unit.Node,to);
         foreach (var other in Units.Where(u => u.Id != unit.Id && u.Health > 0))
         {
-            var (cx,cz) = other.TransitNode >= 0 ? Navigation.Center(other.Node) : (other.X,other.Z);
-            var (dx,dz) = other.TransitNode >= 0 ? Navigation.Center(other.TransitNode) : (other.X,other.Z);
-            var otherHeights = other.TransitNode >= 0 ? Navigation.MovementHeights(other.Node,other.TransitNode) : (other.Y,other.Y);
+            var (cx,cz) = other.TransitNode >= 0 && !other.GroundSegment ? Navigation.Center(other.Node) : (other.X,other.Z);
+            var (dx,dz) = other.TransitNode >= 0 && !other.GroundSegment ? Navigation.Center(other.TransitNode) : (other.X,other.Z);
+            var otherHeights = other.TransitNode >= 0 && !other.GroundSegment ? Navigation.MovementHeights(other.Node,other.TransitNode) : (other.Y,other.Y);
             if (heights.Low-700 >= otherHeights.Item2 || otherHeights.Item1-700 >= heights.High) continue;
             if (IntegerMotion.SegmentsNear(ax,az,bx,bz,cx,cz,dx,dz)) return false;
         }
@@ -273,15 +356,22 @@ public sealed class SimWorld(GridNavigation navigation)
         var actions = Commands.Where(c => c.Tick == Tick).Select(c => (c.Sequence, Action: (Action)(() => Apply(c))))
             .Concat(ObstacleCommands.Where(c => c.Tick == Tick)
                 .Select(c => (c.Sequence, Action: (Action)(() => ApplyObstacle(c)))));
-        foreach (var action in actions.OrderBy(a => a.Sequence)) action.Action();
+        foreach (var action in actions.OrderBy(a => a.Sequence))
+        {
+            _sequence = Math.Max(_sequence,action.Sequence+1);
+            action.Action();
+        }
+        ActivateQueuedOrders();
         if (_navigationRevision != Navigation.Revision)
         {
             // Rebuild routes at a tick boundary. Starting from the last reached
             // node also safely brings an in-flight unit back to its cell center.
             foreach (var unit in Units.Where(u => u.Health > 0 && u.Goal >= 0))
             {
+                RebaseGround(unit);
                 unit.YieldFor = unit.YieldGoal = -1;
                 unit.Path = Navigation.FindPath(unit.Node, unit.Goal);
+                unit.FreeMovement &= unit.Path.All(FreeGround);
                 if (unit.Path.Count == 0) unit.Path.Add(unit.Node);
                 unit.Waypoint = 0; unit.BlockedTicks = 0;
             }
@@ -289,9 +379,18 @@ public sealed class SimWorld(GridNavigation navigation)
         }
         foreach (var unit in Units)
         {
-            unit.Movement.Clear(); unit.Movement.Add(new(0,unit.X,unit.Y,unit.Z));
+            unit.Movement.Clear(); unit.Movement.Add(new(0,unit.X,unit.Y,unit.Z)); unit.MovementTick = Tick;
+        }
+        foreach (var unit in Units)
+        {
             unit.Moving = unit.Attacking = false;
-            if (unit.Health <= 0) continue;
+            if (unit.Health <= 0)
+            {
+                unit.Order = OrderKind.Idle; unit.OrderDestination = unit.OrderTarget = -1;
+                unit.OrderQueue.Clear();
+                unit.Target = unit.Goal = unit.AttackNode = unit.CombatTarget = -1;
+                unit.AutoEngage = false; unit.Path.Clear(); continue;
+            }
             if (unit.YieldFor >= 0)
             {
                 var priority = Units[unit.YieldFor];
@@ -316,43 +415,17 @@ public sealed class SimWorld(GridNavigation navigation)
                 unit.Path = Navigation.FindPath(unit.Node,unit.Goal); unit.Waypoint = 0;
             }
             if (unit.Cooldown > 0) unit.Cooldown--;
-            if (unit.Team == 1 && unit.Target < 0)
-            {
-                var nearby = Units.Where(u => u.Team != unit.Team && u.Health > 0)
-                    .OrderBy(u => SeparationSquared(unit, u)).ThenBy(u => u.Id).FirstOrDefault();
-                if (nearby != null && SeparationSquared(unit, nearby) <= 10_000L * 10_000)
-                    unit.Target = nearby.Id;
-            }
-            if (unit.Target >= 0)
-            {
-                var target = Units[unit.Target];
-                if (target.Health <= 0) { unit.Target = -1; unit.Goal = -1; unit.Path.Clear(); }
-                else if (SeparationSquared(unit, target) <= 2_000L * 2_000)
-                {
-                    unit.Attacking = true;
-                    if (unit.Cooldown == 0)
-                    {
-                        target.Health = Math.Max(0, target.Health - 12); unit.Cooldown = 20;
-                        if (target.Target < 0) target.Target = unit.Id;
-                    }
-                    continue;
-                }
-                else if (Tick % 10 == 0 || unit.Waypoint >= unit.Path.Count)
-                {
-                    // Periodic target tracking must not reverse a valid move
-                    // every half second. Finish its reserved endpoint first.
-                    bool continuing = unit.TransitNode >= 0 && unit.Waypoint < unit.Path.Count
-                        && unit.Path[unit.Waypoint] == unit.TransitNode;
-                    unit.Path = Navigation.FindPath(continuing ? unit.TransitNode : unit.Node, target.Node);
-                    if (continuing && unit.Path.Count == 0) unit.Path.Add(unit.TransitNode);
-                    unit.Goal = target.Node;
-                    unit.Waypoint = 0;
-                }
-            }
+            UpdatePersistentOrder(unit);
+            if (UpdateCombat(unit)) continue;
             // Retry on a fixed cadence. Occupied cells are temporary obstacles;
             // retain the order when no detour exists so a moving blocker can clear.
-            if (unit.Goal >= 0 && unit.BlockedTicks >= 10)
+            if (unit.Target < 0 && unit.FreeMovement && unit.AvoidanceTicks >= 20)
             {
+                unit.FreeMovement = false; RebaseGround(unit); unit.BlockedTicks = 10;
+            }
+            if (unit.Target < 0 && unit.Goal >= 0 && unit.BlockedTicks >= (unit.FreeMovement ? 3 : 10))
+            {
+                RebaseGround(unit);
                 int start = unit.Node;
                 var blocked = OccupiedNodes(unit.Id);
                 blocked.Remove(start);
@@ -366,7 +439,7 @@ public sealed class SimWorld(GridNavigation navigation)
             }
             // An unreachable replacement order can discard the old route in
             // mid-step. Finish retreating to the last center before stopping.
-            if (unit.TransitNode >= 0 && unit.Path.Count == 0)
+            if (unit.TransitNode >= 0 && !unit.GroundSegment && unit.Path.Count == 0)
             {
                 unit.Path.Add(unit.Node); unit.Waypoint = 0;
             }
@@ -374,6 +447,16 @@ public sealed class SimWorld(GridNavigation navigation)
             while (budget > 0 && unit.Waypoint < unit.Path.Count)
             {
                 int nextNode = unit.Path[unit.Waypoint];
+                bool align = unit.Node < Navigation.GroundCount && unit.TransitNode < 0
+                    && (unit.X,unit.Z) != Navigation.Center(unit.Node);
+                if (unit.FreeMovement || unit.GroundSegment || align)
+                {
+                    if (!unit.GroundSegment && unit.FreeMovement) SmoothGroundRoute(unit);
+                    int groundTarget = unit.FreeMovement ? unit.Path[unit.Waypoint] : unit.Node;
+                    if (!MoveGround(unit,groundTarget,ref budget)) break;
+                    if (unit.FreeMovement) unit.Waypoint++;
+                    continue;
+                }
                 if (unit.TransitNode < 0 && nextNode == unit.Node) { unit.Waypoint++; continue; }
                 if (unit.TransitNode < 0) { SmoothWaypoint(unit); nextNode = unit.Path[unit.Waypoint]; }
                 bool returning = nextNode == unit.Node;
@@ -396,6 +479,7 @@ public sealed class SimWorld(GridNavigation navigation)
                 int ny = IntegerMotion.Interpolate(ay,by,progress,length);
                 if (unit.Node < Navigation.GroundCount && transit < Navigation.GroundCount)
                     ny = Navigation.GroundHeight(nx, nz);
+                if (!ClearCombatStep(unit,nx,ny,nz)) break;
                 if (Units.Any(other => other.Id != unit.Id && other.Health > 0
                     && DistanceSquared(nx, nz, other.X, other.Z) + (long)(ny-other.Y)*(ny-other.Y) < 700L * 700)) break;
                 unit.TransitNode = transit; unit.TravelProgress = progress;
@@ -413,7 +497,11 @@ public sealed class SimWorld(GridNavigation navigation)
                 if (unit.Node == (unit.YieldGoal >= 0 ? unit.YieldGoal : unit.Goal)
                     && unit.X == gx && unit.Z == gz)
                 {
-                    if (unit.YieldFor < 0) { unit.Goal = -1; unit.ReturningToRest = false; }
+                    if (unit.YieldFor < 0)
+                    {
+                        unit.Goal = -1; unit.ReturningToRest = false;
+                        if (unit.Target < 0) TravelArrived(unit);
+                    }
                     unit.BlockedTicks = 0;
                 }
                 else unit.BlockedTicks = unit.Moving ? 0 : unit.BlockedTicks + 1;
@@ -431,7 +519,7 @@ public sealed class SimWorld(GridNavigation navigation)
     public string StateDigest()
     {
         var text = Tick + ":" + Navigation.Revision + ":" + string.Join(',', Navigation.ObstacleIds.Where(Navigation.IsObstacleActive))
-            + ":" + string.Join(";", Units.Select(u => $"{u.Id},{u.Team},{u.X},{u.Y},{u.Z},{u.Node},{u.TransitNode},{u.TravelProgress},{u.Health},{u.Target},{u.Cooldown},{u.Waypoint},{u.Goal},{u.BlockedTicks},{u.YieldFor},{u.YieldGoal},{u.OrderSequence},{u.ReturningToRest}:{string.Join(',', u.Path)}"));
+            + ":" + string.Join(";", Units.Select(u => $"{u.Id},{u.Team},{u.X},{u.Y},{u.Z},{u.Node},{u.TransitNode},{u.TravelProgress},{u.Health},{u.Target},{u.Cooldown},{u.Waypoint},{u.Goal},{u.BlockedTicks},{u.YieldFor},{u.YieldGoal},{u.OrderSequence},{u.ReturningToRest},{u.FreeMovement},{u.GroundSegment},{u.GroundStartX},{u.GroundStartY},{u.GroundStartZ},{u.AvoidanceTicks},{u.AttackNode},{u.CombatTarget},{u.CombatPlanTick},{u.CombatWaiting},{u.AutoEngage},{u.Order},{u.OrderDestination},{u.OrderTarget},{u.PatrolStart},{u.PatrolEnd},{u.PatrolForward},{u.GuardPlanTick},{u.GuardOrigin}:{string.Join(',', u.Path)}:{string.Join('|',u.OrderQueue.Select(o => $"{o.Kind},{o.Cell},{o.Target},{o.Sequence}"))}"));
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
     }
 }

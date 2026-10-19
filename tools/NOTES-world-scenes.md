@@ -52,8 +52,10 @@ The combined GLB passes Khronos validation with zero errors and warnings.
 82 synthetic Python tests and eight JavaScript appearance tests pass, including
 17 map/navigation/decal regressions. Both scenes were inspected in the browser. Models use
 static poses; water uses the stored surface and opacity without animated ripple,
-reflection or refraction shaders. Original-game fidelity comparison remains
-deferred until the owner captures references after Phase 2.
+reflection or refraction shaders. The prototype's
+[initial reference review](../references/original-game/PROTOTYPE-REVIEW.md) now
+corrects runtime texture filtering and lake vertex-colour binding. Controlled
+original-game fidelity comparison remains unverified.
 
 Phase 2's scene gate is complete. All shipped secondary terrain layers are empty
 (zero non-sentinel texture IDs across 54 maps); transitions are in the primary

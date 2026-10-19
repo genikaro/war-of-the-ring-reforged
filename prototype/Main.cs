@@ -4,15 +4,23 @@ using System.Text.Json;
 using System.Buffers.Binary;
 using Reforged.Input;
 using Reforged.Presentation;
+using Reforged.Rendering;
 
 public partial class Main : Node3D
 {
     private SimWorld? _world;
+    private bool _loadFailed;
     private NavigationPicker _picker = null!;
     private Camera3D _camera = null!;
     private Label _status = null!;
-    private Label _selection = null!;
     private SandboxHud _hud = null!;
+    private CommandPanel _commands = null!;
+    private readonly OrderInput _orders = new();
+    private readonly ControlGroups _controlGroups = new();
+    private int _lastGroup = -1;
+    private ulong _lastGroupTime;
+    private PanelContainer _toolsPanel = null!;
+    private HSlider _hudScale = null!;
     private readonly HashSet<int> _selected = [];
     private readonly Dictionary<int, UnitView> _views = [];
     private readonly Dictionary<int, Node3D> _obstacleViews = [];
@@ -20,12 +28,25 @@ public partial class Main : Node3D
     private int _pendingObstacle = -1;
     private bool _pendingObstacleActive;
     private Vector3 _focus;
+    private Vector3 _squadFocus, _fortressFocus;
+    private readonly ScenePresentation _presentation = new();
+    private Color[] _teamColors = [new Color("025cd1"), new Color("b90000")];
+    private string _view = "squad";
+    private float _squadDistance = 48;
+    private int _spawnCount;
+    private readonly List<int[]> _friendlySquads = [];
+    private readonly HashSet<int> _primarySquad = [];
+    private Label _help = null!;
+    private bool _hideHud;
     private float _distance = 48, _yaw = 0.25f;
     private Vector2 _dragStart;
     private bool _dragging, _panning, _paused;
     private string _cache = "", _capture = "";
+    private Vector2I _captureResolution;
     private bool _smoke;
     private bool _motionSmoke;
+    private bool _combatSmoke, _combatSpacingPassed = true, _squadKeysPassed = true;
+    private readonly HashSet<int> _squadsFought = [];
     private int _turningSeen, _interpolatedSeen;
     private bool _surfaceSmoke;
     private bool _surfacePicked;
@@ -35,9 +56,10 @@ public partial class Main : Node3D
     private Vector2 _obstacleSmokePoint;
     private int _frames, _moveDestination = -1;
     private string _initialDigest = "";
-    private int _movingSeen, _attackingSeen;
+    private int _movingSeen, _attackingSeen, _freeMovementSeen;
     private bool _inputSelectionPassed, _inputMovePassed, _inputAttackPassed;
     private bool _inputCameraPassed, _inputPausePassed;
+    private bool _fortressViewPassed, _overviewPassed, _squadViewPassed;
     private int _pauseTick;
     private Vector3 _cameraBeforeInput;
     private sealed class UnitView(Node3D root, MeshInstance3D ring, AnimationPlayer? player, JsonElement model)
@@ -49,6 +71,8 @@ public partial class Main : Node3D
         public string Clip = "";
         public bool Died;
         public float DesiredYaw;
+        public Vector3 RingPosition = new(float.PositiveInfinity, 0, 0);
+        public float RingYaw;
     }
 
     public override void _Ready()
@@ -58,33 +82,40 @@ public partial class Main : Node3D
         {
             if (arg.StartsWith("--cache=")) _cache = arg[8..];
             if (arg.StartsWith("--capture=")) _capture = arg[10..];
+            if (arg.StartsWith("--capture-resolution="))
+            {
+                var size = arg[21..].Split('x'); _captureResolution = new(int.Parse(size[0]),int.Parse(size[1]));
+                if (_captureResolution.X < 320 || _captureResolution.Y < 200 || _captureResolution.X > 8192 || _captureResolution.Y > 8192)
+                    throw new ArgumentOutOfRangeException(nameof(_captureResolution));
+            }
+            if (arg.StartsWith("--view=")) _view = arg[7..];
+            if (arg == "--hide-hud") _hideHud = true;
             if (arg == "--smoke") _smoke = true;
             if (arg == "--motion-smoke") _motionSmoke = true;
+            if (arg == "--combat-smoke") { _combatSmoke = true; _smoke = true; }
             if (arg == "--surface-smoke") _surfaceSmoke = true;
             if (arg == "--obstacle-smoke") _obstacleSmoke = true;
+            if (arg == "--command-smoke") _commandSmoke = true;
+            if (arg == "--orders-smoke") _ordersSmoke = true;
         }
+        _hud.Visible = !_hideHud;
         if (_cache == "") _cache = System.IO.Path.GetFullPath(ProjectSettings.GlobalizePath("res://../converted/prototype"));
         try { LoadSandbox(); }
         catch (Exception error)
         {
+            _loadFailed = true;
+            _toolsPanel.Visible = true;
             _status.Text = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             GD.PushError(error.ToString());
-            if (_smoke || _surfaceSmoke || _obstacleSmoke) GetTree().Quit(1);
+            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _capture != "") GetTree().Quit(1);
         }
     }
 
     private JsonElement ReadJson(string relative)
         => JsonDocument.Parse(System.IO.File.ReadAllText(System.IO.Path.Combine(_cache, relative))).RootElement.Clone();
 
-    private Node3D LoadGlb(string relative)
-    {
-        // Release import-only native resources while the engine is still running.
-        using var document = new GltfDocument();
-        using var state = new GltfState();
-        var error = document.AppendFromFile(System.IO.Path.Combine(_cache, relative), state);
-        if (error != Error.Ok) throw new InvalidOperationException($"Cannot load {relative}: {error}");
-        return document.GenerateScene(state) as Node3D ?? throw new InvalidOperationException("glTF scene has no 3D root");
-    }
+    private Node3D LoadGlb(string relative, Color? teamColor = null)
+        => _presentation.Load(System.IO.Path.Combine(_cache, relative), relative, teamColor);
 
     private void LoadSandbox()
     {
@@ -98,6 +129,8 @@ public partial class Main : Node3D
             string hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.IO.File.ReadAllBytes(path)));
             if (!hash.Equals(file.Value.GetString(), StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Stale or damaged cache: " + file.Name);
         }
+        if (manifest.TryGetProperty("team_colors", out var colors))
+            _teamColors = colors.EnumerateArray().Select(c => new Color(c[0].GetSingle(), c[1].GetSingle(), c[2].GetSingle())).ToArray();
         var nav = ReadJson("navigation.json");
         byte[] bytes = System.IO.File.ReadAllBytes(System.IO.Path.Combine(_cache, "heights.bin"));
         int[] heights = new int[bytes.Length / 4];
@@ -115,6 +148,9 @@ public partial class Main : Node3D
         _world = new SimWorld(navigation);
         _picker = NavigationPicker.FromCache(navigation, nav);
         var map = LoadGlb(manifest.GetProperty("map").GetString()!); AddChild(map);
+        var gate = Descendants(map).OfType<Node3D>().FirstOrDefault(n => n.Name.ToString() == "MAIN_GATE");
+        _fortressFocus = gate?.GlobalPosition + new Vector3(17, 0, -4)
+            ?? new Vector3(-navigation.Width * navigation.CellSize / 2000f, 0, navigation.Height * navigation.CellSize / 2000f);
         if (dynamic)
             foreach (var obstacle in _obstacleLayers.EnumerateArray())
             {
@@ -124,36 +160,54 @@ public partial class Main : Node3D
             }
         var environment = new WorldEnvironment { Environment = new Godot.Environment {
             BackgroundMode = Godot.Environment.BGMode.Color, BackgroundColor = new Color("18222b"),
-            AmbientLightSource = Godot.Environment.AmbientSource.Color, AmbientLightColor = new Color("a5b8c9"), AmbientLightEnergy = 0.7f,
-            TonemapMode = Godot.Environment.ToneMapper.Filmic } };
+            AmbientLightSource = Godot.Environment.AmbientSource.Color, AmbientLightColor = new Color("b8bfcb"), AmbientLightEnergy = 0.45f,
+            TonemapMode = Godot.Environment.ToneMapper.Linear } };
         AddChild(environment);
-        AddChild(new DirectionalLight3D { RotationDegrees = new Vector3(-55, -25, 0), LightEnergy = 1.3f, ShadowEnabled = true });
+        // Preview lighting, not a decoded original-game time-of-day model.
+        AddChild(new DirectionalLight3D { RotationDegrees = new Vector3(-55, -25, 0), LightEnergy = 0.85f, ShadowEnabled = true,
+            DirectionalShadowMaxDistance = 500 });
         _camera = new Camera3D { Current = true, Fov = 48, Near = 0.1f, Far = 1200 };
         AddChild(_camera);
         var (cx, cz) = navigation.Center(manifest.GetProperty("camera_cell").GetInt32());
-        _focus = PositionOf(cx, cz);
+        _squadFocus = PositionOf(cx, cz);
         var surfaceSpawns = new HashSet<int>();
         int surfaceStart = _surfaceSmoke ? Enumerable.Range(navigation.GroundCount, navigation.NodeCount-navigation.GroundCount)
             .Where(navigation.CanStand).OrderByDescending(n => {
                 var (x,z) = navigation.Center(n); return navigation.NodeHeight(n)-navigation.GroundHeight(x,z);
             }).First() : -1;
+        var modelTemplates = new Dictionary<(string File,int Team),Node3D>();
         foreach (var spawn in manifest.GetProperty("spawns").EnumerateArray())
         {
             int team = spawn.GetProperty("team").GetInt32(), cell = spawn.GetProperty("cell").GetInt32();
-            if (_surfaceSmoke && team == 0) { cell = navigation.Nearest(surfaceStart, surfaceSpawns); surfaceSpawns.Add(cell); }
+            bool primary = team == 0 && _primarySquad.Count < 6;
+            if (_surfaceSmoke && primary) { cell = navigation.Nearest(surfaceStart, surfaceSpawns); surfaceSpawns.Add(cell); }
             var unit = _world.Spawn(team, cell);
+            if (primary) _primarySquad.Add(unit.Id);
             var model = manifest.GetProperty("models")[spawn.GetProperty("model").GetInt32()];
             var root = new Node3D { Name = "Unit_" + unit.Id, PhysicsInterpolationMode = Node.PhysicsInterpolationModeEnum.Off };
             AddChild(root); root.Position = UnitPosition(unit);
-            var visual = LoadGlb(model.GetProperty("file").GetString()!); root.AddChild(visual);
-            var ring = new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.65f, BottomRadius = 0.65f, Height = 0.025f },
-                Position = new Vector3(0, 0.07f, 0), MaterialOverride = new StandardMaterial3D {
-                    AlbedoColor = unit.Team == 0 ? new Color("43ceab") : new Color("e37466"), ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
+            var modelKey = (model.GetProperty("file").GetString()!,team);
+            Node3D visual;
+            if (modelTemplates.TryGetValue(modelKey,out var template)) visual = (Node3D)template.Duplicate();
+            else { visual = LoadGlb(modelKey.Item1,_teamColors[team]); modelTemplates.Add(modelKey,visual); }
+            root.AddChild(visual);
+            var ring = new MeshInstance3D { Mesh = ScenePresentation.SelectionRing(), Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                MaterialOverride = new StandardMaterial3D {
+                    AlbedoColor = new Color("e9c22d"), CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+                    ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
             root.AddChild(ring);
             _views[unit.Id] = new UnitView(root, ring, Descendants(visual).OfType<AnimationPlayer>().FirstOrDefault(), model);
         }
+        _spawnCount = _world.Units.Count;
+        _friendlySquads.AddRange(_world.Units.Where(u => u.Team == 0).Select(u => u.Id).Chunk(6));
+        for (int slot = 0; slot < _friendlySquads.Count; slot++) _controlGroups.Assign(slot,_friendlySquads[slot],LivingFriendly);
+        _commands.LoadArtwork(_cache,_world);
+        _hudScale.Value = _commands.ScalePercent;
+        float spanX = (_world.Units.Max(u => u.X)-_world.Units.Min(u => u.X))/1000f;
+        float spanZ = (_world.Units.Max(u => u.Z)-_world.Units.Min(u => u.Z))/1000f;
+        _squadDistance = Math.Max(48,Math.Max(spanX,spanZ)*1.9f);
         _status.Text = "Helm's Deep  /  20 Hz sandbox";
-        _selection.Text = "Select your green units. Right-click terrain to move or red units to attack.";
+        SetCameraView(_smoke || _surfaceSmoke || _obstacleSmoke ? "squad" : _view);
         if (_surfaceSmoke) _focus = UnitPosition(_world.Units[0]);
         UpdateCamera();
         _initialDigest = _world.StateDigest();
@@ -180,6 +234,7 @@ public partial class Main : Node3D
         _hud.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _hud.MouseFilter = Control.MouseFilterEnum.Ignore;
         var top = new PanelContainer { Position = new Vector2(16, 16), CustomMinimumSize = new Vector2(660, 0), MouseFilter = Control.MouseFilterEnum.Ignore };
+        _toolsPanel = top; top.Visible = false;
         var style = new StyleBoxFlat { BgColor = new Color(0.035f, 0.055f, 0.07f, 0.94f), ContentMarginLeft = 16, ContentMarginRight = 16,
             ContentMarginTop = 12, ContentMarginBottom = 12, CornerRadiusTopLeft = 8, CornerRadiusBottomRight = 8 };
         top.AddThemeStyleboxOverride("panel", style); _hud.AddChild(top);
@@ -187,16 +242,42 @@ public partial class Main : Node3D
         var title = new Label { Text = "WAR OF THE RING  /  REFORGED", Modulate = new Color("d8b574") };
         title.AddThemeFontSizeOverride("font_size", 20); lines.AddChild(title);
         _status = new Label { Text = "Loading local assets…" }; lines.AddChild(_status);
-        lines.AddChild(new Label { Text = "WASD pan · Q/E rotate · Wheel zoom · Middle-drag pan · Space pause · Esc clear" });
-        lines.AddChild(new Label { Text = "Ctrl + right-click ground below bridges · Alt + right-click remove/restore obstacle" });
-        _selection = new Label { Text = "" }; lines.AddChild(_selection);
-        var reset = new Button { Text = "Restart sandbox", Position = new Vector2(18, 182) };
-        _hud.AddChild(reset); reset.Pressed += () => GetTree().ReloadCurrentScene();
+        var buttons = new HBoxContainer(); lines.AddChild(buttons);
+        foreach (var (view, label) in new[] { ("squad", "F1 · Squad"), ("fortress", "F2 · Fortress"), ("overview", "F3 · Map") })
+        {
+            var button = new Button { Text = label }; buttons.AddChild(button);
+            button.Pressed += () => SetCameraView(view);
+        }
+        var helpButton = new Button { Text = "F4 · Controls" }; buttons.AddChild(helpButton);
+        helpButton.Pressed += () => _help.Visible = !_help.Visible;
+        var reset = new Button { Text = "Restart" }; buttons.AddChild(reset);
+        reset.Pressed += () => GetTree().ReloadCurrentScene();
+        _help = new Label { Visible = false, Text = "1–0 groups · Ctrl+number assign · Shift+number add · Double-tap center\nA Attack: enemy / neutral / friendly / ground · H Hold · G Guard · T Patrol\nM Move · S Stop · Shift-click queue · Ctrl+right-click attack-move · Ctrl+Alt+right-click terrain below bridges\nArrows / middle-drag pan · Q/E rotate · Wheel zoom · Space pause · Esc cancel / clear · Alt+right-click obstacle · F10 UI" };
+        lines.AddChild(_help);
+        var sizing = new HBoxContainer(); lines.AddChild(sizing);
+        sizing.AddChild(new Label { Text = "HUD size" });
+        _hudScale = new HSlider { MinValue = 75,MaxValue = 150,Step = 5,Value = 100,CustomMinimumSize = new(250,24) }; sizing.AddChild(_hudScale);
+        var scaleValue = new Label { Text = "100%" }; sizing.AddChild(scaleValue);
+        _hudScale.ValueChanged += value => { _commands.SetScalePercent(value); scaleValue.Text = $"{value:0}%"; };
+        var autoSize = new Button { Text = "Reset size" }; sizing.AddChild(autoSize); autoSize.Pressed += () => _hudScale.Value = 100;
+        _commands = new CommandPanel(); _hud.AddChild(_commands);
+        _commands.MenuChosen += () => _help.Visible = !_help.Visible;
+        _commands.CommandChosen += ChooseCommand;
+        _commands.GroupChosen += slot => UseGroup(slot,Input.IsPhysicalKeyPressed(Key.Ctrl),Input.IsPhysicalKeyPressed(Key.Shift));
+        _commands.UnitChosen += (id,remove) => {
+            _orders.Cancel();
+            if (remove) _selected.Remove(id); else { _selected.Clear(); if (LivingFriendly(id)) _selected.Add(id); }
+        };
+        _commands.MapChosen += point => {
+            if (_world == null) return;
+            _focus = new(-(1-point.X)*_world.Navigation.Width*_world.Navigation.CellSize/1000f,0,
+                point.Y*_world.Navigation.Height*_world.Navigation.CellSize/1000f); UpdateCamera();
+        };
     }
 
     public override void _UnhandledInput(InputEvent input)
     {
-        if (_world is null) return;
+        if (_world is null || _loadFailed) return;
         if (input is InputEventMouseButton mouse)
         {
             if (mouse.ButtonIndex == MouseButton.WheelUp && mouse.Pressed) _distance = Math.Max(12, _distance * 0.88f);
@@ -204,12 +285,19 @@ public partial class Main : Node3D
             if (mouse.ButtonIndex == MouseButton.Middle) _panning = mouse.Pressed;
             if (mouse.ButtonIndex == MouseButton.Left)
             {
-                if (mouse.Pressed) { _dragStart = mouse.Position; _dragging = true; }
+                if (mouse.Pressed && _orders.Pending != null) Order(mouse.Position,mouse.CtrlPressed,mouse.ShiftPressed);
+                else if (mouse.Pressed) { _dragStart = mouse.Position; _dragging = true; }
                 else if (_dragging) { SelectUnits(_dragStart, mouse.Position, mouse.ShiftPressed); _dragging = false; _hud.SelectionBox = null; }
             }
             if (mouse.ButtonIndex == MouseButton.Right && mouse.Pressed)
             {
-                if (mouse.AltPressed) ToggleObstacle(mouse.Position); else Order(mouse.Position, mouse.CtrlPressed);
+                if (_orders.Pending != null) CancelTargeting();
+                else if (mouse.AltPressed && !mouse.CtrlPressed) ToggleObstacle(mouse.Position);
+                else
+                {
+                    if (mouse.CtrlPressed && !mouse.AltPressed) _orders.Begin(OrderKind.AttackMove);
+                    Order(mouse.Position,mouse.CtrlPressed && mouse.AltPressed,mouse.ShiftPressed);
+                }
             }
         }
         if (input is InputEventMouseMotion motion)
@@ -224,12 +312,67 @@ public partial class Main : Node3D
                 _paused = !_paused;
                 foreach (var view in _views.Values) if (view.Player != null) view.Player.SpeedScale = _paused ? 0 : 1;
             }
-            if (key.Keycode == Key.Escape) _selected.Clear();
+            if (key.Keycode == Key.Escape)
+            {
+                if (_orders.Pending != null) CancelTargeting(); else _selected.Clear();
+                _dragging = false; _hud.SelectionBox = null;
+            }
+            OrderKind? command = key.Keycode switch {
+                Key.M => OrderKind.Move, Key.A => OrderKind.Attack,
+                Key.S => OrderKind.Stop, Key.H => OrderKind.HoldGround, _ => null };
+            command ??= key.Keycode switch { Key.G => OrderKind.Guard,Key.T => OrderKind.Patrol,_ => null };
+            if (command != null && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed) ChooseCommand(command.Value);
+            if (key.Keycode == Key.F1) SetCameraView("squad");
+            int groupSlot = key.Keycode == Key.Key0 ? 9 : key.Keycode is >= Key.Key1 and <= Key.Key9 ? (int)key.Keycode-(int)Key.Key1 : -1;
+            if (groupSlot >= 0 && !key.AltPressed && !key.MetaPressed) UseGroup(groupSlot,key.CtrlPressed,key.ShiftPressed);
+            if (key.Keycode == Key.F2) SetCameraView("fortress");
+            if (key.Keycode == Key.F3) SetCameraView("overview");
+            if (key.Keycode == Key.F4) _help.Visible = !_help.Visible;
+            if (key.Keycode == Key.F10) _hud.Visible = !_hud.Visible;
+        }
+    }
+
+    private bool LivingFriendly(int id) => _world != null && id >= 0 && id < _world.Units.Count && _world.Units[id].Team == 0 && _world.Units[id].Health > 0;
+
+    private void UseGroup(int slot,bool assign,bool append)
+    {
+        if (_world == null) return;
+        _orders.Cancel(); _dragging = false; _hud.SelectionBox = null;
+        if (assign || append)
+        {
+            _controlGroups.Assign(slot,_selected,LivingFriendly,append);
+            _lastGroup = -1;
+            _status.Text = $"Group {(slot == 9 ? 0 : slot+1)} updated"; return;
+        }
+        var ids = _controlGroups.Recall(slot,LivingFriendly);
+        if (ids.Length == 0) { _lastGroup = -1; return; }
+        _selected.Clear(); _selected.UnionWith(ids);
+        ulong now = Time.GetTicksMsec();
+        if (_lastGroup == slot && now-_lastGroupTime <= 350)
+        {
+            _focus = UnitPosition(_world.Units[ids[0]]);
+            UpdateCamera(); _lastGroup = -1;
+        }
+        else _lastGroup = slot;
+        _lastGroupTime = now;
+    }
+
+    public override void _Input(InputEvent input)
+    {
+        // GUI controls consume their own releases. End any battlefield drag
+        // here as well when the pointer is released over the panel.
+        if (input is not InputEventMouseButton { Pressed: false } mouse) return;
+        if (mouse.ButtonIndex == MouseButton.Middle) _panning = false;
+        if (mouse.ButtonIndex == MouseButton.Left && _dragging && _commands.IsVisibleInTree()
+            && _commands.GetGlobalRect().HasPoint(mouse.Position))
+        {
+            _dragging = false; _hud.SelectionBox = null;
         }
     }
 
     private void SelectUnits(Vector2 start, Vector2 end, bool append)
     {
+        _orders.Cancel();
         if (!append) _selected.Clear();
         var rect = new Rect2(start, end - start).Abs();
         foreach (var unit in _world!.Units.Where(u => u.Team == 0 && u.Health > 0))
@@ -237,31 +380,59 @@ public partial class Main : Node3D
             var pos = UnitPosition(unit) + Vector3.Up;
             if (_camera.IsPositionBehind(pos)) continue;
             var screen = _camera.UnprojectPosition(pos);
-            if (rect.Size.Length() < 7 ? screen.DistanceTo(end) < 22 : rect.HasPoint(screen)) _selected.Add(unit.Id);
+            if (rect.Size.Length() < 7 ? screen.DistanceTo(end) < 22 : rect.HasPoint(screen))
+            {
+                if (append && rect.Size.Length() < 7 && _selected.Contains(unit.Id)) _selected.Remove(unit.Id);
+                else _selected.Add(unit.Id);
+            }
         }
     }
 
-    private void Order(Vector2 mouse, bool groundOnly = false)
+    private void Order(Vector2 mouse, bool groundOnly = false,bool queued = false)
     {
-        var enemy = _world!.Units.Where(u => u.Team != 0 && u.Health > 0 && !_camera.IsPositionBehind(UnitPosition(u)))
-            .OrderBy(u => _camera.UnprojectPosition(UnitPosition(u) + Vector3.Up).DistanceSquaredTo(mouse)).FirstOrDefault();
-        if (!groundOnly && enemy != null && _camera.UnprojectPosition(UnitPosition(enemy) + Vector3.Up).DistanceTo(mouse) < 24)
+        if (!_world!.Units.Any(u => u.Team == 0 && u.Health > 0 && _selected.Contains(u.Id))) return;
+        var unit = _world!.Units.Where(u => u.Health > 0 && !_camera.IsPositionBehind(UnitPosition(u)))
+            .OrderBy(u => _camera.UnprojectPosition(UnitPosition(u)+Vector3.Up).DistanceSquaredTo(mouse)).ThenBy(u => u.Id).FirstOrDefault();
+        if (!groundOnly && unit != null && _camera.UnprojectPosition(UnitPosition(unit)+Vector3.Up).DistanceTo(mouse) < 24)
         {
-            _world.Enqueue(0, _selected, enemy.Node, enemy.Id);
-            _status.Text = "Attack order issued"; return;
+            if (_orders.Pending == OrderKind.Guard && unit.Team < 0) { _status.Text = "Guard requires a friendly unit or location"; return; }
+            if (_orders.Resolve(unit.Node,unit.Team > 0 ? unit.Id : -1,out var targeted,unit.Team <= 0 ? unit.Id : -1,queued)) SendOrder(targeted,queued);
+            else _status.Text = "Guard requires a friendly unit or location";
+            return;
         }
         Vector3 origin = _camera.ProjectRayOrigin(mouse), direction = _camera.ProjectRayNormal(mouse);
         var hit = _picker.Pick(new(-origin.X, origin.Y, origin.Z), new(-direction.X, direction.Y, direction.Z), groundOnly);
-        if (hit == null) return;
+        if (hit == null) { _status.Text = "Choose a point on the battlefield"; return; }
         int goal = _world.Navigation.Nearest(hit.Node);
         if (goal >= 0)
         {
-            _world.Enqueue(0, _selected, goal);
-            _status.Text = groundOnly ? "Ground move order issued" : "Move order issued";
+            if (!_orders.Resolve(goal,-1,out var order,keepTargeting: queued)) { _status.Text = "Attack requires an enemy target"; return; }
+            SendOrder(order,queued);
             _hud.Destination = _camera.UnprojectPosition(new Vector3(-hit.Position.X, hit.Position.Y, hit.Position.Z));
             _hud.DestinationTime = 0.7f;
         }
         else _status.Text = "No walkable space at this point";
+    }
+
+    private void ChooseCommand(OrderKind kind)
+    {
+        if (_world == null || !_world.Units.Any(u => u.Team == 0 && u.Health > 0 && _selected.Contains(u.Id))) return;
+        _dragging = false; _hud.SelectionBox = null;
+        if (_orders.Begin(kind)) _status.Text = CommandPanel.OrderName(kind)+": choose a target";
+        else SendOrder(new(kind));
+    }
+
+    private void CancelTargeting()
+    {
+        _orders.Cancel(); _status.Text = "Command targeting cancelled";
+    }
+
+    private void SendOrder(PlayerOrder order,bool queued = false)
+    {
+        var living = _world!.Units.Where(u => u.Team == 0 && u.Health > 0 && _selected.Contains(u.Id)).Select(u => u.Id).ToArray();
+        if (living.Length == 0) return;
+        _world.Enqueue(0,living,order.Kind,order.Cell,order.Target,queued);
+        _status.Text = CommandPanel.OrderName(order.Kind)+(_paused ? " queued (paused)" : " order issued");
     }
 
     private void ToggleObstacle(Vector2 mouse)
@@ -310,7 +481,7 @@ public partial class Main : Node3D
 
     public override void _PhysicsProcess(double delta)
     {
-        if (_world is null || _paused) return;
+        if (_world is null || _loadFailed || _paused) return;
         _world.Step();
         if (_pendingObstacle >= 0)
         {
@@ -323,17 +494,24 @@ public partial class Main : Node3D
         foreach (var unit in _world.Units)
         {
             var view = _views[unit.Id];
+            if (unit.Attacking && unit.Target >= 0)
+            {
+                var target = _world.Units[unit.Target];
+                view.DesiredYaw = Mathf.Atan2(-(target.X-unit.X),target.Z-unit.Z);
+            }
             if (unit.Movement.Count >= 2)
             {
                 var previous = unit.Movement[^2]; var next = unit.Movement[^1];
                 int dx = next.X-previous.X, dz = next.Z-previous.Z;
                 if (dx != 0 || dz != 0) view.DesiredYaw = Mathf.Atan2(-dx,dz);
             }
-            view.Ring.Visible = unit.Health > 0;
-            view.Ring.Scale = _selected.Contains(unit.Id) ? Vector3.One * 1.3f : Vector3.One;
             string state = unit.Health <= 0 ? "death" : unit.Attacking ? "attack" : unit.Moving ? "walk" : "idle";
             if (unit.Moving) _movingSeen++;
+            if (unit.Moving && unit.FreeMovement) _freeMovementSeen++;
             if (unit.Attacking) _attackingSeen++;
+            if (unit.Attacking && unit.Team == 0)
+                for (int squad = 0; squad < _friendlySquads.Count; squad++)
+                    if (_friendlySquads[squad].Contains(unit.Id)) _squadsFought.Add(squad);
             string clip = view.Model.GetProperty(state).GetString() ?? "";
             if (view.Player != null && clip != "" && clip != view.Clip)
             {
@@ -347,11 +525,15 @@ public partial class Main : Node3D
             }
             if (unit.Health <= 0) view.Died = true;
         }
+        if (_combatSmoke)
+            foreach (var unit in _world.Units.Where(u => u.Health > 0))
+                foreach (var other in _world.Units.Where(u => u.Health > 0 && u.Id > unit.Id))
+                    _combatSpacingPassed &= SimWorld.SeparationSquared(unit,other) >= 700L*700;
     }
 
     public override void _Process(double delta)
     {
-        if (_world is null) return;
+        if (_world is null || _loadFailed) return;
         float dt = (float)Math.Min(delta, 0.1);
         if (!_paused)
             foreach (var unit in _world.Units)
@@ -373,19 +555,41 @@ public partial class Main : Node3D
                 if (before > .01f && after < before && after > .001f) _turningSeen++;
                 view.Root.Rotation = new(0,yaw,0);
             }
-        float right = (Input.IsPhysicalKeyPressed(Key.D) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.A) ? 1 : 0);
-        float forward = (Input.IsPhysicalKeyPressed(Key.S) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.W) ? 1 : 0);
+        foreach (var unit in _world.Units)
+        {
+            var view = _views[unit.Id];
+            view.Ring.Visible = unit.Health > 0 && _selected.Contains(unit.Id);
+            if (!view.Ring.Visible || (view.RingPosition == view.Root.Position && view.RingYaw == view.Root.Rotation.Y)) continue;
+            var transform = view.Root.GlobalTransform; var inverse = transform.AffineInverse();
+            ScenePresentation.SelectionRing(local => {
+                var point = transform * local;
+                if (unit.Node < _world.Navigation.GroundCount)
+                    point.Y = _world.Navigation.GroundHeight((int)(-point.X * 1000), (int)(point.Z * 1000)) / 1000f;
+                point.Y += .06f;
+                return inverse * point;
+            }, (ArrayMesh)view.Ring.Mesh!);
+            view.RingPosition = view.Root.Position; view.RingYaw = view.Root.Rotation.Y;
+        }
+        float right = (Input.IsPhysicalKeyPressed(Key.Right) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Left) ? 1 : 0);
+        float forward = (Input.IsPhysicalKeyPressed(Key.Down) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Up) ? 1 : 0);
         Pan(right * dt * _distance * 0.6f, forward * dt * _distance * 0.6f);
         _yaw += ((Input.IsPhysicalKeyPressed(Key.E) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Q) ? 1 : 0)) * dt;
         UpdateCamera();
-        var units = _world.Units.Where(u => _selected.Contains(u.Id) && u.Health > 0).ToList();
-        _selection.Text = $"{units.Count} selected · {units.Sum(u => u.Health)} HP · {_world.Units.Count(u => u.Team == 1 && u.Health > 0)} enemies" + (_paused ? "  /  PAUSED" : "");
+        _selected.RemoveWhere(id => id < 0 || id >= _world.Units.Count || _world.Units[id].Health <= 0 || _world.Units[id].Team != 0);
+        var units = _world.Units.Where(u => _selected.Contains(u.Id)).ToList();
+        if (units.Count == 0) _orders.Cancel();
+        _commands.Refresh(units,UnitName,_orders.Pending,_paused,
+            Enumerable.Range(0,10).Select(slot => _controlGroups.Recall(slot,LivingFriendly)).ToArray(),
+            _world.Units.Count(u => u.Team == 0 && u.Health > 0),_world.Units.Count(u => u.Team != 0 && u.Health > 0));
+        _toolsPanel.Visible = _help.Visible;
         _hud.DestinationTime -= dt; _hud.QueueRedraw();
         _frames++;
+        if (_commandSmoke) CommandSmokeInput();
+        if (_ordersSmoke) OrdersSmokeInput();
         if (_obstacleSmoke) ObstacleSmokeInput();
         if (_surfaceSmoke && _frames == 5)
         {
-            _selected.UnionWith(_world.Units.Where(u => u.Team == 0).Select(u => u.Id));
+            _selected.UnionWith(_primarySquad);
             var unit = _world.Units[0];
             _surfaceSmokePoint = _camera.UnprojectPosition(UnitPosition(unit));
             GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true,
@@ -394,7 +598,7 @@ public partial class Main : Node3D
         if (_surfaceSmoke && _frames == 7)
         {
             _surfacePicked = _world.Commands.Any(c => c.Cell >= _world.Navigation.GroundCount && c.Units.Length == 6);
-            GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true, CtrlPressed = true,
+            GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true, CtrlPressed = true,AltPressed = true,
                 Position = _surfaceSmokePoint, GlobalPosition = _surfaceSmokePoint }, true);
         }
         if (_surfaceSmoke && _frames == 9)
@@ -404,10 +608,14 @@ public partial class Main : Node3D
             GetTree().Quit(_surfacePicked && ground ? 0 : 1);
         }
         if (_smoke) SmokeInput();
-        if (_smoke && _capture != "" && _frames == 60) _ = CaptureFrame(false);
+        if (_smoke && _capture != "" && _frames == (_combatSmoke ? 180 : 60)) _ = CaptureFrame(false);
         if (_smoke && _world.Tick >= 420) FinishSmoke();
-        else if (!_smoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
+        else if (!_smoke && !_commandSmoke && !_ordersSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
     }
+
+    private string UnitName(int id) => _views[id].Model.GetProperty("unit").GetString() switch {
+        "UNIT_G_HERO_ARAGORN" => "Aragorn", "UNIT_G_ELF_KNIGHT" => "Elf Knight",
+        "UNIT_E_URUK_HAI" => "Uruk-hai", _ => "Unit" };
 
     private void Pan(float right, float forward)
     {
@@ -425,6 +633,29 @@ public partial class Main : Node3D
         _focus.Y = _world!.Navigation.PickHeight((int)(-_focus.X * 1000), (int)(_focus.Z * 1000)) / 1000f;
         _camera.Position = _focus + new Vector3(Mathf.Sin(_yaw) * _distance * 0.65f, _distance * 0.8f, Mathf.Cos(_yaw) * _distance * 0.65f);
         _camera.LookAt(_focus);
+        // Keep the encounter above the command panel instead of framing units
+        // in the part of the viewport reserved for controls.
+        _camera.VOffset = _hud.Visible ? -_distance*0.09f : 0;
+    }
+
+    private void SetCameraView(string view)
+    {
+        if (_world == null) return;
+        _view = view;
+        switch (view)
+        {
+            case "squad":
+                _focus = _squadFocus; _distance = _squadDistance; _yaw = .25f; break;
+            case "fortress":
+                _focus = _fortressFocus; _distance = 120; _yaw = -.45f; break;
+            case "overview":
+                _focus = new Vector3(-_world.Navigation.Width * _world.Navigation.CellSize / 2000f, 0,
+                    _world.Navigation.Height * _world.Navigation.CellSize / 2000f);
+                _distance = 340; _yaw = -.5f; break;
+            default: throw new InvalidOperationException("Unknown camera view: " + view);
+        }
+        UpdateCamera();
+        _status.Text = $"Helm's Deep  /  {view}";
     }
 
     private bool _finishing;
@@ -457,13 +688,14 @@ public partial class Main : Node3D
     private void SmokeInput()
     {
         // Exercise Godot's input dispatch, including drag selection and picking.
-        var friendly = _world!.Units.Where(u => u.Team == 0).Select(u => _camera.UnprojectPosition(UnitPosition(u) + Vector3.Up)).ToArray();
+        var friendly = _world!.Units.Where(u => _primarySquad.Contains(u.Id)).Select(u => _camera.UnprojectPosition(UnitPosition(u) + Vector3.Up)).ToArray();
         Vector2 min = new(friendly.Min(p => p.X) - 8, friendly.Min(p => p.Y) - 8);
         Vector2 max = new(friendly.Max(p => p.X) + 8, friendly.Max(p => p.Y) + 8);
         if (_frames == 5)
         {
             _cameraBeforeInput = _camera.Position;
-            GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.WheelUp, Pressed = true, Position = new Vector2(1000, 700), GlobalPosition = new Vector2(1000, 700) }, true);
+            // Keep this battlefield zoom event outside the command panel.
+            GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.WheelUp, Pressed = true, Position = new Vector2(1000, 400), GlobalPosition = new Vector2(1000, 400) }, true);
         }
         if (_frames == 7) _inputCameraPassed = _camera.Position.DistanceTo(_cameraBeforeInput) > 0.1f;
         if (_frames == 10)
@@ -481,7 +713,7 @@ public partial class Main : Node3D
         if (_frames == 22) GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = max, GlobalPosition = max }, true);
         if (_frames == 24)
         {
-            _inputSelectionPassed = _selected.Count == 6;
+            _inputSelectionPassed = _selected.Count == 6 && _views.Values.Count(v => v.Ring.Visible) == 6;
             var (x, z) = _world.Navigation.Center(_moveDestination);
             var screen = _camera.UnprojectPosition(PositionOf(x, z));
             GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true, Position = screen, GlobalPosition = screen }, true);
@@ -494,6 +726,24 @@ public partial class Main : Node3D
             GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true, Position = screen, GlobalPosition = screen }, true);
             _inputAttackPassed = _world.Commands.Any(c => c.Target >= 0 && c.Units.Length == 6);
         }
+        if (_combatSmoke && _frames is 110 or 120)
+        {
+            int squad = _frames == 110 ? 1 : 2;
+            GetViewport().PushInput(new InputEventKey { Keycode = squad == 1 ? Key.Key2 : Key.Key3, Pressed = true },true);
+            _squadKeysPassed &= _selected.SetEquals(_friendlySquads[squad].Where(id => _world.Units[id].Health > 0));
+            var leader = _world.Units[_friendlySquads[squad][0]];
+            var enemy = _world.Units.Where(u => u.Team == 1 && u.Health > 0)
+                .OrderBy(u => SimWorld.SeparationSquared(leader,u)).ThenBy(u => u.Id).First();
+            var screen = _camera.UnprojectPosition(UnitPosition(enemy)+Vector3.Up);
+            GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right,Pressed = true,
+                Position = screen,GlobalPosition = screen },true);
+        }
+        if (_frames is 140 or 144 or 148)
+            GetViewport().PushInput(new InputEventKey { Keycode = _frames == 140 ? Key.F2 : _frames == 144 ? Key.F3 : Key.F1,
+                Pressed = true }, true);
+        if (_frames == 142) _fortressViewPassed = _view == "fortress" && _focus.DistanceTo(_fortressFocus) < 1;
+        if (_frames == 146) _overviewPassed = _view == "overview" && _distance == 340;
+        if (_frames == 150) _squadViewPassed = _view == "squad" && _focus.DistanceTo(_squadFocus) < 1;
     }
 
     private void FinishSmoke()
@@ -501,26 +751,51 @@ public partial class Main : Node3D
         if (_finishing) return;
         _finishing = true;
         var report = new { ticks = _world!.Tick, units = _world.Units.Count, moving_samples = _movingSeen,
+            free_movement_samples = _freeMovementSeen,
             attack_samples = _attackingSeen, damage = _world.Units.Sum(u => 100-u.Health),
             animated_units = _views.Values.Count(v => v.Player != null && v.Clip != ""),
             input_selection = _inputSelectionPassed, input_move = _inputMovePassed, input_attack = _inputAttackPassed,
             input_camera = _inputCameraPassed, input_pause = _inputPausePassed,
+            input_map_views = _fortressViewPassed && _overviewPassed && _squadViewPassed,
+            presentation_import = _presentation.Imports.All(i => i.MissingMipmapsAfter == 0 && i.DisabledVertexColorsAfter == 0)
+                && _presentation.Imports[0].VertexColorSurfaces > 0 && _presentation.Imports.Skip(1).All(i => i.TeamMaterials > 0),
             turning_samples = _turningSeen, interpolated_samples = _interpolatedSeen,
+            friendly_squads_fought = _squadsFought.Count, combat_spacing = _combatSpacingPassed, input_squad_keys = _squadKeysPassed,
             map_loaded = true, initial_digest = _initialDigest, final_digest = _world.StateDigest() };
-        string path = System.IO.Path.Combine(_cache, _motionSmoke ? "motion-smoke-report.json" : "smoke-report.json");
+        string path = System.IO.Path.Combine(_cache, _combatSmoke ? "combat-smoke-report.json" : _motionSmoke ? "motion-smoke-report.json" : "smoke-report.json");
         System.IO.File.WriteAllText(path, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
-        bool passed = report.units == 12 && report.moving_samples > 0 && report.attack_samples > 0 && report.damage > 0 && report.animated_units == 12
-            && report.input_selection && report.input_move && report.input_attack && report.input_camera && report.input_pause;
+        bool passed = report.units == _spawnCount && report.moving_samples > 0 && report.attack_samples > 0 && report.damage > 0 && report.animated_units == _spawnCount
+            && report.input_selection && report.input_move && report.input_attack && report.input_camera && report.input_pause
+            && report.input_map_views && report.presentation_import && report.free_movement_samples > 0;
         if (_motionSmoke) passed &= report.turning_samples > 0 && report.interpolated_samples > 0;
+        if (_combatSmoke) passed &= report.friendly_squads_fought == 3 && report.combat_spacing && report.input_squad_keys;
         GD.Print("SANDBOX_SMOKE " + JsonSerializer.Serialize(report));
         GetTree().Quit(passed ? 0 : 1);
     }
 
     private async Task CaptureFrame(bool quit)
     {
+        if (_captureResolution != Vector2I.Zero) { await CaptureOffscreenFrame(quit); return; }
         await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
-        var image = GetViewport().GetTexture().GetImage();
+        using var image = GetViewport().GetTexture().GetImage();
         var error = image.SavePng(_capture); GD.Print("CAPTURE " + _capture + " " + error);
+        if (error == Error.Ok)
+        {
+            var report = new { view = _view, focus = new[] { _focus.X, _focus.Y, _focus.Z },
+                camera = new[] { _camera.Position.X, _camera.Position.Y, _camera.Position.Z },
+                yaw_radians = _yaw, distance = _distance, fov_degrees = _camera.Fov,
+                camera_vertical_offset = _camera.VOffset,
+                width = image.GetWidth(), height = image.GetHeight(), hud_visible = _hud.Visible,
+                hud_scale_percent = _commands.ScalePercent, hud_effective_scale = _commands.EffectiveScale,
+                hud_bounds = new[] { _commands.GetGlobalRect().Position.X,_commands.GetGlobalRect().Position.Y,
+                    _commands.GetGlobalRect().Size.X,_commands.GetGlobalRect().Size.Y },
+                map_sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                    System.IO.File.ReadAllBytes(System.IO.Path.Combine(_cache, "map/scene.glb")))).ToLowerInvariant(),
+                preview_lighting = new { ambient_energy = .45f, sun_energy = .85f, tonemapper = "Linear", diffuse = "Lambert", specular = "Disabled" },
+                imports = _presentation.Imports, original_game_fidelity_verified = false };
+            System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(_capture, ".json"),
+                JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+        }
         if (quit) GetTree().Quit(error == Error.Ok ? 0 : 1);
     }
 }

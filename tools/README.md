@@ -4,11 +4,16 @@ Python 3.13 + Pillow; map export also uses NumPy. Run from this folder.
 
 ## Current playable prototype
 
-The Godot 4 C# sandbox loads Helm's Deep and twelve animated units. From the
+The Godot 4 C# sandbox loads Helm's Deep and 36 animated units in six squads. It
+starts framing the units; keys 1/2/3 select the three blue squads. From the
 repository root, run `./prototype/run.ps1`; see [setup and controls](../prototype/README.md).
-Phase 2 is complete. Phase 3 is in progress, with reliable squad navigation
-next; [the roadmap](Roadmap.md) records the acceptance criteria and remaining
-animation/audio/importer work. Original-game screenshot comparison is deferred.
+Phase 2 is complete and the movement/spacing prototype is accepted. The next
+milestone is source-driven melee combat. The original console art, scalable HUD,
+four bottom-row actions with contextual Attack/A, hidden Move/Stop controls,
+queued waypoints and editable groups 1–0 are implemented;
+[the roadmap](Roadmap.md) records the sequence and deferred engine work.
+Initial reference review is complete;
+controlled original-game fidelity validation remains open.
 
 Original-game research references are in the
 [reference library](../references/original-game/README.md): 74 saved images,
@@ -16,11 +21,14 @@ the manual and addendum, browsable editor help, campaign recording links and
 per-file source/checksum records. The [gallery](../references/original-game/gallery.html)
 opens locally. Controlled, matching original-game captures are still needed
 for fidelity validation.
+The [prototype comparison](../references/original-game/PROTOTYPE-REVIEW.md)
+documents the corrected rendering imports and remaining gaps.
 
-Latest verification (Oct 19, 2026): 115 Python tests, eight JavaScript tests,
-124 synthetic C# checks, eighteen real-map obstacle/navigation checks, the
+Latest verification (Oct 19, 2026): 120 Python tests, eight JavaScript tests,
+217 synthetic C# checks, twenty real-map obstacle/navigation/demo checks, 40
+actual command/group/HUD input checks, the
 54-map walker mask audit and the Godot
-input/combat, interpolated movement/turning, deck/underpass picking and obstacle
+input/combat (including all three blue squads fighting with separated bodies), interpolated movement/turning, deck/underpass picking and obstacle
 remove/restore smoke tests pass. Generated
 assets, previews, validation reports and portable tools stay in ignored
 `converted/`; original and extracted assets are excluded from source control.
@@ -143,8 +151,9 @@ and four data-only definitions; the viewer can use `?index=../converted/projecti
 GLBs preview models and initial cloth, while JSON retains the parameters for a
 future simulator. See `NOTES-presentation-assets.md` for layouts and limitations.
 
-`converted/phase1-report.json` records conversion coverage and the original-game
-screenshot comparison deferred by the project owner until after Phase 2.
+`converted/phase1-report.json` records conversion coverage and the earlier
+deferred screenshot gate. The initial prototype reference review is now in the
+reference library; controlled fidelity validation remains open.
 Phase 1 implementation is complete. Independent glTF validation and
 its content-hash checks are documented in the notes.
 
@@ -280,5 +289,6 @@ ground graph query semantics and runtime marker/camera/sound behavior.
 Decals render on terrain at initial size; dynamic resizing/fading and projection
 onto water/objects remain runtime work. Two source bridge MPL matrices contain cycles.
 Water previews preserve painted surfaces and opacity without animated shaders.
-Phase 1's original-game screenshot
-comparison is deferred until after Phase 2, when the project owner will capture references.
+Phase 1's controlled original-game screenshot comparison remains unverified;
+the prototype's initial review against the collected references is documented
+in the reference library.

@@ -33,12 +33,11 @@ static class DirectionalChecks
         check(Math.Abs(SimWorld.DistanceSquared(unit.X,unit.Z,1500,1500)-9_000_000) <= 9000,
             "diagonal speed matches straight speed within integer position rounding");
         check(diagonal.StateDigest() == Move(88).StateDigest(), "fractional diagonal progress replays deterministically");
-        var original = diagonal.Units[0].Node;
+        var original = (unit.X,unit.Z);
         diagonal.Enqueue(0,[0],-1);
         for (int tick = 0; tick < 20; tick++) diagonal.Step();
-        var center = grid.Center(original);
-        check(unit.X == center.X && unit.Z == center.Z && unit.TransitNode < 0 && unit.TravelProgress == 0,
-            "interrupted diagonal retreats along its reserved segment to the last center");
+        check((unit.X,unit.Z) == original && unit.TransitNode < 0 && unit.TravelProgress == 0,
+            "cancelled diagonal stops immediately at its current position");
 
         SimWorld Crossing()
         {

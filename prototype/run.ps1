@@ -3,9 +3,17 @@ param(
     [string]$DotnetPath,
     [switch]$Smoke,
     [switch]$MotionSmoke,
+    [switch]$CombatSmoke,
+    [switch]$CommandSmoke,
+    [switch]$OrdersSmoke,
     [switch]$SurfaceSmoke,
     [switch]$ObstacleSmoke,
+    [ValidateSet('squad', 'fortress', 'overview')]
+    [string]$View = 'squad',
+    [switch]$HideHud,
     [string]$CapturePath,
+    [ValidatePattern('^[1-9][0-9]{2,4}x[1-9][0-9]{2,4}$')]
+    [string]$Resolution,
     [string]$CachePath
 )
 $ErrorActionPreference = 'Stop'
@@ -26,16 +34,24 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 & $DotnetPath build (Join-Path $PSScriptRoot 'Reforged.csproj') --nologo
 if ($LASTEXITCODE -ne 0) { throw 'C# build failed' }
 $arguments = @('--path', $PSScriptRoot)
-if ($Smoke -or $MotionSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
+if ($Resolution) { $arguments += @('--resolution',$Resolution) }
+if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
     $renderRate = if ($MotionSmoke) { '80' } else { '20' }
-    $arguments += @('--headless', '--fixed-fps', $renderRate)
+    if (-not $CapturePath) { $arguments += '--headless' }
+    $arguments += @('--fixed-fps', $renderRate)
 }
 $arguments += '--'
+$arguments += "--view=$View"
+if ($HideHud) { $arguments += '--hide-hud' }
 if ($Smoke -or $MotionSmoke) { $arguments += '--smoke' }
 if ($MotionSmoke) { $arguments += '--motion-smoke' }
+if ($CombatSmoke) { $arguments += '--combat-smoke' }
+if ($CommandSmoke) { $arguments += '--command-smoke' }
+if ($OrdersSmoke) { $arguments += '--orders-smoke' }
 if ($SurfaceSmoke) { $arguments += '--surface-smoke' }
 if ($ObstacleSmoke) { $arguments += '--obstacle-smoke' }
 if ($CapturePath) { $arguments += "--capture=$([System.IO.Path]::GetFullPath($CapturePath))" }
+if ($CapturePath -and $Resolution) { $arguments += "--capture-resolution=$Resolution" }
 if ($CachePath) { $arguments += "--cache=$([System.IO.Path]::GetFullPath($CachePath))" }
 & $GodotPath @arguments
 exit $LASTEXITCODE

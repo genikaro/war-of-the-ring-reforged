@@ -39,7 +39,8 @@ static class TrafficChecks
             var reserved = new HashSet<int>();
             foreach (var unit in world.Units)
             {
-                if (!reserved.Add(unit.Node) || (unit.TransitNode >= 0 && !reserved.Add(unit.TransitNode)))
+                if (!unit.FreeMovement && !unit.GroundSegment && (!reserved.Add(unit.Node)
+                    || (unit.TransitNode >= 0 && !reserved.Add(unit.TransitNode))))
                     throw new Exception("opposing traffic shared a reserved move endpoint");
                 if (!world.Navigation.CanStand(world.Navigation.Cell(unit.X,unit.Z)))
                     throw new Exception("opposing traffic crossed blocked terrain");
@@ -144,7 +145,7 @@ static class TrafficChecks
     }
 
     private static string Describe(SimWorld world) => string.Join("; ",world.Units.Select(u =>
-        $"{u.Id} at {u.Node}/{u.TransitNode} goal {u.Goal} yield {u.YieldFor}/{u.YieldGoal}"));
+        $"{u.Id} at {u.Node}/{u.TransitNode} ({u.X},{u.Z}) goal {u.Goal} yield {u.YieldFor}/{u.YieldGoal} path {string.Join(',',u.Path)}:{u.Waypoint} blocked{u.BlockedTicks}"));
 
     public static void Run(Action<bool,string> check)
     {
@@ -210,9 +211,9 @@ static class TrafficChecks
         for (int i = 0; i < 5; i++) source.Step();
         bool rejected = false;
         try { source.Spawn(0,0); } catch (ArgumentException) { rejected = true; }
-        check(rejected, "moving unit reserves its source even after its body has moved clear");
+        check(rejected, "single-file movement retains its source reservation");
         for (int i = 0; i < 2; i++) source.Step();
-        check(source.Spawn(0,0).Node == 0, "source reservation releases after arrival at the next center");
+        check(source.Spawn(0,0).Node == 0, "single-file source releases after reaching its next center");
         var bottleneck = new GridNavigation(3,2,1000,Enumerable.Repeat(true,6).ToArray(),new int[12],null,[new(7,[4],[])]);
         check(bottleneck.IsBottleneck(1), "a sealed bypass makes the remaining passage a bottleneck");
         bottleneck.SetObstacle(7,false);

@@ -2,7 +2,7 @@
 
 Updated Oct 19, 2026 · @Evgenii
 
-Phases 1 and 2 implementation are complete. All 54 maps decode through EOF, including 752 decals. Helm's Deep and a decal-heavy Birth of the Uruk-Hai scene render and validate. Original-game screenshot comparison remains deferred by the project owner. Phase 3 now has a running Godot 4 C# sandbox (engine chosen Oct 19).
+Phases 1 and 2 implementation are complete. All 54 maps decode through EOF, including 752 decals. Helm's Deep and a decal-heavy Birth of the Uruk-Hai scene render and validate. An initial reference review has corrected prototype rendering bugs; controlled original-game fidelity validation remains open. The user has accepted Phase 3's movement and combat-spacing baseline. The command panel and explicit orders are implemented. The next milestone is the first data-driven combat slice in the Godot 4 C# sandbox (engine chosen Oct 19).
 
 An [original-game reference library](../references/original-game/README.md) now
 contains 74 saved images, the original manual and addendum, editor help and
@@ -10,24 +10,34 @@ campaign recording links, with provenance and checksums. Prerelease and
 unversioned references are labeled; collecting them does not complete the
 controlled original-game screenshot comparison or verify gameplay fidelity.
 
+The [prototype reference review](../references/original-game/PROTOTYPE-REVIEW.md)
+corrects missing runtime mipmaps, ignored lake vertex colours, spawned team
+colours and selection disks. F1/F2/F3 views and capture metadata make further
+comparisons repeatable. Lighting, weather, water animation, original UI and
+animation-event/appearance adaptation remain open.
+
 ## Current checkpoint
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
-Latest checks: 115 Python tests, eight JavaScript tests and 124 synthetic C# checks
-pass. Eighteen additional cache checks cover runtime masks matching the initial
+Latest checks: 120 Python tests, eight JavaScript tests and 217 synthetic C# checks
+pass. Twenty additional cache checks cover runtime masks matching the initial
 snapshot, all ten building centers being
 blocked and all six friendly units traversing the four Helm's Deep surfaces
 without overlap, plus opposing six-unit squads swapping between the clearing
-and each walkway. The cache contains
+and each walkway, plus safe startup for all 36 demo units. The cache contains
 1,342 separate surface nodes and 48 terrain entrances, preserving elevation
 and 350 mm body support along mesh edges. A 54-map audit
 (`tools/verify_walker_masks.py`) matches the painted walker bits to the
 original walker region graphs.
 Eight-way weighted routes now use straight diagonal motion at the same speed as
 cardinal moves, with blocked-corner checks and swept-body crossing reservations.
-Ground routes take safe local shortcuts at arbitrary angles; deck links remain
-eight-way. Rendering follows the recorded path between fixed ticks and turns
+Wide-ground orders now use full-route any-angle smoothing, next-tick redirects,
+rolling body checks, local steering and minimum-travel formation assignment.
+The six-unit open-field fixture finishes in 211 ticks versus 274, with no waits.
+[Movement notes](../prototype/MOVEMENT.md) document the benchmark and limits.
+Single-file and mesh routes retain constrained coordination; deck links
+remain eight-way. Rendering follows the recorded path between fixed ticks and turns
 gradually. An 80 FPS motion smoke check verifies interpolation and turning with
 the same 20 Hz simulation, input and combat checks.
 Godot builds without warnings or errors; input and combat pass over 420 fixed
@@ -35,7 +45,121 @@ ticks. An elevated preview was inspected, and actual Godot right-click dispatch
 selects a surface node and terrain beneath it in a separate headless check. The original four sandbox
 GLBs validated without errors or warnings. Original-game fidelity remains unverified.
 
-## Next milestone: reliable squad navigation
+Combat now reserves individual reachable melee and waiting positions, maintains
+allied spacing, holds settled fighters still and faces them toward their targets.
+Moving/blocked targets trigger approach replanning, and surviving attackers can
+continue onto nearby enemies. Ground approaches use the any-angle follower when
+supported. Three six-unit squads per side populate the demo, with a unit-focused
+default camera and 1/2/3 squad selection. A separate Godot combat smoke check
+requires all three friendly squads to fight without overlaps.
+
+The selected-unit command panel now exposes Move, Attack, Attack-move, Stop and
+Hold Ground, plus Guard, Patrol and Force Attack. The visible bottom row is
+Attack, Hold, Guard, Patrol. A single Attack/A action resolves to pursuit,
+force attack or attack-move based on enemy, neutral/friendly or ground targets.
+Move and Stop remain available without visible buttons; F/B shortcuts are removed.
+Original console art, portraits and command/cursor assets are traced through
+source UVA crops into the hashed local cache. The console scales proportionally
+with height, supports a saved 75–150% size setting and fits 4K/ultrawide displays.
+Editable groups 1–0 support Ctrl assignment, Shift additions, recall, lead-unit
+centering and death pruning. Shift-click queues formation waypoints; queued
+orders are recorded and replayed. Seventeen new actual Godot input checks cover
+these additions, alongside 23 command checks. Explicit intent survives temporary
+combat routes; Attack-move resumes after combat, force moves ignore retaliation,
+and stationary orders never chase. Names, health, tooltips, active orders and
+disabled commands are visible. Twenty-two actual Godot input checks cover all
+three blue squads, cancellation, pause/resume and dead selections. The
+[command notes](../prototype/COMMANDS.md) record behavior, original references,
+intentional shortcut/layout differences and remaining limits. Stats and hit
+timing still use prototype combat.
+
+## Accepted baseline: movement and combat spacing
+
+**User acceptance (Oct 19):** movement, group pathfinding and placeholder combat
+spacing are good enough until actual combat and the command interface are
+implemented. Keep the six-squad demo and unit-focused default camera. Preserve
+the 171 simulation checks and existing Godot checks as regression coverage.
+
+This accepts the prototype milestone, not complete navigation or original-game
+combat fidelity. Further movement/spacing polish is deferred. Revisit it only
+for regressions or when verified combat ranges, unit sizes or new gameplay
+actually require a change.
+
+## Next milestone: unit commands and first data-driven combat
+
+**Goal:** use the command panel to control a small battle between the existing
+Aragorn, Elf Knight and Uruk-hai types, with distinct imported stats and attacks
+whose damage lands at the appropriate point in the animation.
+
+1. **Implemented: explicit orders and a functional command panel.**
+   - Introduce recorded order kinds for Move, Attack, Attack-move, Stop and Hold
+     Ground. Keep the existing right-click controls and route buttons, hotkeys
+     and contextual clicks through the same fixed-tick command path.
+   - Define order state separately from the current target and path. Stop clears
+     the current order/pursuit; Hold Ground fights within reach without chasing;
+     Attack-move resumes its destination after an engagement. Specify explicit
+     movement versus automatic retaliation, target death and order replacement
+     so combat cannot accidentally discard the player's intent.
+   - Build the selected-unit command panel with names, health, tooltips, shortcut
+     hints and visible active/available commands. Check the original manual,
+     addendum, `Hotkeys`, `Controls` and source interface assets for layout,
+     labels, bindings and behavior before calling them faithful. Guard, Patrol,
+     basic queues, control groups and original console artwork are now implemented;
+     hero abilities and full interface reconstruction remain subsequent work.
+   - Verify cancellation during combat, Hold versus chasing, Attack-move
+     resumption, mixed selections, dead units and identical replay state for
+     equivalent button/hotkey/contextual orders.
+2. **Replace the three demo types' placeholder stats with imported definitions.**
+   - Resolve `Units` to `Weapons`, `DamageTypes`, `UnitToUnitModifiers` and model
+     data. Export a minimal hashed runtime rules cache from the owner's existing
+     data. Keep source IDs/provenance; quantize values at the adapter boundary
+     so the simulation remains integer-only and independent of Godot.
+   - Start with base health, armor, melee weapon, damage classification, range
+     and the supported attacker limit. The source `Units` records already give
+     base health of 485 for Aragorn, 350 for Elf Knight and 240 for Uruk-hai;
+     all three currently use the prototype's 100 HP instead.
+   - Recover or explicitly document each field's interpretation. The linked
+     melee weapons store `CuttingDamagePerSecond`, not per-hit damage. Their
+     `MaximumRange` values are 1.0 for Aragorn and 0.5 for the other two: establish
+     world scale, body-radius and range-origin semantics before using these as
+     center-to-center reach. Do not shrink the accepted spacing based on an
+     unverified interpretation.
+3. **Add the deterministic melee attack lifecycle and matching presentation.**
+   - Model attack preparation, hit timing, recovery, cancellation, target death
+     and retargeting. Consume the decoded `.lmd` melee-hit events and damage
+     scales through a runtime adapter; convert clip times to fixed simulation
+     ticks with a documented rounding rule.
+   - The simulation owns hit resolution and damage. Animation/render callbacks
+     observe combat state and cannot cause damage or alter simulation timing.
+   - Apply the supported armor, damage-type and unit-to-unit rules, labeling
+     unresolved formulas as approximations. Compare small controlled duels with
+     the original game; use targeted executable analysis where tables and
+     recordings cannot establish a formula.
+   - Connect the required attack-ready/weapon visibility states. Add the small
+     set of hit/attack sounds needed to read these fights; the complete event,
+     effects, cloth and voice adapters remain subsequent work.
+4. **Validate the complete slice in the current demo.**
+   - Exercise all initial orders through the actual UI across the three blue
+     squads. Retain safe movement, waiting attackers and deterministic command
+     playback while health and damage differ by unit type.
+   - Save repeatable duel scenarios, damage/hit-timing evidence and a Godot
+     command/combat report. Keep original-reference comparisons distinct from
+     implementation regressions and record any unverified formulas.
+
+**Acceptance:** a player can select a squad, issue Move/Attack/Attack-move/Stop/
+Hold Ground through the command panel or its shortcuts, and see those orders
+behave consistently during a battle. The three existing types use traced source
+definitions; damage is synchronized with simulation attack timing, and the same
+order log replays identically. No navigation polish or full economy system is
+required to accept this slice.
+
+**Following milestones:** one ranged unit with projectile/hit resolution, then
+hero commands/abilities and more unit counters; follow with workers, resources,
+construction and training queues to form a complete skirmish loop. Full UI art,
+first-run installer packaging, campaign, multiplayer and broad presentation polish
+remain later work. Do not expand this first slice to all 85 unit records.
+
+## Deferred navigation and engine work
 
 1. Extend footprint updates to new/moving objects and settle the corner
    diagonal policy. The walker masks are verified: on all 54 maps the original
@@ -56,11 +180,11 @@ GLBs validated without errors or warnings. Original-game fidelity remains unveri
    Bridge/walkway geometry now uses a layered grid with continuous triangle
    coverage, height-matched terrain entrances and integer elevation. The stored
    MPL route codes are unused. Exact source-triangle picking selects visible
-   navigation surfaces; Ctrl + right-click targets terrain beneath overpasses.
+   navigation surfaces; Ctrl + Alt + right-click targets terrain beneath overpasses.
    Walkway cells whose center cannot hold the body take the nearest supported
    point within 400 mm (135 nodes; 129 more walkway nodes now reachable), kept
    700 mm from other nodes and links. Paths narrower than the body stay closed.
-2. Complete coordinated yielding for opposing traffic and squad spacing.
+2. Extend the accepted coordination only when later gameplay exposes a need.
    Basic congestion replanning is implemented: occupied waypoints wait, routes
    retry around occupied cells after ten blocked ticks, and cleared corridors
    resume. Opposing friendly move orders now use reachable side pockets and
@@ -81,20 +205,22 @@ GLBs validated without errors or warnings. Original-game fidelity remains unveri
    a corridor, 60 random order sequences for 6 to 10 units finish, and six-unit
    squads swap on all four Helm's Deep walkways. Corridors without passing space
    wait safely; dense orders that park units inside single-file passages others
-   must cross can still wait (374 of 400 random sequences with 6 to 14 units).
-3. Connect original animation events to equipment changes, footsteps,
-   attack impacts and voices.
-4. Package the importer with an in-game installation picker.
+   must cross can still wait. Continuous movement on mixed wide/narrow routes
+   and elevated surfaces remains open; the larger dense stress suite needs
+   revalidation after this movement pass.
+3. Complete the remaining animation/presentation event adapter after the melee
+   subset: all equipment/texture changes, footsteps, effects and voice events.
+4. Package the importer with an in-game installation picker for distribution.
 
-Navigation acceptance: send the six friendly units from the clearing through
+Navigation regression coverage: send the six friendly units from the clearing through
 Helm's Deep's gates, bridges and elevated walkways. The squad must reach
 reachable destinations without crossing blocked geometry or overlapping;
-unreachable orders must fail cleanly. Cover narrow passages, opposing groups
-and repeatable command playback before moving on to the event/audio adapter.
+unreachable orders must fail cleanly. Existing narrow-passage, opposing-group
+and repeatable-playback checks stay enabled during command/combat work.
 
-Original-game reference captures can now begin the visual comparison deferred
-by the owner until after Phase 2. Phase 4's original stats, combat, economy and
-production follow the remaining Phase 3 runtime work.
+Controlled original-game captures are still needed after the initial reference
+review. Begin the command/combat slice now; deferred navigation refinements,
+complete audio/appearance adaptation and importer packaging do not block it.
 
 ## Decisions to make
 
@@ -114,7 +240,7 @@ The engine is chosen. Remaining choices can be made as their implementation appr
 
 **Gate:** every unit and building exports with correct team colour and the right gear in each clip, matched against in-game screenshots.
 
-**Status (Oct 19): implementation complete.** The project owner will capture original-game reference screenshots after Phase 2; the visual comparison is deferred until then and is not marked verified. `converted/phase1-report.json` separates conversion results, source gaps and this deferred gate. Effects are data exports; cloth previews use the initial particle surface, without simulation. See `NOTES-presentation-assets.md` for limits and reproducible checks.
+**Status (Oct 19): implementation complete.** The initial prototype review against collected references is documented in the reference library. Controlled, matching original-game captures are still needed; the fidelity gate is not marked verified. `converted/phase1-report.json` retains the earlier conversion audit and its deferred visual gate. Effects are data exports; cloth previews use the initial particle surface, without simulation. See `NOTES-presentation-assets.md` for limits and reproducible checks.
 
 - [x] Apply team colour: additive and unlit, texture × light + mask × team colour (decoded from Team Color.lmt), using the `*_Mask.dds` (744 parts); exported as glTF emissive, the viewer has a team colour picker
 - [x] Decode the `.lmd` animation state list, to get per-clip attachment visibility (sword drawn or sheathed) and building states (construction, healthy, damaged, ruins) — 5576 states / 5998 weighted choices in all 2108 models; resolver exposes named states, clips, mesh selectors and attachment timelines; see `NOTES-animation-states.md`
@@ -142,13 +268,14 @@ The engine is chosen. Remaining choices can be made as their implementation appr
 
 **Gate:** a skirmish sandbox on one map where you select units, order them to move and attack, and they path, animate and fight with placeholder rules.
 
-**Status (Oct 19): first Godot C# sandbox runs.** `prototype/run.ps1` builds and launches Helm's Deep with twelve animated units, selection/move/attack controls, camera controls and a simple opponent. A separate integer 20 Hz core passes 15 checks; actual Godot input dispatch, map/model loading and 420 simulation ticks pass the smoke test. This is an early playable milestone: complete navigation/avoidance, original animation-state event adaptation, audio and importer packaging remain open. See `prototype/README.md` (one folder above `tools/`).
+**Status (Oct 19): playable baseline accepted; console and basic orders implemented.** `prototype/run.ps1` launches 36 animated units in six squads with original console art, a scalable four-button bottom row (Attack, Hold, Guard, Patrol), target-dependent Attack/A, hidden Move/Stop controls, editable groups and queued waypoints. The integer 20 Hz core passes 217 synthetic checks plus twenty map/demo checks; 40 command/group input checks and existing combat/motion/picking checks cover actual Godot dispatch. The user accepts current movement and spacing. Advanced navigation, complete animation-state/event adaptation, audio and importer packaging remain deferred; proceed to the Phase 4 combat-data and hit-timing slice. See `prototype/README.md`.
 
 - [x] Settle the engine: Godot 4 with C#; current local cache is generated from the owner's install, with no assets in source control. Production asset-delivery packaging remains open.
 - [ ] Package the first-run importer: `prepare_prototype.py --install` now extracts/verifies source archives and writes a hashed runtime cache; in-game install selection and production packaging remain.
 - [x] Load a map scene and units; RTS camera (pan, zoom, rotate), selection box, move and attack orders
 - [ ] Complete animation state adaptation: initial idle/run/attack/death clips play; original attachment, texture and event timelines still need the Godot adapter.
-- [ ] Complete navigation: eight-way layered A*, safe ground shortcuts, mesh entrances/elevation, swept-body mesh-edge clearance, off-center nodes on narrow walkways, removable/restorable placed-object footprints, deck/underpass picking, congestion replanning and chained cooperative yielding work; six-unit traversal and six-versus-six swaps on all four Helm's Deep walkable helpers pass. Walker masks are verified against the original region graphs. New/moving footprints, the corner-diagonal policy and dense single-file gridlocks remain.
+- [x] Establish prototype navigation and combat spacing (accepted): eight-way layered A*, any-angle wide-ground movement, immediate redirects, formation assignment, mesh entrances/elevation, swept-body clearance, off-center walkway nodes, removable/restorable footprints, deck/underpass picking, congestion replanning, chained yielding and individual combat/waiting positions work. Six-unit traversal and six-versus-six walkway swaps pass. Advanced cases remain in the deferred navigation section; full original-game pathing fidelity is not claimed.
+- [x] Implement the selected-unit command panel and explicit Move/Attack/Attack-move/Stop/Hold Ground states, with shared button/hotkey/contextual dispatch, independent intent, cancellation, health, tooltips and replay checks. The combat-data adapter remains Phase 4 work.
 - [x] Fixed-step integer simulation separate from rendering: 20 Hz core, tick commands, stable ordering and repeatability tests; lockstep networking remains later work.
 - [ ] Audio: Ogg speech and music, WAV effects, triggered by clip events from Phase 1
 
@@ -156,9 +283,13 @@ The engine is chosen. Remaining choices can be made as their implementation appr
 
 **Gate:** a skirmish against a scripted opponent that plays like the original: same costs, build times, damage outcomes and unit counters.
 
+**Next slice:** complete the combat-data and attack-timing parts of the milestone
+above for the three existing demo types. Establish supported data semantics before
+expanding to ranged combat, powers, the economy and production.
+
 - [ ] Load unit, weapon, building, spell and technique stats from the JSON tables (`Units`, `Weapons`, `Buildings`, `Spells`, `Techniques`, `UnitToUnitModifiers`, `BattleGear`, `HeroExperiences`)
 - [ ] Economy: resources, workers, building and training queues, places of power
-- [ ] Combat: damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them
+- [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them
 - [ ] Heroes, fate powers and spells (`SpellAndEventAndActions` chains events to actions)
 - [ ] Open `Rings.exe` in Ghidra to recover the formulas the tables only feed: damage, hit chance, experience, upgrade effects
 - [ ] Record reference fights in the original game (it still runs) and compare outcomes
@@ -180,7 +311,7 @@ The engine is chosen. Remaining choices can be made as their implementation appr
 
 - [ ] Deterministic lockstep networking to replace the defunct GameSpy service
 - [ ] Replays (the original `.wrr` format is a reference for what a replay stores)
-- [ ] Interface: rebuild menus and the in-game console from `Screens.H2O`, `Fonts.H2O`, `Cursors.H2O` and the interface textures
+- [ ] Interface: complete menus and original in-game console art from `Screens.H2O`, `Fonts.H2O`, `Cursors.H2O` and interface textures; functional unit commands and their panel move earlier into the next command/combat milestone
 - [ ] Settings, hotkeys (`Hotkeys.lqr`, `Controls.lqr`), widescreen and high-DPI, controller support if wanted
 - [ ] Modding: load extra content from folders so the community can extend it
 
@@ -191,7 +322,7 @@ The biggest risk is the game logic: assets are data and decode cleanly, but rule
 | Risk | Fallback |
 | --- | --- |
 | Combat and economy formulas take too long to recover from `Rings.exe` | Ship rules approximated from the tables, tuned against recorded fights, and refine later |
-| The `.lmd` state list stays undecoded | Keep the inferred default-gear rules plus a small manual override table |
+| Weapon damage-per-second, range and animation-event fields are misinterpreted | Trace table descriptions and executable behavior, compare controlled original-game fights, and label approximations; keep the integer rules adapter separate from rendering |
 | 26 compiled missions are too much to rewrite | Release skirmish first; port missions one at a time |
 | Legal exposure from assets | Never distribute assets or converted files; only the importer that runs on the player's own copy |
 | Only a Russian install is at hand | Text and speech from an English install, imported the same way |

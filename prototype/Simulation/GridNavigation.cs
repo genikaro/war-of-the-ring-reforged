@@ -260,6 +260,11 @@ public sealed class GridNavigation
     private int[] SweptColumns(int a, int b)
     {
         var (ax,az) = Center(a); var (bx,bz) = Center(b);
+        return SweptColumns(ax,az,bx,bz);
+    }
+
+    private int[] SweptColumns(int ax, int az, int bx, int bz)
+    {
         long dx = bx-ax, dz = bz-az;
         var cells = new List<int>();
         int xmin = Math.Max(0,Math.Min(ax,bx)-350)/CellSize, xmax = Math.Min(Width-1,(Math.Max(ax,bx)+350)/CellSize);
@@ -279,6 +284,13 @@ public sealed class GridNavigation
         return _obstacles[id].Nodes.Any(cells.Contains) || _obstacles[id].Edges.Any(e => cells.Contains(e.A) && cells.Contains(e.B));
     }
 
+    public bool ObstacleCoversGroundBody(int id, int x, int z)
+    {
+        var cells = SweptColumns(x,z,x,z).ToHashSet();
+        return _obstacles[id].Nodes.Any(cells.Contains)
+            || _obstacles[id].Edges.Any(e => cells.Contains(e.A) && cells.Contains(e.B));
+    }
+
     public (int Low,int High) MovementHeights(int a, int b)
     {
         int low = Math.Min(NodeHeight(a),NodeHeight(b)), high = Math.Max(NodeHeight(a),NodeHeight(b));
@@ -296,10 +308,16 @@ public sealed class GridNavigation
     {
         if (a < 0 || b < 0 || a >= GroundCount || b >= GroundCount) return false;
         var (ax,az) = Center(a); var (bx,bz) = Center(b);
+        return CanTraverseGroundPoints(ax,az,bx,bz,occupied);
+    }
+
+    public bool CanTraverseGroundPoints(int ax, int az, int bx, int bz, IReadOnlySet<int>? occupied = null)
+    {
         if (Math.Min(ax,bx) < 350 || Math.Min(az,bz) < 350
             || Math.Max(ax,bx)+350L > Width*(long)CellSize || Math.Max(az,bz)+350L > Height*(long)CellSize) return false;
-        var cells = SweptColumns(a,b).ToHashSet();
-        if (cells.Any(n => !CanStand(n) || (n != a && occupied?.Contains(n) == true))) return false;
+        int from = Cell(ax,az);
+        var cells = SweptColumns(ax,az,bx,bz).ToHashSet();
+        if (cells.Any(n => !CanStand(n) || (n != from && occupied?.Contains(n) == true))) return false;
         return !_blockedEdges.Keys.Any(e => cells.Contains(e.Item1) && cells.Contains(e.Item2));
     }
 

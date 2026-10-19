@@ -15,6 +15,27 @@ class PrototypeImportTests(unittest.TestCase):
     def test_empty_grid_has_no_component(self):
         self.assertEqual(prepare_prototype.connected(bytes(9), 3, 3), set())
 
+    def test_demo_squads_are_connected_separate_and_repeatable(self):
+        width, height, anchor = 80, 70, 35*80+25
+        allowed = bytes([1]) * (width*height)
+        spawns, groups, camera = prepare_prototype.demo_layout(allowed, width, height, anchor)
+        self.assertEqual((len(spawns), len(groups)), (36, 6))
+        self.assertEqual([sum(s['group'] == g['id'] for s in spawns) for g in groups], [6]*6)
+        self.assertEqual(sum(s['team'] == 0 for s in spawns), 18)
+        self.assertEqual(len({s['cell'] for s in spawns}), 36)
+        self.assertTrue(allowed[camera])
+        for a in spawns:
+            for b in spawns:
+                if a['group'] == b['group']:
+                    continue
+                distance = (a['cell'] % width - b['cell'] % width)**2 + (a['cell']//width - b['cell']//width)**2
+                self.assertGreaterEqual(distance, (12 if a['team'] != b['team'] else 8)**2)
+        self.assertEqual((spawns, groups, camera), prepare_prototype.demo_layout(allowed, width, height, anchor))
+
+    def test_demo_layout_rejects_insufficient_space(self):
+        with self.assertRaisesRegex(ValueError, 'no separated'):
+            prepare_prototype.demo_layout(bytes([1])*100, 10, 10, 22)
+
     def test_original_and_extraction_cannot_be_cache_outputs(self):
         for folder in ['TLOTR - War of the Ring/cache', 'extracted/cache']:
             with self.subTest(folder=folder), self.assertRaisesRegex(ValueError, 'outside'):

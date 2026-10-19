@@ -21,6 +21,7 @@ static class SmoothingChecks
         for (int tick = 1; tick < 10; tick++) world.Step();
         check(Math.Abs(SimWorld.DistanceSquared(unit.X,unit.Z,500,500)-2_250_000) <= 4500,
             "any-angle shortcut preserves three-meter-per-second speed");
+        var stoppedPosition = (unit.X,unit.Z);
         world.Enqueue(0,[0],-1);
         bool staysOnLine = true;
         for (int tick = 0; tick < 30; tick++)
@@ -28,15 +29,15 @@ static class SmoothingChecks
             world.Step();
             staysOnLine &= Math.Abs(3L*(unit.Z-500)-(unit.X-500)) <= 2;
         }
-        check(staysOnLine, "shortcut cancellation stays on its reserved line while retreating");
-        check(unit.Node == 0 && unit.X == 500 && unit.Z == 500 && unit.TravelProgress == 0,
-            "interrupted shortcut returns to its original safe center");
+        check(staysOnLine, "shortcut cancellation stays on its original line");
+        check((unit.X,unit.Z) == stoppedPosition && unit.TravelProgress == 0,
+            "interrupted shortcut stops without undoing its progress");
 
         var around = new SimWorld(Grid(true)); around.Spawn(0,0); around.Enqueue(0,[0],7);
         for (int tick = 0; tick < 60; tick++)
         {
             around.Step(); var moving = around.Units[0];
-            if (moving.TransitNode >= 0 && !around.Navigation.CanTraverseGround(moving.Node,moving.TransitNode))
+            if (!around.Navigation.CanTraverseGroundPoints(moving.X,moving.Z,moving.X,moving.Z))
                 throw new Exception("smoothed motion crossed blocked terrain");
         }
         check(around.Units[0].Node == 7 && around.Units[0].Goal < 0, "smoothing takes a safe detour around a blocked corner");
@@ -44,15 +45,23 @@ static class SmoothingChecks
         var building = new SimWorld(Grid(dynamic: true)); building.EnqueueObstacle(8,false); building.Step();
         building.Spawn(0,0); building.Enqueue(0,[0],7); building.Step();
         building.EnqueueObstacle(8,true); building.Step();
-        check(!building.Navigation.IsObstacleActive(8), "construction cannot block the interior of a reserved shortcut");
+        check(building.Navigation.IsObstacleActive(8), "construction ahead of a moving unit replans its route");
         building.Enqueue(0,[0],-1); for (int i = 0; i < 30; i++) building.Step();
         building.EnqueueObstacle(8,true); building.Step();
-        check(building.Navigation.IsObstacleActive(8), "shortcut corridor releases after cancellation reaches its safe center");
+        check(building.Navigation.IsObstacleActive(8), "cancelling a move preserves the new obstacle");
 
         var spawning = new SimWorld(Grid()); spawning.Spawn(0,0); spawning.Enqueue(0,[0],7); spawning.Step();
         bool refused = false;
         try { spawning.Spawn(0,1); } catch (ArgumentException) { refused = true; }
-        check(refused, "spawn cannot enter the future interior of another unit's shortcut");
+        check(!refused, "a distant route waypoint does not reserve empty ground against spawning");
+
+        var bodyBuild = new SimWorld(new(4,2,1000,Enumerable.Repeat(true,8).ToArray(),new int[15],null,[new(9,[1],[])]));
+        bodyBuild.EnqueueObstacle(9,false); bodyBuild.Step();
+        bodyBuild.Spawn(0,0); bodyBuild.Enqueue(0,[0],7);
+        for (int i = 0; i < 3; i++) bodyBuild.Step();
+        bodyBuild.Enqueue(0,[0],-1); bodyBuild.Step();
+        bodyBuild.EnqueueObstacle(9,true); bodyBuild.Step();
+        check(!bodyBuild.Navigation.IsObstacleActive(9),"construction cannot clip a stopped unit's body across a neighboring cell boundary");
 
         MovementSample[] corner = [new(0,0,0,0),new(75_000,1000,0,0),new(150_000,1000,0,1000)];
         var early = MovementPlayback.Sample(corner,.25); var late = MovementPlayback.Sample(corner,.75);
@@ -72,5 +81,17 @@ static class SmoothingChecks
         combat.Enqueue(0,[0],22,1);
         for (int tick = 0; tick < 180; tick++) combat.Step();
         check(combat.Units[1].Health < 100, "periodic combat retargeting advances without repeatedly reversing its current move");
+
+        var retaliation = new SimWorld(new(12,5,1000,Enumerable.Repeat(true,60).ToArray(),new int[78]));
+        retaliation.Spawn(0,25); retaliation.Spawn(2,41);
+        retaliation.Enqueue(0,[0],34); retaliation.Enqueue(2,[1],25,0);
+        for (int tick = 0; tick < 100; tick++)
+        {
+            retaliation.Step();
+            if (SimWorld.SeparationSquared(retaliation.Units[0],retaliation.Units[1]) < 700L*700)
+                throw new Exception("retaliation during a free-ground order overlapped units");
+        }
+        check(retaliation.Units[1].Health < 100 && !retaliation.Units[0].FreeMovement,
+            "a unit attacked during free-ground movement transfers safely into combat");
     }
 }

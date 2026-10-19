@@ -1,6 +1,13 @@
 using Reforged.Simulation;
 using System.Text.Json;
 
+if (Array.IndexOf(args,"--movement-benchmark") is int benchmark && benchmark >= 0)
+{
+    string? output = benchmark+1 < args.Length ? args[benchmark+1] : null;
+    Console.WriteLine(JsonSerializer.Serialize(ResponsivenessChecks.Measure(output)));
+    return;
+}
+
 int passed = 0;
 void Check(bool value, string name) { if (!value) throw new Exception(name); passed++; }
 GridNavigation Grid(int width = 10, int height = 8, bool[]? allowed = null)
@@ -9,6 +16,10 @@ NavigationPickerChecks.Run(Check);
 DirectionalChecks.Run(Check);
 SmoothingChecks.Run(Check);
 TrafficChecks.Run(Check);
+ResponsivenessChecks.Run(Check);
+CombatChecks.Run(Check);
+OrderChecks.Run(Check);
+ExtendedOrderChecks.Run(Check);
 
 var allowed = Enumerable.Repeat(true, 80).ToArray();
 for (int z = 0; z < 7; z++) allowed[z * 10 + 4] = false;
@@ -195,7 +206,7 @@ foreach (int destination in new[] { 6,-1 })
     interrupted.Spawn(0,14); interrupted.Enqueue(0,[0],20); Advance(interrupted,3);
     interrupted.Enqueue(0,[0],destination); Advance(interrupted,30);
     Check(interrupted.Units[0].Goal < 0 && interrupted.Units[0].X == 500 && interrupted.Units[0].TransitNode < 0,
-        "unreachable or invalid replacement order returns a moving unit to its last cell center");
+        "unreachable replacement in a single-file passage returns to its reserved center");
 }
 
 int cacheArg = Array.IndexOf(args, "--cache");
@@ -237,7 +248,7 @@ dynamicCorridor.EnqueueObstacle(1, false); dynamicCorridor.Step();
 dynamicCorridor.Spawn(0, 0); dynamicCorridor.Enqueue(0, [0], 6); Advance(dynamicCorridor, 3);
 dynamicCorridor.EnqueueObstacle(1, true); Advance(dynamicCorridor, 60);
 Check(dynamicCorridor.Units[0].Goal == 6 && dynamicCorridor.Units[0].X == 500,
-    "sealed dynamic route retains destination and recenters a moving unit");
+    "sealed single-file route retains destination and returns to its reserved center");
 dynamicCorridor.EnqueueObstacle(1, false); Advance(dynamicCorridor, 100);
 Check(dynamicCorridor.Units[0].Node == 6 && dynamicCorridor.Units[0].Goal < 0,
     "removal resumes a dynamically sealed order");
@@ -290,7 +301,13 @@ if (cacheArg >= 0)
         var position = o.GetProperty("position");
         return !realNav.CanStand(realNav.Cell((int)(position[0].GetDouble()*1000), (int)(position[1].GetDouble()*1000)));
     }), "real map building centers are excluded from ground movement");
-    foreach (var item in manifest.GetProperty("spawns").EnumerateArray().Where(s => s.GetProperty("team").GetInt32() == 0))
+    var primarySpawns = manifest.GetProperty("spawns").EnumerateArray().Where(s => s.GetProperty("team").GetInt32() == 0).Take(6).ToArray();
+    var demo = new SimWorld(realNav);
+    foreach (var spawn in manifest.GetProperty("spawns").EnumerateArray()) demo.Spawn(spawn.GetProperty("team").GetInt32(),spawn.GetProperty("cell").GetInt32());
+    Check(demo.Units.Count == 36 && demo.Units.Count(u => u.Team == 0) == 18,"demo contains three six-unit squads per side without spawn overlap");
+    Advance(demo,1);
+    Check(demo.Units.All(u => u.Target < 0 && u.Health == 100),"separated demo squads wait for player orders at startup");
+    foreach (var item in primarySpawns)
         realWorld.Spawn(0, item.GetProperty("cell").GetInt32());
     var destinations = surfaceJson.Select((s, i) => (Surface: s.GetProperty("surface").GetString()!, Node: realNav.GroundCount+i))
         .GroupBy(s => s.Surface).Select(g => g.OrderByDescending(s => {
@@ -314,7 +331,7 @@ if (cacheArg >= 0)
         Check(realWorld.Units.All(u => u.Goal < 0), "real map six-unit formation finishes: "+destination.Surface);
         Console.WriteLine($"MAP_NAV {destination.Surface}: six units arrived, target height {realNav.NodeHeight(destination.Node)} mm");
     }
-    var clearing = manifest.GetProperty("spawns").EnumerateArray().Where(s => s.GetProperty("team").GetInt32() == 0)
+    var clearing = primarySpawns
         .Select(s => s.GetProperty("cell").GetInt32()).ToArray();
     foreach (var crossingDestination in destinations)
     {
