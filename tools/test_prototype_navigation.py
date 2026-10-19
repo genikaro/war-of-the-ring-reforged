@@ -28,6 +28,40 @@ class PrototypeNavigationTests(unittest.TestCase):
         self.assertFalse(nav.covers_segment([0, .5, 0], [1, .5, 0], triangles))
         self.assertIsNone(nav.height_at(2, .5, triangles[0]))
 
+    def test_body_needs_support_beyond_its_centerline(self):
+        narrow = rectangle(0, 2, .3, .7)
+        self.assertTrue(nav.covers_segment([.5, .5, 0], [1.5, .5, 0], narrow))
+        self.assertFalse(nav.covers_body([.5, .5, 0], [1.5, .5, 0], narrow))
+        result = nav.build(2, 1, 1, [0, 0], [0]*6, [{'name': 'narrow', 'triangles': narrow}])
+        self.assertEqual(result['surface_nodes'], [])
+
+    def test_body_union_accepts_shared_edges_and_reversed_winding(self):
+        triangles = rectangle(0, 2, 0, 1, 0, 2)
+        self.assertTrue(nav.covers_body([.5, .5, .5], [1.5, .5, 1.5], triangles))
+        self.assertTrue(nav.covers_body([1.5, .5, 1.5], [.5, .5, .5], [t[::-1] for t in triangles]))
+
+    def test_body_detects_off_center_hole_despite_overlapping_triangles(self):
+        triangles = rectangle(0, 2, 0, .6) + rectangle(0, 2, .61, 1)
+        self.assertTrue(nav.covers_segment([.5, .5, 0], [1.5, .5, 0], triangles))
+        self.assertFalse(nav.covers_body([.5, .5, 0], [1.5, .5, 0], triangles*3))
+
+    def test_body_cannot_borrow_support_from_another_floor(self):
+        triangles = rectangle(0, 2, .3, .7, 4, 4) + rectangle(0, 2, 0, 1)
+        self.assertFalse(nav.covers_body([.5, .5, 4], [1.5, .5, 4], triangles))
+
+    def test_body_sweep_rejects_mid_edge_narrowing(self):
+        triangles = (rectangle(0, .9, 0, 1) + rectangle(.9, 1.1, .3, .7)
+                     + rectangle(1.1, 2, 0, 1))
+        self.assertTrue(nav.covers_body([.5, .5, 0], [.5, .5, 0], triangles))
+        self.assertTrue(nav.covers_body([1.5, .5, 0], [1.5, .5, 0], triangles))
+        self.assertFalse(nav.covers_body([.5, .5, 0], [1.5, .5, 0], triangles))
+        result = nav.build(2, 1, 1, [0, 0], [0]*6, [{'name': 'neck', 'triangles': triangles}])
+        self.assertEqual([n['links'] for n in result['surface_nodes']], [[], []])
+
+    def test_body_accepts_exact_clearance_and_a_transverse_slope(self):
+        triangles = [[[x, z, z] for x, z, _ in t] for t in rectangle(0, 2, .15, .85)]
+        self.assertTrue(nav.covers_body([.5, .5, .5], [1.5, .5, .5], triangles))
+
     def test_bridge_has_only_height_matched_terrain_entrances(self):
         result = nav.build(4, 1, 1, [1, 1, 1, 1], [0]*10,
                            [{'name': 'ramp', 'triangles': rectangle(0, 4, 0, 1, 0, 2)}])

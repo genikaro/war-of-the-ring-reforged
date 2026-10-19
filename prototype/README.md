@@ -6,7 +6,8 @@ fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
 Squads now traverse layered walkable geometry with terrain entrances and
 congestion replanning. Static building/object footprints now block movement.
-Original mask semantics, mesh-edge clearance and dynamic updates remain open.
+Walkway edges now require support for the full 350 mm unit radius.
+Original mask semantics and dynamic updates remain open.
 The remaining Phase 3 work and acceptance criteria are in
 [the local roadmap](../tools/Roadmap.md).
 
@@ -109,13 +110,17 @@ boxes may be over-conservative. Unsupported or missing collision boxes fail
 cache generation. These are static snapshots, with no construction/destruction
 updates yet. The raw painted mask is retained separately for auditing.
 Walkable helpers append separate nodes to the ground grid; the
-current cache has 1,492 surface nodes and 51 height-matched terrain entrances.
+current cache has 1,207 surface nodes and 39 height-matched terrain entrances.
 Links require continuous triangle coverage with at most 150 mm deviation from
 the interpolated height, no more than one cell of rise, and terrain joins within
 250 mm. Source model scale and placement transforms match the rendered scene.
 The original MPL route codes are unused, including the two cyclic bridge tables.
-This conservative one-meter raster can omit narrow routes and does not yet
-provide clearance for the full unit body along mesh edges. Mouse orders pick the
+Mesh nodes and edges require continuous support for a swept 350 mm square
+around the unit center, conservatively enclosing its circular body. Triangle
+subtraction checks the whole footprint; overlapping triangles cannot conceal
+gaps. Support must match the local slope and interpolated height within 150 mm,
+so lower floors cannot fill holes in a deck. This conservative one-meter raster
+can omit narrow routes. Mouse orders pick the
 highest sampled surface in a column; picking beneath an overpass remains open.
 Units retain their surface node and integer elevation; collision and melee use
 vertical separation. Congested units wait before entering occupied waypoints
