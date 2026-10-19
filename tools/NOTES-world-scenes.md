@@ -152,9 +152,31 @@ supported by the strict footer reader, unrelated to the map navigation data.
 `prepare_prototype.py` preserves the painted walker mask and derives a separate
 runtime allowed mask. On Helm's Deep the raw `(painted, mask_b, mask_c)` counts
 are `(1,1,0): 38,841`, `(0,1,0): 6,849`, `(0,0,0): 45,830`.
-Painted is a subset of mask_b, and mask_c is empty; these facts alone do not
-prove the original query semantics. The prototype continues to treat painted
-ones as allowed, without claiming fidelity for the two auxiliary masks.
+
+The walker graph's row tables are u16 `(region, run length - 1)` pairs, with
+`0xffff` for no region and the table word equal to the row width
+(`world_scene.region_cells`). Each region record stores its cell count and
+bounding box (`raw_words[1:6]`); all 54 maps match the decoded cells.
+`verify_walker_masks.py` then shows on every map:
+
+- The walker regions cover exactly the painted bits, so painted is the
+  original runtime passability. mask_b-only cells belong to no region.
+- Region links equal eight-way cell adjacency, including diagonals whose two
+  flank cells are unpainted (126 corner-only links on Helm's Deep, 12,697 in all).
+- Painted cells always lie in mask_b or mask_c, for both categories. Unforced
+  painted cells pass the category's slope limit (steeper of the cell's two
+  terrain triangles) and lake depth on 46 maps; the other 8 differ by at most
+  15 cells. mask_c cells act as forced passable: all walker mask_c cells are
+  painted except 106 on LS06. mask_b cells passing both limits but left unpainted lie outside the
+  painted bounding box, apart from at most 23 per map: an outer frame whose
+  margin source is not decoded. Helm's Deep reproduces exactly: painted =
+  mask_b, slope <= 30 degrees, depth <= 1 m, inside that frame.
+
+The prototype keeps painted bits as allowed cells and fails cache generation if
+they differ from the region graph. Its ground diagonals still require both
+flank cells; without corner-only diagonals 66 painted cells on Helm's Deep
+(2,192 over 43 maps) fall out of the original's main connected area. Whether
+units in the original cut those corners is not verified.
 
 All ten building centers have painted bits set. The static obstacle adapter
 therefore subtracts independent footprints for Buildings and Objects whose
@@ -178,11 +200,19 @@ separate work.
 
 `prototype_navigation.py` rebuilds layered links from transformed, filtered
 navigation triangles instead of following MPL codes. Helm's Deep produces
-1,492 surface nodes with 51 height-matched terrain links. Segment/triangle
+1,342 surface nodes with 48 height-matched terrain links. Segment/triangle
 interval unions reject gaps; source mesh/placement scales and rotations match
 the GLB. All six friendly units traverse all four helpers in the cache-backed
-C# check, preserving integer heights and non-overlap. The one-meter raster can
-omit narrow routes; it is a prototype policy rather than original path fidelity.
+C# check, preserving integer heights and non-overlap.
+
+A cell center supports the 700 mm body only on walkways at least 1.7 m wide.
+Where it cannot, the builder takes the nearest supported point of a 100 mm
+lattice within 400 mm of the center (135 off-center nodes on Helm's Deep; 129
+more walkway nodes are reachable from the main ground area). Off-center nodes
+stay 700 mm from nearby nodes and from possible links between them, and links
+passing within 700 mm of a third node are dropped, so a unit parked on any node
+leaves every other link usable. Bodies narrower than 700 mm stay impassable;
+this is a prototype policy rather than original path fidelity.
 
 ## Decals and world tail
 

@@ -6,7 +6,7 @@ not a claim to reproduce the original executable's collision queries.
 """
 import math
 
-from prototype_navigation import transform, terrain_height
+from prototype_navigation import node_point, transform, terrain_height
 
 RADIUS = .35
 BODY_HEIGHT = 1.8
@@ -146,8 +146,7 @@ def runtime_layers(width, height, spacing, allowed, heights, nodes, footprints):
         if node < base:
             x, z = (node % width+.5)*spacing, (node // width+.5)*spacing
             return [x, z, terrain_height(x, z, width, spacing, heights)]
-        item = nodes[node-base]; cell = item['cell']
-        return [(cell % width+.5)*spacing, (cell // width+.5)*spacing, item['height_mm']/1000]
+        return list(node_point(nodes[node-base], width, spacing))
     surface_edges = {tuple(sorted((base+i, link))) for i, n in enumerate(nodes) for link in n['links']}
     result = []
     for object_id, boxes in sorted(grouped.items()):

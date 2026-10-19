@@ -1,6 +1,7 @@
 """Synthetic map sections, corruption checks and glTF instance regressions."""
 from pathlib import Path
 import tempfile
+import types
 import unittest
 import zlib
 
@@ -11,6 +12,7 @@ from lms2gltf import Exporter
 import mpl
 import terrain_set
 from test_wor import pack, string, table, world_bytes
+import verify_walker_masks
 from test_asset_formats import mesh_bytes
 import wor
 import wor2gltf
@@ -223,6 +225,31 @@ class WorldSceneTests(unittest.TestCase):
         for data in [fixture()[:-1], fixture() + b'\0']:
             with self.assertRaisesRegex(ValueError, 'truncated|trailing'):
                 ws.parse(data)
+
+    def test_walker_regions_cover_painted_cells_baked_from_editor_masks(self):
+        # Cells 0 1 2 / 3 4 5: cell 2 is painted input but too steep, cell 4 is forced.
+        def bitset(cells):
+            return {'count': 6, 'set_count': len(cells), 'words': [sum(1 << c for c in cells)]}
+        graph = {'grid': [3, 2], 'table_word': 3,
+                 'regions': [{'raw_words': [0, 2, 0, 1, 0, 0, -1], 'links': [{'header': [1, 0, 2]}]},
+                             {'raw_words': [0, 2, 0, 1, 1, 1, -1], 'links': [{'header': [0, 0, 2]}]}],
+                 'tables': [pack('4H', 0, 1, 0xffff, 0).hex(), pack('4H', 1, 1, 0xffff, 0).hex()]}
+        self.assertEqual(ws.region_cells(graph), [0, 0, -1, 1, 1, -1])
+        heights = [0] * 12; heights[3] = 5
+        scene = {'world': types.SimpleNamespace(heights=heights, metadata={'terrain': {'cell_size': 1.0}}),
+                 'water': {'lakes': []}}
+        category = {'name': 'PATHING_CATEGORY_WALKER', 'grid': [3, 2], 'max_slope': 30, 'max_water_depth': 1,
+                    'painted': bitset([0, 1, 3, 4]), 'mask_b': bitset([0, 1, 2, 3]), 'mask_c': bitset([4]), 'graph': graph}
+        report = verify_walker_masks.audit_category(scene, category)
+        for key in ['region_mismatches', 'painted_outside_mask_b_or_c', 'mask_c_unpainted',
+                    'unforced_painted_over_slope_or_water', 'mask_b_baked_but_unpainted', 'corner_only_links']:
+            self.assertEqual(report[key], 0, key)
+        self.assertTrue(report['region_records_match_cells'] and report['links_match_eight_way_adjacency'])
+        category['painted'] = bitset([0, 3, 4])
+        self.assertEqual(verify_walker_masks.audit_category(scene, category)['region_mismatches'], 1)
+        for tables in [[graph['tables'][0]], [pack('2H', 0, 1).hex(), graph['tables'][1]], [pack('2H', 2, 2).hex()] * 2]:
+            with self.assertRaisesRegex(ValueError, 'region'):
+                ws.region_cells(dict(graph, tables=tables))
 
 
 if __name__ == '__main__':

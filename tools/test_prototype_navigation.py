@@ -96,6 +96,41 @@ class PrototypeNavigationTests(unittest.TestCase):
         for node in nodes:
             self.assertTrue(all(n >= 2 and nodes[n-2]['height_mm'] == node['height_mm'] for n in node['links']))
 
+    def test_walkways_between_cell_centers_keep_a_connected_route(self):
+        import math
+        # No cell center can hold a 700 mm body on these 1.2 m wide decks.
+        straight = rectangle(0, 6, .2, 1.4, 2, 2)
+        a, b = (0, .3), (6, 6.3)
+        normal = (-.6/2**.5, .6/2**.5)
+        diagonal = [[[*p, 2] for p in [(a[0]+normal[0], a[1]+normal[1]), (b[0]+normal[0], b[1]+normal[1]),
+                                     (a[0]-normal[0], a[1]-normal[1])]],
+                    [[*p, 2] for p in [(b[0]+normal[0], b[1]+normal[1]), (b[0]-normal[0], b[1]-normal[1]),
+                                     (a[0]-normal[0], a[1]-normal[1])]]]
+        for triangles, size in [(straight, (6, 2)), (diagonal, (6, 7))]:
+            width, height = size
+            result = nav.build(width, height, 1, [0]*(width*height), [0]*((width+1)*(height+1)),
+                               [{'name': 'deck', 'triangles': triangles}])
+            nodes = result['surface_nodes']
+            self.assertTrue(nodes and all('x_mm' in n for n in nodes))
+            self.assertEqual(result['surface_report'][0]['off_center_nodes'], len(nodes))
+            points = [nav.node_point(n, width, 1) for n in nodes]
+            self.assertTrue(all(math.dist(p, q) >= nav.NODE_SPACING for p in points for q in points if p is not q))
+            self.assertTrue(all(n['cell'] == int(p[1])*width+int(p[0]) for n, p in zip(nodes, points)))
+            # A unit parked on any node leaves every other link passable.
+            links = [(i, j-width*height) for i, n in enumerate(nodes) for j in n['links'] if j-width*height > i]
+            self.assertTrue(links)
+            self.assertFalse([(i, j, k) for i, j in links for k in range(len(nodes))
+                              if k not in (i, j) and nav.crowds(points[k], points[i], points[j])])
+            first = min(range(len(nodes)), key=lambda i: points[i][0]+points[i][1])
+            last = max(range(len(nodes)), key=lambda i: points[i][0]+points[i][1])
+            self.assertGreater(points[last][0]-points[first][0], 4)
+            base, seen, stack = width*height, {first}, [first]
+            while stack:
+                for link in nodes[stack.pop()]['links']:
+                    if link >= base and link-base not in seen:
+                        seen.add(link-base); stack.append(link-base)
+            self.assertIn(last, seen)
+
     def test_raster_graph_rejects_gap_between_cell_centers(self):
         result = nav.build(2, 1, 1, [0, 0], [0]*6,
                            [{'name': 'gap', 'triangles': rectangle(0, .9, 0, 1) + rectangle(1.1, 2, 0, 1)}])

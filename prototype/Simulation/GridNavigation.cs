@@ -1,6 +1,7 @@
 namespace Reforged.Simulation;
 
-public sealed record SurfaceCell(int Cell, int Height, int[] Links);
+/// <summary>A mesh node, at its column center unless an off-center X/Z in millimeters is given.</summary>
+public sealed record SurfaceCell(int Cell, int Height, int[] Links, int? X = null, int? Z = null);
 public sealed record NavigationEdge(int A, int B);
 public sealed record NavigationObstacle(int Id, int[] Nodes, NavigationEdge[] Edges);
 
@@ -34,11 +35,13 @@ public sealed class GridNavigation
             throw new ArgumentException("Invalid navigation dimensions");
         Width = width; Height = height; CellSize = cellSize;
         Allowed = (bool[])allowed.Clone(); Heights = (int[])heights.Clone();
-        _surfaces = surfaces?.Select(s => new SurfaceCell(s.Cell, s.Height, (int[])s.Links.Clone())).ToArray() ?? [];
+        _surfaces = surfaces?.Select(s => s with { Links = (int[])s.Links.Clone() }).ToArray() ?? [];
         for (int i = 0; i < _surfaces.Length; i++)
         {
             var surface = _surfaces[i];
-            if (surface.Cell < 0 || surface.Cell >= GroundCount || surface.Links.Any(n => n < 0 || n >= NodeCount))
+            if (surface.Cell < 0 || surface.Cell >= GroundCount || surface.Links.Any(n => n < 0 || n >= NodeCount)
+                || surface.X.HasValue != surface.Z.HasValue || (surface.X is int sx && surface.Z is int sz
+                    && (sx < 0 || sz < 0 || sx/cellSize != surface.Cell%width || sz/cellSize != surface.Cell/width)))
                 throw new ArgumentException("Invalid surface graph");
             if (!_surfaceColumns.TryGetValue(surface.Cell, out var column)) _surfaceColumns[surface.Cell] = column = [];
             column.Add(GroundCount + i);
@@ -95,6 +98,7 @@ public sealed class GridNavigation
     private int Column(int node) => node < GroundCount ? node : _surfaces[node-GroundCount].Cell;
     public (int X, int Z) Center(int cell)
     {
+        if (cell >= GroundCount && _surfaces[cell-GroundCount] is { X: int x, Z: int z }) return (x, z);
         int column = Column(cell);
         return (column % Width * CellSize + CellSize / 2, column / Width * CellSize + CellSize / 2);
     }

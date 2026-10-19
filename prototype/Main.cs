@@ -107,7 +107,8 @@ public partial class Main : Node3D
             nav.GetProperty("cell_size_mm").GetInt32(), Convert.FromBase64String(nav.GetProperty(dynamic ? "painted_allowed_base64" : "allowed_base64").GetString()!).Select(b => b != 0).ToArray(), heights,
             nav.TryGetProperty("surface_nodes", out var surfaces) ? surfaces.EnumerateArray().Select(s => new SurfaceCell(
                 s.GetProperty("cell").GetInt32(), s.GetProperty("height_mm").GetInt32(),
-                s.GetProperty("links").EnumerateArray().Select(n => n.GetInt32()).ToArray())).ToArray() : null,
+                s.GetProperty("links").EnumerateArray().Select(n => n.GetInt32()).ToArray(),
+                s.TryGetProperty("x_mm", out var x) ? x.GetInt32() : null, s.TryGetProperty("z_mm", out var z) ? z.GetInt32() : null)).ToArray() : null,
             dynamic ? _obstacleLayers.EnumerateArray().Select(o => new NavigationObstacle(o.GetProperty("id").GetInt32(),
                 o.GetProperty("nodes").EnumerateArray().Select(n => n.GetInt32()).ToArray(),
                 o.GetProperty("edges").EnumerateArray().Select(e => new NavigationEdge(e[0].GetInt32(), e[1].GetInt32())).ToArray())).ToArray() : null);

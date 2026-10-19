@@ -8,7 +8,9 @@ Squads now traverse layered walkable geometry with terrain entrances and
 congestion replanning. Static building/object footprints now block movement.
 Walkway edges now require support for the full 350 mm unit radius.
 Placed obstacles can be removed and restored while units replan their routes.
-Original mask semantics and broader traffic coordination remain open.
+Painted walker bits match the original walker region graphs on all 54 maps.
+Narrow walkways keep off-center nodes, and squads clear longer gridlocks.
+New/moving footprints and the corner-diagonal policy remain open.
 The remaining Phase 3 work and acceptance criteria are in
 [the local roadmap](../tools/Roadmap.md).
 
@@ -71,7 +73,7 @@ checked before loading. Never distribute the local cache with the project.
 ./prototype/run.ps1 -ObstacleSmoke
 ```
 
-The simulation runner has no Godot or test-package dependency. Its 110 checks cover
+The simulation runner has no Godot or test-package dependency. Its 124 checks cover
 blocked routes, unreachable areas, adjacent-cell paths, deterministic ties,
 terrain interpolation, repeatable command playback, movement, combat,
 ownership and non-overlapping units, stationary-blocker detours, a six-unit
@@ -99,12 +101,16 @@ corners and verify that rendering does not change simulation state.
 Traffic checks cover two opposing three-unit squads using wide bays and
 single-entry pockets, reversed command order, cancellation during yielding,
 recorded command playback, movement endpoint reservations and bottleneck cache
-invalidation. They check occupied endpoints and physical overlap every tick.
-The optional cache check adds sixteen checks: runtime layers reproduce the
-static ground snapshot, all placed building centers are
+invalidation. Gridlock checks swap opposing three- and six-unit squads through
+a 12-cell single-file corridor, add a third squad behind the first, cross four
+squads at a single-file junction, clear four idle units out of a corridor and
+run 60 seeded random order sequences for 6 to 10 units on both maps. They check
+occupied endpoints and physical overlap every tick. Off-center walkway nodes
+are covered as well. The optional cache check adds eighteen checks: runtime
+layers reproduce the static ground snapshot, all placed building centers are
 blocked, and all six friendly units visit each of Helm's Deep's four walkable
-surfaces without overlap and reach every order. Opposing three-unit squads
-also swap between the clearing and the second walkable helper.
+surfaces without overlap and reach every order. Opposing six-unit squads also
+swap between the clearing and each of the four walkways.
 The headless Godot smoke test loads
 the actual map and twelve models, dispatches mouse/key events through the
 viewport, and checks selection, move/attack picking, zoom, pause/resume,
@@ -153,9 +159,12 @@ and rotates units gradually. It follows terrain height between samples, holds
 on pause, and uses no floating-point feedback into the simulation. Native
 physics interpolation is disabled for these manually interpolated unit roots.
 
-Movement currently interprets the saved painted walker bits as allowed cells.
-This is a prototype policy, not a claim of original-game passability fidelity.
-Auxiliary ground mask semantics remain open.
+Movement interprets the saved painted walker bits as allowed cells. On all 54
+maps the original walker region graph covers exactly these bits; the two other
+bitsets are editor inputs (`tools/NOTES-world-scenes.md`). Cache generation
+fails if they disagree. Ground diagonals still need both flank cells, while the
+original region graph also links corner-only diagonals: 66 painted Helm's Deep
+cells are outside the prototype's main area only for that reason.
 Static footprints use the source's oriented-collision layer for Buildings and
 objects with `IsPathingObstacle`: 108 Helm's Deep placements block 1,741 painted
 ground cells. The prototype interprets the records as half-extents, center and
@@ -173,7 +182,7 @@ toggles existing placed objects; building health, construction and destruction
 gameplay remain Phase 4 work. New or moving footprints still require an adapter.
 The raw painted mask and initial blocked snapshot remain available for auditing.
 Walkable helpers append separate nodes to the ground grid; the
-current cache has 1,207 surface nodes and 39 height-matched terrain entrances.
+current cache has 1,342 surface nodes and 48 height-matched terrain entrances.
 Links require continuous triangle coverage with at most 150 mm deviation from
 the interpolated height, no more than one cell of rise, and terrain joins within
 250 mm. Source model scale and placement transforms match the rendered scene.
@@ -182,8 +191,10 @@ Mesh nodes and edges require continuous support for a swept 350 mm square
 around the unit center, conservatively enclosing its circular body. Triangle
 subtraction checks the whole footprint; overlapping triangles cannot conceal
 gaps. Support must match the local slope and interpolated height within 150 mm,
-so lower floors cannot fill holes in a deck. This conservative one-meter raster
-can omit narrow routes. Mouse orders intersect source terrain and walkable mesh
+so lower floors cannot fill holes in a deck. Where a cell center cannot hold
+the body, a node takes the nearest supported point within 400 mm (135 on Helm's
+Deep). Off-center nodes keep 700 mm from other nodes and from links between
+them, so a parked unit never blocks another link. Mouse orders intersect source terrain and walkable mesh
 triangles. Ctrl + right-click bypasses decks to target terrain beneath them.
 Grid traversal limits terrain queries to cells crossed by the ray; precise
 triangle calculations avoid cracks along shared edges. The input adapter uses
@@ -221,9 +232,17 @@ Refuges avoid other units' reserved destinations and fill deeper off-route space
 first, searching up to eight graph edges beyond the pocket entrance. Assigned
 refuges remain stable during travel. A settled yielder can relocate if it blocks
 its priority unit's changed route, and dependent holds transfer when their own
-priority unit must yield. This passes the opposing three-unit pocket tests and
-the real-map crossing. Corridors without passing space wait safely; larger and
-more varied gridlocks still need broader coverage. Full local avoidance remains open.
+priority unit must yield. A refuge search can pass standing friendly units
+that could also give way; the one nearest the refuge moves first, so a squad
+backs out of a corridor one unit at a time. Units also yield on head-on routes
+at junctions where their goals point the same way. Yielding units can ask for
+room on their own way to a refuge, and an inherited or since occupied refuge is
+replaced. A held refuge is released once the priority unit's remaining route no
+longer crosses the way back. Idle units settle where they stand when blocked,
+or in the refuge when they cannot return without crossing a destination.
+Corridors without passing space wait safely. Dense random orders that park
+units inside single-file passages others must cross can still wait: with 6 to
+14 units, 374 of 400 seeded sequences finish. Full local avoidance remains open.
 
 Rules are placeholders: 100 HP, 12 melee damage, one-second cooldown, 3 m/s.
 Enemies acquire nearby targets; attacked units retaliate. This is not the

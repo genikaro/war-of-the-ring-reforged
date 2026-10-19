@@ -10,8 +10,9 @@ Phase 2 is complete. Phase 3 is in progress, with reliable squad navigation
 next; [the roadmap](Roadmap.md) records the acceptance criteria and remaining
 animation/audio/importer work. Original-game screenshot comparison is deferred.
 
-Latest verification (Oct 19, 2026): 113 Python tests, eight JavaScript tests,
-110 synthetic C# checks, sixteen real-map obstacle/navigation checks and the Godot
+Latest verification (Oct 19, 2026): 115 Python tests, eight JavaScript tests,
+124 synthetic C# checks, eighteen real-map obstacle/navigation checks, the
+54-map walker mask audit and the Godot
 input/combat, interpolated movement/turning, deck/underpass picking and obstacle
 remove/restore smoke tests pass. Generated
 assets, previews, validation reports and portable tools stay in ignored
@@ -33,6 +34,7 @@ assets, previews, validation reports and portable tools stay in ignored
 | `lms2gltf.py` | Export to `.glb`: one unit by name, all units, or hand-picked files. |
 | `world_scene.py`, `terrain_set.py`, `mpl.py`, `map_decals.py` | Terrain, placements/decals, navigation geometry, lakes, palettes and the world tail. See `NOTES-world-scenes.md`. |
 | `wor2gltf.py`, `verify_phase2.py` | Export Helm's Deep as one GLB; audit all 54 maps and the rendered scene. |
+| `verify_walker_masks.py` | Audit every map's ground bitsets against its original walker region graph (`converted/walker-mask-report.json`). |
 | `prepare_prototype.py` | Build a hashed local runtime cache for the Godot C# sandbox; optionally extract the owner's install. |
 | `viewer.html` | three.js viewer with unit and clip pickers (`?clip=Name`, `?t=0.5` freezes a frame). |
 

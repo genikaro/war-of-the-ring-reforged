@@ -1,9 +1,11 @@
 """Conservative layered walker graph from placed navigation triangles.
 
-Ground cells keep their original IDs. Surface cells append separate nodes;
-terrain links require matching heights. Stored MPL routing codes are unused.
+Ground cells keep their original IDs. Surface cells append separate nodes,
+usually at cell centers; terrain links require matching heights. Stored MPL
+routing codes are unused.
 Coordinates are source X/Y horizontal and Z up, in millimeters at runtime.
 """
+import itertools
 import math
 from collections import defaultdict
 
@@ -161,12 +163,48 @@ def terrain_height(x, z, width, spacing, heights):
     return a+(b-a)*dx+(c-a)*dz if dx+dz <= 1 else d+(c-d)*(1-dx)+(b-d)*(1-dz)
 
 
+def node_point(node, width, spacing):
+    """World position in meters; off-center nodes store integer millimeters."""
+    cell = node['cell']
+    return (node['x_mm']/1000 if 'x_mm' in node else (cell % width+.5)*spacing,
+            node['z_mm']/1000 if 'z_mm' in node else (cell // width+.5)*spacing, node['height_mm']/1000)
+
+
+# Searched nearest-first when a cell center cannot hold the body. The lattice
+# stays inside the cell, so a node keeps its column for grid queries.
+OFFSETS = sorted(((i/10, j/10) for i in range(-4, 5) for j in range(-4, 5) if i or j),
+                 key=lambda o: (o[0]*o[0]+o[1]*o[1], o[1], o[0]))
+NODE_SPACING = .7  # Two bodies fit at any pair of nodes on one floor.
+
+
+def crowds(p, a, b):
+    """A body standing at p would obstruct movement between a and b.
+
+    Matches the simulation's reservation test: vertical ranges within 700 mm
+    and a horizontal segment distance below 700 mm. Cell-center lattices
+    never do this; off-center nodes must not either.
+    """
+    if p[2] <= min(a[2], b[2])-NODE_SPACING or p[2] >= max(a[2], b[2])+NODE_SPACING:
+        return False
+    dx, dz = b[0]-a[0], b[1]-a[1]
+    length = dx*dx+dz*dz
+    t = max(0, min(1, ((p[0]-a[0])*dx+(p[1]-a[1])*dz)/length)) if length else 0
+    return math.hypot(p[0]-a[0]-t*dx, p[1]-a[1]-t*dz) < NODE_SPACING-1e-9
+
+
 def build(width, height, spacing, allowed, heights, surfaces, footprints=()):
     """surfaces: name/triangles in world space. Build deterministic cell graph."""
     from prototype_obstacles import blocked, RADIUS
     nodes, triangles_by_node = [], []
     by_cell = defaultdict(list)
     reports = []
+    def around(cell, reach):
+        return [n for dz in range(-reach, reach+1) for dx in range(-reach, reach+1)
+                if 0 <= cell % width+dx < width and 0 <= cell // width+dz < height
+                for n in by_cell[cell+dz*width+dx]]
+    def adjacent_cells(a, b):
+        ca, cb = nodes[a]['cell'], nodes[b]['cell']
+        return ca != cb and abs(ca % width-cb % width) <= 1 and abs(ca // width-cb // width) <= 1
     for surface in surfaces:
         candidates = defaultdict(list)
         for triangle in surface['triangles']:
@@ -178,6 +216,12 @@ def build(width, height, spacing, allowed, heights, surfaces, footprints=()):
                 for x in range(xmin, xmax+1):
                     candidates[z*width+x].append(triangle)
         first = len(nodes)
+        def add(cell, x, z, y, offset):
+            by_cell[cell].append(len(nodes))
+            nodes.append({'cell': cell, 'height_mm': y, 'links': [], 'surface': surface['name']})
+            if offset:
+                nodes[-1].update(x_mm=round(x*1000), z_mm=round(z*1000))
+            triangles_by_node.append(surface['triangles'])
         for cell, triangles in sorted(candidates.items()):
             x, z = (cell % width + .5)*spacing, (cell // width + .5)*spacing
             samples = sorted({round(y*1000) for t in triangles if (y := height_at(x, z, t)) is not None})
@@ -189,27 +233,49 @@ def build(width, height, spacing, allowed, heights, surfaces, footprints=()):
                 # Retain genuinely stacked surfaces; merge rounding at shared edges.
                 if any(abs(nodes[n]['height_mm']-y) <= 2 for n in by_cell[cell]):
                     continue
-                node = len(nodes)
-                by_cell[cell].append(node)
-                nodes.append({'cell': cell, 'height_mm': y, 'links': [], 'surface': surface['name']})
-                triangles_by_node.append(surface['triangles'])
-        reports.append({'name': surface['name'], 'triangles': len(surface['triangles']), 'nodes': len(nodes)-first})
+                add(cell, x, z, y, False)
+        # Walkways narrower than 1.7 m can miss cell centers. Fill each
+        # remaining floor with the nearest supported lattice point instead.
+        def covered(x, z):
+            return any(height_at(x, z, t) is not None for t in surface['triangles'])
+        offsets = 0
+        for cell, triangles in sorted(candidates.items()):
+            cx, cz = (cell % width + .5)*spacing, (cell // width + .5)*spacing
+            nearby = around(cell, 1)
+            # Possible links of nodes up to two cells away can pass this cell.
+            segments = [(node_point(nodes[a], width, spacing), node_point(nodes[b], width, spacing))
+                        for a, b in itertools.combinations(around(cell, 2), 2) if adjacent_cells(a, b)]
+            for dx, dz in OFFSETS:
+                x, z = cx+dx*spacing, cz+dz*spacing
+                for y in sorted({round(y*1000) for t in triangles if (y := height_at(x, z, t)) is not None}):
+                    if any(abs(nodes[n]['height_mm']-y) < spacing*1000 for n in by_cell[cell]):
+                        continue
+                    if any(math.dist((x, z, y/1000), node_point(nodes[n], width, spacing)) < NODE_SPACING for n in nearby):
+                        continue
+                    if any(crowds((x, z, y/1000), a, b) for a, b in segments):
+                        continue
+                    if not all(covered(x+sx*RADIUS, z+sz*RADIUS) for sx in (-1, 1) for sz in (-1, 1)):
+                        continue
+                    if (covers_body((x, z, y/1000), (x, z, y/1000), surface['triangles'], RADIUS)
+                            and not blocked((x, z, y/1000), (x, z, y/1000), footprints, spacing)):
+                        add(cell, x, z, y, True); nearby.append(len(nodes)-1); offsets += 1
+        reports.append({'name': surface['name'], 'triangles': len(surface['triangles']), 'nodes': len(nodes)-first,
+                        'off_center_nodes': offsets})
     base = width*height
     def point(node):
-        cell = nodes[node]['cell']
-        return ((cell % width+.5)*spacing, (cell // width+.5)*spacing, nodes[node]['height_mm']/1000)
+        return node_point(nodes[node], width, spacing)
     for i, node in enumerate(nodes):
         cell = node['cell']; x, z, y = point(i)
         ground = terrain_height(x, z, width, spacing, heights)
-        if allowed[cell] and abs(ground-y) <= .25:
+        center = terrain_height((cell % width+.5)*spacing, (cell // width+.5)*spacing, width, spacing, heights)
+        # Terrain links lead to the column's ground center.
+        if allowed[cell] and abs(ground-y) <= .25 and abs(center-y) <= .25:
             node['links'].append(cell)
-        adjacent = [cell] + ([cell-1] if cell % width else []) + ([cell-width] if cell >= width else [])
-        if cell >= width:
-            if cell % width: adjacent.append(cell-width-1)
-            if cell % width+1 < width: adjacent.append(cell-width+1)
+        adjacent = [cell+dz*width+dx for dz in (-1, 0, 1) for dx in (-1, 0, 1)
+                    if 0 <= cell % width+dx < width and 0 <= cell // width+dz < height]
         for neighbor in adjacent:
             for j in by_cell[neighbor]:
-                if j >= i:
+                if j <= i:
                     continue
                 other = point(j)
                 if abs(y-other[2]) > spacing:
@@ -217,6 +283,8 @@ def build(width, height, spacing, allowed, heights, surfaces, footprints=()):
                 triangles = triangles_by_node[i]
                 if triangles is not triangles_by_node[j]:
                     triangles = triangles + triangles_by_node[j]
+                if any(crowds(point(k), (x, z, y), other) for k in around(cell, 2) if k != i and k != j):
+                    continue
                 if (covers_segment((x, z, y), other, triangles)
                         and covers_body((x, z, y), other, triangles, RADIUS)
                         and not blocked((x, z, y), other, footprints, spacing)):
@@ -224,7 +292,7 @@ def build(width, height, spacing, allowed, heights, surfaces, footprints=()):
     for node in nodes:
         node['links'].sort()
     return {'surface_nodes': nodes, 'surface_report': reports,
-            'surface_policy': 'Eight-way separate mesh layers at grid centers; continuous triangle coverage and 350 mm swept-square body support within 150 mm of interpolated height, <=1 cell rise per edge, <=250 mm terrain joins. Narrower-than-grid routes may be omitted.',
+            'surface_policy': 'Eight-way separate mesh layers at grid centers, or the nearest supported 100 mm lattice point within 400 mm when a center cannot hold the body; off-center nodes stay 700 mm from nearby nodes and possible links, and no link passes within 700 mm of another node. Continuous triangle coverage and 350 mm swept-square body support within 150 mm of interpolated height, <=1 cell rise per edge, <=250 mm terrain joins at the node and its column center.',
             'surface_clearance_radius_mm': round(RADIUS*1000)}
 
 

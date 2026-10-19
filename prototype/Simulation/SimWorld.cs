@@ -110,17 +110,19 @@ public sealed class SimWorld(GridNavigation navigation)
 
     private void RequestYield(SimUnit waiting)
     {
-        if (waiting.Target >= 0 || waiting.YieldFor >= 0) return;
-        int start = waiting.Node;
-        var path = Navigation.FindPath(start,waiting.Goal);
-        var route = path.ToHashSet();
-        foreach (var edge in path.Zip(path.Skip(1))) route.UnionWith(Navigation.MovementNodes(edge.First,edge.Second));
+        if (waiting.Target >= 0) return;
+        // A yielding unit can be blocked on its way to the refuge; it asks
+        // for room on that route, never from a unit it is yielding for.
+        int destination = waiting.YieldGoal >= 0 ? waiting.YieldGoal : waiting.Goal;
+        var priorities = new HashSet<int>();
+        for (int id = waiting.YieldFor; id >= 0 && priorities.Add(id); id = Units[id].YieldFor) { }
+        var route = RouteCells(waiting.Node, destination);
         // A squad's early arrivals can seal its remaining formation slots.
         // Exchange slots only within the same explicit order, and only when
         // the parked unit has a clear route to the unfinished slot.
-        foreach (var parked in Units.Where(u => u.Id != waiting.Id && u.Team == waiting.Team && u.Health > 0
+        foreach (var parked in Units.Where(u => waiting.YieldFor < 0 && u.Id != waiting.Id && u.Team == waiting.Team && u.Health > 0
             && u.Goal < 0 && u.Target < 0 && u.YieldFor < 0 && u.OrderSequence == waiting.OrderSequence
-            && u.OrderSequence >= 0 && route.Contains(u.Node)))
+            && u.OrderSequence >= 0 && route.Contains(u.Node) && !Units.Any(o => o.Goal == u.Node)))
         {
             var occupied = OccupiedNodes(parked.Id);
             var onward = Navigation.FindPath(parked.Node, waiting.Goal, occupied);
@@ -130,31 +132,53 @@ public sealed class SimWorld(GridNavigation navigation)
             waiting.Path = Navigation.FindPath(waiting.Node, waiting.Goal); waiting.Waypoint = 0;
             return;
         }
-        foreach (var other in Units.Where(u => u.Id != waiting.Id && u.Team == waiting.Team
-            && u.Health > 0 && u.Target < 0 && (u.YieldFor < 0 || u.YieldFor == waiting.Id)))
+        // A unit heading the same way usually clears on its own. At a
+        // junction, routes can still meet head-on although goals do not.
+        bool Blocking(SimUnit u)
         {
-            if (other.YieldFor >= 0 && (other.TransitNode >= 0 || other.Node != other.YieldGoal)) continue;
-            var (wx, wz) = Navigation.Center(waiting.Goal);
-            int resume = other.Goal >= 0 ? other.Goal : other.Node;
-            var (ox, oz) = Navigation.Center(resume);
-            if (other.YieldFor < 0 && other.Goal >= 0 && (long)(wx - waiting.X) * (ox - other.X)
-                + (long)(wz - waiting.Z) * (oz - other.Z) >= 0) continue;
+            if (u.YieldFor >= 0 || u.Goal < 0) return true;
+            int resume = u.Goal;
+            var (wx, wz) = Navigation.Center(destination); var (ox, oz) = Navigation.Center(resume);
+            if ((long)(wx - waiting.X) * (ox - u.X) + (long)(wz - waiting.Z) * (oz - u.Z) < 0) return true;
+            var ahead = Navigation.FindPath(u.Node, resume);
+            return ahead.Contains(waiting.Node) || ahead.Contains(waiting.TransitNode);
+        }
+        bool Eligible(SimUnit u) => u.Id != waiting.Id && u.Team == waiting.Team && !priorities.Contains(u.Id)
+            && u.Health > 0 && u.Target < 0 && (u.YieldFor < 0 || u.YieldFor == waiting.Id);
+        var occupants = new Dictionary<int, SimUnit>();
+        foreach (var u in Units.Where(u => u.Health > 0))
+        {
+            occupants.TryAdd(u.Node, u);
+            if (u.TransitNode >= 0) occupants.TryAdd(u.TransitNode, u);
+        }
+        foreach (var other in Units.Where(Eligible))
+        {
+            // Assigned refuges stay stable while reachable. One that units
+            // now block (an inherited or since occupied refuge) is replaced.
+            if (other.YieldFor >= 0 && (other.TransitNode >= 0 || (other.Node != other.YieldGoal
+                && Navigation.FindPath(other.Node, other.YieldGoal, OccupiedNodes(other.Id)).Count > 0))) continue;
             int cell = other.Node;
-            if (!route.Contains(cell)) continue;
-            var occupied = OccupiedNodes(other.Id);
-            occupied.Remove(cell);
+            if (!route.Contains(cell) || !Blocking(other)) continue;
             var reserved = Units.Where(u => u.YieldGoal >= 0).Select(u => u.YieldGoal)
                 .Concat(Units.Where(u => u.Goal >= 0).Select(u => u.Goal)).ToHashSet();
-            var queue = new Queue<int>(); queue.Enqueue(cell);
+            // The nearest refuge may lie past other standing friendly units
+            // that could also give way. The one closest to it moves first; the
+            // chain unwinds on later requests.
+            var queue = new Queue<(int Node, SimUnit Mover)>(); queue.Enqueue((cell, other));
             var seen = new HashSet<int> { cell };
-            while (queue.TryDequeue(out int candidate))
+            while (queue.TryDequeue(out var item))
             {
+                var (candidate, mover) = item;
+                int resume = mover.Goal >= 0 ? mover.Goal : mover.Node;
                 // The priority unit will park at its goal. Reject refuges that
-                // would trap the yielding unit behind that final position.
-                bool giveUpRest = (other.Goal < 0 || other.ReturningToRest) && resume == waiting.Goal;
-                if (!route.Contains(candidate) && !reserved.Contains(candidate)
-                    && (giveUpRest || Navigation.FindPath(candidate, resume, new HashSet<int> { waiting.Goal }).Count > 0))
+                // would trap an ordered unit behind that final position; an
+                // idle unit settles in the refuge instead.
+                bool free = !occupants.ContainsKey(candidate) && !route.Contains(candidate) && !reserved.Contains(candidate);
+                bool canReturn = free && Navigation.FindPath(candidate, resume, new HashSet<int> { destination }).Count > 0;
+                if (free && (canReturn || mover.Goal < 0 || mover.ReturningToRest))
                 {
+                    bool giveUpRest = !canReturn;
+                    var occupied = OccupiedNodes(mover.Id);
                     // Fill a single-entry refuge from the back, keeping its
                     // mouth available for the rest of the oncoming squad.
                     var pockets = new Queue<(int Node,int Depth)>(); pockets.Enqueue((candidate,0));
@@ -169,20 +193,42 @@ public sealed class SimWorld(GridNavigation navigation)
                             if (Navigation.CanStand(next) && !route.Contains(next) && !occupied.Contains(next)
                                 && !reserved.Contains(next) && pocketSeen.Add(next)) pockets.Enqueue((next,pocket.Depth+1));
                     }
-                    other.ReturningToRest |= other.Goal < 0;
-                    other.Goal = giveUpRest ? refuge : resume;
+                    mover.ReturningToRest |= mover.Goal < 0;
+                    mover.Goal = giveUpRest ? refuge : resume;
                     // Keep existing refuges held for the new priority unit,
                     // instead of letting a dependent pin this blocker in place.
-                    foreach (var dependent in Units.Where(u => u.YieldFor == other.Id)) dependent.YieldFor = waiting.Id;
-                    other.YieldFor = waiting.Id; other.YieldGoal = refuge;
-                    other.Path = Navigation.FindPath(cell, refuge, occupied);
-                    other.Waypoint = 0; other.BlockedTicks = 0;
+                    foreach (var dependent in Units.Where(u => u.YieldFor == mover.Id)) dependent.YieldFor = waiting.Id;
+                    mover.YieldFor = waiting.Id; mover.YieldGoal = refuge;
+                    mover.Path = Navigation.FindPath(mover.Node, refuge, occupied);
+                    mover.Waypoint = 0; mover.BlockedTicks = 0;
                     return;
                 }
                 foreach (int next in Navigation.Neighbors(candidate))
-                    if (Navigation.CanStand(next) && !occupied.Contains(next) && seen.Add(next)) queue.Enqueue(next);
+                {
+                    if (!Navigation.CanStand(next) || !seen.Add(next)) continue;
+                    if (!occupants.TryGetValue(next, out var unit)) queue.Enqueue((next, mover));
+                    else if (unit.TransitNode < 0 && Eligible(unit) && Blocking(unit)) queue.Enqueue((next, unit));
+                }
             }
         }
+    }
+
+    // A held refuge is released once the priority unit's remaining route no
+    // longer crosses this unit's way back. Checked every half second.
+    private bool Passed(SimUnit unit, SimUnit priority)
+    {
+        if (unit.TransitNode >= 0 || unit.Node != unit.YieldGoal || priority.YieldFor >= 0 || (Tick + unit.Id) % 10 != 0) return false;
+        var ahead = RouteCells(priority.TransitNode >= 0 ? priority.TransitNode : priority.Node, priority.Goal);
+        ahead.Add(priority.Node);
+        return !RouteCells(unit.Node, unit.Goal).Overlaps(ahead);
+    }
+
+    private HashSet<int> RouteCells(int from, int to)
+    {
+        var path = Navigation.FindPath(from, to);
+        var cells = path.ToHashSet();
+        foreach (var edge in path.Zip(path.Skip(1))) cells.UnionWith(Navigation.MovementNodes(edge.First, edge.Second));
+        return cells;
     }
 
     private HashSet<int> OccupiedNodes(int except)
@@ -249,7 +295,7 @@ public sealed class SimWorld(GridNavigation navigation)
             if (unit.YieldFor >= 0)
             {
                 var priority = Units[unit.YieldFor];
-                if (priority.Health <= 0 || priority.Goal < 0 || priority.Target >= 0 || unit.Target >= 0)
+                if (priority.Health <= 0 || priority.Goal < 0 || priority.Target >= 0 || unit.Target >= 0 || Passed(unit, priority))
                 {
                     unit.YieldFor = unit.YieldGoal = -1;
                     unit.Path = Navigation.FindPath(unit.Node, unit.Goal);
@@ -312,7 +358,11 @@ public sealed class SimWorld(GridNavigation navigation)
                 blocked.Remove(start);
                 unit.Path = Navigation.FindPath(start, unit.YieldGoal >= 0 ? unit.YieldGoal : unit.Goal, blocked);
                 unit.Waypoint = 0; unit.BlockedTicks = 0;
-                if (unit.Path.Count == 0) RequestYield(unit);
+                // A blocked idle unit has no destination worth displacing
+                // others for; it rests where it stands instead.
+                if (unit.Path.Count == 0 && unit.ReturningToRest && unit.YieldFor < 0)
+                { unit.Goal = -1; unit.ReturningToRest = false; }
+                else if (unit.Path.Count == 0) RequestYield(unit);
             }
             // An unreachable replacement order can discard the old route in
             // mid-step. Finish retreating to the last center before stopping.

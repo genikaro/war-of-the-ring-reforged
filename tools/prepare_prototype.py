@@ -19,6 +19,7 @@ import prototype_obstacles
 from lms2gltf import convert_model
 from resolve_model import Resolver
 import wor
+import verify_walker_masks
 import world_scene
 import wor2gltf
 
@@ -71,6 +72,9 @@ def prepare(output, install=None):
     scene = world_scene.parse(source.read_bytes())
     world_scene.resolve_objects(scene, resolver.db)
     category = next(c for c in scene['pathing']['categories'] if c['name'] == 'PATHING_CATEGORY_WALKER')
+    mask_audit = verify_walker_masks.audit_category(scene, category)
+    if mask_audit.get('region_mismatches', 1):
+        raise ValueError('painted walker bits differ from the original walker regions')
     width, height = category['grid']
     words = category['painted']['words']
     allowed = bytes((words[i // 32] >> (i % 32)) & 1 for i in range(width * height))
@@ -89,8 +93,8 @@ def prepare(output, install=None):
            'allowed_base64': base64.b64encode(allowed).decode('ascii'),
            'painted_allowed_base64': base64.b64encode(source_allowed).decode('ascii'),
            'obstacle_report': obstacle_report,
-           'source_category': category['name'],
-           'policy': 'Painted walker bits interpreted as allowed cells, with independently removable per-object collision masks. Original auxiliary masks and portal query semantics remain unverified.'}
+           'source_category': category['name'], 'walker_mask_audit': mask_audit,
+           'policy': 'Painted walker bits are allowed cells; they equal the original walker region coverage. Independently removable per-object collision masks. Ground diagonals need both flank cells, unlike corner-only region links.'}
     spacing = scene['world'].metadata['terrain']['cell_size']
     surfaces = prototype_navigation.placed_surfaces(scene, resolver)
     nav.update(prototype_navigation.build(width, height, spacing,

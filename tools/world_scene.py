@@ -210,6 +210,30 @@ def path_graph(r):
             'matrices': matrices, 'table_word': word, 'tables': tables}
 
 
+def region_cells(graph):
+    """Per-cell region IDs from the row tables; -1 marks cells without a region.
+
+    Each row is a sequence of u16 (region, run length - 1) pairs, 0xffff for
+    no region; the table word is the row width.
+    """
+    width, height = graph['grid']
+    if graph['table_word'] != width or len(graph['tables']) != height:
+        raise ValueError('region tables do not match the pathing grid')
+    cells = []
+    for row in graph['tables']:
+        raw = bytes.fromhex(row)
+        if len(raw) % 4:
+            raise ValueError('incomplete region run')
+        start = len(cells)
+        for region, run in struct.iter_unpack('<2H', raw):
+            if region != 0xffff and region >= len(graph['regions']):
+                raise ValueError('region run index out of range')
+            cells.extend([-1 if region == 0xffff else region] * (run + 1))
+        if len(cells) - start != width:
+            raise ValueError('region runs do not fill their row')
+    return cells
+
+
 def pathing(r):
     categories = []
     for _ in range(r.take('I') if r.boolean() else 0):

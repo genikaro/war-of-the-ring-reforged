@@ -164,6 +164,16 @@ Check(elevated && bridgeWorld.Units[0].Node == 4 && bridgeWorld.Units[0].Y == 0
 var stacked = new SimWorld(new GridNavigation(1, 1, 1000, [true], new int[4], [new(0, 4000, [])]));
 stacked.Spawn(0, 0); stacked.Spawn(1, 1); Advance(stacked, 50);
 Check(stacked.Units.All(u => u.Health == 100), "units on separate floors neither collide nor melee through the deck");
+var narrowDeck = new GridNavigation(3, 1, 1000, [false, false, false], new int[8], [
+    new(0, 2000, [4], 500, 600), new(1, 2000, [3, 5], 1500, 600), new(2, 2000, [4], 2500, 600)]);
+var narrowWorld = new SimWorld(narrowDeck); var walker = narrowWorld.Spawn(0, 3);
+narrowWorld.Enqueue(0, [0], 5);
+bool onCenterline = true;
+for (int i = 0; i < 40; i++) { Advance(narrowWorld, 1); onCenterline &= walker.Z == 600 && walker.Y == 2000; }
+Check(narrowDeck.Center(3) == (500, 600) && narrowDeck.TopNode(500, 900) == 3 && onCenterline
+    && walker.Node == 5 && walker.X == 2500 && walker.Goal < 0, "units follow off-center nodes on a narrow walkway");
+try { new GridNavigation(2, 1, 1000, [false, false], new int[6], [new(0, 2000, [], 1500, 600)]); Check(false, "off-center node outside its column must fail"); }
+catch (ArgumentException) { passed++; }
 var slots = new SimWorld(Grid(6, 1)); slots.Spawn(0, 0); slots.Spawn(0, 4);
 slots.Enqueue(0, [0, 1], 5); Advance(slots, 120);
 Check(slots.Units.All(u => u.Goal < 0) && slots.Units[0].Node == 4 && slots.Units[1].Node == 5,
@@ -264,7 +274,8 @@ if (cacheArg >= 0)
         nav.GetProperty("cell_size_mm").GetInt32(), Convert.FromBase64String(nav.GetProperty(dynamicCache ? "painted_allowed_base64" : "allowed_base64").GetString()!)
             .Select(b => b != 0).ToArray(), realHeights,
         surfaceJson.Select(s => new SurfaceCell(s.GetProperty("cell").GetInt32(), s.GetProperty("height_mm").GetInt32(),
-            s.GetProperty("links").EnumerateArray().Select(n => n.GetInt32()).ToArray())).ToArray(),
+            s.GetProperty("links").EnumerateArray().Select(n => n.GetInt32()).ToArray(),
+            s.TryGetProperty("x_mm", out var x) ? x.GetInt32() : null, s.TryGetProperty("z_mm", out var z) ? z.GetInt32() : null)).ToArray(),
         dynamicCache ? obstacleJson.EnumerateArray().Select(o => new NavigationObstacle(o.GetProperty("id").GetInt32(),
             o.GetProperty("nodes").EnumerateArray().Select(n => n.GetInt32()).ToArray(),
             o.GetProperty("edges").EnumerateArray().Select(e => new NavigationEdge(e[0].GetInt32(), e[1].GetInt32())).ToArray())).ToArray() : null);
@@ -303,23 +314,28 @@ if (cacheArg >= 0)
         Check(realWorld.Units.All(u => u.Goal < 0), "real map six-unit formation finishes: "+destination.Surface);
         Console.WriteLine($"MAP_NAV {destination.Surface}: six units arrived, target height {realNav.NodeHeight(destination.Node)} mm");
     }
-    var crossingDestination = destinations.First(d => d.Surface.Contains("Mesh 04"));
-    var mapTraffic = new SimWorld(realNav);
     var clearing = manifest.GetProperty("spawns").EnumerateArray().Where(s => s.GetProperty("team").GetInt32() == 0)
-        .Take(3).Select(s => s.GetProperty("cell").GetInt32()).ToArray();
-    foreach (int cell in clearing) mapTraffic.Spawn(0,cell);
-    var deckSlots = new HashSet<int>();
-    for (int i = 0; i < 3; i++)
+        .Select(s => s.GetProperty("cell").GetInt32()).ToArray();
+    foreach (var crossingDestination in destinations)
     {
-        int slot = realNav.Nearest(crossingDestination.Node,deckSlots);
-        deckSlots.Add(slot); mapTraffic.Spawn(0,slot);
+        // Six units on the deck swap with six from the clearing.
+        var mapTraffic = new SimWorld(realNav);
+        foreach (int cell in clearing) mapTraffic.Spawn(0,cell);
+        var deckSlots = new HashSet<int>();
+        for (int i = 0; i < 6; i++)
+        {
+            int slot = realNav.Nearest(crossingDestination.Node,deckSlots);
+            deckSlots.Add(slot); mapTraffic.Spawn(0,slot);
+        }
+        mapTraffic.Enqueue(0,[0,1,2,3,4,5],crossingDestination.Node); mapTraffic.Enqueue(0,[6,7,8,9,10,11],clearing[0]);
+        for (int tick = 0; tick < 12000 && (tick == 0 || mapTraffic.Units.Any(u => u.Goal >= 0 || u.YieldFor >= 0)); tick++) Advance(mapTraffic,1);
+        if (mapTraffic.Units.Any(u => u.Goal >= 0))
+            Console.WriteLine("MAP_TRAFFIC " + string.Join(";",mapTraffic.Units.Select(u => $"{u.Id} {u.Node} goal{u.Goal} yield{u.YieldFor}/{u.YieldGoal}")));
+        Check(mapTraffic.Units.All(u => u.Goal < 0 && u.YieldFor < 0)
+            && mapTraffic.Units.Take(6).Any(u => u.Node == crossingDestination.Node)
+            && mapTraffic.Units.Skip(6).Any(u => u.Node == clearing[0]),
+            "opposing six-unit squads swap destinations on a real map walkway: "+crossingDestination.Surface);
+        Console.WriteLine($"MAP_TRAFFIC {crossingDestination.Surface}: six-unit squads swapped in {mapTraffic.Tick} ticks");
     }
-    mapTraffic.Enqueue(0,[0,1,2],crossingDestination.Node); mapTraffic.Enqueue(0,[3,4,5],clearing[0]);
-    for (int tick = 0; tick < 8000 && (tick == 0 || mapTraffic.Units.Any(u => u.Goal >= 0)); tick++) Advance(mapTraffic,1);
-    if (mapTraffic.Units.Any(u => u.Goal >= 0))
-        Console.WriteLine("MAP_TRAFFIC " + string.Join(";",mapTraffic.Units.Select(u => $"{u.Id} {u.Node} goal{u.Goal} yield{u.YieldFor}/{u.YieldGoal}")));
-    Check(mapTraffic.Units.All(u => u.Goal < 0 && u.YieldFor < 0), "opposing three-unit squads finish on a real map walkway");
-    Check(mapTraffic.Units.Take(3).Any(u => u.Node == crossingDestination.Node)
-        && mapTraffic.Units.Skip(3).Any(u => u.Node == clearing[0]), "real-map traffic preserves both orders' destinations");
 }
 Console.WriteLine($"{passed} total simulation checks passed");

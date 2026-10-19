@@ -8,14 +8,16 @@ Phases 1 and 2 implementation are complete. All 54 maps decode through EOF, incl
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
-Latest checks: 113 Python tests, eight JavaScript tests and 110 synthetic C# checks
-pass. Sixteen additional cache checks cover runtime masks matching the initial
+Latest checks: 115 Python tests, eight JavaScript tests and 124 synthetic C# checks
+pass. Eighteen additional cache checks cover runtime masks matching the initial
 snapshot, all ten building centers being
 blocked and all six friendly units traversing the four Helm's Deep surfaces
-without overlap, plus opposing squads swapping between the clearing and a
-walkway. The cache contains
-1,207 separate surface nodes and 39 terrain entrances, preserving elevation
-and 350 mm body support along mesh edges.
+without overlap, plus opposing six-unit squads swapping between the clearing
+and each walkway. The cache contains
+1,342 separate surface nodes and 48 terrain entrances, preserving elevation
+and 350 mm body support along mesh edges. A 54-map audit
+(`tools/verify_walker_masks.py`) matches the painted walker bits to the
+original walker region graphs.
 Eight-way weighted routes now use straight diagonal motion at the same speed as
 cardinal moves, with blocked-corner checks and swept-body crossing reservations.
 Ground routes take safe local shortcuts at arbitrary angles; deck links remain
@@ -29,8 +31,14 @@ GLBs validated without errors or warnings. Original-game fidelity remains unveri
 
 ## Next milestone: reliable squad navigation
 
-1. Verify the original walker masks and extend footprint updates to new/moving
-   objects. Existing placed obstacles now have independent node/edge masks:
+1. Extend footprint updates to new/moving objects and settle the corner
+   diagonal policy. The walker masks are verified: on all 54 maps the original
+   walker region graph covers exactly the painted bits, and its links equal
+   eight-way adjacency including corner-only diagonals. mask_b is the editor
+   input before slope, water and outer-frame exclusions; mask_c forces cells
+   passable. The prototype still requires both flank cells for a diagonal,
+   which leaves 66 Helm's Deep cells (2,192 on 43 maps) outside the original's
+   main area. Existing placed obstacles now have independent node/edge masks:
    removal/restoration runs on fixed ticks, preserves overlapping blocks,
    invalidates routes, and rejects restoration over occupied units or segments.
    Alt + right-click toggles an obstacle and its visual in the sandbox.
@@ -43,7 +51,9 @@ GLBs validated without errors or warnings. Original-game fidelity remains unveri
    coverage, height-matched terrain entrances and integer elevation. The stored
    MPL route codes are unused. Exact source-triangle picking selects visible
    navigation surfaces; Ctrl + right-click targets terrain beneath overpasses.
-   Narrow routes can be omitted by the one-meter raster.
+   Walkway cells whose center cannot hold the body take the nearest supported
+   point within 400 mm (135 nodes; 129 more walkway nodes now reachable), kept
+   700 mm from other nodes and links. Paths narrower than the body stay closed.
 2. Complete coordinated yielding for opposing traffic and squad spacing.
    Basic congestion replanning is implemented: occupied waypoints wait, routes
    retry around occupied cells after ten blocked ticks, and cleared corridors
@@ -58,7 +68,14 @@ GLBs validated without errors or warnings. Original-game fidelity remains unveri
    remain stable while approached, and can relocate after a route changes.
    Extra formation slots avoid nearby cut points so arrivals leave room for
    other traffic; idle yielders settle nearby if their old spot is claimed.
-   Corridors without passing space wait safely; larger gridlocks need more coverage.
+   Larger gridlocks resolve through chained refuges past standing units, head-on
+   detection at junctions, refuge replacement and early release. Opposing
+   six-unit squads clear a 12-cell single-file corridor, three squads share it,
+   four squads cross a single-file junction, a squad clears idle units out of
+   a corridor, 60 random order sequences for 6 to 10 units finish, and six-unit
+   squads swap on all four Helm's Deep walkways. Corridors without passing space
+   wait safely; dense orders that park units inside single-file passages others
+   must cross can still wait (374 of 400 random sequences with 6 to 14 units).
 3. Connect original animation events to equipment changes, footsteps,
    attack impacts and voices.
 4. Package the importer with an in-game installation picker.
@@ -85,6 +102,7 @@ The engine is chosen. Remaining choices can be made as their implementation appr
 | Rule fidelity | Match the exe's formulas exactly (disassembly), or approximate from the tables | Tables first for a playable game, then disassemble combat and economy to match | Phase 4 | Open |
 | Mission scripts | Host the original 32-bit DLLs behind the same interface, or rewrite each mission in the new engine's script language | Rewrite, using the DLL imports as the API spec; hosting ties the game to 32-bit Windows | Phase 5 | Open |
 | Multiplayer model | Deterministic lockstep, client-server, or none at first | Keep the simulation deterministic from day one so lockstep stays possible; build networking last | Phase 3 | Open |
+| Ground corner diagonals | Keep requiring both flank cells, or allow corner-only diagonals between painted cells like the original region links | Allow them across unpainted terrain but not across obstacle footprints, so reachability matches the original | Phase 3 | Open |
 
 ## Phase 1: finish the asset pipeline
 
@@ -124,7 +142,7 @@ The engine is chosen. Remaining choices can be made as their implementation appr
 - [ ] Package the first-run importer: `prepare_prototype.py --install` now extracts/verifies source archives and writes a hashed runtime cache; in-game install selection and production packaging remain.
 - [x] Load a map scene and units; RTS camera (pan, zoom, rotate), selection box, move and attack orders
 - [ ] Complete animation state adaptation: initial idle/run/attack/death clips play; original attachment, texture and event timelines still need the Godot adapter.
-- [ ] Complete navigation: eight-way layered A*, safe ground shortcuts, mesh entrances/elevation, swept-body mesh-edge clearance, removable/restorable placed-object footprints, deck/underpass picking, congestion replanning and cooperative yielding work; six-unit traversal of all four Helm's Deep walkable helpers passes. Original mask semantics, new/moving footprints and complex gridlocks remain.
+- [ ] Complete navigation: eight-way layered A*, safe ground shortcuts, mesh entrances/elevation, swept-body mesh-edge clearance, off-center nodes on narrow walkways, removable/restorable placed-object footprints, deck/underpass picking, congestion replanning and chained cooperative yielding work; six-unit traversal and six-versus-six swaps on all four Helm's Deep walkable helpers pass. Walker masks are verified against the original region graphs. New/moving footprints, the corner-diagonal policy and dense single-file gridlocks remain.
 - [x] Fixed-step integer simulation separate from rendering: 20 Hz core, tick commands, stable ordering and repeatability tests; lockstep networking remains later work.
 - [ ] Audio: Ogg speech and music, WAV effects, triggered by clip events from Phase 1
 
@@ -186,6 +204,7 @@ Everything lives in the project folder `war-of-the-ring-reforged`; the research 
 | `converted/buildings/`, `converted/projectiles/` | Building GLBs with initial cloth; projectile definitions/previews |
 | `converted/phase1-report.json` | Reproducible conversion audit; visual comparison deferred until after Phase 2 |
 | `converted/phase2-report.json` | Complete map/terrain/decal audit and two validated scene gates |
+| `converted/walker-mask-report.json` | 54-map audit of ground bitsets against the original walker region graphs |
 | `converted/prototype/` | Local hashed runtime cache, rendered preview and smoke/verification reports |
 | `prototype/` | Godot C# project, launch script and integer simulation core; start with `prototype/README.md` |
 | `tests/simulation/` | Independent C# navigation, movement, combat and repeatability checks |
