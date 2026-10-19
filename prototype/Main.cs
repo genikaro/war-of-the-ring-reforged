@@ -12,6 +12,10 @@ public partial class Main : Node3D
     private SandboxHud _hud = null!;
     private readonly HashSet<int> _selected = [];
     private readonly Dictionary<int, UnitView> _views = [];
+    private readonly Dictionary<int, Node3D> _obstacleViews = [];
+    private JsonElement _obstacleLayers;
+    private int _pendingObstacle = -1;
+    private bool _pendingObstacleActive;
     private Vector3 _focus;
     private float _distance = 48, _yaw = 0.25f;
     private Vector2 _dragStart;
@@ -19,6 +23,9 @@ public partial class Main : Node3D
     private string _cache = "", _capture = "";
     private bool _smoke;
     private bool _surfaceSmoke;
+    private bool _obstacleSmoke, _obstacleRemoved;
+    private int _obstacleSmokeId = -1;
+    private Vector2 _obstacleSmokePoint;
     private int _frames, _moveDestination = -1;
     private string _initialDigest = "";
     private int _movingSeen, _attackingSeen;
@@ -45,6 +52,7 @@ public partial class Main : Node3D
             if (arg.StartsWith("--capture=")) _capture = arg[10..];
             if (arg == "--smoke") _smoke = true;
             if (arg == "--surface-smoke") _surfaceSmoke = true;
+            if (arg == "--obstacle-smoke") _obstacleSmoke = true;
         }
         if (_cache == "") _cache = System.IO.Path.GetFullPath(ProjectSettings.GlobalizePath("res://../converted/prototype"));
         try { LoadSandbox(); }
@@ -52,7 +60,7 @@ public partial class Main : Node3D
         {
             _status.Text = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             GD.PushError(error.ToString());
-            if (_smoke || _surfaceSmoke) GetTree().Quit(1);
+            if (_smoke || _surfaceSmoke || _obstacleSmoke) GetTree().Quit(1);
         }
     }
 
@@ -83,13 +91,24 @@ public partial class Main : Node3D
         byte[] bytes = System.IO.File.ReadAllBytes(System.IO.Path.Combine(_cache, "heights.bin"));
         int[] heights = new int[bytes.Length / 4];
         for (int i = 0; i < heights.Length; i++) heights[i] = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(i * 4, 4));
+        bool dynamic = nav.TryGetProperty("runtime_obstacles", out _obstacleLayers);
         var navigation = new GridNavigation(nav.GetProperty("width").GetInt32(), nav.GetProperty("height").GetInt32(),
-            nav.GetProperty("cell_size_mm").GetInt32(), Convert.FromBase64String(nav.GetProperty("allowed_base64").GetString()!).Select(b => b != 0).ToArray(), heights,
+            nav.GetProperty("cell_size_mm").GetInt32(), Convert.FromBase64String(nav.GetProperty(dynamic ? "painted_allowed_base64" : "allowed_base64").GetString()!).Select(b => b != 0).ToArray(), heights,
             nav.TryGetProperty("surface_nodes", out var surfaces) ? surfaces.EnumerateArray().Select(s => new SurfaceCell(
                 s.GetProperty("cell").GetInt32(), s.GetProperty("height_mm").GetInt32(),
-                s.GetProperty("links").EnumerateArray().Select(n => n.GetInt32()).ToArray())).ToArray() : null);
+                s.GetProperty("links").EnumerateArray().Select(n => n.GetInt32()).ToArray())).ToArray() : null,
+            dynamic ? _obstacleLayers.EnumerateArray().Select(o => new NavigationObstacle(o.GetProperty("id").GetInt32(),
+                o.GetProperty("nodes").EnumerateArray().Select(n => n.GetInt32()).ToArray(),
+                o.GetProperty("edges").EnumerateArray().Select(e => new NavigationEdge(e[0].GetInt32(), e[1].GetInt32())).ToArray())).ToArray() : null);
         _world = new SimWorld(navigation);
-        AddChild(LoadGlb(manifest.GetProperty("map").GetString()!));
+        var map = LoadGlb(manifest.GetProperty("map").GetString()!); AddChild(map);
+        if (dynamic)
+            foreach (var obstacle in _obstacleLayers.EnumerateArray())
+            {
+                var view = Descendants(map).OfType<Node3D>().FirstOrDefault(n => n.Name.ToString() == obstacle.GetProperty("name").GetString());
+                if (view == null) throw new InvalidOperationException("Obstacle visual missing: " + obstacle.GetProperty("name").GetString());
+                _obstacleViews.Add(obstacle.GetProperty("id").GetInt32(), view);
+            }
         var environment = new WorldEnvironment { Environment = new Godot.Environment {
             BackgroundMode = Godot.Environment.BGMode.Color, BackgroundColor = new Color("18222b"),
             AmbientLightSource = Godot.Environment.AmbientSource.Color, AmbientLightColor = new Color("a5b8c9"), AmbientLightEnergy = 0.7f,
@@ -100,9 +119,16 @@ public partial class Main : Node3D
         AddChild(_camera);
         var (cx, cz) = navigation.Center(manifest.GetProperty("camera_cell").GetInt32());
         _focus = PositionOf(cx, cz);
+        var surfaceSpawns = new HashSet<int>();
+        int surfaceStart = _surfaceSmoke ? Enumerable.Range(navigation.GroundCount, navigation.NodeCount-navigation.GroundCount)
+            .Where(navigation.CanStand).OrderByDescending(n => {
+                var (x,z) = navigation.Center(n); return navigation.NodeHeight(n)-navigation.GroundHeight(x,z);
+            }).First() : -1;
         foreach (var spawn in manifest.GetProperty("spawns").EnumerateArray())
         {
-            var unit = _world.Spawn(spawn.GetProperty("team").GetInt32(), spawn.GetProperty("cell").GetInt32());
+            int team = spawn.GetProperty("team").GetInt32(), cell = spawn.GetProperty("cell").GetInt32();
+            if (_surfaceSmoke && team == 0) { cell = navigation.Nearest(surfaceStart, surfaceSpawns); surfaceSpawns.Add(cell); }
+            var unit = _world.Spawn(team, cell);
             var model = manifest.GetProperty("models")[spawn.GetProperty("model").GetInt32()];
             var root = new Node3D { Name = "Unit_" + unit.Id };
             AddChild(root); root.Position = UnitPosition(unit);
@@ -115,6 +141,7 @@ public partial class Main : Node3D
         }
         _status.Text = "Helm's Deep  /  20 Hz sandbox";
         _selection.Text = "Select your green units. Right-click terrain to move or red units to attack.";
+        if (_surfaceSmoke) _focus = UnitPosition(_world.Units[0]);
         UpdateCamera();
         _initialDigest = _world.StateDigest();
         if (_smoke)
@@ -148,8 +175,9 @@ public partial class Main : Node3D
         title.AddThemeFontSizeOverride("font_size", 20); lines.AddChild(title);
         _status = new Label { Text = "Loading local assets…" }; lines.AddChild(_status);
         lines.AddChild(new Label { Text = "WASD pan · Q/E rotate · Wheel zoom · Middle-drag pan · Space pause · Esc clear" });
+        lines.AddChild(new Label { Text = "Alt + right-click an obstacle to remove or restore it" });
         _selection = new Label { Text = "" }; lines.AddChild(_selection);
-        var reset = new Button { Text = "Restart sandbox", Position = new Vector2(18, 154) };
+        var reset = new Button { Text = "Restart sandbox", Position = new Vector2(18, 182) };
         _hud.AddChild(reset); reset.Pressed += () => GetTree().ReloadCurrentScene();
     }
 
@@ -166,7 +194,10 @@ public partial class Main : Node3D
                 if (mouse.Pressed) { _dragStart = mouse.Position; _dragging = true; }
                 else if (_dragging) { SelectUnits(_dragStart, mouse.Position, mouse.ShiftPressed); _dragging = false; _hud.SelectionBox = null; }
             }
-            if (mouse.ButtonIndex == MouseButton.Right && mouse.Pressed) Order(mouse.Position);
+            if (mouse.ButtonIndex == MouseButton.Right && mouse.Pressed)
+            {
+                if (mouse.AltPressed) ToggleObstacle(mouse.Position); else Order(mouse.Position);
+            }
         }
         if (input is InputEventMouseMotion motion)
         {
@@ -223,10 +254,62 @@ public partial class Main : Node3D
         }
     }
 
+    private void ToggleObstacle(Vector2 mouse)
+    {
+        int selected = PickObstacle(mouse);
+        if (selected < 0) return;
+        _pendingObstacle = selected;
+        _pendingObstacleActive = !_world!.Navigation.IsObstacleActive(selected);
+        _world.EnqueueObstacle(selected, _pendingObstacleActive);
+        _status.Text = "Obstacle change queued; restore requires free space";
+    }
+
+    private int PickObstacle(Vector2 mouse)
+    {
+        if (_obstacleLayers.ValueKind != JsonValueKind.Array) return -1;
+        Vector3 origin = _camera.ProjectRayOrigin(mouse), direction = _camera.ProjectRayNormal(mouse);
+        // Test source footprints even after their visuals are hidden, so the
+        // same click restores an obstacle. Convex half-space ray clipping.
+        float nearest = float.PositiveInfinity; int selected = -1;
+        foreach (var layer in _obstacleLayers.EnumerateArray())
+        foreach (var box in layer.GetProperty("footprints").EnumerateArray())
+        {
+            float lo = 0, hi = 1500;
+            bool Clip(float value, float velocity)
+            {
+                if (Mathf.Abs(velocity) < 0.000001f) return value >= 0;
+                float t = -value/velocity;
+                if (velocity > 0) lo = Math.Max(lo, t); else hi = Math.Min(hi, t);
+                return lo <= hi;
+            }
+            if (!Clip(origin.Y-box.GetProperty("y_min").GetSingle(), direction.Y)
+                || !Clip(box.GetProperty("y_max").GetSingle()-origin.Y, -direction.Y)) continue;
+            var polygon = box.GetProperty("polygon").EnumerateArray().ToArray();
+            bool hit = true;
+            for (int i = 0; i < polygon.Length; i++)
+            {
+                var p = polygon[i]; var q = polygon[(i+1)%polygon.Length];
+                float dx = q[0].GetSingle()-p[0].GetSingle(), dz = q[1].GetSingle()-p[1].GetSingle();
+                if (!Clip(dx*(origin.Z-p[1].GetSingle())-dz*(-origin.X-p[0].GetSingle()), dx*direction.Z+dz*direction.X))
+                { hit = false; break; }
+            }
+            if (hit && lo < nearest) { nearest = lo; selected = layer.GetProperty("id").GetInt32(); }
+        }
+        return selected;
+    }
+
     public override void _PhysicsProcess(double delta)
     {
         if (_world is null || _paused) return;
         _world.Step();
+        if (_pendingObstacle >= 0)
+        {
+            bool applied = _world.Navigation.IsObstacleActive(_pendingObstacle) == _pendingObstacleActive;
+            _status.Text = applied ? (_pendingObstacleActive ? "Obstacle restored" : "Obstacle removed")
+                : "Cannot restore here while a unit occupies the space";
+            _pendingObstacle = -1;
+        }
+        foreach (var (id, view) in _obstacleViews) view.Visible = _world.Navigation.IsObstacleActive(id);
         foreach (var unit in _world.Units)
         {
             var view = _views[unit.Id];
@@ -267,6 +350,7 @@ public partial class Main : Node3D
         _selection.Text = $"{units.Count} selected · {units.Sum(u => u.Health)} HP · {_world.Units.Count(u => u.Team == 1 && u.Health > 0)} enemies" + (_paused ? "  /  PAUSED" : "");
         _hud.DestinationTime -= dt; _hud.QueueRedraw();
         _frames++;
+        if (_obstacleSmoke) ObstacleSmokeInput();
         if (_surfaceSmoke && _frames == 5)
         {
             _selected.UnionWith(_world.Units.Where(u => u.Team == 0).Select(u => u.Id));
@@ -305,6 +389,32 @@ public partial class Main : Node3D
     }
 
     private bool _finishing;
+    private void ObstacleSmokeInput()
+    {
+        if (_frames == 5)
+        {
+            var box = _obstacleLayers[0].GetProperty("footprints")[0];
+            var polygon = box.GetProperty("polygon").EnumerateArray().ToArray();
+            var center = new Vector3(-polygon.Average(p => p[0].GetSingle()),
+                (box.GetProperty("y_min").GetSingle()+box.GetProperty("y_max").GetSingle())/2,
+                polygon.Average(p => p[1].GetSingle()));
+            _focus = center; UpdateCamera();
+            _obstacleSmokePoint = _camera.UnprojectPosition(center);
+            _obstacleSmokeId = PickObstacle(_obstacleSmokePoint);
+        }
+        if ((_frames == 5 || _frames == 10) && _obstacleSmokeId >= 0)
+            GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true,
+                AltPressed = true, Position = _obstacleSmokePoint, GlobalPosition = _obstacleSmokePoint }, true);
+        if (_frames == 7 && _obstacleSmokeId >= 0)
+            _obstacleRemoved = !_world!.Navigation.IsObstacleActive(_obstacleSmokeId) && !_obstacleViews[_obstacleSmokeId].Visible;
+        if (_frames == 12)
+        {
+            bool passed = _obstacleSmokeId >= 0 && _obstacleRemoved && _world!.Navigation.IsObstacleActive(_obstacleSmokeId)
+                && _obstacleViews[_obstacleSmokeId].Visible && _world.ObstacleCommands.Count == 2;
+            GD.Print("OBSTACLE_INPUT_SMOKE " + passed); GetTree().Quit(passed ? 0 : 1);
+        }
+    }
+
     private void SmokeInput()
     {
         // Exercise Godot's input dispatch, including drag selection and picking.

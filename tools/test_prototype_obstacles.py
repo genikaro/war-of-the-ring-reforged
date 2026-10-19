@@ -62,6 +62,21 @@ class PrototypeObstacleTests(unittest.TestCase):
         item = {'polygon': [(0, 0), (1, 0), (1, 1), (0, 1)], 'y_min': 3, 'y_max': 5}
         self.assertTrue(obstacles.blocked([.5, .5, 0], [.5, .5, 6], [item], 1))
 
+    def test_runtime_layers_retain_overlapping_object_masks(self):
+        boxes = [{'name': str(i), 'object_id': i, 'polygon': [(2, 0), (3, 0), (3, 1), (2, 1)],
+                  'y_min': 0, 'y_max': 2} for i in [9, 3]]
+        layers = obstacles.runtime_layers(6, 1, 1, bytes([1]*6), [0]*14, [], boxes)
+        self.assertEqual([o['id'] for o in layers], [3, 9])
+        self.assertEqual([o['nodes'] for o in layers], [[1, 2, 3], [1, 2, 3]])
+
+    def test_runtime_layers_mask_edge_between_unblocked_floors(self):
+        box = {'name': 'ceiling', 'object_id': 1, 'polygon': [(0, 0), (1, 0), (1, 1), (0, 1)],
+               'y_min': 3, 'y_max': 5}
+        nodes = [{'cell': 0, 'height_mm': 0, 'links': [2]}, {'cell': 0, 'height_mm': 6000, 'links': [1]}]
+        layer = obstacles.runtime_layers(1, 1, 1, [1], [0]*4, nodes, [box])[0]
+        self.assertEqual(layer['nodes'], [])
+        self.assertEqual(layer['edges'], [[1, 2]])
+
 
 if __name__ == '__main__':
     unittest.main()

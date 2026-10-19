@@ -7,7 +7,8 @@ fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 Squads now traverse layered walkable geometry with terrain entrances and
 congestion replanning. Static building/object footprints now block movement.
 Walkway edges now require support for the full 350 mm unit radius.
-Original mask semantics and dynamic updates remain open.
+Placed obstacles can be removed and restored while units replan their routes.
+Original mask semantics and broader traffic coordination remain open.
 The remaining Phase 3 work and acceptance criteria are in
 [the local roadmap](../tools/Roadmap.md).
 
@@ -50,6 +51,7 @@ checked before loading. Never distribute the local cache with the project.
 | Shift + selection | Add to selection |
 | Right-click terrain | Move the selection in a small formation |
 | Right-click an enemy | Attack, approaching when outside melee range |
+| Alt + right-click a placed obstacle | Remove it; click the same space again to restore it |
 | WASD / middle-drag | Pan the camera |
 | Q / E | Rotate |
 | Mouse wheel | Zoom |
@@ -63,9 +65,11 @@ checked before loading. Never distribute the local cache with the project.
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --cache converted/prototype
 ./prototype/run.ps1 -Smoke
+./prototype/run.ps1 -SurfaceSmoke
+./prototype/run.ps1 -ObstacleSmoke
 ```
 
-The simulation runner has no Godot or test-package dependency. Its 34 checks cover
+The simulation runner has no Godot or test-package dependency. Its 48 checks cover
 blocked routes, unreachable areas, adjacent-cell paths, deterministic ties,
 terrain interpolation, repeatable command playback, movement, combat,
 ownership and non-overlapping units, stationary-blocker detours, a six-unit
@@ -74,7 +78,12 @@ They also cover opposing units using a siding, repeatable yielding, opposing
 three-unit groups in open space and replacing an order during yielding.
 Layered checks cover ramp heights, explicit bridge entrances, separated floors,
 surface picking, formation spacing and slot exchanges after an early arrival.
-The optional cache check adds thirteen checks: all placed building centers are
+Obstacle checks cover overlapping footprints, separate floors, blocked surface
+edges, route invalidation and recovery, deterministic obstacle commands, and
+safe restoration around standing units and units in transit. Replacement orders
+retain the occupied physical segment until the unit reaches a cell center.
+The optional cache check adds fourteen checks: runtime layers reproduce the
+static ground snapshot, all placed building centers are
 blocked, and all six friendly units visit each of Helm's Deep's four walkable
 surfaces without overlap and reach every order.
 The headless Godot smoke test loads
@@ -82,6 +91,9 @@ the actual map and twelve models, dispatches mouse/key events through the
 viewport, and checks selection, move/attack picking, zoom, pause/resume,
 animation and damage over 420 fixed ticks. Its report is
 `converted/prototype/smoke-report.json`.
+The surface smoke test places six units on an elevated deck and dispatches a
+right-click order. The obstacle smoke test removes and restores an obstacle
+through actual Alt + right-click input and verifies its visibility each time.
 
 For a rendered capture (opens the engine, saves a frame, then exits):
 
@@ -99,7 +111,7 @@ UI hit positions are quantized into cell commands before the next fixed tick.
 
 Movement currently interprets the saved painted walker bits as allowed cells.
 This is a prototype policy, not a claim of original-game passability fidelity.
-Auxiliary ground mask semantics and dynamic obstacle updates remain open.
+Auxiliary ground mask semantics remain open.
 Static footprints use the source's oriented-collision layer for Buildings and
 objects with `IsPathingObstacle`: 108 Helm's Deep placements block 1,741 painted
 ground cells. The prototype interprets the records as half-extents, center and
@@ -107,8 +119,15 @@ quaternion, transforms their corners, and applies a conservative swept-cell
 envelope with a 350 mm radius and 1.8 m body. Vertical bounds preserve separate
 floors. Original executable collision formulas remain unverified; rotated
 boxes may be over-conservative. Unsupported or missing collision boxes fail
-cache generation. These are static snapshots, with no construction/destruction
-updates yet. The raw painted mask is retained separately for auditing.
+cache generation. The obstacle-free graph and independent per-object node/edge
+masks allow removal and restoration at fixed simulation ticks. Overlapping
+objects retain their own blocks. Adding an obstacle is rejected if its mask
+covers a live unit or a segment the unit is crossing. Route changes bring moving
+units back to their last cell center before taking a new path; sealed orders
+retain their destination and resume after reopening. This sandbox control
+toggles existing placed objects; building health, construction and destruction
+gameplay remain Phase 4 work. New or moving footprints still require an adapter.
+The raw painted mask and initial blocked snapshot remain available for auditing.
 Walkable helpers append separate nodes to the ground grid; the
 current cache has 1,207 surface nodes and 39 height-matched terrain entrances.
 Links require continuous triangle coverage with at most 150 mm deviation from

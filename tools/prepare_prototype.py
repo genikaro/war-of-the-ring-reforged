@@ -90,9 +90,12 @@ def prepare(output, install=None):
            'painted_allowed_base64': base64.b64encode(source_allowed).decode('ascii'),
            'obstacle_report': obstacle_report,
            'source_category': category['name'],
-           'policy': 'Painted walker bits interpreted as allowed cells, minus static collision footprints. Original auxiliary masks and portal query semantics remain unverified.'}
-    nav.update(prototype_navigation.build(width, height, scene['world'].metadata['terrain']['cell_size'],
-               allowed, scene['world'].heights, prototype_navigation.placed_surfaces(scene, resolver), footprints))
+           'policy': 'Painted walker bits interpreted as allowed cells, with independently removable per-object collision masks. Original auxiliary masks and portal query semantics remain unverified.'}
+    spacing = scene['world'].metadata['terrain']['cell_size']
+    nav.update(prototype_navigation.build(width, height, spacing,
+               source_allowed, scene['world'].heights, prototype_navigation.placed_surfaces(scene, resolver)))
+    nav['runtime_obstacles'] = prototype_obstacles.runtime_layers(width, height, spacing,
+        source_allowed, scene['world'].heights, nav['surface_nodes'], footprints)
     (output / 'navigation.json').write_text(json.dumps(nav, indent=2) + '\n')
     heights = [round(h * 1000) for h in scene['world'].heights]
     (output / 'heights.bin').write_bytes(struct.pack('<%di' % len(heights), *heights))

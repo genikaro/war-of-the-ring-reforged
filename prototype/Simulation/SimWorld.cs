@@ -8,6 +8,7 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int Z { get; internal set; } = z;
     public int Y { get; internal set; }
     public int Node { get; internal set; }
+    public int TransitNode { get; internal set; } = -1;
     public int Health { get; internal set; } = 100;
     public int Target { get; internal set; } = -1;
     public int Cooldown { get; internal set; }
@@ -23,6 +24,7 @@ public sealed class SimUnit(int id, int team, int x, int z)
 }
 
 public sealed record SimCommand(int Tick, int Sequence, int Team, int[] Units, int Cell, int Target = -1);
+public sealed record SimObstacleCommand(int Tick, int Sequence, int Obstacle, bool Active);
 
 /// <summary>20 Hz integer simulation. No renderer, wall clock, random state or Godot APIs.</summary>
 public sealed class SimWorld(GridNavigation navigation)
@@ -31,8 +33,10 @@ public sealed class SimWorld(GridNavigation navigation)
     public GridNavigation Navigation { get; } = navigation;
     public List<SimUnit> Units { get; } = [];
     public List<SimCommand> Commands { get; } = [];
+    public List<SimObstacleCommand> ObstacleCommands { get; } = [];
     public int Tick { get; private set; }
     private int _sequence;
+    private int _navigationRevision = navigation.Revision;
 
     public SimUnit Spawn(int team, int cell)
     {
@@ -46,6 +50,26 @@ public sealed class SimWorld(GridNavigation navigation)
 
     public void Enqueue(int team, IEnumerable<int> units, int cell, int target = -1)
         => Commands.Add(new(Tick, _sequence++, team, units.Distinct().Order().ToArray(), cell, target));
+
+    public void EnqueueObstacle(int id, bool active)
+    {
+        if (!Navigation.ObstacleIds.Contains(id)) throw new ArgumentException("Unknown obstacle");
+        ObstacleCommands.Add(new(Tick, _sequence++, id, active));
+    }
+
+    private void ApplyObstacle(SimObstacleCommand command)
+    {
+        if (command.Active)
+        {
+            foreach (var unit in Units.Where(u => u.Health > 0))
+            {
+                if (Navigation.ObstacleCovers(command.Obstacle, unit.Node)) return;
+                if (unit.TransitNode >= 0 && Navigation.ObstacleCoversEdge(
+                    command.Obstacle, unit.Node, unit.TransitNode)) return;
+            }
+        }
+        Navigation.SetObstacle(command.Obstacle, command.Active);
+    }
 
     private void Apply(SimCommand command)
     {
@@ -133,7 +157,23 @@ public sealed class SimWorld(GridNavigation navigation)
 
     public void Step()
     {
-        foreach (var command in Commands.Where(c => c.Tick == Tick).OrderBy(c => c.Sequence)) Apply(command);
+        var actions = Commands.Where(c => c.Tick == Tick).Select(c => (c.Sequence, Action: (Action)(() => Apply(c))))
+            .Concat(ObstacleCommands.Where(c => c.Tick == Tick)
+                .Select(c => (c.Sequence, Action: (Action)(() => ApplyObstacle(c)))));
+        foreach (var action in actions.OrderBy(a => a.Sequence)) action.Action();
+        if (_navigationRevision != Navigation.Revision)
+        {
+            // Rebuild routes at a tick boundary. Starting from the last reached
+            // node also safely brings an in-flight unit back to its cell center.
+            foreach (var unit in Units.Where(u => u.Health > 0 && u.Goal >= 0))
+            {
+                unit.YieldFor = unit.YieldGoal = -1;
+                unit.Path = Navigation.FindPath(unit.Node, unit.Goal);
+                if (unit.Path.Count == 0) unit.Path.Add(unit.Node);
+                unit.Waypoint = 0; unit.BlockedTicks = 0;
+            }
+            _navigationRevision = Navigation.Revision;
+        }
         foreach (var unit in Units)
         {
             unit.Moving = unit.Attacking = false;
@@ -196,7 +236,7 @@ public sealed class SimWorld(GridNavigation navigation)
                 int nextNode = unit.Path[unit.Waypoint], y = Navigation.NodeHeight(nextNode);
                 int dx = x - unit.X, dz = z - unit.Z;
                 int distance = Math.Abs(dx) + Math.Abs(dz);
-                if (distance == 0 && y == unit.Y) { unit.Node = nextNode; unit.Waypoint++; continue; }
+                if (distance == 0 && y == unit.Y) { unit.Node = nextNode; unit.TransitNode = -1; unit.Waypoint++; continue; }
                 if (distance == 0) distance = Math.Abs(y-unit.Y);
                 // Wait before entering an occupied waypoint, keeping queues at
                 // cell centers so replanning cannot strand several units in one cell.
@@ -210,8 +250,11 @@ public sealed class SimWorld(GridNavigation navigation)
                     ny = Navigation.GroundHeight(nx, nz);
                 if (Units.Any(other => other.Id != unit.Id && other.Health > 0
                     && DistanceSquared(nx, nz, other.X, other.Z) + (long)(ny-other.Y)*(ny-other.Y) < 700L * 700)) break;
+                // Preserve the occupied physical segment across replacement
+                // orders and retreat-to-center replans.
+                if (nextNode != unit.Node) unit.TransitNode = nextNode;
                 unit.X = nx; unit.Z = nz; unit.Y = ny; unit.Moving = true; budget -= movement;
-                if (movement == distance) { unit.Node = nextNode; unit.Y = y; unit.Waypoint++; }
+                if (movement == distance) { unit.Node = nextNode; unit.TransitNode = -1; unit.Y = y; unit.Waypoint++; }
             }
             if (unit.Goal >= 0)
             {
@@ -236,7 +279,8 @@ public sealed class SimWorld(GridNavigation navigation)
 
     public string StateDigest()
     {
-        var text = Tick + ":" + string.Join(";", Units.Select(u => $"{u.Id},{u.Team},{u.X},{u.Y},{u.Z},{u.Node},{u.Health},{u.Target},{u.Cooldown},{u.Waypoint},{u.Goal},{u.BlockedTicks},{u.YieldFor},{u.YieldGoal},{u.OrderSequence}:{string.Join(',', u.Path)}"));
+        var text = Tick + ":" + Navigation.Revision + ":" + string.Join(',', Navigation.ObstacleIds.Where(Navigation.IsObstacleActive))
+            + ":" + string.Join(";", Units.Select(u => $"{u.Id},{u.Team},{u.X},{u.Y},{u.Z},{u.Node},{u.TransitNode},{u.Health},{u.Target},{u.Cooldown},{u.Waypoint},{u.Goal},{u.BlockedTicks},{u.YieldFor},{u.YieldGoal},{u.OrderSequence}:{string.Join(',', u.Path)}"));
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
     }
 }

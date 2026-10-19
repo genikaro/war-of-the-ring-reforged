@@ -129,3 +129,34 @@ def ground_mask(width, height, spacing, allowed, heights, footprints):
     return bytes(result), {'placements': len(footprints), 'ground_cells_blocked': sum(allowed)-sum(result),
                           'objects': report, 'radius_m': RADIUS, 'body_height_m': BODY_HEIGHT,
                           'policy': 'Root oriented-collision boxes for Buildings and IsPathingObstacle objects; half-extents/center/wxyz pose, conservative projected swept-cell clearance. Static snapshot; original runtime collision formulas unverified.'}
+
+
+def runtime_layers(width, height, spacing, allowed, heights, nodes, footprints):
+    """Independent object masks allow removal without opening another's cells.
+
+    Keep the obstacle-free graph intact. Edge masks also cover a swept height
+    interval between surface nodes, where neither endpoint need hit a box.
+    """
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for item in footprints:
+        grouped[item['object_id']].append(item)
+    base = width*height
+    def point(node):
+        if node < base:
+            x, z = (node % width+.5)*spacing, (node // width+.5)*spacing
+            return [x, z, terrain_height(x, z, width, spacing, heights)]
+        item = nodes[node-base]; cell = item['cell']
+        return [(cell % width+.5)*spacing, (cell // width+.5)*spacing, item['height_mm']/1000]
+    edges = sorted({tuple(sorted((base+i, link))) for i, n in enumerate(nodes) for link in n['links']})
+    result = []
+    for object_id, boxes in sorted(grouped.items()):
+        mask, _ = ground_mask(width, height, spacing, allowed, heights, boxes)
+        blocked_nodes = [i for i, (before, after) in enumerate(zip(allowed, mask)) if before and not after]
+        blocked_nodes.extend(base+i for i in range(len(nodes)) if blocked(point(base+i), point(base+i), boxes, spacing))
+        blocked_set = set(blocked_nodes)
+        blocked_edges = [list(edge) for edge in edges if not blocked_set.intersection(edge)
+                         and blocked(point(edge[0]), point(edge[1]), boxes, spacing)]
+        result.append({'id': object_id, 'name': boxes[0]['name'], 'nodes': blocked_nodes,
+                       'edges': blocked_edges, 'footprints': boxes})
+    return result

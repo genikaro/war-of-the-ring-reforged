@@ -166,6 +166,64 @@ Check(slots.Units.All(u => u.Goal < 0) && slots.Units[0].Node == 4 && slots.Unit
     "early squad arrival exchanges its slot to keep a narrow formation reachable");
 
 int cacheArg = Array.IndexOf(args, "--cache");
+var overlap = new GridNavigation(3, 1, 1000, [true, true, false], new int[8], null,
+    [new(10, [1, 2], []), new(20, [1], [])]);
+overlap.SetObstacle(10, false);
+Check(!overlap.CanStand(1), "removing one overlapping obstacle preserves the other");
+overlap.SetObstacle(20, false);
+Check(overlap.CanStand(1) && !overlap.CanStand(2), "last removal reopens only painted walkable terrain");
+int revision = overlap.Revision; overlap.SetObstacle(20, false);
+Check(overlap.Revision == revision, "idempotent obstacle updates preserve navigation revision");
+var dynamicDeck = new GridNavigation(1, 1, 1000, [true], new int[4], [new(0, 4000, [2]), new(0, 4500, [1])],
+    [new(1, [1], []), new(2, [], [new(1, 2)])]);
+Check(dynamicDeck.CanStand(0) && !dynamicDeck.CanStand(1) && dynamicDeck.Nearest(1) != 1,
+    "obstacle blocks its own floor and cannot reserve a blocked surface");
+dynamicDeck.SetObstacle(1, false);
+Check(dynamicDeck.FindPath(1, 2).Count == 0 && dynamicDeck.FindPath(2, 1).Count == 0,
+    "swept obstacle edge blocks travel in both directions");
+dynamicDeck.SetObstacle(2, false);
+Check(dynamicDeck.FindPath(1, 2).Count == 2, "removing edge obstacle reconnects existing surface nodes");
+
+SimWorld DynamicWorld(int width = 7, int height = 3, int blockedNode = 10)
+    => new(new GridNavigation(width, height, 1000, Enumerable.Repeat(true, width*height).ToArray(),
+        new int[(width+1)*(height+1)], null, [new(1, [blockedNode], [])]));
+SimWorld ChangingRoute()
+{
+    var world = DynamicWorld(); world.EnqueueObstacle(1, false); world.Step();
+    world.Spawn(0, 7); world.Enqueue(0, [0], 13); Advance(world, 3);
+    world.EnqueueObstacle(1, true); Advance(world, 150);
+    return world;
+}
+var changedRoute = ChangingRoute();
+Check(changedRoute.Navigation.IsObstacleActive(1) && changedRoute.Units[0].Node == 13
+    && changedRoute.Units[0].Goal < 0, "new obstacle invalidates active path and unit takes a detour");
+Check(changedRoute.StateDigest() == ChangingRoute().StateDigest(), "obstacle commands replay deterministically");
+
+var dynamicCorridor = DynamicWorld(7, 1, 3);
+dynamicCorridor.EnqueueObstacle(1, false); dynamicCorridor.Step();
+dynamicCorridor.Spawn(0, 0); dynamicCorridor.Enqueue(0, [0], 6); Advance(dynamicCorridor, 3);
+dynamicCorridor.EnqueueObstacle(1, true); Advance(dynamicCorridor, 60);
+Check(dynamicCorridor.Units[0].Goal == 6 && dynamicCorridor.Units[0].X == 500,
+    "sealed dynamic route retains destination and recenters a moving unit");
+dynamicCorridor.EnqueueObstacle(1, false); Advance(dynamicCorridor, 100);
+Check(dynamicCorridor.Units[0].Node == 6 && dynamicCorridor.Units[0].Goal < 0,
+    "removal resumes a dynamically sealed order");
+dynamicCorridor.EnqueueObstacle(1, true); Advance(dynamicCorridor, 1);
+Check(dynamicCorridor.Navigation.IsObstacleActive(1), "restoring a cleared footprint succeeds");
+
+var occupiedBuild = DynamicWorld(3, 1, 1);
+occupiedBuild.EnqueueObstacle(1, false); occupiedBuild.Step(); occupiedBuild.Spawn(0, 1);
+occupiedBuild.EnqueueObstacle(1, true); occupiedBuild.Step();
+Check(!occupiedBuild.Navigation.IsObstacleActive(1), "construction cannot cover a standing unit");
+var transitBuild = DynamicWorld(3, 1, 1);
+transitBuild.EnqueueObstacle(1, false); transitBuild.Step(); transitBuild.Spawn(0, 0);
+transitBuild.Enqueue(0, [0], 2); Advance(transitBuild, 3);
+transitBuild.EnqueueObstacle(1, true); Advance(transitBuild, 1);
+Check(!transitBuild.Navigation.IsObstacleActive(1), "construction cannot close a segment with a unit in transit");
+transitBuild.Enqueue(0, [0], 0);
+transitBuild.EnqueueObstacle(1, true); Advance(transitBuild, 1);
+Check(!transitBuild.Navigation.IsObstacleActive(1), "replacement order cannot erase the occupied physical segment");
+
 if (cacheArg >= 0)
 {
     string cache = args[cacheArg+1];
@@ -175,11 +233,18 @@ if (cacheArg >= 0)
     int[] realHeights = Enumerable.Range(0, rawHeights.Length/4)
         .Select(i => System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(rawHeights.AsSpan(i*4, 4))).ToArray();
     var surfaceJson = nav.GetProperty("surface_nodes").EnumerateArray().ToArray();
+    bool dynamicCache = nav.TryGetProperty("runtime_obstacles", out var obstacleJson);
     var realNav = new GridNavigation(nav.GetProperty("width").GetInt32(), nav.GetProperty("height").GetInt32(),
-        nav.GetProperty("cell_size_mm").GetInt32(), Convert.FromBase64String(nav.GetProperty("allowed_base64").GetString()!)
+        nav.GetProperty("cell_size_mm").GetInt32(), Convert.FromBase64String(nav.GetProperty(dynamicCache ? "painted_allowed_base64" : "allowed_base64").GetString()!)
             .Select(b => b != 0).ToArray(), realHeights,
         surfaceJson.Select(s => new SurfaceCell(s.GetProperty("cell").GetInt32(), s.GetProperty("height_mm").GetInt32(),
-            s.GetProperty("links").EnumerateArray().Select(n => n.GetInt32()).ToArray())).ToArray());
+            s.GetProperty("links").EnumerateArray().Select(n => n.GetInt32()).ToArray())).ToArray(),
+        dynamicCache ? obstacleJson.EnumerateArray().Select(o => new NavigationObstacle(o.GetProperty("id").GetInt32(),
+            o.GetProperty("nodes").EnumerateArray().Select(n => n.GetInt32()).ToArray(),
+            o.GetProperty("edges").EnumerateArray().Select(e => new NavigationEdge(e[0].GetInt32(), e[1].GetInt32())).ToArray())).ToArray() : null);
+    Check(Enumerable.Range(0, realNav.GroundCount).Select(realNav.CanStand).SequenceEqual(
+        Convert.FromBase64String(nav.GetProperty("allowed_base64").GetString()!).Select(b => b != 0)),
+        "runtime obstacle layers reproduce the static ground snapshot");
     var realWorld = new SimWorld(realNav);
     var mapScene = JsonDocument.Parse(File.ReadAllText(Path.Combine(cache, "map", "scene.json"))).RootElement;
     var buildings = mapScene.GetProperty("placements").GetProperty("objects").EnumerateArray()

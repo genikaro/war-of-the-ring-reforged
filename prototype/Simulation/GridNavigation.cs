@@ -1,6 +1,8 @@
 namespace Reforged.Simulation;
 
 public sealed record SurfaceCell(int Cell, int Height, int[] Links);
+public sealed record NavigationEdge(int A, int B);
+public sealed record NavigationObstacle(int Id, int[] Nodes, NavigationEdge[] Edges);
 
 /// <summary>Integer A* over four-neighbor terrain and separate mesh layers. Stable node-ID ties.</summary>
 public sealed class GridNavigation
@@ -15,9 +17,15 @@ public sealed class GridNavigation
     private readonly SurfaceCell[] _surfaces;
     private readonly Dictionary<int, List<int>> _groundLinks = [];
     private readonly Dictionary<int, List<int>> _surfaceColumns = [];
+    private readonly Dictionary<int, NavigationObstacle> _obstacles = [];
+    private readonly HashSet<int> _activeObstacles = [];
+    private readonly Dictionary<int, int> _blockedNodes = [];
+    private readonly Dictionary<(int, int), int> _blockedEdges = [];
+    public int Revision { get; private set; }
+    public IEnumerable<int> ObstacleIds => _obstacles.Keys.Order();
 
     public GridNavigation(int width, int height, int cellSize, bool[] allowed, int[] heights,
-        IReadOnlyList<SurfaceCell>? surfaces = null)
+        IReadOnlyList<SurfaceCell>? surfaces = null, IReadOnlyList<NavigationObstacle>? obstacles = null)
     {
         if (width <= 0 || height <= 0 || cellSize <= 0 || allowed.Length != checked(width * height)
             || heights.Length != checked((width + 1) * (height + 1)))
@@ -43,11 +51,43 @@ public sealed class GridNavigation
         foreach (int link in _surfaces[i].Links.Where(n => n >= GroundCount))
             if (!_surfaces[link-GroundCount].Links.Contains(GroundCount+i))
                 throw new ArgumentException("Surface edges must be bidirectional");
+        foreach (var obstacle in obstacles ?? [])
+        {
+            if (_obstacles.ContainsKey(obstacle.Id) || obstacle.Nodes.Any(n => n < 0 || n >= NodeCount)
+                || obstacle.Edges.Any(e => e.A < 0 || e.B < 0 || e.A >= NodeCount || e.B >= NodeCount))
+                throw new ArgumentException("Invalid obstacle layer");
+            _obstacles.Add(obstacle.Id, new(obstacle.Id, obstacle.Nodes.Distinct().Order().ToArray(),
+                obstacle.Edges.Select(e => e.A < e.B ? e : new(e.B, e.A)).Distinct().ToArray()));
+            SetObstacle(obstacle.Id, true);
+        }
+        Revision = 0;
+    }
+
+    public bool IsObstacleActive(int id) => _activeObstacles.Contains(id);
+    public bool ObstacleCovers(int id, int node) => _obstacles[id].Nodes.Contains(node);
+    public bool ObstacleCoversEdge(int id, int a, int b)
+        => ObstacleCovers(id, a) || ObstacleCovers(id, b)
+            || _obstacles[id].Edges.Any(e => e == new NavigationEdge(Math.Min(a,b), Math.Max(a,b)));
+
+    public void SetObstacle(int id, bool active)
+    {
+        if (!_obstacles.TryGetValue(id, out var obstacle)) throw new ArgumentException("Unknown obstacle");
+        if (IsObstacleActive(id) == active) return;
+        void Count<T>(Dictionary<T, int> counts, T key) where T : notnull
+        {
+            int value = counts.GetValueOrDefault(key) + (active ? 1 : -1);
+            if (value == 0) counts.Remove(key); else counts[key] = value;
+        }
+        foreach (int node in obstacle.Nodes) Count(_blockedNodes, node);
+        foreach (var edge in obstacle.Edges) Count(_blockedEdges, (edge.A, edge.B));
+        if (active) _activeObstacles.Add(id); else _activeObstacles.Remove(id);
+        Revision++;
     }
 
     public int Cell(int x, int z) => x < 0 || z < 0 || x >= Width * CellSize || z >= Height * CellSize
         ? -1 : z / CellSize * Width + x / CellSize;
-    public bool CanStand(int cell) => cell >= 0 && cell < NodeCount && (cell >= GroundCount || Allowed[cell]);
+    public bool CanStand(int cell) => cell >= 0 && cell < NodeCount && (cell >= GroundCount || Allowed[cell])
+        && !_blockedNodes.ContainsKey(cell);
     private int Column(int node) => node < GroundCount ? node : _surfaces[node-GroundCount].Cell;
     public (int X, int Z) Center(int cell)
     {
@@ -81,7 +121,7 @@ public sealed class GridNavigation
             var seen = new HashSet<int> { cell };
             while (queue.TryDequeue(out var item))
             {
-                if (CanReserve(item.Node, excluded)) return item.Node;
+                if (CanStand(item.Node) && CanReserve(item.Node, excluded)) return item.Node;
                 if (item.Depth >= radius) continue;
                 foreach (int next in Neighbors(item.Node))
                     if (CanStand(next) && seen.Add(next)) queue.Enqueue((next, item.Depth+1));
@@ -111,6 +151,9 @@ public sealed class GridNavigation
     }
 
     public IEnumerable<int> Neighbors(int id)
+        => TopologyNeighbors(id).Where(n => !_blockedEdges.ContainsKey((Math.Min(id,n), Math.Max(id,n))));
+
+    private IEnumerable<int> TopologyNeighbors(int id)
     {
         if (id >= GroundCount)
         {
