@@ -5,8 +5,8 @@ Knights and six Uruk-hai. Select friendly units, issue move/attack orders and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
 Squads now traverse layered walkable geometry with terrain entrances and
-congestion replanning. Obstacle footprints and original mask semantics remain
-the next navigation tasks.
+congestion replanning. Static building/object footprints now block movement.
+Original mask semantics, mesh-edge clearance and dynamic updates remain open.
 The remaining Phase 3 work and acceptance criteria are in
 [the local roadmap](../tools/Roadmap.md).
 
@@ -73,8 +73,9 @@ They also cover opposing units using a siding, repeatable yielding, opposing
 three-unit groups in open space and replacing an order during yielding.
 Layered checks cover ramp heights, explicit bridge entrances, separated floors,
 surface picking, formation spacing and slot exchanges after an early arrival.
-The optional cache check adds twelve checks: all six friendly units visit each
-of Helm's Deep's four walkable surfaces without overlap and reach every order.
+The optional cache check adds thirteen checks: all placed building centers are
+blocked, and all six friendly units visit each of Helm's Deep's four walkable
+surfaces without overlap and reach every order.
 The headless Godot smoke test loads
 the actual map and twelve models, dispatches mouse/key events through the
 viewport, and checks selection, move/attack picking, zoom, pause/resume,
@@ -97,8 +98,17 @@ UI hit positions are quantized into cell commands before the next fixed tick.
 
 Movement currently interprets the saved painted walker bits as allowed cells.
 This is a prototype policy, not a claim of original-game passability fidelity.
-Auxiliary ground masks and obstacle footprint updates still need navigation
-integration. Walkable helpers append separate nodes to the ground grid; the
+Auxiliary ground mask semantics and dynamic obstacle updates remain open.
+Static footprints use the source's oriented-collision layer for Buildings and
+objects with `IsPathingObstacle`: 108 Helm's Deep placements block 1,741 painted
+ground cells. The prototype interprets the records as half-extents, center and
+quaternion, transforms their corners, and applies a conservative swept-cell
+envelope with a 350 mm radius and 1.8 m body. Vertical bounds preserve separate
+floors. Original executable collision formulas remain unverified; rotated
+boxes may be over-conservative. Unsupported or missing collision boxes fail
+cache generation. These are static snapshots, with no construction/destruction
+updates yet. The raw painted mask is retained separately for auditing.
+Walkable helpers append separate nodes to the ground grid; the
 current cache has 1,492 surface nodes and 51 height-matched terrain entrances.
 Links require continuous triangle coverage with at most 150 mm deviation from
 the interpolated height, no more than one cell of rise, and terrain joins within

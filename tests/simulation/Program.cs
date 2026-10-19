@@ -181,6 +181,13 @@ if (cacheArg >= 0)
         surfaceJson.Select(s => new SurfaceCell(s.GetProperty("cell").GetInt32(), s.GetProperty("height_mm").GetInt32(),
             s.GetProperty("links").EnumerateArray().Select(n => n.GetInt32()).ToArray())).ToArray());
     var realWorld = new SimWorld(realNav);
+    var mapScene = JsonDocument.Parse(File.ReadAllText(Path.Combine(cache, "map", "scene.json"))).RootElement;
+    var buildings = mapScene.GetProperty("placements").GetProperty("objects").EnumerateArray()
+        .Where(o => o.GetProperty("database_table").GetString() == "Buildings").ToArray();
+    Check(buildings.Length > 0 && buildings.All(o => {
+        var position = o.GetProperty("position");
+        return !realNav.CanStand(realNav.Cell((int)(position[0].GetDouble()*1000), (int)(position[1].GetDouble()*1000)));
+    }), "real map building centers are excluded from ground movement");
     foreach (var item in manifest.GetProperty("spawns").EnumerateArray().Where(s => s.GetProperty("team").GetInt32() == 0))
         realWorld.Spawn(0, item.GetProperty("cell").GetInt32());
     var destinations = surfaceJson.Select((s, i) => (Surface: s.GetProperty("surface").GetString()!, Node: realNav.GroundCount+i))

@@ -77,8 +77,9 @@ def terrain_height(x, z, width, spacing, heights):
     return a+(b-a)*dx+(c-a)*dz if dx+dz <= 1 else d+(c-d)*(1-dx)+(b-d)*(1-dz)
 
 
-def build(width, height, spacing, allowed, heights, surfaces):
+def build(width, height, spacing, allowed, heights, surfaces, footprints=()):
     """surfaces: name/triangles in world space. Build deterministic cell graph."""
+    from prototype_obstacles import blocked
     nodes, triangles_by_node = [], []
     by_cell = defaultdict(list)
     reports = []
@@ -97,6 +98,8 @@ def build(width, height, spacing, allowed, heights, surfaces):
             x, z = (cell % width + .5)*spacing, (cell // width + .5)*spacing
             samples = sorted({round(y*1000) for t in triangles if (y := height_at(x, z, t)) is not None})
             for y in samples:
+                if blocked((x, z, y/1000), (x, z, y/1000), footprints, spacing):
+                    continue
                 # Retain genuinely stacked surfaces; merge rounding at shared edges.
                 if any(abs(nodes[n]['height_mm']-y) <= 2 for n in by_cell[cell]):
                     continue
@@ -125,7 +128,7 @@ def build(width, height, spacing, allowed, heights, surfaces):
                 triangles = triangles_by_node[i]
                 if triangles is not triangles_by_node[j]:
                     triangles = triangles + triangles_by_node[j]
-                if covers_segment((x, z, y), other, triangles):
+                if covers_segment((x, z, y), other, triangles) and not blocked((x, z, y), other, footprints, spacing):
                     node['links'].append(base+j); nodes[j]['links'].append(base+i)
     for node in nodes:
         node['links'].sort()

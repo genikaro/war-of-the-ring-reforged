@@ -8,9 +8,10 @@ Phases 1 and 2 implementation are complete. All 54 maps decode through EOF, incl
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
-Latest checks: 93 Python tests, eight JavaScript tests and 34 synthetic C# checks
-pass. Twelve additional cache checks send all six friendly units through each
-of the four Helm's Deep walkable surfaces without overlap. The cache contains
+Latest checks: 101 Python tests, eight JavaScript tests and 34 synthetic C# checks
+pass. Thirteen additional cache checks cover all ten building centers being
+blocked and all six friendly units traversing the four Helm's Deep surfaces
+without overlap. The cache contains
 1,492 separate surface nodes and 51 terrain entrances, preserving elevation.
 Godot builds without warnings or errors; input and combat pass over 420 fixed
 ticks. An elevated preview was inspected, and actual Godot right-click dispatch
@@ -19,7 +20,10 @@ GLBs validated without errors or warnings. Original-game fidelity remains unveri
 
 ## Next milestone: reliable squad navigation
 
-1. Verify the original walker masks and integrate building footprints.
+1. Verify the original walker masks, add dynamic footprint updates and complete
+   mesh-edge body clearance. Static oriented-collision footprints are integrated:
+   108 Buildings/IsPathingObstacle placements block 1,741 ground cells. Original
+   collision-query formulas remain unverified; this policy is conservative.
    Bridge/walkway geometry now uses a layered grid with continuous triangle
    coverage, height-matched terrain entrances and integer elevation. The stored
    MPL route codes are unused. Full body clearance and picking under overpasses
@@ -95,7 +99,7 @@ The engine is chosen. Remaining choices can be made as their implementation appr
 - [ ] Package the first-run importer: `prepare_prototype.py --install` now extracts/verifies source archives and writes a hashed runtime cache; in-game install selection and production packaging remain.
 - [x] Load a map scene and units; RTS camera (pan, zoom, rotate), selection box, move and attack orders
 - [ ] Complete animation state adaptation: initial idle/run/attack/death clips play; original attachment, texture and event timelines still need the Godot adapter.
-- [ ] Complete navigation: layered A*, mesh entrances/elevation, congestion replanning and cooperative yielding work; six-unit traversal of all four Helm's Deep walkable helpers passes. Original mask semantics, obstacle footprints, body clearance and complex gridlocks remain.
+- [ ] Complete navigation: layered A*, mesh entrances/elevation, static collision footprints, congestion replanning and cooperative yielding work; six-unit traversal of all four Helm's Deep walkable helpers passes. Original mask semantics, dynamic footprint updates, mesh-edge clearance and complex gridlocks remain.
 - [x] Fixed-step integer simulation separate from rendering: 20 Hz core, tick commands, stable ordering and repeatability tests; lockstep networking remains later work.
 - [ ] Audio: Ogg speech and music, WAV effects, triggered by clip events from Phase 1
 

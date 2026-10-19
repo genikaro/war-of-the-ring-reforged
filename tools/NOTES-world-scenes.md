@@ -147,6 +147,43 @@ and checks EOF. All navigation meshes pass. Geometry-only conversion remains
 available: nine Obelisk effect meshes' animated group UV tails are not yet
 supported by the strict footer reader, unrelated to the map navigation data.
 
+## Prototype navigation snapshot (Oct 19)
+
+`prepare_prototype.py` preserves the painted walker mask and derives a separate
+runtime allowed mask. On Helm's Deep the raw `(painted, mask_b, mask_c)` counts
+are `(1,1,0): 38,841`, `(0,1,0): 6,849`, `(0,0,0): 45,830`.
+Painted is a subset of mask_b, and mask_c is empty; these facts alone do not
+prove the original query semantics. The prototype continues to treat painted
+ones as allowed, without claiming fidelity for the two auxiliary masks.
+
+All ten building centers have painted bits set. The static obstacle adapter
+therefore subtracts independent footprints for Buildings and Objects whose
+database `IsPathingObstacle` is set. All 108 such placements have one root box
+in `BBOX_LAYER_ORIENTED_COLLISION` (BBoxes.lqr), flag zero, positive dimensions,
+two homogeneous vector tags of 1 and a unit final quaternion within 0.01.
+The prototype interprets their three vec4s as half-extents, center and wxyz
+quaternion. This interpretation matches the source poses and render scale,
+but the executable's collision-query formulas have not been verified. Parser
+records intentionally keep their raw vector representation.
+
+`prototype_obstacles.py` transforms all eight corners and uses a projected
+convex polygon plus vertical interval. A conservative cell envelope includes
+a 350 mm unit radius and 1.8 m body. SAT overlap blocks 1,741 previously allowed
+ground cells. Height tests also apply to mesh nodes and edges, keeping separate
+floors. Unsupported box flags, joint attachment or absent collision layers
+fail generation rather than silently dropping an obstacle. Moving/created/
+destroyed obstacles require later runtime updates; projected tilted boxes may
+block more space than necessary. Unit clearance from mesh boundaries remains
+separate work.
+
+`prototype_navigation.py` rebuilds layered links from transformed, filtered
+navigation triangles instead of following MPL codes. Helm's Deep produces
+1,492 surface nodes with 51 height-matched terrain links. Segment/triangle
+interval unions reject gaps; source mesh/placement scales and rotations match
+the GLB. All six friendly units traverse all four helpers in the cache-backed
+C# check, preserving integer heights and non-overlap. The one-meter raster can
+omit narrow routes; it is a prototype policy rather than original path fidelity.
+
 ## Decals and world tail
 
 After lakes: optional 48-byte camera-waypoint records; placed lights with two

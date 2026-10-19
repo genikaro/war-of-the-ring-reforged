@@ -15,6 +15,7 @@ import struct
 import h2o
 import prototype_assets
 import prototype_navigation
+import prototype_obstacles
 from lms2gltf import convert_model
 from resolve_model import Resolver
 import wor
@@ -73,6 +74,10 @@ def prepare(output, install=None):
     width, height = category['grid']
     words = category['painted']['words']
     allowed = bytes((words[i // 32] >> (i % 32)) & 1 for i in range(width * height))
+    source_allowed = allowed
+    footprints = prototype_obstacles.placed_footprints(scene, resolver)
+    allowed, obstacle_report = prototype_obstacles.ground_mask(width, height,
+        scene['world'].metadata['terrain']['cell_size'], allowed, scene['world'].heights, footprints)
     main_region = connected(allowed, width, height)
     offsets = [(x, z) for z in [0, 2] for x in [0, 2, 4, 14, 16, 18]]
     candidates = [i for i in sorted(main_region) if i % width + 19 < width and i // width + 3 < height
@@ -82,10 +87,12 @@ def prepare(output, install=None):
     anchor = min(candidates, key=lambda i: ((i % width - 215)**2 + (i // width - 160)**2, i))
     nav = {'width': width, 'height': height, 'cell_size_mm': round(scene['world'].metadata['terrain']['cell_size'] * 1000),
            'allowed_base64': base64.b64encode(allowed).decode('ascii'),
+           'painted_allowed_base64': base64.b64encode(source_allowed).decode('ascii'),
+           'obstacle_report': obstacle_report,
            'source_category': category['name'],
-           'policy': 'Prototype interprets the saved painted walker bits as allowed cells; original auxiliary masks/portal queries and mesh entrances are not simulated.'}
+           'policy': 'Painted walker bits interpreted as allowed cells, minus static collision footprints. Original auxiliary masks and portal query semantics remain unverified.'}
     nav.update(prototype_navigation.build(width, height, scene['world'].metadata['terrain']['cell_size'],
-               allowed, scene['world'].heights, prototype_navigation.placed_surfaces(scene, resolver)))
+               allowed, scene['world'].heights, prototype_navigation.placed_surfaces(scene, resolver), footprints))
     (output / 'navigation.json').write_text(json.dumps(nav, indent=2) + '\n')
     heights = [round(h * 1000) for h in scene['world'].heights]
     (output / 'heights.bin').write_bytes(struct.pack('<%di' % len(heights), *heights))
