@@ -104,6 +104,7 @@ public partial class Main : Node3D
             if (arg == "--orders-smoke") _ordersSmoke = true;
             if (arg == "--ability-smoke") _abilitySmoke = true;
             if (arg == "--skirmish-smoke") _skirmishSmoke = true;
+            if (arg == "--construction-smoke") _constructionSmoke = true;
             if (arg == "--melee-smoke") { _meleeSmoke = _combatSmoke = _smoke = true; }
             if (arg == "--engagement-smoke") _engagementSmoke = true;
             if (arg == "--attack-move-engagement-smoke") _attackMoveEngagementSmoke=_engagementSmoke=true;
@@ -119,7 +120,7 @@ public partial class Main : Node3D
             RefreshDebugMenu();
             _status.Text = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             GD.PushError(error.ToString());
-            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _engagementSmoke || _capture != "") GetTree().Quit(1);
+            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _engagementSmoke || _capture != "") GetTree().Quit(1);
         }
     }
 
@@ -162,6 +163,8 @@ public partial class Main : Node3D
                 o.GetProperty("nodes").EnumerateArray().Select(n => n.GetInt32()).ToArray(),
                 o.GetProperty("edges").EnumerateArray().Select(e => new NavigationEdge(e[0].GetInt32(), e[1].GetInt32())).ToArray())).ToArray() : null);
         navigation.LoadBodyProfiles(nav);
+        if (nav.TryGetProperty("inactive_obstacles",out var inactive))
+            foreach (var id in inactive.EnumerateArray()) navigation.SetObstacle(id.GetInt32(),false);
         _world = new SimWorld(navigation,_rules);
         _picker = NavigationPicker.FromCache(navigation, nav);
         var map = LoadGlb(manifest.GetProperty("map").GetString()!); AddChild(map);
@@ -296,8 +299,10 @@ public partial class Main : Node3D
         _commands.CommandChosen += ChooseCommand;
         _commands.WalkRunChosen += ToggleWalkRun;
         _commands.AbilityChosen += ChooseAbility;
+        _commands.ConstructionChosen += ChooseConstruction;
         _commands.GroupChosen += slot => UseGroup(slot,Input.IsPhysicalKeyPressed(Key.Ctrl),Input.IsPhysicalKeyPressed(Key.Shift));
         _commands.UnitChosen += (id,append,sameType) => {
+            ClearConstructionTargeting();
             _orders.Cancel();
             if (_world != null) UnitSelection.Click(_selected,_world.Units,LivingUnit(id) ? _world.Units[id] : null,append,sameType);
         };
@@ -318,13 +323,14 @@ public partial class Main : Node3D
             if (mouse.ButtonIndex == MouseButton.Middle) _panning = mouse.Pressed;
             if (mouse.ButtonIndex == MouseButton.Left)
             {
-                if (mouse.Pressed && _orders.Pending != null) Order(mouse.Position,mouse.CtrlPressed,mouse.ShiftPressed);
+                if (mouse.Pressed && _constructionTargeting) TargetConstruction(mouse.Position,mouse.ShiftPressed);
+                else if (mouse.Pressed && _orders.Pending != null) Order(mouse.Position,mouse.CtrlPressed,mouse.ShiftPressed);
                 else if (mouse.Pressed) { _dragStart = mouse.Position; _dragging = true; _selectSameType = mouse.CtrlPressed || mouse.DoubleClick; }
                 else if (_dragging) { SelectUnits(_dragStart, mouse.Position, mouse.ShiftPressed,_selectSameType); _dragging = false; _hud.SelectionBox = null; }
             }
             if (mouse.ButtonIndex == MouseButton.Right && mouse.Pressed)
             {
-                if (_orders.Pending != null) CancelTargeting();
+                if (_orders.Pending != null || _constructionTargeting) CancelTargeting();
                 else if (mouse.AltPressed && !mouse.CtrlPressed) ToggleObstacle(mouse.Position);
                 else
                 {
@@ -346,7 +352,7 @@ public partial class Main : Node3D
             }
             if (key.Keycode == Key.Escape)
             {
-                if (_orders.Pending != null) CancelTargeting(); else _selected.Clear();
+                if (_orders.Pending != null || _constructionTargeting) CancelTargeting(); else _selected.Clear();
                 _dragging = false; _hud.SelectionBox = null;
             }
             OrderKind? command = key.Keycode switch {
@@ -370,6 +376,7 @@ public partial class Main : Node3D
     private void UseGroup(int slot,bool assign,bool append)
     {
         if (_world == null) return;
+        ClearConstructionTargeting();
         _orders.Cancel(); _dragging = false; _hud.SelectionBox = null;
         if (assign || append)
         {
@@ -393,6 +400,8 @@ public partial class Main : Node3D
 
     public override void _Input(InputEvent input)
     {
+        // Rendered automation must not consume live desktop input between its scripted events.
+        if (_constructionSmoke && !_injectingConstructionInput) { GetViewport().SetInputAsHandled(); return; }
         if (input is InputEventMouseMotion motion) _pointerPosition = motion.Position;
         else if (input is InputEventMouseButton pointer) _pointerPosition = pointer.Position;
         // GUI controls consume their own releases. End any battlefield drag
@@ -408,6 +417,7 @@ public partial class Main : Node3D
 
     private void SelectUnits(Vector2 start, Vector2 end, bool append,bool sameType = false)
     {
+        ClearConstructionTargeting();
         _orders.Cancel();
         var rect = new Rect2(start, end - start).Abs();
         if (rect.Size.Length() < 7)
@@ -456,6 +466,7 @@ public partial class Main : Node3D
     {
         if (_world == null || !_world.Units.Any(u => u.Team == 0 && u.Health > 0 && _selected.Contains(u.Id))) return;
         _dragging = false; _hud.SelectionBox = null;
+        ClearConstructionTargeting();
         if (_orders.Begin(kind)) _status.Text = CommandPanel.OrderName(kind)+": choose a target";
         else SendOrder(new(kind));
     }
@@ -471,6 +482,7 @@ public partial class Main : Node3D
 
     private void CancelTargeting()
     {
+        ClearConstructionTargeting();
         _orders.Cancel(); _status.Text = "Command targeting cancelled";
     }
 
@@ -492,6 +504,8 @@ public partial class Main : Node3D
     private void ToggleObstacle(Vector2 mouse)
     {
         int selected = PickObstacle(mouse);
+        if (_world!.ConstructionSites.Values.Any(s => s.Obstacle == selected))
+        { _status.Text = "Resource building footprints follow construction"; return; }
         if (selected < 0) return;
         _pendingObstacle = selected;
         _pendingObstacleActive = !_world!.Navigation.IsObstacleActive(selected);
@@ -664,6 +678,7 @@ public partial class Main : Node3D
         PresentHealingEffects();
         float right = (Input.IsPhysicalKeyPressed(Key.Right) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Left) ? 1 : 0);
         float forward = (Input.IsPhysicalKeyPressed(Key.Down) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Up) ? 1 : 0);
+        if (_constructionSmoke) right = forward = 0;
         Pan(right * dt * _distance * 0.6f, forward * dt * _distance * 0.6f);
         UpdateCamera();
         _selected.RemoveWhere(id => !LivingUnit(id));
@@ -673,6 +688,13 @@ public partial class Main : Node3D
             Enumerable.Range(0,10).Select(slot => _controlGroups.Recall(slot,LivingFriendly)).ToArray(),
             _world.Units.Count(u => u.Team == 0 && u.Health > 0),_world.Units.Count(u => u.Team != 0 && u.Health > 0),_world.IsWalking(0),_world.Tick,_pendingAbilitySlot);
         UpdateAbilityCursor();
+        if (_skirmish)
+        {
+            if (!SelectedWorkers().Any()) ClearConstructionTargeting();
+            _commands.RefreshConstruction(_world,units,_constructionTargeting,_constructionKind);
+            PresentConstruction();
+            UpdateConstructionPreview();
+        }
         _presentStep = false;
         if (_toolsPanel.Visible) RefreshDebugMenu();
         _hud.DestinationTime -= dt; _hud.QueueRedraw();
@@ -681,6 +703,12 @@ public partial class Main : Node3D
         if (_ordersSmoke) OrdersSmokeInput();
         if (_abilitySmoke) AbilitySmokeInput();
         if (_skirmishSmoke) SkirmishSmokeInput();
+        if (_constructionSmoke)
+        {
+            _injectingConstructionInput = true;
+            try { ConstructionSmokeInput(); }
+            finally { _injectingConstructionInput = false; }
+        }
         if (_engagementSmoke) { if (_formationSmoke) FormationSmokeInput(); else EngagementSmokeInput(); }
         if (_obstacleSmoke) ObstacleSmokeInput();
         if (_surfaceSmoke && _frames == 5)
@@ -706,7 +734,7 @@ public partial class Main : Node3D
         if (_smoke) SmokeInput();
         if (_smoke && _capture != "" && _frames == (_combatSmoke ? 180 : 60)) _ = CaptureFrame(false);
         if (_smoke && _world.Tick >= 420) FinishSmoke();
-        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_skirmishSmoke && !_engagementSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
+        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_skirmishSmoke && !_constructionSmoke && !_engagementSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
     }
 
     private string UnitName(int id) => _world!.Units[id].Definition.DisplayName;

@@ -121,6 +121,7 @@ public partial class CommandPanel : Control
             _abilities[slot] = button; _abilityLabels[slot] = label; _abilityRecharge[slot] = recharge;
             _abilityHotkeys[slot] = key;
         }
+        CreateConstructionButtons();
         _hint = Text("",new(260,-27),new(760,24),13); _content.AddChild(_hint);
         var config = new ConfigFile();
         if (config.Load("user://interface.cfg") == Error.Ok) ScalePercent = Math.Clamp(config.GetValue("hud","scale_percent",100).AsDouble(),75,150);

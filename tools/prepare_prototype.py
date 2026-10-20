@@ -16,6 +16,7 @@ import h2o
 import prototype_assets
 import skirmish_map
 import skirmish_economy
+import skirmish_construction
 import prototype_navigation
 import prototype_obstacles
 import prototype_interface
@@ -165,7 +166,7 @@ def walker_category(scene):
     return next(c for c in scene['pathing']['categories'] if c['name'] == 'PATHING_CATEGORY_WALKER')
 
 
-def build_navigation(scene, resolver, output, extra_footprints=()):
+def build_navigation(scene, resolver, output, extra_footprints=(), inactive_obstacles=()):
     """Write navigation.json and heights.bin; shared by the demo and skirmish maps."""
     category = walker_category(scene)
     mask_audit = verify_walker_masks.audit_category(scene, category)
@@ -177,7 +178,8 @@ def build_navigation(scene, resolver, output, extra_footprints=()):
     source_allowed = allowed
     footprints = prototype_obstacles.placed_footprints(scene, resolver) + list(extra_footprints)
     allowed, obstacle_report = prototype_obstacles.ground_mask(width, height,
-        scene['world'].metadata['terrain']['cell_size'], allowed, scene['world'].heights, footprints)
+        scene['world'].metadata['terrain']['cell_size'], allowed, scene['world'].heights,
+        [f for f in footprints if f['object_id'] not in inactive_obstacles])
     nav = {'width': width, 'height': height, 'cell_size_mm': round(scene['world'].metadata['terrain']['cell_size'] * 1000),
            'allowed_base64': base64.b64encode(allowed).decode('ascii'),
            'painted_allowed_base64': base64.b64encode(source_allowed).decode('ascii'),
@@ -191,6 +193,8 @@ def build_navigation(scene, resolver, output, extra_footprints=()):
     nav['picking_surfaces'] = surfaces
     nav['runtime_obstacles'] = prototype_obstacles.runtime_layers(width, height, spacing,
         source_allowed, scene['world'].heights, nav['surface_nodes'], footprints)
+    if inactive_obstacles:
+        nav['inactive_obstacles'] = sorted(inactive_obstacles)
     (output / 'navigation.json').write_text(json.dumps(nav, indent=2) + '\n')
     heights = [round(h * 1000) for h in scene['world'].heights]
     (output / 'heights.bin').write_bytes(struct.pack('<%di' % len(heights), *heights))
@@ -271,7 +275,9 @@ def prepare_skirmish(output, install=None):
         footprint, _ = skirmish_map.building_footprint(resolver, skirmish_map.CITADEL, (x, y, z), CITADEL_OBJECT_BASE + team)
         footprint['name'] = 'Start Citadel %d' % team
         bases.append({'team': team, 'start_point': point['name'], 'position': [x, y, z], 'footprint': footprint})
-    nav, allowed, width, height = build_navigation(scene, resolver, output, [b['footprint'] for b in bases])
+    construction, site_footprints = skirmish_construction.construction_data(resolver, skirmish_map.resource_nodes(scene))
+    nav, allowed, width, height = build_navigation(scene, resolver, output, [b['footprint'] for b in bases]+site_footprints,
+        [s['obstacle'] for s in construction['sites']])
     region = connected(allowed, width, height)
     ground = bytes(1 if allowed[i] and i in region else 0 for i in range(width * height))
     spawns, groups = [], []
@@ -295,6 +301,8 @@ def prepare_skirmish(output, install=None):
         model = resolver.db['Models'].get(resolver.db['Buildings'].get(name)['Model'])
         target = building_dir / (model.name + '.glb')
         convert_model(resolver, model.name, str(target))
+        if name in skirmish_construction.BUILDINGS.values():
+            prototype_assets.restore_building(target)
         building_files[name] = 'buildings/' + target.name
     variables = resolver.db['WorldVariables'].records[0]
     citadel = resolver.db['Buildings'].get(skirmish_map.CITADEL)
@@ -305,9 +313,10 @@ def prepare_skirmish(output, install=None):
     camera_cell = int(y / spacing) * width + int(x / spacing)
     manifest = {'format_version': 1, 'mode': 'skirmish', 'name': "Bilbo's Bluffs — Good Skirmish", 'map': 'map/scene.glb',
                 'team_colors': team_colors(resolver), 'models': models, 'spawns': spawns, 'groups': groups, 'camera_cell': camera_cell,
-                'rules': 'Imported combat stats and raw ore gathering; construction, food production and training remain open.',
+                'rules': 'Imported combat stats, resource-site construction and carried food/ore; training and the rest of Tier 1 remain open.',
                 'skirmish': {'start_state': start_state, 'resources': nodes, 'building_files': building_files,
                              'economy': skirmish_economy.economy_data(resolver),
+                             'construction': construction,
                              'bases': [{'team': b['team'], 'start_point': b['start_point'], 'position': b['position'],
                                         'building': skirmish_map.CITADEL, 'footprint_object': b['footprint']['object_id'],
                                         'worker_cells': b['worker_cells']} for b in bases]},

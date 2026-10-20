@@ -17,14 +17,16 @@ def economy_data(resolver):
         record = resolver.db['Objects'].get(name)
         sources['ore' if name.endswith('ORE_PILE') else 'food'] = {
             'rate_milli_per_tick': round(record['ResourceGatherRateRaw'] * 1000 / 20),
-            'raw_fraction_ppm': round(record['MaxGatherPercentageRaw'] * 1_000_000)}
+            'raw_fraction_ppm': round(record['MaxGatherPercentageRaw'] * 1_000_000),
+            'improved_rate_milli_per_tick': round(record['ResourceGatherRateWithBuilding'] * 1000 / 20),
+            'improved_fraction_ppm': round(record['MaxGatherPercentageWithBuilding'] * 1_000_000)}
     return {'format_version': 1, 'ticks_per_second': 20,
             'workers': {'UNIT_G_HUMAN_WORKER': {'food_capacity': worker['MaxCarriedFood'], 'ore_capacity': worker['MaxCarriedOre']}},
             'food_capacity': variables['DefaultInitialFoodCapacity'], 'ore_capacity': variables['DefaultInitialOreCapacity'],
             'sources': sources,
             'adapter': 'Raw rate interpreted as units/second; max raw percentage as recoverable fraction of initial stock. '
                        'Interaction radii use footprint corner distance plus worker radius and one navigation cell. '
-                       'Food wells remain unavailable until Mill construction is implemented.'}
+                       'Food wells require a Mill; a completed owned Foundry enables improved ore gathering.'}
 
 
 def refresh(cache):

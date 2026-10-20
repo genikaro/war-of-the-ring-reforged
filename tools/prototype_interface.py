@@ -34,6 +34,7 @@ def export(output, resolver=None):
     paths += [source / ('Console/UnitPortraits/' + name) for name in [
         'Good/Portrait_G_Aragorn.uva', 'Good/Portrait_G_Elven_Knight.uva', 'Evil/Portrait_E_Uruk_Hai.uva', 'Good/Portrait_G_Elven_Archer.uva',
         'Good/Portrait_G_Human_Worker.uva']]
+    paths += [source / ('Console/BuildingPortraits/Good/Building_G_' + name + '.uva') for name in ['Mill','Foundry']]
     paths += [p for p in (source / 'Cursors/Good').glob('*.uva')
               if any(word in p.stem for word in ['attack', 'move', 'guard', 'patrol', 'greater_kingsfoil', 'negative'])]
     target = output / 'interface'; target.mkdir(parents=True, exist_ok=True)

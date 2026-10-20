@@ -4,10 +4,17 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
+**build-6:** workers can build a Mill on a food well or a Foundry on an ore pile.
+Select workers, choose the building icon, then click its resource site. A green/red
+preview shows placement validity. Workers approach and build together; Stop pauses
+their work, right-click resumes it, and Cancel refunds 75% of the cost. Completed
+buildings unlock food/improved ore gathering. See [skirmish notes](SKIRMISH.md)
+for source values, cache refresh and remaining Tier 1 work.
+
 **build-5:** Bilbo's Bluffs workers gather raw ore and deliver it to their own
 Citadel. The resource strip reads the live simulation bank. Right-click ore to
 gather, Shift-right-click to queue; ordinary orders interrupt and preserve cargo.
-Food gathering awaits Mill construction. See [skirmish notes](SKIRMISH.md) for
+Build-6 adds Mill construction for food. See [skirmish notes](SKIRMISH.md) for
 cache refresh, source values and adapter limits.
 
 **build-3:** Kingsfoil now has its original healing sprite layers and a targeting
@@ -217,11 +224,11 @@ checked before loading. Never distribute the local cache with the project.
 | F4 / console Menu button | Open/close debug tools |
 | F10 | Show/hide the debug UI |
 
-Planned controls (user decision): **Q/W/E/R for abilities 1–4** and **F2 for
+Control policy (user decision): **Q/W/E/R for abilities 1–4** and **F2 for
 walk/run**, retaining S Stop. These are intentional differences from the
 original game's bindings. Q/E rotation and F1/F2/F3 camera shortcuts have been
 removed; camera buttons and launch-time `-View` captures remain available. The
-planned abilities and walk/run actions are not implemented yet. See
+Aragorn's Q heal, W/E passives and global Walk/Run are implemented. See
 [command plans](COMMANDS.md#planned-corrections-from-the-local-original-game-session).
 
 The debug menu has live pause/tick and selected-order information, Pause/Resume,
@@ -244,12 +251,14 @@ a normal viewport capture with `-CapturePath`.
 ./prototype/run.ps1 -CommandSmoke
 ./prototype/run.ps1 -OrdersSmoke
 ./prototype/run.ps1 -SkirmishSmoke
+./prototype/run.ps1 -ConstructionSmoke
 ./prototype/run.ps1 -SurfaceSmoke
 ./prototype/run.ps1 -ObstacleSmoke
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --movement-benchmark converted/prototype/movement-after.json
 ```
 
-The simulation runner has no Godot or test-package dependency. Its 341 checks cover
+The simulation runner has no Godot or test-package dependency. Build-6 passes
+613 synthetic checks and 680 checks with the Helm's Deep cache. These cover
 blocked routes, unreachable areas, adjacent-cell paths, deterministic ties,
 terrain interpolation, repeatable command playback, movement, combat,
 ownership and non-overlapping units, stationary-blocker detours, a six-unit

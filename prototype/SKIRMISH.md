@@ -8,9 +8,10 @@ tracks what exists; planning lives in `tools/Roadmap.md` (Phase 4 economy).
 
 ```powershell
 python tools/prepare_prototype.py --skirmish   # one-time, builds converted/skirmish
-python tools/skirmish_economy.py --cache converted/skirmish  # upgrade an existing build-4 cache
+python tools/skirmish_construction.py --cache converted/skirmish  # upgrade an existing build-4/5 cache
 ./prototype/run.ps1 -Skirmish
 ./prototype/run.ps1 -SkirmishSmoke             # headless checks
+./prototype/run.ps1 -ConstructionSmoke         # construction, cancellation and both resources
 ```
 
 The cache is separate from `converted/prototype` (Helm's Deep), so both sandboxes
@@ -35,11 +36,11 @@ no behavior and no AI; nothing in build-4 changes unit rules.
 
 ## Known limits
 
-- Construction, training and repair remain open. Buildings are scene dressing
-  plus navigation obstacles and cannot be selected.
-- Food gathering requires a Mill, and further ore extraction requires a Foundry;
-  both depend on the next construction slice. Gather animation/equipment and
-  original timing comparison remain open.
+- Mill/Foundry construction and gathering work. General placement, the remaining
+  Tier 1 buildings, building selection, training, repair and combat against
+  buildings remain open.
+- Worker build/gather animation and equipment, exact work ranges and controlled
+  original-game timing comparisons remain open.
 - Start Citadel orientation is 0 degrees, not the original game's. Start-worker
   placement is an approximation of the original layout.
 - The preview lighting is dark on this map; no lighting or fog-of-war work yet.
@@ -92,3 +93,59 @@ Build-5 validation: 588 simulation checks, 158 Python tests and 19 skirmish smok
 checks pass, including a completed delivery by every starting worker.
 The existing Command, Orders and Ability Godot smoke checks also pass; the
 prototype builds with zero warnings/errors and `git diff --check` is clean.
+
+## Build-6: resource buildings and improved gathering
+
+Select workers and click the Mill or Foundry portrait above the command row,
+then click a food well or ore pile respectively. The ghost is green for valid
+placement and red for invalid placement. Costs and time appear in tooltips.
+Occupied foundations cannot be placed; move units clear if necessary. The site
+footprint activates and the bank pays once on the command tick. Workers approach
+the building and contribute only while alive and within its work envelope.
+
+Stop or another order interrupts work without removing the foundation. Right-click
+an owned unfinished foundation with workers selected to resume or assist. The
+Cancel button targets an unfinished owned building, removes its footprint and
+refunds 75% exactly once; fractional resources stay in the bank. Completed
+buildings cannot use this construction refund. Shift-placement queues the order
+without reserving money or ground until activation. A queued follow-up takes
+precedence over the normal automatic switch from construction to gathering.
+
+| Source rule | Mill | Foundry |
+|---|---:|---:|
+| `Buildings.CostFood / CostOre` | 0 / 50 | 0 / 80 |
+| `BuildTime` (milliseconds, converted to 20 Hz ticks) | 25,000 / 500 | 40,000 / 800 |
+| `MaxHealth` | 570 | 750 |
+| `BuildingRequired1..3` | None | Citadel 1 |
+| `RefundFoodPct / RefundOrePct` | 75% / 75% | 75% / 75% |
+| `Objects.ResourceGatherRateWithBuilding` | 0.4 per second | 0.4 per second |
+| `MaxGatherPercentageWithBuilding` | 100% | 100% |
+
+`WorldVariables.AddlWorkerBuildFactor=0.1` is interpreted as additive work:
+one worker contributes one tick per tick, each extra worker adds 10%. Initial
+health is the imported 5%; health grows with progress. Original construction
+states 19/17/18 show at thirds of progress, then state 0 shows the healthy
+building. The cache restores hidden scaffold geometry and binds the original
+construction texture keys. Progress/health labels and building animation freeze
+when paused. Equal thirds, additive build speed, linear health growth, fixed
+resource-site placement/orientation and interaction envelopes are adapter
+policies awaiting original-game measurement.
+
+A completed owned Mill enables food loads of ten; a completed owned Foundry
+doubles the raw ore rate and unlocks the remaining 45% of the pile. Workers
+still deliver carried resources to their own Citadel: neither source building
+is marked `IsResourceDropOffBuilding`. Construction preserves existing cargo,
+which is returned before gathering the new resource. Opponents cannot gather
+through another team's improvement. Resource stocks remain shared and finite.
+
+`skirmish_construction.py` refreshes an existing cache's navigation masks, body
+clearance, building geometry/materials, icons, rules and hashes. Full skirmish
+preparation also produces these assets. Original/extracted folders stay read-only.
+
+Build-6 validation: 613 synthetic simulation checks (680 with the Helm's Deep
+cache), 160 Python tests, 23 construction and 19 gathering Godot checks pass.
+The construction check drives actual worker buttons and world clicks, checks
+green/red previews, refunds, stop/resume, pause, all stages, deliveries, ownership
+and exact food/ore conservation. A freshly prepared cache and an upgraded cache
+both pass. Command, Orders and Ability smoke checks also pass. Construction views
+are inspected at 1280x800 and 4K; original-game fidelity remains unverified.

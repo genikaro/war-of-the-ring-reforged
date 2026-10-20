@@ -43,6 +43,7 @@ public partial class Main
         _startState = (state.GetProperty("population").GetInt32(),state.GetProperty("population_cap").GetInt32(),
             state.GetProperty("food").GetInt32(),state.GetProperty("ore").GetInt32());
         LoadSkirmishEconomy(data);
+        LoadSkirmishConstruction(data);
         ApplySkirmishHud(_commands);
     }
 
@@ -77,7 +78,8 @@ public partial class Main
             int x = (int)Math.Round(at[0].GetDouble()*1000),z = (int)Math.Round(at[1].GetDouble()*1000);
             _world!.Resources.Add(id,new(id,kind == "ore" ? ResourceKind.Ore : ResourceKind.Food,
                 x,z,resource.GetProperty("initial").GetInt32(),rules.GetProperty("rate_milli_per_tick").GetInt32(),
-                rules.GetProperty("raw_fraction_ppm").GetInt32(),SkirmishInteractionRadius(id,x,z)));
+                rules.GetProperty("raw_fraction_ppm").GetInt32(),SkirmishInteractionRadius(id,x,z),
+                rules.GetProperty("improved_rate_milli_per_tick").GetInt32(),rules.GetProperty("improved_fraction_ppm").GetInt32()));
         }
     }
 
@@ -95,19 +97,19 @@ public partial class Main
     {
         if (!_skirmish || _orders.Pending != null || !_world!.Units.Any(u => u.Team == 0 && u.Health > 0
             && _selected.Contains(u.Id) && _world.Workers.ContainsKey(u.Definition.Name))) return false;
-        Vector3 origin = _camera.ProjectRayOrigin(mouse),direction = _camera.ProjectRayNormal(mouse);
-        var hit = _picker.Pick(new(-origin.X,origin.Y,origin.Z),new(-direction.X,direction.Y,direction.Z));
-        if (hit == null) return false;
-        int x = (int)Math.Round(hit.Position.X*1000),z = (int)Math.Round(hit.Position.Z*1000);
-        var source = _world.Resources.Values.Where(r => SimWorld.DistanceSquared(x,z,r.X,r.Z) <= 4000L*4000)
-            .OrderBy(r => SimWorld.DistanceSquared(x,z,r.X,r.Z)).ThenBy(r => r.Id).FirstOrDefault();
+        var source = ResourceAt(mouse);
         if (source == null) return false;
-        if (!source.CanGather && !_world.Units.Any(u => u.Team == 0 && _selected.Contains(u.Id) && u.Health > 0 && u.CargoMilli > 0))
-        { _status.Text = source.Kind == ResourceKind.Food ? "Food gathering requires a Mill (construction is next)" : "No raw ore remains; a Foundry is required"; return true; }
+        if (_world.ConstructionSites.TryGetValue(source.Id,out var site) && site.Team == 0 && !site.Complete)
+        {
+            _world.Enqueue(0,SelectedWorkers(),OrderKind.Build,target: source.Id,queued: queued);
+            _status.Text = "Resume construction"; return true;
+        }
+        if (!_world.CanGather(0,source.Id) && !_world.Units.Any(u => u.Team == 0 && _selected.Contains(u.Id) && u.Health > 0 && u.CargoMilli > 0))
+        { _status.Text = site is { Team: > 0 } ? "Enemy resource building" : source.Kind == ResourceKind.Food ? "Food gathering requires a Mill" : "No raw ore remains; a Foundry is required"; return true; }
         var workers = _world.Units.Where(u => u.Team == 0 && u.Health > 0 && _selected.Contains(u.Id)
             && _world.Workers.ContainsKey(u.Definition.Name)).Select(u => u.Id);
         _world.Enqueue(0,workers,OrderKind.Gather,target: source.Id,queued: queued);
-        _status.Text = "Gather ore"+(_paused ? " queued (paused)" : " order issued");
+        _status.Text = "Gather "+source.Kind.ToString().ToLowerInvariant()+(_paused ? " queued (paused)" : " order issued");
         return true;
     }
 }

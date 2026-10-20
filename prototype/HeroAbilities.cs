@@ -43,6 +43,7 @@ public partial class Main
         if (caster.Casting || caster.AbilityReadyAt[slot] > _world.Tick)
         { _status.Text = ability.Name+" is recharging"; return; }
         _pendingAbilityCaster = caster.Id; _pendingAbilitySlot = slot;
+        ClearConstructionTargeting();
         _orders.Begin(OrderKind.UseAbility); _dragging = false; _hud.SelectionBox = null;
         _status.Text = ability.Name+": choose an injured friendly unit (or Aragorn)";
     }

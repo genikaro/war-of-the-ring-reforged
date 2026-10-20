@@ -111,6 +111,45 @@ def restore_geometry(path):
     restore_meshes(gltf); write_glb(path,gltf,binary)
 
 
+def construction_materials(gltf):
+    """Bind source construction texture keys to their separate scaffold meshes.
+
+    Healthy parts keep the default material. Damage/ruins texture playback is
+    outside this resource-building slice. The tag makes cache refresh idempotent.
+    """
+    from copy import deepcopy
+    extra = gltf.setdefault('extras', {})
+    if extra.get('wotrConstructionMaterials') == 1:
+        return
+    for model in extra['wotrAppearance']['models']:
+        for state in model['states']:
+            if state['id'] not in (19, 17, 18):
+                continue
+            choice = next(c for c in state['choices'] if c['weight'] > 0)
+            slots = [-1, -1]
+            for time, stages in choice.get('textureKeys', []):
+                if time <= 0:
+                    slots = [new if new >= 0 else old for new, old in zip(stages, slots)]
+            for part, selected in zip(model['parts'], choice['meshes']):
+                if part is None or selected < 0:
+                    continue
+                for primitive in gltf['meshes'][gltf['nodes'][part]['mesh']]['primitives']:
+                    material = deepcopy(gltf['materials'][primitive['material']])
+                    if slots[0] >= 0 and model['textures'][slots[0]] is not None:
+                        material.setdefault('pbrMetallicRoughness', {})['baseColorTexture'] = {'index': model['textures'][slots[0]]}
+                    if slots[1] >= 0 and model['textures'][slots[1]] is not None and 'emissiveTexture' in material:
+                        material['emissiveTexture'] = {'index': model['textures'][slots[1]]}
+                    primitive['material'] = len(gltf['materials'])
+                    gltf['materials'].append(material)
+    extra['wotrConstructionMaterials'] = 1
+
+
+def restore_building(path):
+    from wor2gltf import load_glb
+    path = Path(path); gltf, binary = load_glb(path)
+    restore_meshes(gltf); construction_materials(gltf); write_glb(path, gltf, binary)
+
+
 def write_glb(path,gltf,binary):
     js = json.dumps(gltf, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
     js += b' ' * (-len(js) % 4)

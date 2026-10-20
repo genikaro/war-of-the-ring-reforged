@@ -158,6 +158,8 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
 
     private void Apply(SimCommand command, bool activating = false)
     {
+        if (command.Kind == OrderKind.Build) { BeginConstruction(command,activating); return; }
+        if (command.Kind == OrderKind.CancelConstruction) { CancelConstruction(command); return; }
         if (command.Kind == OrderKind.Gather) { BeginGather(command,activating); return; }
         if (command.Kind == OrderKind.UseAbility) { BeginAbility(command); return; }
         if (command.Kind == OrderKind.ToggleWalkRun)
@@ -498,6 +500,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             action.Action();
         }
         ActivateQueuedOrders();
+        UpdateConstruction();
         if (_navigationRevision != Navigation.Revision)
         {
             // Rebuild routes at a tick boundary. Starting from the last reached
@@ -558,6 +561,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             if (unit.Cooldown > 0) unit.Cooldown--;
             if (UpdateAbility(unit)) continue;
             UpdateGather(unit);
+            ApproachConstruction(unit);
             UpdatePersistentOrder(unit);
             if (UpdateCombat(unit)) continue;
             if (unit.Target < 0 && unit.FreeMovement && unit.Definition.BodyRadiusMm > 350 && Tick%10 == 0)
@@ -677,6 +681,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         text += ":pace:"+string.Join(';',_walkingTeams.OrderBy(p => p.Key).Select(p => $"{p.Key},{p.Value}"));
         text += ":abilities:"+string.Join(';',Units.Select(u => $"{u.AbilitySlot},{u.CastStartTick},{u.CastSerial},{u.CastApplied}:{string.Join(',',u.AbilityReadyAt)}"));
         text += EconomyDigest();
+        text += ConstructionDigest();
         text += ":"+_projectileSequence+":"+string.Join(';',Projectiles);
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
     }

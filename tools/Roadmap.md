@@ -30,6 +30,20 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-6 (Oct 20):** Mill/Foundry construction is connected to worker portraits
+and resource-site placement, including a green/red ghost, imported costs and
+prerequisites, shared worker progress, original scaffold stages, Stop/resume and
+75% cancellation refunds. Completed owned buildings unlock food and improved
+ore gathering; cargo returns to the Citadel. Rules, work, costs, footprints,
+ownership and fractional resources replay deterministically. See [skirmish
+notes](../prototype/SKIRMISH.md) for source values and explicit adapter policies.
+Validation: 613 synthetic / 680 cached simulation checks, 160 Python tests,
+23 construction and 19 gathering Godot checks, plus Command/Orders/Ability
+regressions. Fresh and upgraded caches pass; 1280x800 and 4K views are inspected.
+Next: remaining Tier 1 construction, building selection and production queues
+with population reservation and cancellation checks. Building combat/repair,
+worker work animations, fog and the scripted opponent remain open.
+
 **Build-5 (Oct 20):** raw-ore gathering is connected to the Bilbo's Bluffs
 skirmish. Workers gather carried loads, return to an owned Citadel and credit
 the live resource bank. Shared deposits, partial final loads, cancellation,
@@ -534,7 +548,7 @@ against continuous source-game evidence before claiming fidelity. Powers, econom
 and production remain later work.
 
 - [ ] Load unit, weapon, building, spell and technique stats from the JSON tables (`Units`, `Weapons`, `Buildings`, `Spells`, `Techniques`, `UnitToUnitModifiers`, `BattleGear`, `HeroExperiences`); three demo units' base melee definitions and pair-rule support are implemented.
-- [ ] Economy: resources, workers, building and training queues, places of power (build-5 adds carried raw ore, Citadel delivery and a live resource bank; construction, food gathering and production are next); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
+- [ ] Economy: resources, workers, building and training queues, places of power (builds 5-6 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds; other Tier 1 buildings and production are next); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
 - [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them
 - [ ] Heroes, fate powers and spells (`SpellAndEventAndActions` chains events to actions)
 - [ ] Open `Rings.exe` in Ghidra to recover the formulas the tables only feed: damage, hit chance, experience, upgrade effects
