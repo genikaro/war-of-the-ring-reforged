@@ -3,6 +3,9 @@
 /extracted/
 /converted/
 
+# Third-party walkthrough licensed for personal use only
+/references/original-game/GUIDE.txt
+
 # Local editor settings and Python caches
 /.claude/
 __pycache__/
