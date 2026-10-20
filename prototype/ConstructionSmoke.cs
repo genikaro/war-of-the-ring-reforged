@@ -31,6 +31,7 @@ public partial class Main
                 _smokeFoodSite = world.Resources.Values.Where(r => r.Kind == ResourceKind.Food).MinBy(r => SimWorld.DistanceSquared(r.X,r.Z,world.Units[0].X,world.Units[0].Z))!.Id;
                 _smokeFoundrySite = world.Resources.Values.Where(r => r.Kind == ResourceKind.Ore).MinBy(r => SimWorld.DistanceSquared(r.X,r.Z,world.Units[0].X,world.Units[0].Z))!.Id;
                 var food = world.Resources[_smokeFoodSite]; _focus = PositionOf(food.X,food.Z); UpdateCamera(); break;
+            case 4: Click(_commands.BuildButton.GetGlobalRect().GetCenter()); break;
             case 6:
                 _constructionChecks["worker_construction_icons"] = _commands.ConstructionButton(ResourceKind.Food).Visible
                     && _commands.ConstructionButton(ResourceKind.Food).Icon != null && _commands.ConstructionButton(ResourceKind.Ore).Icon != null;
@@ -49,8 +50,11 @@ public partial class Main
                 _constructionChecks["foundation_paid_once"] = world.ConstructionSites[_smokeFoodSite].Team == 0 && world.Economies[0].Ore == 275;
                 _constructionChecks["foundation_blocks_navigation"] = world.Navigation.IsObstacleActive(world.ConstructionSites[_smokeFoodSite].Obstacle);
                 _constructionChecks["construction_dispatched_to_four_workers"] = world.Commands.Any(c => c.Kind == OrderKind.Build && c.Units.Length == 4);
-                Click(_commands.CancelConstructionButton.GetGlobalRect().GetCenter()); break;
-            case 16: Click(Point(_smokeFoodSite)); break;
+                // Cancel the foundation from its own selection panel.
+                Click(StructureSmokePoint(world.ConstructionSites[_smokeFoodSite].Obstacle)); break;
+            case 16: Click(_commands.CancelConstructionButton.GetGlobalRect().GetCenter()); break;
+            case 17: PushKey(Key.Key1); break;
+            case 18: Click(_commands.BuildButton.GetGlobalRect().GetCenter()); break;
             case 20:
                 _constructionChecks["cancel_refund_and_obstacle_removal"] = world.Economies[0].OreMilli == 312500
                     && world.ConstructionSites[_smokeFoodSite].Team == -1 && !world.Navigation.IsObstacleActive(world.ConstructionSites[_smokeFoodSite].Obstacle)
@@ -79,6 +83,7 @@ public partial class Main
                 _constructionChecks["mill_workers_deliver_food"] = world.Economies[0].Food > 115 && _commands.ResourceReadout == $"4/10 {world.Economies[0].Food} {world.Economies[0].Ore}";
                 PushKey(Key.S);
                 var ore = world.Resources[_smokeFoundrySite]; _focus = PositionOf(ore.X,ore.Z); UpdateCamera(); break;
+            case 1201: Click(_commands.BuildButton.GetGlobalRect().GetCenter()); break;
             case 1202:
                 Click(_commands.ConstructionButton(ResourceKind.Ore).GetGlobalRect().GetCenter());
                 _constructionChecks["foundry_button_arms_targeting"] = _constructionTargeting && _constructionBuilding == world.ConstructionRules[ResourceKind.Ore].Name; break;

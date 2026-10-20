@@ -16,7 +16,7 @@ public partial class Main
         var canvas = new CanvasLayer(); viewport.AddChild(canvas);
         var root = new Control { Size = _captureResolution,MouseFilter = Control.MouseFilterEnum.Ignore }; canvas.AddChild(root);
         root.AddChild(new BuildOverlay { Visible = _hud.Visible });
-        var hud = new CommandPanel { ManageCursor = false }; root.AddChild(hud); hud.LoadArtwork(_cache,_world!);
+        var hud = new CommandPanel { ManageCursor = false,BuildMenuOpen = _buildMenu }; root.AddChild(hud); hud.LoadArtwork(_cache,_world!);
         hud.Visible = _hud.Visible;
         if (_skirmish) ApplySkirmishHud(hud);
         var selected = _world!.Units.Where(u => _selected.Contains(u.Id) && u.Health > 0).ToList();
@@ -24,7 +24,7 @@ public partial class Main
             _world.Units.Count(u => u.Team == 0 && u.Health > 0),_world.Units.Count(u => u.Team != 0 && u.Health > 0),_world.IsWalking(0),_world.Tick,_pendingAbilitySlot);
         if (_skirmish)
         {
-            hud.RefreshConstruction(_world,selected,_constructionTargeting,_constructionBuilding,_constructionChoices);
+            hud.RefreshConstruction(_world,selected,_constructionTargeting,_constructionBuilding,_constructionChoices,SelectedStructureDetails());
             hud.RefreshStructure(SelectedStructureDetails());
             hud.RefreshProduction(_world,SelectedProducer());
         }

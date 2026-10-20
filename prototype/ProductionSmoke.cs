@@ -44,7 +44,8 @@ public partial class Main
             case 12:
                 _productionChecks["repeated_clicks_queue_units"] = producer.Queue.Count == 3 && Hud(7,10) && _commands.QueueButton(2).Visible;
                 _productionChecks["unaffordable_training_disabled"] = _commands.TrainButton(0).Disabled && _commands.TrainButton(0).TooltipText.Contains("Insufficient resources");
-                Click(_commands.QueueButton(2).GetGlobalRect().GetCenter()); break;
+                Press(_commands.QueueButton(2).GetGlobalRect().GetCenter()); break;
+            case 13: Release(_commands.QueueButton(2).GetGlobalRect().GetCenter()); break;
             case 14:
                 _productionChecks["queue_portrait_cancels_with_refund"] = producer.Queue.Count == 2 && Hud(6,45);
                 PushKey(Key.Backspace); break;
@@ -84,7 +85,7 @@ public partial class Main
                 _focus = UnitPosition(unit); UpdateCamera(); Click(_camera.UnprojectPosition(UnitPosition(unit)+Vector3.Up)); break;
             case 522:
                 _productionChecks["trained_worker_selectable_with_construction"] = _selected.SetEquals([_productionTrained]) && _selectedStructure == null
-                    && _commands.ConstructionButton(ResourceKind.Ore).Visible && !_commands.TrainButton(0).Visible;
+                    && _commands.BuildButton.Visible && !_commands.TrainButton(0).Visible;
                 var report = new { build = BuildInfo.Label,checks = _productionChecks,passed = _productionChecks.Count == 17 && _productionChecks.Values.All(v => v),
                     producer = new { producer.Id,producer.Team,producer.RallyCell,producer.ProgressTicks,queue = producer.Queue },
                     trained = world.Units[_productionTrained] is var t ? new { t.Id,t.Node,t.X,t.Z,t.Order } : null,

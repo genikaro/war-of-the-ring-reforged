@@ -531,3 +531,45 @@ Helm's Deep, the gameplay, combat and melee smokes record the same arrow
 releases, visuals, hits and damage as build-14. All other skirmish and command
 checks pass, and fresh and upgraded caches pass. Rendered captures at 1280x800
 and 4K were inspected.
+
+## Build-16: Build menu and working construction clicks
+
+The owner reported after playtesting that building icons could not be clicked.
+Since build-9 the command panel hid and disabled every construction button at
+the start of each frame and showed them again later in the same frame. A real
+click presses in one frame and releases in another; hiding the button in between
+removes Godot's mouse focus, so the release never reached it. The foundation
+Cancel button, the structure portrait and the training-queue portraits lost
+clicks the same way. Automated checks pushed press and release together, so they
+missed it. Now each control's visibility has exactly one owner and is assigned
+once per frame. The smokes press and release in separate frames for the Build
+button, a building icon, the foundation Cancel button and a training-queue
+portrait. With the old per-frame hiding temporarily restored, the placement
+check fails.
+
+Following the owner's request, construction now uses a Warcraft-style Build
+menu instead of the original panel's always-visible list:
+
+- Selected workers show their normal commands plus a Build button (the original
+  `console_g_action_build` icon) in the top-left action slot. B opens it too.
+- The build page replaces the unit commands with the seven Tier 1 buildings in
+  the original order (Citadel, Mill, Foundry, Watchtower / Camp, Barracks, Dwarf
+  Hall) and a Back button in the bottom-right slot.
+- Choosing a building arms placement with the ghost. A successful placement
+  returns to the unit commands. Esc first cancels placement and stays on the build
+  page; a second Esc (or Back) returns to the commands. A unit command or a
+  different selection also closes the page.
+- To cancel a foundation, select it and use its Cancel button. The separate
+  "cancel by clicking a foundation" worker mode is gone.
+
+The seven buildings fit the 4x3 grid for Tier 1. Later tiers will need paging
+or categories; the owner deferred that decision.
+
+Validation: the Godot placement check grows to 23 cases. New cases cover the
+worker card with Build and commands, the build page replacing the commands,
+returning after placement, the B hotkey, and Esc stepping from placement to the
+page to the commands. Construction (23), structure (61), production (17), Dwarf
+Hall (9), gathering (23), command (49), orders (27) and ability (38) checks, the
+Helm's Deep gameplay and melee smokes, 680 synthetic / 747 cached simulation
+checks, 33 worker-cache checks and 167 Python tests pass. Captures of both cards
+at 1280x800 and 4K were inspected. No cache refresh is needed after build-15.

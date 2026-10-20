@@ -4,6 +4,12 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
+**build-16:** construction clicks work again; buttons are no longer hidden and
+re-shown between a press and its release. Workers get a Build button (B) that
+swaps the unit commands for the seven Tier 1 buildings and a Back button. Esc
+cancels placement, then closes the page. Cancel a foundation by selecting it.
+No cache refresh is needed. See [skirmish notes](SKIRMISH.md#build-16-build-menu-and-working-construction-clicks).
+
 **build-15:** a completed Dwarf Hall trains the Dwarf Axethrower (60 food,
 10 ore, population 2), which throws original axe projectiles with their own
 launch sounds and trail. Ranged presentation is now per unit; the Elven Archer
@@ -266,7 +272,7 @@ checked before loading. Never distribute the local cache with the project.
 | Shift + selection | Add to selection |
 | Shift + structure click | Select/toggle that structure separately from units |
 | Structure portrait | Center the camera on the selected structure |
-| Workers selected: building icon, then click | Place a Tier 1 building (Shift queues); Mill/Foundry choose a resource site |
+| Workers selected: Build [B], then a building | Place a Tier 1 building (Shift queues); Mill/Foundry choose a resource site; Back or Esc returns |
 | Workers selected: right-click a foundation | Resume or assist its construction |
 | Citadel selected: worker portrait | Train a Human Worker; click again to queue (five maximum) |
 | Citadel selected: training portrait / Backspace | Cancel that unit / the last queued unit, with a full refund |
@@ -291,7 +297,7 @@ checked before loading. Never distribute the local cache with the project.
 | Menu: Rotate left / Rotate right | Rotate the camera |
 | Mouse wheel | Zoom |
 | Space | Pause/resume simulation and unit animation |
-| Esc | Cancel targeting; otherwise clear selection |
+| Esc | Cancel targeting; then close the build page; otherwise clear selection |
 | Right-click while targeting | Cancel targeting and retain the current order |
 | Restart sandbox | Reset the encounter |
 | Menu: All squads / Fortress / Whole map / Focus selection | Frame a comparison view or the current selection |

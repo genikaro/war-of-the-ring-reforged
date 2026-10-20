@@ -233,8 +233,8 @@ public partial class CommandPanel : Control
     public void Refresh(IReadOnlyList<SimUnit> units,Func<int,string> name,OrderKind? pending,bool paused,IReadOnlyList<int[]>? groups = null,int allies = 0,int enemies = 0,bool walking = false,int tick = 0,int pendingAbilitySlot = -1)
     {
         bool available = units.Count > 0;
-        _structureDetails.Visible = false;
-        foreach (var button in _constructionButtons) { button.Visible = false; button.Disabled = true; }
+        // Each control's visibility has one owner and is assigned once per frame: hiding a
+        // button between a press and its release (separate frames) would drop the click.
         bool controllable = available && units.All(u => u.Team == 0);
         bool single = units.Count == 1;
         RefreshAbilities(units,pending,tick,pendingAbilitySlot);
@@ -290,7 +290,7 @@ public partial class CommandPanel : Control
         }
         foreach (var (kind,button) in _buttons)
         {
-            button.Visible = controllable;
+            button.Visible = controllable && !BuildMenuOpen;
             button.Disabled = !controllable;
             button.SetPressedNoSignal(controllable && (PanelCommand(pending) == kind || (pending == null && units.All(u => PanelCommand(u.Order) == kind))));
         }
@@ -359,7 +359,8 @@ public partial class CommandPanel : Control
     public TextureButton WalkRunButton => _walkRun;
     public TextureButton MenuButton => _menu;
     public bool CommandsAvailable => _buttons.Values.All(b => !b.Disabled);
-    public bool CommandPaletteEmpty => !_buttons.Values.Concat(_abilities).Concat(_constructionButtons).Concat(_trainButtons).Any(b => b.Visible);
+    public bool CommandPaletteEmpty => !_buttons.Values.Concat(_abilities).Concat(_constructionButtons).Concat(_trainButtons)
+        .Concat([_buildButton,_backButton,_cancelConstructionButton]).Any(b => b.Visible);
     public bool HealthCounterCentered => Math.Abs(_singleHealthText.GetRect().GetCenter().Y-_singleHealth.GetRect().GetCenter().Y) < .01f;
     public bool ResourceCountersCentered => new[] {(_populationIcon,_populationText),(_foodIcon,_foodText),(_oreIcon,_oreText)}
         .All(p => Math.Abs(p.Item1.GetRect().GetCenter().Y-p.Item2.GetRect().GetCenter().Y) < .01f);

@@ -93,7 +93,8 @@ public partial class Main
                 _structureChecks["unfinished_building_selected"] = _selectedStructure == world.ConstructionSites[_structureFood].Obstacle
                     && _commands.StructureDetailsVisible && _commands.DisplayedName == "Mill" && SelectedStructureDetails() is {UnderConstruction: true};
                 _structureChecks["selected_foundation_can_cancel"] = _commands.CancelConstructionButton.Visible && !_commands.CancelConstructionButton.Disabled;
-                _structureRefundBank = world.Economies[0].OreMilli; Click(_commands.CancelConstructionButton.GetGlobalRect().GetCenter()); break;
+                _structureRefundBank = world.Economies[0].OreMilli; Press(_commands.CancelConstructionButton.GetGlobalRect().GetCenter()); break;
+            case 27: Release(_commands.CancelConstructionButton.GetGlobalRect().GetCenter()); break;
             case 30:
                 _structureChecks["cancel_prunes_selection_and_refunds"] = _selectedStructure == null && world.ConstructionSites[_structureFood].Team == -1
                     && world.Economies[0].OreMilli == _structureRefundBank+37500;

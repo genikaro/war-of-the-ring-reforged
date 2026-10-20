@@ -21,6 +21,7 @@ public partial class Main
                 // Test fixture: the start bank cannot afford a Dwarf Hall plus an Axethrower. Everything after this uses UI input.
                 world.Economies[0].FoodMilli += 300_000; world.Economies[0].OreMilli += 300_000; break;
             case 3: PushKey(Key.Key1); _focus = PositionOf(citadel.X,citadel.Z); UpdateCamera(); break;
+            case 5: Click(_commands.BuildButton.GetGlobalRect().GetCenter()); break;
             case 6: _dwarfCell = VisiblePlacementCells(SmokeDwarfHall)[0]; Click(_commands.ConstructionButton(SmokeDwarfHall).GetGlobalRect().GetCenter()); break;
             case 8: Click(PlacementPoint(_dwarfCell)); break;
             case 10:

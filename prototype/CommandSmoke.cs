@@ -21,6 +21,10 @@ public partial class Main
             CtrlPressed = ctrl,ShiftPressed = shift },true);
     }
 
+    // A real click spans frames: the panel refreshes between press and release.
+    private void Press(Vector2 point) => GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left,Pressed = true,Position = point,GlobalPosition = point },true);
+    private void Release(Vector2 point) => GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left,Pressed = false,Position = point,GlobalPosition = point },true);
+
     private void ClickCommand(OrderKind kind) => Click(_commands.ButtonFor(kind).GetGlobalRect().GetCenter());
 
     private Vector2 CommandGoalPoint(bool clear = false)

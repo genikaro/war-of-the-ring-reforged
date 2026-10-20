@@ -32,7 +32,7 @@ public partial class CommandPanel
     {
         _structureDetails.Visible = details != null;
         if (details == null) return;
-        foreach (var button in _buttons.Values.Concat(_abilities).Concat(_constructionButtons)) { button.Visible = false; button.Disabled = true; }
+        foreach (var button in _buttons.Values.Concat(_abilities)) { button.Visible = false; button.Disabled = true; }
         _single.Visible = _roster.Visible = false;
         _title.Position = new(335,59); _title.Size = new(435,22); _title.Text = details.Name;
         _structurePortrait.Icon = _art.GetValueOrDefault(details.Portrait);
@@ -45,10 +45,6 @@ public partial class CommandPanel
         _structureProgressText.Text = (details.UnderConstruction ? $"Construction {details.ProgressPercent}%\n" : "")+details.Resource;
         _order.Text = details.Team < 0 ? "Neutral structure · Inspecting" : details.Team == 0
             ? details.UnderConstruction ? "Under construction · select workers to resume or assist" : "Your structure" : "Enemy structure · Inspecting";
-        bool cancel = details.Team == 0 && details.UnderConstruction;
-        CancelConstructionButton.Visible = cancel; CancelConstructionButton.Disabled = !cancel;
-        CancelConstructionButton.SetPressedNoSignal(false);
-        if (cancel) CancelConstructionButton.TooltipText = "Cancel this construction and receive its resource refund";
     }
 
     public bool StructureHealthVisible => _structureHealthDetails.IsVisibleInTree();

@@ -308,6 +308,7 @@ public partial class Main : Node3D
         _commands.WalkRunChosen += ToggleWalkRun;
         _commands.AbilityChosen += ChooseAbility;
         _commands.ConstructionChosen += ChooseConstruction;
+        _commands.BuildMenuChosen += OpenBuildMenu;
         _commands.TrainingChosen += ChooseTraining;
         _commands.TrainingCancelled += CancelTraining;
         _commands.StructurePortraitChosen += () => {
@@ -368,6 +369,7 @@ public partial class Main : Node3D
             if (key.Keycode == Key.Escape)
             {
                 if (_orders.Pending != null || _constructionTargeting) CancelTargeting();
+                else if (_buildMenu) OpenBuildMenu(false);
                 else { _selected.Clear(); _selectedStructure = null; }
                 _dragging = false; _hud.SelectionBox = null;
             }
@@ -381,6 +383,7 @@ public partial class Main : Node3D
             int groupSlot = key.Keycode == Key.Key0 ? 9 : key.Keycode is >= Key.Key1 and <= Key.Key9 ? (int)key.Keycode-(int)Key.Key1 : -1;
             if (groupSlot >= 0 && !key.AltPressed && !key.MetaPressed) UseGroup(groupSlot,key.CtrlPressed,key.ShiftPressed);
             if (key.Keycode == Key.Backspace) CancelTraining(-1);
+            if (key.Keycode == Key.B && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed && !_buildMenu) OpenBuildMenu(true);
             if (key.Keycode == Key.F4) ToggleDebugMenu();
             if (key.Keycode == Key.F2 && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed) ToggleWalkRun();
             if (key.Keycode == Key.F10) _hud.Visible = !_hud.Visible;
@@ -496,7 +499,7 @@ public partial class Main : Node3D
     {
         if (_world == null || !_world.Units.Any(u => u.Team == 0 && u.Health > 0 && _selected.Contains(u.Id))) return;
         _dragging = false; _hud.SelectionBox = null;
-        ClearConstructionTargeting();
+        ClearConstructionTargeting(); _buildMenu = false;
         if (_orders.Begin(kind)) _status.Text = CommandPanel.OrderName(kind)+": choose a target";
         else SendOrder(new(kind));
     }
@@ -715,6 +718,7 @@ public partial class Main : Node3D
         _selected.RemoveWhere(id => !LivingUnit(id));
         var units = _world.Units.Where(u => _selected.Contains(u.Id)).ToList();
         if (units.Count == 0) _orders.Cancel();
+        if (_skirmish) SyncBuildMenu();
         _commands.Refresh(units,UnitName,_orders.Pending,_paused,
             Enumerable.Range(0,10).Select(slot => _controlGroups.Recall(slot,LivingFriendly)).ToArray(),
             _world.Units.Count(u => u.Team == 0 && u.Health > 0),_world.Units.Count(u => u.Team != 0 && u.Health > 0),_world.IsWalking(0),_world.Tick,_pendingAbilitySlot);
@@ -722,7 +726,7 @@ public partial class Main : Node3D
         if (_skirmish)
         {
             if (!SelectedWorkers().Any()) ClearConstructionTargeting();
-            _commands.RefreshConstruction(_world,units,_constructionTargeting,_constructionBuilding,_constructionChoices);
+            _commands.RefreshConstruction(_world,units,_constructionTargeting,_constructionBuilding,_constructionChoices,SelectedStructureDetails());
             PresentConstruction();
             PresentStructureSelection();
             PresentProduction();

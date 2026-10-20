@@ -39,13 +39,22 @@ public partial class Main
         switch (_frames)
         {
             case 3: PushKey(Key.Key1); _focus = PositionOf(citadel.X,citadel.Z); UpdateCamera(); break;
+            case 4:
+                _placementChecks["workers_show_build_button_with_commands"] = _commands.BuildButton is { Visible: true,Icon: not null } && _commands.ButtonFor(OrderKind.Attack).Visible
+                    && !_commands.ConstructionButton(SmokeCamp).Visible && !_commands.BuildBackButton.Visible;
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-workers.png");
+                Press(_commands.BuildButton.GetGlobalRect().GetCenter()); break;
+            case 5: Release(_commands.BuildButton.GetGlobalRect().GetCenter()); break;
             case 6:
                 _placementCells = VisiblePlacementCells(SmokeCamp,SmokeBarracks,SmokeCamp);
+                _placementChecks["build_page_replaces_unit_commands"] = _buildMenu && !_commands.BuildButton.Visible && _commands.BuildBackButton.Visible
+                    && !_commands.ButtonFor(OrderKind.Attack).Visible && !_commands.ButtonFor(OrderKind.Patrol).Visible;
                 _placementChecks["seven_buildings_in_original_order"] = _constructionChoices.Length == 7 && _constructionChoices.All(c => _commands.ConstructionButton(c.Building) is { Visible: true,Icon: not null })
-                    && _commands.CancelConstructionButton.Visible && _constructionChoices[3].Building == "BUILDING_G_TOWER";
+                    && !_commands.CancelConstructionButton.Visible && _constructionChoices[3].Building == "BUILDING_G_TOWER";
                 _placementChecks["unaffordable_citadel_disabled"] = _commands.ConstructionButton("BUILDING_G_TOWN_CENTER_LEVEL_1") is { Disabled: true } citadelButton
                     && citadelButton.TooltipText.Contains("Insufficient resources") && !_commands.ConstructionButton(SmokeCamp).Disabled;
-                Click(_commands.ConstructionButton(SmokeCamp).GetGlobalRect().GetCenter()); Pointer(PlacementPoint(_placementCells[0])); break;
+                Press(_commands.ConstructionButton(SmokeCamp).GetGlobalRect().GetCenter()); break;
+            case 7: Release(_commands.ConstructionButton(SmokeCamp).GetGlobalRect().GetCenter()); Pointer(PlacementPoint(_placementCells[0])); break;
             case 8:
                 _placementChecks["open_ground_preview_green"] = _constructionTargeting && _constructionBuilding == SmokeCamp && _constructionPreview is { Visible: true } && _previewValid;
                 Pointer(_camera.UnprojectPosition(PositionOf(citadel.X,citadel.Z))); break;
@@ -64,11 +73,21 @@ public partial class Main
                     && world.Commands.Any(c => c.Kind == OrderKind.PlaceBuilding && c.Units.Length == 4) && !_constructionTargeting;
                 _placementChecks["runtime_footprint_blocks_ground"] = camp != null && world.Navigation.IsObstacleActive(camp.Obstacle)
                     && !world.Navigation.CanStand(_placementCells[0]) && _structureViews.ContainsKey(camp.Obstacle);
-                Click(_commands.ConstructionButton(SmokeBarracks).GetGlobalRect().GetCenter()); break;
+                _placementChecks["placement_returns_to_unit_commands"] = !_buildMenu && _commands.BuildButton.Visible && _commands.ButtonFor(OrderKind.Attack).Visible;
+                Click(_commands.BuildButton.GetGlobalRect().GetCenter()); break;
+            case 15: Click(_commands.ConstructionButton(SmokeBarracks).GetGlobalRect().GetCenter()); break;
             case 16: Click(PlacementPoint(_placementCells[1]),shift: true); break;
             case 18:
                 _placementChecks["shift_placement_queued_without_payment"] = Site(SmokeBarracks,_placementCells[1]) == null && world.Economies[0].Ore == 245
-                    && world.Units.Where(u => u.Team == 0).All(u => u.OrderQueue.Any(o => o.Kind == OrderKind.PlaceBuilding)); break;
+                    && world.Units.Where(u => u.Team == 0).All(u => u.OrderQueue.Any(o => o.Kind == OrderKind.PlaceBuilding));
+                PushKey(Key.B); break;
+            case 20: Click(_commands.ConstructionButton(SmokeCamp).GetGlobalRect().GetCenter()); break;
+            case 22: PushKey(Key.Escape); break;
+            case 24:
+                _placementChecks["escape_cancels_targeting_on_build_page"] = !_constructionTargeting && _buildMenu && _commands.BuildBackButton.Visible;
+                PushKey(Key.Escape); break;
+            case 26:
+                _placementChecks["second_escape_returns_to_unit_commands"] = !_buildMenu && _selected.Count == 4 && _commands.ButtonFor(OrderKind.Attack).Visible; break;
             case 800:
                 _placementChecks["camp_complete_adds_population"] = Site(SmokeCamp,_placementCells[0]) is { Complete: true,Health: 400 } && world.PopulationCapacity(0) == 21
                     && _commands.ResourceReadout.StartsWith("4/21 ");
@@ -91,6 +110,7 @@ public partial class Main
                 _placementChecks["swordsman_training_pays_and_reserves"] = world.Economies[0].Food == 5 && _commands.ResourceReadout.StartsWith("6/21 ")
                     && barracksProducer.Queue.Count == 1 && _commands.TrainingVisible && barracksProducer.RallyCell >= 0;
                 PushKey(Key.Key1); _focus = PositionOf(citadel.X,citadel.Z); UpdateCamera(); break;
+            case 1506: Click(_commands.BuildButton.GetGlobalRect().GetCenter()); break;
             case 1507: Click(_commands.ConstructionButton(SmokeCamp).GetGlobalRect().GetCenter()); break;
             case 1509: Click(PlacementPoint(_placementCells[2])); break;
             case 1513: PushKey(Key.S); break;
@@ -102,7 +122,8 @@ public partial class Main
             case 1537:
                 _placementChecks["right_click_foundation_resumes"] = world.Units.Count(u => u.Team == 0 && u.Order == OrderKind.Build) == 4 && world.Economies[0].Ore == 60;
                 Click(StructureSmokePoint(Site(SmokeCamp,_placementCells[2])!.Obstacle)); break;
-            case 1539: Click(_commands.CancelConstructionButton.GetGlobalRect().GetCenter()); break;
+            case 1539: Press(_commands.CancelConstructionButton.GetGlobalRect().GetCenter()); break;
+            case 1540: Release(_commands.CancelConstructionButton.GetGlobalRect().GetCenter()); break;
             case 1543:
                 _placementChecks["cancel_removes_foundation_with_refund"] = Site(SmokeCamp,_placementCells[2]) == null && world.Economies[0].Ore == 120
                     && world.Navigation.CanStand(_placementCells[2]) && _selectedStructure == null
@@ -121,11 +142,11 @@ public partial class Main
                 var stats = selected == null ? null : Reforged.Presentation.UnitHudStats.From(selected,_rules);
                 _placementChecks["swordsman_selectable_with_source_stats"] = selected != null && _selected.SetEquals([selected.Id]) && _commands.SingleUnitDetailsVisible
                     && _commands.DisplayedName == "Gondor Swordsman" && _commands.DisplayedHealth == "155/155" && stats is { Attack: "10",Armor: "0" }
-                    && !_commands.ConstructionButton(SmokeCamp).Visible;
+                    && !_commands.ConstructionButton(SmokeCamp).Visible && !_commands.BuildButton.Visible;
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-swordsman.png");
                 break;
             case 1906:
-                var report = new { build = BuildInfo.Label,checks = _placementChecks,passed = _placementChecks.Count == 18 && _placementChecks.Values.All(v => v),
+                var report = new { build = BuildInfo.Label,checks = _placementChecks,passed = _placementChecks.Count == 23 && _placementChecks.Values.All(v => v),
                     cells = _placementCells,sites = world.ConstructionSites.Values.Where(s => s.Building != null).Select(s => new { s.Id,s.Building,s.X,s.Z,s.Team,s.Complete,s.Health }),
                     bank = new { world.Economies[0].FoodMilli,world.Economies[0].OreMilli },population = new { used = world.PopulationUsed(0),capacity = world.PopulationCapacity(0) },
                     selected = _selected,display = new { _commands.DisplayedName,_commands.DisplayedHealth,_commands.SingleUnitDetailsVisible },

@@ -6,8 +6,10 @@ using System.Text.Json;
 public partial class Main
 {
     private bool _constructionTargeting;
-    /// <summary>Building chosen for placement; null while targeting a foundation to cancel.</summary>
     private string? _constructionBuilding;
+    /// <summary>Worker build page open, for the selection it was opened with.</summary>
+    private bool _buildMenu;
+    private string _buildMenuSelection = "";
     private readonly Dictionary<string,string> _constructionFiles = [];
     private (string Building,string Portrait)[] _constructionChoices = [];
     private readonly Dictionary<int,BuildingVisual> _constructionViews = [];
@@ -92,17 +94,32 @@ public partial class Main
         return hit == null ? -1 : _world!.Navigation.Cell((int)Math.Round(hit.Position.X*1000),(int)Math.Round(hit.Position.Z*1000));
     }
 
+    private void OpenBuildMenu(bool open)
+    {
+        ClearConstructionTargeting(); _orders.Cancel();
+        _buildMenu = open && _skirmish && SelectedWorkers().Any();
+        _buildMenuSelection = string.Join(',',_selected.Order());
+    }
+
+    /// <summary>Close the build page when the selection it was opened for changes.</summary>
+    private void SyncBuildMenu()
+    {
+        if (_buildMenu && (!SelectedWorkers().Any() || _buildMenuSelection != string.Join(',',_selected.Order()))) { _buildMenu = false; ClearConstructionTargeting(); }
+        _commands.BuildMenuOpen = _buildMenu;
+    }
+
+    /// <summary>A building to place from the build page, or null to cancel the selected foundation.</summary>
     private void ChooseConstruction(string? building)
     {
-        if (building == null && SelectedStructureDetails() is { Team: 0,UnderConstruction: true,SiteId: >= 0 } selected)
+        if (building == null)
         {
-            _world!.Enqueue(0,[],OrderKind.CancelConstruction,target: selected.SiteId);
-            _status.Text = "Construction cancellation queued"; return;
+            if (SelectedStructureDetails() is { Team: 0,UnderConstruction: true,SiteId: >= 0 } selected)
+            { _world!.Enqueue(0,[],OrderKind.CancelConstruction,target: selected.SiteId); _status.Text = "Construction cancellation queued"; }
+            return;
         }
         if (!_skirmish || !SelectedWorkers().Any()) return;
         ClearConstructionTargeting(); _orders.Cancel(); _dragging = false; _hud.SelectionBox = null;
         _constructionTargeting = true; _constructionBuilding = building;
-        if (building == null) { _status.Text = "Choose an unfinished building to cancel"; return; }
         var rules = _world!.BuildingRules.GetValueOrDefault(building) ?? _world.ConstructionRules[ResourceBuildingKind(building)!.Value];
         _status.Text = "Build "+rules.DisplayName+(ResourceBuildingKind(building) != null ? ": choose a resource site" : ": choose open ground near your buildings");
         _constructionPreview = LoadGlb(_constructionFiles[building],_teamColors[0]); AddChild(_constructionPreview);
@@ -136,25 +153,16 @@ public partial class Main
             if (!_world!.CanPlaceBuilding(0,building,cell,out string blocked)) { _status.Text = blocked; return; }
             _world.Enqueue(0,SelectedWorkers(),OrderKind.PlaceBuilding,cell,_world.PlaceableBuildings.IndexOf(building),queued);
             _status.Text = "Build "+_world.BuildingRules[building].DisplayName+(_paused ? " queued (paused)" : " order issued");
-            ClearConstructionTargeting(); return;
+            ClearConstructionTargeting(); _buildMenu = false; return;
         }
         var source = ResourceAt(mouse);
-        if (source == null) { _status.Text = "Choose a resource site"; return; }
-        var site = _world!.ConstructionSites[source.Id];
-        if (_constructionBuilding is { } resourceBuilding)
-        {
-            var kind = ResourceBuildingKind(resourceBuilding)!.Value;
-            if (source.Kind != kind) { _status.Text = kind == ResourceKind.Food ? "A Mill requires a food well" : "A Foundry requires an ore pile"; return; }
-            if (!_world.CanStartConstruction(0,source.Id,out string reason)) { _status.Text = reason; return; }
-            _world.Enqueue(0,SelectedWorkers(),OrderKind.Build,target: source.Id,queued: queued);
-            _status.Text = "Build "+_world.ConstructionRules[kind].DisplayName+(_paused ? " queued (paused)" : " order issued");
-        }
-        else
-        {
-            if (site.Team != 0 || site.Complete) { _status.Text = "Choose your unfinished building"; return; }
-            _world.Enqueue(0,[],OrderKind.CancelConstruction,target: source.Id); _status.Text = "Construction cancellation queued";
-        }
-        ClearConstructionTargeting();
+        if (source == null || _constructionBuilding is not { } resourceBuilding) { _status.Text = "Choose a resource site"; return; }
+        var kind = ResourceBuildingKind(resourceBuilding)!.Value;
+        if (source.Kind != kind) { _status.Text = kind == ResourceKind.Food ? "A Mill requires a food well" : "A Foundry requires an ore pile"; return; }
+        if (!_world!.CanStartConstruction(0,source.Id,out string reason)) { _status.Text = reason; return; }
+        _world.Enqueue(0,SelectedWorkers(),OrderKind.Build,target: source.Id,queued: queued);
+        _status.Text = "Build "+_world.ConstructionRules[kind].DisplayName+(_paused ? " queued (paused)" : " order issued");
+        ClearConstructionTargeting(); _buildMenu = false;
     }
 
     private void UpdateConstructionPreview()

@@ -14,7 +14,8 @@ public partial class CommandPanel
     public bool TrainingVisible => _training.IsVisibleInTree();
     public float TrainingProgressWidth => _trainingProgress.Size.X;
     public bool TrainingBarLoaded => _trainingBar.Texture != null;
-    public bool PaletteOnlyTraining => _trainButtons.Any(b => b.Visible) && !_buttons.Values.Concat(_abilities).Concat(_constructionButtons).Any(b => b.Visible);
+    public bool PaletteOnlyTraining => _trainButtons.Any(b => b.Visible) && !_buttons.Values.Concat(_abilities).Concat(_constructionButtons)
+        .Concat([_buildButton,_backButton,_cancelConstructionButton]).Any(b => b.Visible);
 
     private void CreateProductionControls()
     {

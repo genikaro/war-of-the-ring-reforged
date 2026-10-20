@@ -30,6 +30,15 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-16 (Oct 21):** owner playtest found construction icons unclickable. The
+panel hid and re-showed them every frame, cancelling real clicks that span
+frames; each control now has a single visibility owner, and the smokes press and
+release across frames. At the owner's request, workers use a Warcraft-style Build
+button (B) that swaps the unit commands for the Tier 1 buildings and Back; Esc
+steps back. Paging for later tiers is deferred.
+Validation: 23-case placement check including cross-frame clicks and Esc/B
+navigation, plus all skirmish, Helm's Deep, simulation and Python regressions. See [skirmish notes](../prototype/SKIRMISH.md#build-16-build-menu-and-working-construction-clicks).
+
 **Build-15 (Oct 20):** a completed Dwarf Hall trains the Dwarf Axethrower
 (60 food, 10 ore, population 2, 340 ticks; 140 HP, 9 DPS, 0.5–10 m). The rules
 export uses an explicit ranged list instead of the Archer-only name check (the

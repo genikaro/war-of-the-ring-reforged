@@ -1,48 +1,71 @@
 using Godot;
+using Reforged.Presentation;
 using Reforged.Simulation;
 
+/// <summary>Worker Build menu: a Build button on the unit card opens a page of buildings, as in Warcraft.</summary>
 public partial class CommandPanel
 {
-    /// <summary>A building to place, or null to choose a foundation to cancel.</summary>
     public event Action<string?>? ConstructionChosen;
-    // Seven Tier 1 buildings in the original worker panel order, then Cancel, over two action rows.
-    private readonly Button[] _constructionButtons = new Button[8];
+    public event Action<bool>? BuildMenuChosen;
+    // Seven Tier 1 buildings in the original worker panel order fill the action grid row by row.
+    private readonly Button[] _constructionButtons = new Button[7];
+    private Button _buildButton = null!,_backButton = null!,_cancelConstructionButton = null!;
     private string[] _constructionNames = [];
     private readonly Dictionary<ResourceKind,int> _resourceSlots = [];
+    /// <summary>Set by the owner before each refresh: show the building page instead of unit commands.</summary>
+    public bool BuildMenuOpen { get; set; }
     public Button ConstructionButton(string building) => _constructionButtons[Array.IndexOf(_constructionNames,building)];
     public Button ConstructionButton(ResourceKind kind) => _constructionButtons[_resourceSlots[kind]];
-    public Button CancelConstructionButton => _constructionButtons[^1];
+    public Button BuildButton => _buildButton;
+    public Button BuildBackButton => _backButton;
+    public Button CancelConstructionButton => _cancelConstructionButton;
+
+    private Button ActionButton(int slot,string text = "")
+    {
+        var button = new Button { Position = new(788+slot%4*56,34+slot/4*56),Size = new(54,54),FocusMode = FocusModeEnum.None,
+            ExpandIcon = true,Visible = false,Text = text };
+        if (text != "") button.AddThemeFontSizeOverride("font_size",12);
+        Skin(button); _content.AddChild(button); return button;
+    }
 
     private void CreateConstructionButtons()
     {
         for (int index = 0; index < _constructionButtons.Length; index++)
         {
-            int slot = index; bool cancel = index == _constructionButtons.Length-1;
-            var button = new Button { Position = new(788+index%4*56,34+index/4*56),Size = new(54,54),FocusMode = FocusModeEnum.None,
-                ExpandIcon = true,ToggleMode = true,Visible = false,Text = cancel ? "Cancel" : "" };
-            if (cancel) button.AddThemeFontSizeOverride("font_size",12);
-            Skin(button); button.Pressed += () => ConstructionChosen?.Invoke(cancel ? null : _constructionNames[slot]);
-            _constructionButtons[index] = button; _content.AddChild(button);
+            int slot = index; var button = ActionButton(index); button.ToggleMode = true;
+            button.Pressed += () => ConstructionChosen?.Invoke(_constructionNames[slot]);
+            _constructionButtons[index] = button;
         }
+        _buildButton = ActionButton(0);
+        _buildButton.TooltipText = "Build [B]\nShow the buildings these workers can construct.";
+        _buildButton.Pressed += () => BuildMenuChosen?.Invoke(true);
+        _backButton = ActionButton(11,"Back");
+        _backButton.TooltipText = "Back [Esc]\nReturn to the unit commands.";
+        _backButton.Pressed += () => BuildMenuChosen?.Invoke(false);
+        _cancelConstructionButton = ActionButton(11,"Cancel");
+        _cancelConstructionButton.TooltipText = "Cancel this construction and receive its resource refund";
+        _cancelConstructionButton.Pressed += () => ConstructionChosen?.Invoke(null);
     }
 
-    public void RefreshConstruction(SimWorld world,IReadOnlyList<SimUnit> units,bool targeting,string? pending,(string Building,string Portrait)[] choices)
+    /// <summary>The single owner of the Build, building, Back and foundation Cancel buttons; each is assigned once per frame.</summary>
+    public void RefreshConstruction(SimWorld world,IReadOnlyList<SimUnit> units,bool targeting,string? pending,
+        (string Building,string Portrait)[] choices,StructureDetails? structure)
     {
         _constructionNames = choices.Select(c => c.Building).ToArray();
-        bool visible = world.ConstructionRules.Count > 0 && units.Any(u => u.Team == 0 && world.Workers.ContainsKey(u.Definition.Name))
+        bool workers = world.ConstructionRules.Count > 0 && units.Any(u => u.Team == 0 && world.Workers.ContainsKey(u.Definition.Name))
             && units.All(u => u.Team == 0 && u.Definition.Abilities?.Length is not > 0);
+        bool page = workers && BuildMenuOpen;
+        _buildButton.Visible = workers && !BuildMenuOpen;
+        _buildButton.Icon ??= _art.GetValueOrDefault("console_g_action_build");
+        _backButton.Visible = page;
+        bool cancel = structure is { Team: 0,UnderConstruction: true };
+        _cancelConstructionButton.Visible = cancel; _cancelConstructionButton.Disabled = !cancel;
         for (int index = 0; index < _constructionButtons.Length; index++)
         {
-            var button = _constructionButtons[index]; bool cancel = index == _constructionButtons.Length-1;
-            button.Visible = visible && (cancel || index < choices.Length);
+            var button = _constructionButtons[index];
+            button.Visible = page && index < choices.Length;
             if (!button.Visible) continue;
-            button.SetPressedNoSignal(targeting && pending == (cancel ? null : choices[index].Building));
-            if (cancel)
-            {
-                button.Disabled = !world.ConstructionSites.Values.Any(s => s.Team == 0 && !s.Complete);
-                button.TooltipText = "Cancel construction\nChoose your unfinished building to cancel it and receive the imported resource refund.";
-                continue;
-            }
+            button.SetPressedNoSignal(targeting && pending == choices[index].Building);
             var (building,portrait) = choices[index];
             button.Icon = _art.GetValueOrDefault(portrait);
             var resource = world.ConstructionRules.Values.FirstOrDefault(r => r.Name == building);
@@ -61,8 +84,8 @@ public partial class CommandPanel
                 + "\nShift-click queues the placement. Right-click an unfinished foundation to resume or assist."
                 + (button.Disabled ? "\n"+reason : "");
         }
-        if (targeting) _hint.Text = pending == null ? "Cancel construction: choose your unfinished building · Esc/right-click exits"
-            : $"Build {(world.BuildingRules.GetValueOrDefault(pending) ?? world.ConstructionRules.Values.First(r => r.Name == pending)).DisplayName}: "
-              + (world.BuildingRules.ContainsKey(pending) ? "choose open ground" : "choose a resource site")+" · Esc/right-click cancels";
+        if (targeting && pending != null) _hint.Text = $"Build {(world.BuildingRules.GetValueOrDefault(pending) ?? world.ConstructionRules.Values.First(r => r.Name == pending)).DisplayName}: "
+            + (world.BuildingRules.ContainsKey(pending) ? "choose open ground" : "choose a resource site")+" · Esc/right-click cancels";
+        else if (page) _hint.Text = "Choose a building · Esc returns to unit commands";
     }
 }
