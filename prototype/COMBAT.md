@@ -1,17 +1,18 @@
-# Imported melee combat
+# Imported combat
 
-The existing 36-unit demo uses source definitions for Aragorn, Elven Knight and
-Uruk-Hai. Original damage-formula fidelity has not been established. Movement
+The 36-unit demo uses source definitions for Aragorn, Elven Knight, Elven Archer
+and Uruk-Hai. Original damage-formula fidelity has not been established. Movement
 and combat spacing use source-derived per-type envelopes, with explicit
 [demo sizing and friendly compression](ENGAGEMENT.md#crowd-and-attack-move-follow-up).
 
 ## Definitions and provenance
 
-| Unit / source ID | Health | Armor points | Melee DPS | Damage classification | Weapon ID |
+| Unit / source ID | Health | Armor points | Weapon DPS | Damage classification | Weapon ID |
 |---|---:|---:|---:|---|---:|
 | Aragorn / 16 | 485 | 3 | 20 | HERO (3) | 15 |
 | Elven Knight / 3 | 350 | 3 | 10 | CUTTING (0) | 4 |
 | Uruk-Hai / 34 | 240 | 1 | 14 | PIERCING (1) | 74 |
+| Elven Archer / 2 | 180 | 0 | 14 (bow) | PIERCING (1) | 13 |
 
 `Units.MeleeWeapon` resolves the `Weapons` record. The Elven Knight uses
 `WEAPON_GONDOR_SWORDSMAN_MELEE`. Damage comes from `CuttingDamagePerSecond`,
@@ -165,14 +166,14 @@ adds sampled encounter evidence, not a timing trace. A Gondor swordsman displays
 1. HP also rose between later samples. Those observations do not establish
 per-hit damage, regeneration rate/cause, armor subtraction or kill attribution.
 
-Before the ranged slice, the [roadmap](../tools/Roadmap.md#next-milestone-original-game-command-and-combat-corrections)
-calls for a repeatable swordsman/worker reference fixture and matching continuous
+The [roadmap](../tools/Roadmap.md#next-milestone-original-game-command-and-combat-corrections)
+still calls for a repeatable swordsman/worker reference fixture and matching continuous
 recordings or health traces, followed by the current three demo types. Hold,
 retaliation, retreat, interruption and regeneration must be isolated. Cross-check
 the swordsman's source records without adding it to the demo by default. Correct
 only measured rules; the current armor/event normalization and body-based reach stay
-explicit approximations until evidence resolves them. Projectile work then needs
-Uruk-hai launch/flight/impact and interruption references.
+explicit approximations until evidence resolves them. The owner requested Elven
+Archer implementation next; original launch/flight/impact comparison remains open.
 
 ```powershell
 python -m unittest discover -s tools -p 'test_*.py'
@@ -205,5 +206,114 @@ proportional HUD. Existing command/group, motion, surface and obstacle checks
 remain regressions.
 
 Unsupported rules: upgrades, levels above one, regeneration, height bonuses,
-poison, knockback, ranged/projectile damage, critical deaths and the complete
-animation/effect event system. This adapter covers three types, not all 85 units.
+poison, knockback, other ranged units, critical deaths and the complete
+animation/effect event system. This adapter covers four types, not all 85 units.
+
+## Elven Archer
+
+Requested October 20. Friendly squad 3 now contains six archers; the total stays
+36 units. `UNIT_G_ELVEN_ARCHER` (2) uses missile weapon 13, `WEAPON_ELF_ARCHER_MISSILE`:
+180 HP, zero armor, 14 DPS, Piercing, minimum range 1 m, maximum range 13 m.
+The imported collision cylinder is radius 535 mm / height 2351 mm; its original
+portrait, model, walk/run ratio and equipment visibility tracks are retained.
+
+`Elven_Archer_Attack_Missile` lasts 2.0333333 source seconds, rounded up to 41
+ticks. Its `missile_release` event 5 occurs at source fraction 0.5333330, so the
+arrow launches on tick 22. The projectile model comes from resource 1243 in
+`PROJECTILE_ELVEN_ARCHER_ARROW` (14), with the original LPO preserved in the
+rules cache. Model, LPO and database hashes are recorded. Refresh an existing
+cache with `python tools/prepare_prototype.py --units-only`.
+
+Archers keep their firing position when a target is in range and visible, and
+otherwise use the existing combat approach planner. Bow shots neither consume
+nor obey melee attacker slots. When engaged in melee, archers use
+`WEAPON_ELF_ARCHER_MELEE` (16), also 14 DPS, with its source 0.5 m surface gap
+and all three original `Attack_Melee` animations and hit events. Close enemies
+interrupt a bow windup even when it targets a different distant unit. After
+contact ends the archer returns to shooting; an explicit distant target resumes
+after defeating a temporary melee threat. Melee attacks obey normal attacker
+slots. Hold fights without chasing; other existing
+orders retain their movement, queue and pursuit rules. Damage uses the same
+type/pair/armor policy as melee, frozen at release and applied only at impact.
+Stop, Move, retargeting and weapon switches cancel pending attack events while
+retaining cooldown; switching weapons cannot bypass recovery.
+Released arrows survive replacement orders and shooter death; dead targets
+consume arriving arrows without another hit or victory. Active projectiles,
+their release/impact ticks and IDs are included in state digests.
+
+Explicit approximations: range is measured between unit centers; arrows travel
+at 25 m/s and follow their original target, without interception or collision
+after release. The source LPO's seek/motion semantics have not been recovered.
+Launch and aim use body-height offsets rather than live skeleton joints.
+Line of fire samples terrain and deck planes every 200 mm, treating blocked
+navigation columns as opaque unless a walkable deck supports the shot above
+them. This conservatively blocks some shots over water or low cover; it is not
+a render-mesh ray cast. Allies do not intercept arrows. The switch uses the
+same body-based melee reach as infantry (`max(2 m, both radii + source gap)`),
+including enemy melee engagement when the enemy has longer reach. This threshold
+and shared recovery policy remain approximations; the owner confirmed the
+original game's ranged-to-melee behavior. Upgrades and height bonuses remain open.
+
+`RangedChecks` covers release/impact timing, approach and Hold range, interruption,
+shooter/target death, moving targets, attacker caps, cover, deck crossings,
+both weapon-switch directions, interrupted windups, melee threats and replay.
+Cached checks exercise all three source melee timelines. The extended
+`-MeleeSmoke` verifies all four imported types, exact release timing, arrow
+visuals, delayed hits, source melee animation playback and safe squad fighting.
+
+### Ranged turning and animation pivot
+
+The archer's source `J_Position` is about 0.7 m forward in ready/attack poses,
+but near zero in locomotion. Retaining that offset made the mesh swing around
+the unit origin during hit-and-run turns. Archer cache adaptation now centers
+every clip and the bind pose on `J_Position`, applying the same horizontal
+correction to all independent skeleton roots. Vertical bobbing and relative
+joint motion remain intact. Refresh older model caches with `--units-only`.
+
+Ranged facing now advances at simulation ticks and is interpolated for drawing,
+so render frame rate cannot determine when combat starts. A new windup waits
+until both ends of the interpolated turn are within 0.5 degrees of the target.
+Active attacks can track moving targets; replacements still cancel normally.
+Movement redirects turn from the current heading, and tiny arrival corrections
+do not change it. Facing is included in replay state.
+
+Source `Units.MaxTurnAngle` is 60 for Elven Archer. Its database description
+says the maximum angle a unit can turn at once, in degrees; it does not specify
+a per-second speed or the original turn update cadence. This value is retained
+in `Source.MaxTurnAngleDegrees`. The runtime retains the existing prototype
+8 rad/s speed, quantized to 22.918 degrees per 50 ms tick. It is not claimed as
+the original game's turn rate. The 0.5-degree start threshold is also an adapter
+policy. Import tests check pivot alignment across idle/run/attack poses; facing
+checks cover turn budgets, windup gating, angle wrap and repeated hit-and-run.
+
+### Arrow launch sound and gray trail
+
+Elven Archer's LPO launch event 7 contains opcode 46 and SoundEvents ID 172,
+`SOUND_EVENT_WEAPON_ELVEN_ARROW_LAUNCH`. The same payload shape matches ordinary,
+fire, ballista and axe projectile launch sounds. All six Elven variants are
+converted from the original Microsoft ADPCM files to PCM and hashed in the
+cache. The `Release` event plays a spatial one-shot at the shooter, using the
+source minimum volume (0.6) and a separate three-voice pool. Bow windup,
+cancellation before release and melee hits do not trigger a launch sound.
+Pause/resume and scene shutdown control both impact and launch audio pools.
+
+The arrow's first resource binding references effect 12, `EFFECT_TEST_ARROW_TRAIL`,
+also shared by ordinary and Legolas arrows. The source track has a 250 ms
+duration, width key 0.05 tapering to zero, and packed colors `0x3fffffff` to
+`0x19ffffff`. The cache preserves the full LFX and its hash. Runtime draws a
+thin, feathered ribbon through recent projectile positions, with a 70% gray
+tint and age fade. It remains briefly after impact and then frees its mesh.
+World-space points prevent the trail rotating with the arrow or connecting
+unrelated shots. Point ages use simulation time, so pause freezes the trail.
+
+The narrow adapter interprets the track duration as point lifetime, key word 3
+as full width and word 5 as ARGB. These interpretations, the gray tint and the
+feather/fade curve are presentation policies; exact legacy blending remains
+unverified. Sound variant scheduling, spatial falloff and voice replacement are
+also adapter policies. Neither sound nor trail changes projectile damage,
+collision, aiming or replay state. Refresh with `--rules-only`.
+
+`-MeleeSmoke` now checks one launch trigger and one trail per released/visible
+arrow, plus trail drawing samples. Both 20 and 80 FPS runs cover these effects;
+portable trail checks cover pause, bounded lifetime, post-impact cleanup and
+agreement of tail length across render rates.

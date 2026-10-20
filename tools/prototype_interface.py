@@ -30,7 +30,7 @@ def export(output, resolver=None):
     paths += [source / 'Console/Main/console_frameportrait.uva']
     paths += list((source / 'Console/Counter Markers').glob('*.uva'))
     paths += [source / ('Console/UnitPortraits/' + name) for name in [
-        'Good/Portrait_G_Aragorn.uva', 'Good/Portrait_G_Elven_Knight.uva', 'Evil/Portrait_E_Uruk_Hai.uva']]
+        'Good/Portrait_G_Aragorn.uva', 'Good/Portrait_G_Elven_Knight.uva', 'Evil/Portrait_E_Uruk_Hai.uva', 'Good/Portrait_G_Elven_Archer.uva']]
     paths += [p for p in (source / 'Cursors/Good').glob('*.uva')
               if any(word in p.stem for word in ['attack', 'move', 'guard', 'patrol'])]
     target = output / 'interface'; target.mkdir(parents=True, exist_ok=True)

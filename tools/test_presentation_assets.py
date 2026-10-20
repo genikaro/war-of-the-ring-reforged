@@ -87,6 +87,12 @@ def cloth(version=103):
 
 
 class PresentationTests(unittest.TestCase):
+    def test_known_projectile_launch_sound_payload(self):
+        asset = {'events':[{'id':7,'type':0,'name_bytes':p('ii',46,172).hex()},
+                           {'id':7,'type':0,'name_bytes':p('ii',47,99).hex()},
+                           {'id':5,'type':2,'name_bytes':p('i',38).hex()}]}
+        self.assertEqual(lpo.launch_sound_events(asset),[172])
+
     def test_uva_versions_and_legacy_filename(self):
         for version in (1, 2, 3):
             m = ta.parse_uva(uva(version))

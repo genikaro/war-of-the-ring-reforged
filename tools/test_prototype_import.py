@@ -22,6 +22,8 @@ class PrototypeImportTests(unittest.TestCase):
         self.assertEqual((len(spawns), len(groups)), (36, 6))
         self.assertEqual([sum(s['group'] == g['id'] for s in spawns) for g in groups], [6]*6)
         self.assertEqual(sum(s['team'] == 0 for s in spawns), 18)
+        self.assertEqual([s['model'] for s in spawns if s['team'] == 0], [0]+[1]*11+[3]*6)
+        self.assertEqual(prepare_prototype.combat_rules.UNITS[3], 'UNIT_G_ELVEN_ARCHER')
         self.assertEqual(len({s['cell'] for s in spawns}), 36)
         self.assertTrue(allowed[camera])
         for a in spawns:
@@ -40,6 +42,8 @@ class PrototypeImportTests(unittest.TestCase):
         for folder in ['TLOTR - War of the Ring/cache', 'extracted/cache']:
             with self.subTest(folder=folder), self.assertRaisesRegex(ValueError, 'outside'):
                 prepare_prototype.prepare(wor.ROOT / folder)
+            with self.subTest(refresh=folder), self.assertRaisesRegex(ValueError, 'outside'):
+                prepare_prototype.refresh_units(wor.ROOT / folder)
 
     def test_root_motion_removes_horizontal_travel_from_both_roots(self):
         raw = bytearray(); views = []; accessors = []
@@ -70,6 +74,42 @@ class PrototypeImportTests(unittest.TestCase):
         self.assertEqual(result[child['byteOffset']:], raw[child['byteOffset']:])
         animation['name'] = 'Unit_Attack'
         self.assertEqual(prototype_assets.in_place(gltf, raw), (bytes(raw), []))
+
+    def test_centered_pivot_aligns_idle_run_and_attack_about_position_marker(self):
+        raw = bytearray(); views = []; accessors = []
+        def acc(values, width):
+            start = len(raw)
+            for value in values:
+                raw.extend(struct.pack('<%df' % width, *(value if width > 1 else [value])))
+            views.append({'byteOffset':start,'byteLength':len(raw)-start})
+            accessors.append({'bufferView':len(views)-1,'componentType':5126,'count':len(values)})
+            return len(accessors)-1
+        times = acc([0,1],1)
+        idle = acc([[.3,1,.8],[.3,1.1,.8]],3)
+        marker = acc([[.2,0,1.4],[.2,0,1.4]],3)
+        attack = acc([[.3,1,1.5],[.3,1.1,1.5]],3)
+        run_marker = acc([[.2,0,.7],[.2,0,2.7]],3)
+        run = acc([[.3,1,.8],[.3,1.1,2.8]],3)
+        def animation(name,tracks):
+            return {'name':name,'samplers':[{'input':times,'output':a} for _,a in tracks],
+                'channels':[{'sampler':i,'target':{'node':node,'path':'translation'}} for i,(node,_) in enumerate(tracks)]}
+        gltf = {'nodes':[{'name':'J_Position','translation':[.2,0,.7]},
+                          {'name':'Pelvis','translation':[.3,1,.8]}],
+                'skins':[{'joints':[0,1]}],'accessors':accessors,'bufferViews':views,
+                'animations':[animation('Idle_01',[(1,idle)]),animation('Attack_Missile',[(0,marker),(1,attack)]),
+                              animation('Run',[(0,run_marker),(1,run)])]}
+        result, changed = prototype_assets.in_place(gltf,raw,center_pivot=True)
+        self.assertEqual(changed,['Attack_Missile','Idle_01','Run'])
+        self.assertEqual(gltf['nodes'][0]['translation'],[0,0,0])
+        for a in [idle,attack,run]:
+            offset = views[accessors[a]['bufferView']]['byteOffset']
+            for i in range(2):
+                x,y,z = struct.unpack_from('<3f',result,offset+i*12)
+                self.assertAlmostEqual(x,.1,places=6); self.assertAlmostEqual(z,.1,places=6)
+                self.assertAlmostEqual(y,1+i*.1,places=6)
+        for a in [marker,run_marker]:
+            offset = views[accessors[a]['bufferView']]['byteOffset']
+            self.assertEqual(struct.unpack_from('<3f',result,offset),(0,0,0))
 
 
 if __name__ == '__main__':

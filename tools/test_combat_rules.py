@@ -21,6 +21,15 @@ def adpcm(payload=b'\x17', recent=0, older=0, delta=16, coefficient=(256,0), tot
 
 
 class CombatAdapterTests(unittest.TestCase):
+    def test_arrow_trail_source_width_lifetime_and_argb(self):
+        profile = combat_rules.trail_profile({'duration_ms':250,'keys':[
+            {'time':0,'words':[0,0,0,struct.unpack('<I',struct.pack('<f',.05))[0],0,0x3fffffff,0]},
+            {'time':1,'words':[0,0,0,0,0,0x19ffffff,0]}]})
+        self.assertEqual((profile['LifetimeMs'],profile['WidthMm'],profile['EndWidthMm']),(250,50,0))
+        self.assertEqual((profile['StartColorArgb'],profile['EndColorArgb']),(0x3fffffff,0x19ffffff))
+        with self.assertRaises(ValueError):
+            combat_rules.trail_profile({'duration_ms':0,'keys':[]})
+
     def test_locomotion_ratio_uses_source_xy_and_state_choices(self):
         skeleton = SimpleNamespace(joints=[SimpleNamespace(name='J_Position ')], clips=[
             SimpleNamespace(name='walk',duration=2,tracks=[SimpleNamespace(positions=[(0,0,0),(0,4,99)])]),
@@ -64,6 +73,13 @@ class CombatAdapterTests(unittest.TestCase):
                     {'name':'melee_hit','time':fraction,'damage_scale':1}],1)
         with self.assertRaises(ValueError):
             attack_choice({'clip_name':'x','weight':1,'event_indices':[]},[],1)
+
+    def test_missile_release_has_unit_weight_and_source_timing(self):
+        result = attack_choice({'clip_name':'shoot','weight':1,'event_indices':[0,1]},[
+            {'name':'missile_release','time':0.5333330035209656},
+            {'name':'sound','time':0.23}],2.0333333015441895,'missile_release')
+        self.assertEqual(result['DurationTicks'],41)
+        self.assertEqual([(h['Tick'],h['Scale']) for h in result['Hits']],[(22,1000000)])
 
     def test_quantization_is_explicit(self):
         self.assertEqual(quantize(.0005),1)

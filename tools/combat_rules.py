@@ -1,4 +1,4 @@
-"""Small, traced melee-rules adapter for the three Godot demo types.
+"""Traced melee/ranged rules adapter for the four Godot demo types.
 
 Source data is read-only. Runtime numbers are integers. See prototype/COMBAT.md
 for the explicitly approximate armor/range policies and unsupported rules.
@@ -7,16 +7,19 @@ from decimal import Decimal, ROUND_HALF_UP, ROUND_CEILING
 import hashlib
 import json
 import math
+import struct
 from pathlib import Path
 
 import lsk
 import lmd
+import lpo
+import lfx
 from resolve_model import Resolver
 import prototype_assets
 from pcm_audio import decode_ms_adpcm
 
 ROOT = Path(__file__).resolve().parent.parent
-UNITS = ['UNIT_G_HERO_ARAGORN', 'UNIT_G_ELF_KNIGHT', 'UNIT_E_URUK_HAI']
+UNITS = ['UNIT_G_HERO_ARAGORN', 'UNIT_G_ELF_KNIGHT', 'UNIT_E_URUK_HAI', 'UNIT_G_ELVEN_ARCHER']
 
 
 def type_matchups(damage_types):
@@ -40,7 +43,40 @@ def quantize(value, scale=1000):
     return int((Decimal(str(value))*scale).to_integral_value(rounding=ROUND_HALF_UP))
 
 
-def attack_choice(choice, events, duration):
+def trail_profile(track):
+    """Narrow arrow-trail adapter; preserve the full source effect separately."""
+    keys = sorted(track['keys'],key=lambda k: k['time'])
+    if not keys or not 0 < track['duration_ms'] <= 5000:
+        raise ValueError('invalid arrow trail')
+    def width(key):
+        value = struct.unpack('<f',struct.pack('<I',key['words'][3]))[0]
+        if not math.isfinite(value) or not 0 <= value <= 1:
+            raise ValueError('invalid arrow trail width')
+        return quantize(value)
+    return {'LifetimeMs': track['duration_ms'],'WidthMm': width(keys[0]),
+            'EndWidthMm': width(keys[-1]),'StartColorArgb': keys[0]['words'][5],
+            'EndColorArgb': keys[-1]['words'][5], 'GrayTintPpm': 700000}
+
+
+def export_sounds(output, resolver, event_ids, trace, slots=3):
+    sounds = []
+    sound_dir = output/'combat/sounds'; sound_dir.mkdir(parents=True,exist_ok=True)
+    for event_id in sorted(event_ids):
+        event = resolver.db['SoundEvents'].get(event_id)
+        for slot in range(1,slots+1):
+            effect = resolver.db['SoundEffects'].get(event['SoundEffect%d' % slot])
+            if effect is None: continue
+            path = resolver.index.find('SoundEffects',effect['Filename'])
+            if path is None: raise ValueError('missing combat sound: ' + effect.name)
+            trace(path); filename = str(effect.id)+'.wav'
+            (sound_dir/filename).write_bytes(decode_ms_adpcm(Path(path).read_bytes()))
+            sounds.append({'File': 'combat/sounds/'+filename,'EventId': event.id,'EffectId': effect.id,
+                'EventName': event.name,'EffectName': effect.name,'VolumePpm': quantize(event['MinVolume'],1_000_000),
+                'MaxSimultaneous': event['MaxSimultaneous'],'Conversion': 'mono Microsoft ADPCM to 16-bit PCM'})
+    return sounds
+
+
+def attack_choice(choice, events, duration, event_name='melee_hit'):
     if not math.isfinite(duration) or duration <= 0 or choice['weight'] <= 0:
         raise ValueError('invalid melee clip')
     seconds = Decimal(str(duration))
@@ -48,9 +84,9 @@ def attack_choice(choice, events, duration):
     hits = []
     for index in choice['event_indices']:
         event = events[index]
-        if event.get('name') != 'melee_hit':
+        if event.get('name') != event_name:
             continue
-        time, scale = event['time'], event['damage_scale']
+        time, scale = event['time'], event.get('damage_scale', 1) if event_name == 'missile_release' else event['damage_scale']
         if not math.isfinite(time) or not 0 <= time <= 1 or not math.isfinite(scale) or scale <= 0:
             raise ValueError('invalid melee event')
         tick = int((seconds*Decimal(str(time))*20).to_integral_value(rounding=ROUND_CEILING))
@@ -128,7 +164,9 @@ def export(output, resolver=None):
         sources[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
     units = []
     for name in UNITS:
-        unit = resolver.db['Units'].get(name); weapon = resolver.db['Weapons'].get(unit['MeleeWeapon'])
+        unit = resolver.db['Units'].get(name)
+        ranged = name == 'UNIT_G_ELVEN_ARCHER'
+        weapon = resolver.db['Weapons'].get(unit['MissileWeapon'] if ranged else unit['MeleeWeapon'])
         model = resolver.resolve(name,recurse=False)
         skeleton_path = ROOT/model['skeletons'][0]['file']
         skeleton = lsk.parse(skeleton_path.read_bytes())
@@ -139,9 +177,14 @@ def export(output, resolver=None):
         body_source['SourceRadiusMm'] = radius
         body_source['SourceHeightMm'] = body_height
         trace(ROOT/model['file']); trace(skeleton_path)
-        state = next(s for s in model['animation_states'] if s['name'] == 'UNIT_ANIM_STATE_ATTACK_MELEE_01')
+        state = next(s for s in model['animation_states'] if s['name'] == ('UNIT_ANIM_STATE_ATTACK_MISSILE_01' if ranged else 'UNIT_ANIM_STATE_ATTACK_MELEE_01'))
         durations = {clip.name: clip.duration for clip in skeleton.clips}
-        choices = [attack_choice(c,model['events'],durations[c['clip_name']]) for c in state['choices'] if c['weight'] > 0]
+        choices = [attack_choice(c,model['events'],durations[c['clip_name']], 'missile_release' if ranged else 'melee_hit') for c in state['choices'] if c['weight'] > 0]
+        melee_weapon = resolver.db['Weapons'].get(unit['MeleeWeapon'])
+        melee_state = next(s for s in model['animation_states'] if s['name'] == 'UNIT_ANIM_STATE_ATTACK_MELEE_01')
+        if ranged:
+            choices += [dict(attack_choice(c,model['events'],durations[c['clip_name']]),Melee=True)
+                        for c in melee_state['choices'] if c['weight'] > 0]
         ready = next(s for s in model['animation_states'] if s['name'] == 'UNIT_ANIM_STATE_ATTACK_READY')
         ready_clip = next(c['clip_name'] for c in ready['choices'] if c['weight'] > 0)
         damage_type = resolver.db['DamageTypes'].get(unit['DamageType'])
@@ -150,13 +193,19 @@ def export(output, resolver=None):
             'DamageType': damage_type.id,'DamageTypeName': damage_type.name,'MaxAttackers': unit['MaxUnitsAttacking'],
             'Composition': unit['CompositionType'],'WeaponId': weapon.id,'WeaponName': weapon.name,
             'DpsMilli': quantize(weapon['CuttingDamagePerSecond']), 'SourceRangeMm': quantize(weapon['MaximumRange']),
-            'ReachMm': 2000,'ReadyClip': ready_clip,'Attacks': choices,
+            'ReachMm': quantize(weapon['MaximumRange']) if ranged else 2000,'ReadyClip': ready_clip,'Attacks': choices,
+            'MinimumRangeMm': quantize(weapon['MinimumRange']) if ranged else 0,
+            'ProjectileSpeedMmPerSecond': 25000 if ranged else 0,
+            'MeleeDpsMilli': quantize(melee_weapon['CuttingDamagePerSecond']) if ranged else 0,
+            'MeleeReachMm': 2000,'MeleeGapMm': quantize(melee_weapon['MaximumRange']) if ranged else 0,
             'WalkScale': walk_scale,'WalkClip': motion['Walk']['Clip'],'RunClip': motion['Run']['Clip'],
             'BodyRadiusMm': radius,'BodyHeightMm': body_height,'SelectionRadiusMm': quantize(unit['SelectionRingRadius']),
             **demo_body_tuning(name, radius, body_height),
-            'AttackGapMm': quantize(weapon['MaximumRange']),
+            'AttackGapMm': 0 if ranged else quantize(weapon['MaximumRange']),
             'Source': {'Unit': unit.name,'ModelId': model['id'],'ModelFile': model['file'],
-                       'StateId': state['id'],'Weapon': weapon.values,'Locomotion': motion,'Collision': body_source}})
+                       'StateId': state['id'],'Weapon': weapon.values,'Locomotion': motion,'Collision': body_source,
+                       'MeleeWeaponId': melee_weapon.id,'MeleeWeaponName': melee_weapon.name,'MeleeWeapon': melee_weapon.values,'MeleeStateId': melee_state['id'],
+                       'MaxTurnAngleDegrees': unit['MaxTurnAngle']}})
     ids = {u['Id'] for u in units}
     pairs = [{'From': p['FromUnit'],'To': p['ToUnit'],'Scale': quantize(p['DamageMultiplier'],1_000_000),
               'Invincible': bool(p['IsInvinicible']),'SourceId': p.id,'SourceName': p.name}
@@ -169,40 +218,47 @@ def export(output, resolver=None):
                            if r['WeaponImpactType'] == impact and r['CompositionType'] == victim['Composition']),None)
             if effect and effect['SoundEvent'] >= 0:
                 sound_event_ids.add(effect['SoundEvent'])
-    sounds = []
-    sound_dir = output/'combat/sounds'; sound_dir.mkdir(parents=True,exist_ok=True)
-    for event_id in sorted(sound_event_ids):
-        event = resolver.db['SoundEvents'].get(event_id)
-        # A small, deterministic subset of the traced impact event's variants.
-        for slot in range(1,4):
-            effect = resolver.db['SoundEffects'].get(event['SoundEffect%d' % slot])
-            if effect is None:
-                continue
-            path = resolver.index.find('SoundEffects',effect['Filename'])
-            if path is None:
-                raise ValueError('missing impact sound: ' + effect.name)
-            trace(path); filename = str(effect.id)+'.wav'
-            (sound_dir/filename).write_bytes(decode_ms_adpcm(Path(path).read_bytes()))
-            sounds.append({'File': 'combat/sounds/'+filename,'EventId': event.id,'EffectId': effect.id,
-                'EventName': event.name,'EffectName': effect.name,'VolumePpm': quantize(event['MinVolume'],1_000_000),
-                'MaxSimultaneous': event['MaxSimultaneous'], 'Conversion': 'mono Microsoft ADPCM to 16-bit PCM'})
+    sounds = export_sounds(output,resolver,sound_event_ids,trace)
     for name in ['Units','Models','BBoxes','Weapons','DamageTypes','UnitToUnitModifiers','WeaponEffects','WeaponImpactTypes','SoundEvents','SoundEffects']:
         trace(resolver.db.files[name.lower()])
+    from lms2gltf import convert_model
+    projectile_record = resolver.db['Projectiles'].get(resolver.db['Weapons'].get(
+        resolver.db['Units'].get('UNIT_G_ELVEN_ARCHER')['MissileWeapon'])['AssociatedProjectile'])
+    projectile_path = Path(resolver.index.find('Projectiles',projectile_record['Filename']))
+    projectile = lpo.parse(projectile_path.read_bytes())
+    launch_sounds = export_sounds(output,resolver,lpo.launch_sound_events(projectile),trace,slots=6)
+    effect_id = next(b['source'] for key in projectile['resource_keys'] for b in key['bindings'] if b['source'] >= 0)
+    effect_record = resolver.db['Effects'].get(effect_id)
+    effect_path = Path(resolver.index.find('Effects',effect_record['Filename']))
+    effect = lfx.parse(effect_path.read_bytes())
+    trail = trail_profile(effect['trail_tracks'][0])
+    trail['Source'] = {'Id': effect_id,'Name': effect_record.name,'File': str(effect_path.relative_to(ROOT)), 'Data': effect}
+    trace(effect_path); trace(resolver.db.files['effects'])
+    projectile_model = next(k['id'] for k in projectile['resource_keys'] if k['kind'] == 0 and k['id'] >= 0)
+    arrow_path = output/'combat/elven_archer_arrow.glb'
+    convert_model(resolver,str(projectile_model),str(arrow_path),extras={'wotrProjectile':projectile})
+    trace(projectile_path); trace(resolver.db.files['projectiles'])
+    trace(ROOT/resolver.resolve(str(projectile_model),recurse=False)['file'])
     data = {'FormatVersion': 3,'TicksPerSecond': 20,'Units': units,'Pairs': pairs,'Sounds': sounds,
         'TypeMatchups': type_matchups(resolver.db['DamageTypes']),
         'TypeMatchupSource': {'Cycle': 'Shipped English manual addendum, PDF page 7; owner weapon-rating photograph.',
                             'Percentages': 'Owner request, 2026-10-19: advantage 125%, disadvantage 75%, heroes 100%.',
                             'NeutralPolicy': 'Same type and attacks against Hero: 100%.',
                             'Guide': 'https://gamefaqs.gamespot.com/pc/563555-the-lord-of-the-rings-war-of-the-ring/faqs/29079'},
+        'ProjectileVisual': 'combat/elven_archer_arrow.glb',
+        'LaunchSounds': launch_sounds,'ArrowTrail': trail,
+        'ProjectileSource': {'Id': projectile_record.id,'Name': projectile_record.name,'Data': projectile},
         'Sources': sources,'Policy': {
             'Armor': 'Approximation: subtract armor points from DPS after type and explicit pair multipliers; clamp rate at zero.',
             'Damage': 'Distribute DPS * quantized cycle duration across hit events in proportion to source damage_scale.',
-            'Ranges': 'Center reach is max(legacy 2000 mm, both body radii plus source weapon range as a surface gap). Original range-origin semantics remain unverified.',
+            'Ranges': 'Melee center reach is max(legacy 2000 mm, both body radii plus source weapon range as a surface gap). Elven Archer uses source missile minimum/maximum as center distances. Original range-origin semantics remain unverified.',
             'Collision': 'Static terrain and enemies use full envelopes. Allies compress personal space to 50% with a solid non-overlapping core; resting formations retain full spacing. Aragorn presentation scales 112%, radius floor 800 mm, height follows scale. Owner-requested feel policy; raw source bounds retained in Source.Collision. Original response semantics remain unverified.',
-            'Types': 'Apply TypeMatchups once, then explicit unit-pair multiplier once (absent pairs 1.0). Pair invincibility takes precedence. No explicit pairs exist among the three demo types. Stacking for other roster units remains unverified.',
+            'Types': 'Apply TypeMatchups once, then explicit unit-pair multiplier once (absent pairs 1.0). Pair invincibility takes precedence. Stacking remains an adapter policy.',
             'Timing': 'ceil(source duration * event fraction * 20); cycle ceil(duration*20), final hit at most cycle-1.',
             'Movement': 'Retain accepted 3 m/s run speed. Walk speed uses the source J_Position XY displacement/duration ratio of first positive walk/run choices. Original world speed and stamina remain unverified.',
-            'Unsupported': 'Upgrades, levels, regeneration, height bonuses, poison, knockback, ranged and critical deaths.'}}
+            'Ranged': 'Elven Archer only. Source missile range in center meters; source release event. Target-following arrows use an approximate 25 m/s travel speed, snapshot damage at release and survive shooter death/order replacement. Conservative navigation line of fire at release; no flight collision. Switch to source melee weapon/animations at the same body-based reach as infantry; switch cancellation preserves cooldown. Exact switch threshold/timing and LPO motion semantics remain unverified.',
+            'ArrowPresentation': 'Launch sound event from LPO event 7/opcode 46; original PCM variants at release with source minimum volume and voice cap. Trail binding references Effects 12. Track duration interpreted as point lifetime, key word 3 as full width, word 5 as ARGB. Runtime uses a 70% gray tint, feathered ribbon and smooth age fade; exact legacy blending and trail semantics remain unverified. Presentation never drives hits.',
+            'Unsupported': 'Upgrades, levels, regeneration, height bonuses, poison, knockback, other ranged units and critical deaths.'}}
     target = output/'combat/rules.json'; target.parent.mkdir(parents=True,exist_ok=True)
     target.write_text(json.dumps(data,indent=2)+'\n')
     return data
@@ -222,6 +278,6 @@ def refresh(output):
             manifest['files'][path.relative_to(output).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
     for model in manifest['models']:
         path = output/model['file']; manifest['files'][model['file']] = hashlib.sha256(path.read_bytes()).hexdigest()
-    manifest['rules'] = 'Imported melee stats and fixed-tick clip hits; see combat/rules.json Policy for approximations.'
+    manifest['rules'] = 'Imported combat stats, fixed-tick melee hits and Elven Archer projectiles; see combat/rules.json Policy for approximations.'
     manifest_path.write_text(json.dumps(manifest,indent=2)+'\n')
     return data

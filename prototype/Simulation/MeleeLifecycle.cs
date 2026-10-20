@@ -1,6 +1,6 @@
 namespace Reforged.Simulation;
 
-public enum CombatEventKind { Start, Hit, Cancel }
+public enum CombatEventKind { Start, Hit, Cancel, Release }
 public sealed record CombatEvent(int Tick,CombatEventKind Kind,int Unit,int Target,int Attack,int Hit,long DamageMilli,
     int StartTick,int X,int Y,int Z);
 
@@ -19,28 +19,35 @@ public sealed partial class SimWorld
 
     private bool AttackerSlot(SimUnit unit,SimUnit target)
     {
+        if (UsesMissile(unit,target)) return true;
         int limit = target.Definition.MaxAttackers;
         if (limit == 0) return true;
-        return Units.Where(u => u.Health > 0 && u.Target == target.Id
+        return Units.Where(u => u.Health > 0 && u.Target == target.Id && !UsesMissile(u,target)
             && (HoldsPosition(u) || RoomToFight(u))
-            && MeleeReach(u,u.Node,u.X,u.Y,u.Z,target)).OrderBy(u => u.Id).Take(limit).Any(u => u.Id == unit.Id);
+            && AttackReach(u,u.Node,u.X,u.Y,u.Z,target)).OrderBy(u => u.Id).Take(limit).Any(u => u.Id == unit.Id);
     }
 
     private void Strike(SimUnit unit,SimUnit target)
     {
-        if (unit.AttackStartTick >= 0 && unit.AttackVictim != target.Id) CancelStrike(unit);
+        bool melee = unit.Definition.HasMelee && !UsesMissile(unit,target);
+        if (unit.AttackStartTick >= 0 && (unit.AttackVictim != target.Id
+            || unit.Definition.IsRanged && unit.Definition.Attacks[unit.AttackVariant].Melee != melee)) CancelStrike(unit);
         if (unit.AttackStartTick >= 0 && Tick-unit.AttackStartTick >= unit.Definition.Attacks[unit.AttackVariant].DurationTicks)
         {
             unit.AttackStartTick = unit.AttackVictim = unit.AttackVariant = -1; unit.NextHit = 0;
         }
         if (unit.AttackStartTick < 0 && unit.Cooldown == 0)
         {
+            if (!FacingAligned(unit,target)) return;
             // Per-unit stateless weighted choice; no renderer or global RNG can
             // affect clip selection, damage timing or another unit's choices.
-            long total = unit.Definition.Attacks.Sum(a => (long)a.Weight);
+            var eligible = Enumerable.Range(0,unit.Definition.Attacks.Length)
+                .Where(i => !unit.Definition.IsRanged || unit.Definition.Attacks[i].Melee == melee).ToArray();
+            long total = eligible.Sum(i => (long)unit.Definition.Attacks[i].Weight);
             long pick = ((long)unit.Id*73856093+unit.AttackSerial*19349663L)%total;
-            int variant = 0;
-            while (pick >= unit.Definition.Attacks[variant].Weight) pick -= unit.Definition.Attacks[variant++].Weight;
+            int choice = 0;
+            while (pick >= unit.Definition.Attacks[eligible[choice]].Weight) pick -= unit.Definition.Attacks[eligible[choice++]].Weight;
+            int variant = eligible[choice];
             unit.AttackVariant = variant; unit.AttackSerial++; unit.AttackStartTick = Tick;
             unit.AttackVictim = target.Id; unit.NextHit = 0; unit.Cooldown = unit.Definition.Attacks[variant].DurationTicks;
             CombatEvents.Add(new(Tick,CombatEventKind.Start,unit.Id,target.Id,variant,-1,0,Tick,unit.X,unit.Y,unit.Z));
@@ -51,23 +58,15 @@ public sealed partial class SimWorld
         while (unit.NextHit < attack.Hits.Length && attack.Hits[unit.NextHit].Tick <= elapsed)
         {
             int index = unit.NextHit++;
-            if (target.Health <= 0 || unit.Target != target.Id || !MeleeReach(unit,unit.Node,unit.X,unit.Y,unit.Z,target)) continue;
+            if (target.Health <= 0 || unit.Target != target.Id || !AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,target)) continue;
             var pair = Rules.Pair(unit.Definition.Id,target.Definition.Id);
             int typeScale = Rules.TypeScale(unit.Definition.DamageType,target.Definition.DamageType);
-            long typedDps = (long)unit.Definition.DpsMilli*typeScale/1_000_000;
+            int dps = melee ? unit.Definition.MeleeDpsMilli : unit.Definition.DpsMilli;
+            long typedDps = (long)dps*typeScale/1_000_000;
             long rate = Math.Max(0,typedDps*pair.Scale/1_000_000-target.Definition.ArmorMilli);
             long damage = pair.Invincible ? 0 : rate*attack.DurationTicks*attack.Hits[index].Scale/(TicksPerSecond*attack.Hits.Sum(h => (long)h.Scale));
-            damage = Math.Min(damage,target.HealthMilli); target.HealthMilli -= damage;
-            CombatEvents.Add(new(Tick,CombatEventKind.Hit,unit.Id,target.Id,unit.AttackVariant,index,damage,
-                unit.AttackStartTick,target.X,target.Y,target.Z));
-            if (target.Health <= 0)
-            {
-                // This hit crossed zero; later events skip dead targets. Only
-                // hostile kills count, including enemy kills by neutral teams.
-                if (damage > 0 && target.Team != unit.Team) unit.KillCount++;
-                CancelStrike(target);
-            }
-            Retaliate(target,unit);
+            if (unit.Definition.FiresProjectile(unit.AttackVariant)) ReleaseProjectile(unit,target,index,damage);
+            else ApplyHit(unit,target,unit.AttackVariant,index,damage,unit.AttackStartTick);
         }
     }
 }

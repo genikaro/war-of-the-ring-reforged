@@ -1,7 +1,7 @@
 # Godot C# skirmish sandbox
 
-First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, seventeen Elf
-Knights and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
+First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
+Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
 Squads now traverse layered walkable geometry with terrain entrances and
@@ -24,7 +24,7 @@ for large formations getting stuck behind early arrivals. The original console a
 queued waypoints and explicit orders are implemented. The bottom action row is
 Attack, Hold, Guard, Patrol. Attack/A resolves by target: enemy pursuit,
 neutral/friendly force attack, or ground attack-move. Move and Stop work without
-visible buttons. These three types now use imported health, armor, melee DPS and
+visible buttons. These four types now use imported health, armor, weapon DPS and
 animation-timed hit events, with weapon visibility and impact sounds. See
 [combat rules and approximations](COMBAT.md) and [command behavior](COMMANDS.md).
 
@@ -33,6 +33,23 @@ favorable direction, 75% in reverse, and 100% for Hero attacks. Equal types
 and Hero targets are neutral. Single selection shows the original type icon,
 Attack, Armor, Victories and live health; hover the icon for its matchups.
 Group selection retains the portrait roster. Enemy kills update Victories.
+
+**Squad 3 is six Elven Archers.** Press **3** to select them. They use the
+original model, portrait and shooting animation, with 180 HP, Attack 14, Armor 0
+and Piercing damage. Their source bow range is 1–13 m. They approach until they
+can fire, release visible original arrows on the animation's source event, and
+apply damage on arrival. In melee combat they switch to their original melee
+weapon and attack animations, returning to the bow after contact ends.
+Their animation pivot is centered for hit-and-run turns, and new attack
+windups wait until they face the target. Turning uses fixed simulation ticks;
+the original per-turn angle field is recorded, while turn speed remains a
+[documented prototype value](COMBAT.md#ranged-turning-and-animation-pivot).
+Arrow releases play the original Elven launch sound and leave a narrow gray
+trail that fades after impact. Refresh older sound/effect caches with
+`python tools/prepare_prototype.py --rules-only`.
+Attack/A, attack-move, Hold, Guard, Patrol, queued
+orders and Walk/Run use the existing controls. Arrow speed and target following
+are prototype policies; [ranged details and limits](COMBAT.md#elven-archer).
 
 Click an enemy to inspect the same stats with a red ring and health bar.
 Commands disable while inspecting it; drag selection remains friendly-only.
@@ -97,6 +114,13 @@ Rebuild the cache from the already extracted local install:
 
 ```powershell
 python tools/prepare_prototype.py
+```
+
+To add the archer to an existing cache, refresh models, portraits, rules,
+body navigation and demo squads together:
+
+```powershell
+python tools/prepare_prototype.py --units-only
 ```
 
 To update just the squads and camera in an existing cache:

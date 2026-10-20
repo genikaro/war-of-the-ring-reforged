@@ -2,7 +2,7 @@
 
 Updated Oct 20, 2026 · @Evgenii
 
-Phases 1 and 2 implementation are complete. All 54 maps decode through EOF, including 752 decals. Helm's Deep and a decal-heavy Birth of the Uruk-Hai scene render and validate. An initial reference review has corrected prototype rendering bugs; controlled original-game fidelity validation remains open. The user has accepted Phase 3's movement and combat-spacing baseline. The command panel, explicit orders and first imported melee slice are implemented in the Godot 4 C# sandbox (engine chosen Oct 19). The next milestone is a bounded original-game command/combat comparison and correction pass, followed by one ranged unit with projectile resolution. Original armor/range formulas remain unresolved.
+Phases 1 and 2 implementation are complete. All 54 maps decode through EOF, including 752 decals. Helm's Deep and a decal-heavy Birth of the Uruk-Hai scene render and validate. An initial reference review has corrected prototype rendering bugs; controlled original-game fidelity validation remains open. The user has accepted Phase 3's movement and combat-spacing baseline. The command panel, explicit orders and first imported melee slice are implemented in the Godot 4 C# sandbox (engine chosen Oct 19). The Elven Archer ranged slice is implemented with projectile resolution. A bounded original-game command/combat comparison and correction pass remains open. Original armor/range formulas remain unresolved.
 
 An [original-game reference library](../references/original-game/README.md) now
 contains 26 visually retail-compatible images, the original manual and addendum,
@@ -238,8 +238,8 @@ order log replays identically. No navigation polish or full economy system is
 required to accept this slice.
 
 **Following milestones:** complete the verification/correction pass below, then
-one ranged unit with projectile/hit resolution, hero commands/abilities and more
-unit counters. Follow with workers, resources, construction, training queues and
+hero commands/abilities and more unit counters. The first ranged unit, Elven
+Archer, now has projectile/hit resolution. Follow with workers, resources, construction, training queues and
 fog of war to form a complete skirmish loop. Full UI reconstruction, first-run
 installer packaging, campaign, multiplayer and broad presentation polish remain
 later work. Do not expand this slice to all 85 unit records.
@@ -295,10 +295,29 @@ valid; they demonstrate our behavior, not equivalence to the original.
      replay with an explicit discrepancy list. Correct only measured rules;
      leave unresolved formulas labeled as approximations. Stills and synthetic
      duel checks cannot satisfy this comparison gate on their own.
-3. **Then implement one evidenced ranged unit.**
-   - Capture the Uruk-hai missile launch, flight, impact, damage and interrupted
-     attacks continuously; connect the traced weapon/projectile/model events to
-     fixed-tick resolution. Retain presentation-only animation/audio callbacks.
+3. **First ranged unit implemented: Elven Archer (owner request, Oct 20).**
+   - Squad 3 contains six archers using source model/portrait, 180 HP, 14 piercing
+     DPS and 1–13 m bow range. Source missile-release events launch visible
+     original arrows; fixed-tick projectile arrivals apply damage. Existing
+     commands, body clearance and Walk/Run remain connected. See the
+     [ranged implementation and approximations](../prototype/COMBAT.md#elven-archer).
+   - Ranged units switch to source melee weapons/animations during melee combat,
+     as clarified by the owner, and resume bow use after contact ends. Switching
+     preserves cooldown; released arrows remain in flight. Elven Archer's three
+     melee clips and separate weapon 16 are imported and checked.
+   - Original Elven arrow launch sound event 172 and trail effect 12 are connected
+     to release and projectile playback. Trails are subtle gray ribbons with
+     source-derived width/lifetime and fade after impact. Blending, scheduling
+     and spatial falloff remain documented adapter policies; checks pass at
+     20 and 80 FPS.
+   - **Owner checkpoint (Oct 20):** accepted the Elven Archer work and requested
+     saving it, including melee switching, centered turning, turn-before-attack,
+     launch sound and subtle gray trail. Source-fidelity limits above remain open.
+   - Continuous original-game launch/flight/impact and interruption comparison
+     remains open. Arrow speed, center-based range, target following and
+     navigation-based line of fire are explicit adapter policies. The earlier
+     melee comparison gate remains unverified; implementation is not evidence
+     of original-game timing or formula fidelity.
    - Follow with hero abilities using the reserved Q/W/E/R bindings. Collect Evil,
      hero and mixed-selection panels before generalizing the Good infantry HUD.
 4. **Build the skirmish loop from the captured selection cases.**
@@ -451,8 +470,10 @@ The engine is chosen. Remaining choices can be made as their implementation appr
 fixed-tick melee events, with repeatable duel and Godot evidence. Armor, range
 and event-scale interpretations remain explicit approximations pending original
 comparisons. Next: compare and correct command semantics, bindings and measured
-melee behavior using the milestone above. Then add one ranged unit and
-deterministic projectile/hit resolution, before powers, economy and production.
+melee behavior using the milestone above. The first ranged unit and
+deterministic projectile/hit resolution are implemented; compare their policies
+against continuous source-game evidence before claiming fidelity. Powers, economy
+and production remain later work.
 
 - [ ] Load unit, weapon, building, spell and technique stats from the JSON tables (`Units`, `Weapons`, `Buildings`, `Spells`, `Techniques`, `UnitToUnitModifiers`, `BattleGear`, `HeroExperiences`); three demo units' base melee definitions and pair-rule support are implemented.
 - [ ] Economy: resources, workers, building and training queues, places of power; use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation

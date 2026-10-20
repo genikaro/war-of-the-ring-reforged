@@ -111,16 +111,16 @@ public sealed partial class SimWorld
         if (IdleGuardEnabled(unit)) return IdleGuardMayAcquire(unit,enemy);
         if (unit.Order==OrderKind.AttackMove && unit.Definition.BodyRadiusMm>350)
         {
-            if (MeleeReach(unit,unit.Node,unit.X,unit.Y,unit.Z,enemy)) return true;
+            if (AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,enemy)) return true;
             if (unit.AttackMoveReturning) return false;
             // A marching lane limits pursuit of fleeing bait, not participation
             // in the nearby battle already occupying the rest of the squad.
             var origin=unit.AttackMoveOrigin>=0 ? Navigation.Center(unit.AttackMoveOrigin) : (unit.X,unit.Z);
             if (FightingAlly(unit,enemy) && DistanceSquared(origin.Item1,origin.Item2,enemy.X,enemy.Z)<=8000L*8000) return true;
             if (enemy.Id==unit.AttackMoveIgnoredTarget && Tick<unit.AttackMoveIgnoreUntil
-                && !(enemy.Target==unit.Id && MeleeReach(unit,unit.Node,unit.X,unit.Y,unit.Z,enemy))) return false;
+                && !(enemy.Target==unit.Id && AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,enemy))) return false;
             if (!InAttackMoveArea(unit,enemy.X,enemy.Z))
-                return enemy.Target==unit.Id && MeleeReach(unit,unit.Node,unit.X,unit.Y,unit.Z,enemy);
+                return enemy.Target==unit.Id && AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,enemy);
         }
         if (unit.Order == OrderKind.Guard)
         {
@@ -167,7 +167,7 @@ public sealed partial class SimWorld
         // A force move keeps its destination even when struck. A stationary
         // order can return blows within reach, but can never start a pursuit.
         if (victim.Health <= 0 || victim.Order == OrderKind.Move || victim.AttackMoveReturning) return;
-        if (HoldsPosition(victim) && !MeleeReach(victim,victim.Node,victim.X,victim.Y,victim.Z,attacker)) return;
+        if (HoldsPosition(victim) && !AttackReach(victim,victim.Node,victim.X,victim.Y,victim.Z,attacker)) return;
         victim.AutoEngage = !HoldsPosition(victim);
         if (victim.Target < 0) { BeginAttackMoveEncounter(victim); victim.Target = attacker.Id; }
     }

@@ -136,6 +136,24 @@ static class MeleeChecks
     {
         var rules = CombatRules.Parse(File.ReadAllText(Path.Combine(cache,"combat/rules.json")));
         var hero = rules.Units["UNIT_G_HERO_ARAGORN"]; var knight = rules.Units["UNIT_G_ELF_KNIGHT"]; var orc = rules.Units["UNIT_E_URUK_HAI"];
+        var archer = rules.Units["UNIT_G_ELVEN_ARCHER"];
+        check(archer.IsRanged && (archer.MaxHealth,archer.DpsMilli,archer.ArmorMilli,archer.DamageType) == (180,14000,0,1),
+            "Elven Archer imports source health, missile DPS, armor and piercing classification");
+        check((archer.ReachMm,archer.MinimumRangeMm,archer.BodyRadiusMm,archer.BodyHeightMm) == (13000,1000,535,2351)
+            && archer.Attacks.Single(a => !a.Melee).DurationTicks == 41 && archer.Attacks.Single(a => !a.Melee).Hits.Single().Tick == 22,
+            "Elven Archer range, body and bow release are source-derived");
+        check(archer.HasMelee && archer.MeleeDpsMilli == 14000 && archer.MeleeGapMm == 500
+            && archer.Attacks.Count(a => a.Melee) == 3,"Elven Archer imports its distinct melee weapon and all three original melee clips");
+        var archerDuel = Open(rules); archerDuel.Spawn(0,85,archer); archerDuel.Spawn(2,87,orc);
+        archerDuel.Units[1].Health = 10000; archerDuel.Units[1].Cooldown = 10000;
+        archerDuel.Enqueue(2,[1],OrderKind.HoldGround); archerDuel.Enqueue(0,[0],OrderKind.HoldGround);
+        var archerHits = new List<CombatEvent>();
+        for (int tick = 0; tick < 3000; tick++) { archerDuel.Step(); archerHits.AddRange(archerDuel.CombatEvents.Where(e => e.Kind == CombatEventKind.Hit && e.Unit == 0)); }
+        check(archerHits.Select(e => e.Attack).Distinct().Count() == 3 && archerHits.All(e => archer.Attacks[e.Attack].Melee
+            && e.Tick-e.StartTick == archer.Attacks[e.Attack].Hits[e.Hit].Tick),
+            "all three original archer melee variants deal damage on their exact source hit events");
+        check(archerDuel.Projectiles.Count == 0 && archerDuel.Units[1].Health < 10000,
+            "source archer fights in melee without launching arrows");
         check((hero.BodyRadiusMm,knight.BodyRadiusMm,orc.BodyRadiusMm) == (800,927,693)
             && hero.ModelScalePpm == 1_120_000 && rules.Units.Values.All(u => u.FriendlyCompressionPpm == 500_000),
             "cache applies explicit hero sizing and compressible friendly personal space");

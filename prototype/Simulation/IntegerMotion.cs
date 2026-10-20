@@ -29,7 +29,13 @@ public static class IntegerMotion
     {
         long square = (long)dx*dx+(long)dz*dz;
         if (square == 0) square = (long)dy*dy;
-        long value = checked(square*1_000_000), remainder = value, root = 0, bit = 1L<<62;
+        return SqrtCeiling(checked(square*1_000_000));
+    }
+
+    public static long SqrtCeiling(long value)
+    {
+        if (value < 0) throw new ArgumentOutOfRangeException(nameof(value));
+        long remainder = value, root = 0, bit = 1L<<62;
         while (bit > remainder) bit >>= 2;
         while (bit != 0)
         {

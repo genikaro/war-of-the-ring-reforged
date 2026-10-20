@@ -220,6 +220,15 @@ public partial class Main : Node3D
             foreach (string clip in unit.Definition.Attacks.Select(a => a.Clip).Append(unit.Definition.ReadyClip))
                 if (!player.GetAnimationList().Any(a => a == clip || a.EndsWith('/'+clip)))
                     throw new InvalidOperationException("Missing combat animation: "+clip);
+            if (_meleeSmoke && unit.Definition.HasMelee)
+                foreach (var attack in unit.Definition.Attacks.Where(a => a.Melee))
+                {
+                    string clip = player.GetAnimationList().First(a => a == attack.Clip || a.EndsWith('/'+attack.Clip));
+                    player.Play(clip); player.Advance(0);
+                    player.Seek(player.CurrentAnimationLength*attack.Hits[0].Tick/attack.DurationTicks,true);
+                    appearance.Apply(attack.Clip,attack.Hits[0].Tick/(double)attack.DurationTicks);
+                    _archerMeleeClipSamples++;
+                }
             if (_meleeSmoke && unit.Definition.Id == 16)
             {
                 var idle = appearance.VisibleNodes;
@@ -538,7 +547,8 @@ public partial class Main : Node3D
         foreach (var unit in _world.Units)
         {
             var view = _views[unit.Id];
-            if (unit.Attacking && unit.Target >= 0)
+            if (unit.Definition.IsRanged) view.DesiredYaw = (float)UnitFacing.Sample(unit.Facing,unit.Facing,1);
+            else if (unit.Attacking && unit.Target >= 0)
             {
                 var target = _world.Units[unit.Target];
                 view.Heading.Reset();
@@ -603,10 +613,17 @@ public partial class Main : Node3D
                         _interpolatedSeen++;
                 }
                 float before = Mathf.Abs(Mathf.AngleDifference(view.Root.Rotation.Y,view.DesiredYaw));
-                float yaw = Mathf.RotateToward(view.Root.Rotation.Y,view.DesiredYaw,dt*8);
+                float yaw = unit.Definition.IsRanged ? (float)UnitFacing.Sample(unit.PreviousFacing,unit.Facing,fraction)
+                    : Mathf.RotateToward(view.Root.Rotation.Y,view.DesiredYaw,dt*8);
                 float after = Mathf.Abs(Mathf.AngleDifference(yaw,view.DesiredYaw));
                 if (before > .01f && after < before && after > .001f) _turningSeen++;
                 view.Root.Rotation = new(0,yaw,0);
+                if (unit.Definition.IsRanged && unit.StrikeActive && _world.Tick-1 == unit.AttackStartTick)
+                {
+                    _rangedFacingSamples++;
+                    _rangedFacingVerified &= Mathf.Abs(Mathf.AngleDifference(yaw,view.DesiredYaw))
+                        <= 2*UnitFacing.AttackTolerance*Mathf.Pi/180000+.00001f;
+                }
                 SeekAttack(unit,view,fraction);
                 if (!unit.StrikeActive && view.Player != null && view.Player.CurrentAnimation.ToString().Length > 0 && view.Player.CurrentAnimationLength > 0)
                     view.Appearance?.Apply(view.Clip,view.Player.CurrentAnimationPosition/view.Player.CurrentAnimationLength);
@@ -627,6 +644,7 @@ public partial class Main : Node3D
             }, (ArrayMesh)view.Ring.Mesh!);
             view.RingPosition = view.Root.Position; view.RingYaw = view.Root.Rotation.Y;
         }
+        PresentProjectiles();
         float right = (Input.IsPhysicalKeyPressed(Key.Right) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Left) ? 1 : 0);
         float forward = (Input.IsPhysicalKeyPressed(Key.Down) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Up) ? 1 : 0);
         Pan(right * dt * _distance * 0.6f, forward * dt * _distance * 0.6f);
@@ -841,7 +859,15 @@ public partial class Main : Node3D
             equipment_idle_ready_verified = _equipmentStatesVerified,
             source_units = _world.Units.Select(u => u.Definition.Id).Distinct().Order().ToArray(),
             source_health = _rules.Units.Values.Select(u => u.MaxHealth).Order().ToArray(),
-            hit_timing = _combatTrace.Where(e => e.Kind == CombatEventKind.Hit).All(e =>
+            arrow_releases = _arrowReleases, arrow_hits = _arrowHits, arrow_visuals = _arrowVisuals,
+            arrow_launch_samples = _launchSamples, arrow_trails_created = _trailCreated, arrow_trail_samples = _trailSamples,
+            ranged_release_timing = _combatTrace.Where(e => e.Kind == CombatEventKind.Release).All(e =>
+                e.Tick-e.StartTick == _world.Units[e.Unit].Definition.Attacks[e.Attack].Hits[e.Hit].Tick),
+            archer_melee_hits = _combatTrace.Count(e => e.Kind == CombatEventKind.Hit
+                && _world.Units[e.Unit].Definition.HasMelee && !_world.Units[e.Unit].Definition.FiresProjectile(e.Attack)),
+            archer_melee_clip_samples = _archerMeleeClipSamples,
+            ranged_facing_samples = _rangedFacingSamples, ranged_starts_aligned = _rangedFacingVerified,
+            hit_timing = _combatTrace.Where(e => e.Kind == CombatEventKind.Hit && !_world.Units[e.Unit].Definition.FiresProjectile(e.Attack)).All(e =>
                 e.Tick-e.StartTick == _world.Units[e.Unit].Definition.Attacks[e.Attack].Hits[e.Hit].Tick),
             animated_units = _views.Values.Count(v => v.Player != null && v.Clip != ""),
             input_selection = _inputSelectionPassed, input_move = _inputMovePassed, input_attack = _inputAttackPassed,
@@ -850,7 +876,8 @@ public partial class Main : Node3D
             map_view_checks = new { squad = _squadViewPassed, fortress = _fortressViewPassed, overview = _overviewPassed },
             camera_shortcuts_removed = _cameraShortcutsRemoved,
             presentation_import = _presentation.Imports.All(i => i.MissingMipmapsAfter == 0 && i.DisabledVertexColorsAfter == 0)
-                && _presentation.Imports[0].VertexColorSurfaces > 0 && _presentation.Imports.Skip(1).All(i => i.TeamMaterials > 0),
+                && _presentation.Imports.Single(i => i.File == "map/scene.glb").VertexColorSurfaces > 0
+                && _presentation.Imports.Where(i => i.File.StartsWith("units/")).All(i => i.TeamMaterials > 0),
             turning_samples = _turningSeen, interpolated_samples = _interpolatedSeen,
             friendly_squads_fought = _squadsFought.Count, combat_spacing = _combatSpacingPassed, input_squad_keys = _squadKeysPassed,
             body_sizes = _world.Units.Select(u => new {u.Definition.Name,u.Definition.BodyRadiusMm,u.Definition.BodyHeightMm,u.Definition.ModelScalePpm,u.Definition.FriendlyCompressionPpm}).Distinct().ToArray(),
@@ -864,7 +891,11 @@ public partial class Main : Node3D
             && report.input_map_views && report.camera_shortcuts_removed && report.presentation_import && report.free_movement_samples > 0;
         if (_motionSmoke) passed &= report.turning_samples > 0 && report.interpolated_samples > 0;
         if (_combatSmoke) passed &= report.friendly_squads_fought == 3 && report.combat_spacing && report.input_squad_keys;
-        if (_meleeSmoke) passed &= report.source_units.SequenceEqual(new[] {3,16,34}) && report.source_health.SequenceEqual(new[] {240,350,485})
+        if (_meleeSmoke) passed &= report.source_units.SequenceEqual(new[] {2,3,16,34}) && report.source_health.SequenceEqual(new[] {180,240,350,485})
+            && report.arrow_releases > 0 && report.arrow_hits > 0 && report.arrow_visuals > 0 && report.ranged_release_timing
+            && report.arrow_launch_samples == report.arrow_releases && report.arrow_trails_created == report.arrow_visuals && report.arrow_trail_samples > 0
+            && report.archer_melee_clip_samples == 18
+            && report.ranged_facing_samples > 0 && report.ranged_starts_aligned
             && report.hit_timing && report.hit_events > 0 && report.strike_starts > 0 && report.attack_seek_samples > 0
             && report.impact_samples > 0 && report.equipment_changes > 0 && report.equipment_idle_ready_verified;
         GD.Print("SANDBOX_SMOKE " + JsonSerializer.Serialize(report));

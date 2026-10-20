@@ -5,12 +5,17 @@ using System.Text;
 namespace Reforged.Simulation;
 
 public sealed record MeleeHit(int Tick,int Scale);
-public sealed record MeleeAttack(string Clip,int Weight,int DurationTicks,MeleeHit[] Hits);
+public sealed record MeleeAttack(string Clip,int Weight,int DurationTicks,MeleeHit[] Hits,bool Melee = false);
 public sealed record UnitDefinition(int Id,string Name,string DisplayName,int MaxHealth,int ArmorMilli,int DamageType,
     string DamageTypeName,int MaxAttackers,int DpsMilli,int ReachMm,string ReadyClip,MeleeAttack[] Attacks,int StartingHealthPercent = 100,
     int WalkScale = 500_000,string WalkClip = "",string RunClip = "",int BodyRadiusMm = 350,int BodyHeightMm = 700,int SelectionRadiusMm = 650,int AttackGapMm = 0,
-    int FriendlyCompressionPpm = 1_000_000,int ModelScalePpm = 1_000_000)
+    int FriendlyCompressionPpm = 1_000_000,int ModelScalePpm = 1_000_000,
+    int ProjectileSpeedMmPerSecond = 0,int MinimumRangeMm = 0,
+    int MeleeDpsMilli = 0,int MeleeReachMm = 2000,int MeleeGapMm = 0)
 {
+    public bool IsRanged => ProjectileSpeedMmPerSecond > 0;
+    public bool HasMelee => IsRanged && Attacks.Any(a => a.Melee);
+    public bool FiresProjectile(int attack) => IsRanged && !Attacks[attack].Melee;
     // A stable probe profile preserves the existing navigation/spacing fixtures.
     // Actual demo units always receive a definition from the hashed rules cache.
     public static UnitDefinition Probe { get; } = new(-1,"probe","Probe",100,0,-1,"Unclassified",0,12000,2000,"",
@@ -19,17 +24,21 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
     public void Validate()
     {
         if (MaxHealth <= 0 || MaxHealth > 1_000_000 || ArmorMilli < 0 || DpsMilli < 0 || DpsMilli > 1_000_000
-            || ReachMm is < 700 or > 10000 || MaxAttackers < 0 || StartingHealthPercent is <= 0 or > 100
+            || ReachMm is < 700 or > 50000 || MaxAttackers < 0 || StartingHealthPercent is <= 0 or > 100
+            || ProjectileSpeedMmPerSecond is < 0 or > 200000 || MinimumRangeMm < 0 || MinimumRangeMm >= ReachMm
+            || (!IsRanged && MinimumRangeMm != 0)
+            || MeleeDpsMilli is < 0 or > 1_000_000 || MeleeReachMm is < 700 or > 10000 || MeleeGapMm is < 0 or > 10000
             || WalkScale is <= 0 or > 1_000_000
             || BodyRadiusMm is < 100 or > 5000 || BodyHeightMm is < 100 or > 15000 || SelectionRadiusMm is < 100 or > 6000
             || AttackGapMm is < 0 or > 10000
             || FriendlyCompressionPpm is < 500_000 or > 1_000_000 || ModelScalePpm is < 500_000 or > 2_000_000
             || Attacks == null || Attacks.Length == 0 || string.IsNullOrEmpty(Name)) throw new ArgumentException("Invalid unit definition");
+        if (IsRanged && Attacks.All(a => a.Melee)) throw new ArgumentException("Ranged unit has no missile attack");
         foreach (var attack in Attacks)
             if (attack.Weight <= 0 || attack.DurationTicks is <= 0 or > 1200 || attack.Hits == null || attack.Hits.Length == 0
                 || attack.Hits.Any(h => h.Tick < 0 || h.Tick >= attack.DurationTicks || h.Scale is <= 0 or > 10_000_000)
                 || !attack.Hits.Select(h => h.Tick).SequenceEqual(attack.Hits.Select(h => h.Tick).Order()))
-                throw new ArgumentException("Invalid melee attack timeline");
+                throw new ArgumentException("Invalid attack timeline");
     }
 }
 

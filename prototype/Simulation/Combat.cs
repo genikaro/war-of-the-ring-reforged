@@ -12,7 +12,25 @@ public sealed partial class SimWorld
         }
     }
 
-    private bool MeleeReach(SimUnit attacker,int node, int x, int y, int z, SimUnit target)
+    private bool AttackReach(SimUnit attacker,int node, int x, int y, int z, SimUnit target)
+    {
+        if (!attacker.Definition.IsRanged) return MeleeReach(attacker,node,x,y,z,target);
+        if (attacker.Definition.HasMelee && MeleeReach(attacker,node,x,y,z,target)) return true;
+        if (!UsesMissile(attacker,target)) return false;
+        int range = AttackRange(attacker,target);
+        long distance = DistanceSquared(x,z,target.X,target.Z)+(long)(y-target.Y)*(y-target.Y);
+        if (distance > (long)range*range) return false;
+        return distance >= (long)attacker.Definition.MinimumRangeMm*attacker.Definition.MinimumRangeMm
+                && Navigation.HasLineOfFire(x,y+attacker.Definition.BodyHeightMm*2/3,z,
+                    target.X,target.Y+target.Definition.BodyHeightMm/2,target.Z);
+    }
+
+    private bool UsesMissile(SimUnit unit,SimUnit target)
+        => unit.Definition.IsRanged && !(unit.Definition.HasMelee && (MeleeReach(unit,unit.Node,unit.X,unit.Y,unit.Z,target)
+            || target.Target == unit.Id && (!target.Definition.IsRanged || target.Definition.HasMelee)
+                && MeleeReach(target,target.Node,target.X,target.Y,target.Z,unit)));
+
+    private bool MeleeReach(SimUnit attacker,int node,int x,int y,int z,SimUnit target)
     {
         int range = MeleeRange(attacker,target);
         if (DistanceSquared(x,z,target.X,target.Z)+(long)(y-target.Y)*(y-target.Y) > (long)range*range) return false;
@@ -37,7 +55,7 @@ public sealed partial class SimWorld
     {
         var (x,z) = Navigation.Center(node); int y = Navigation.NodeHeight(node);
         if (unit.Order==OrderKind.AttackMove && unit.Definition.BodyRadiusMm>350 && unit.AttackMoveOrigin>=0
-            && !InAttackMoveArea(unit,x,z,MeleeRange(unit,target),target.Id)) return false;
+            && !InAttackMoveArea(unit,x,z,AttackRange(unit,target),target.Id)) return false;
         foreach (var other in Units.Where(u => u.Id != unit.Id && u.Health > 0))
         {
             int spacing = other.Team == unit.Team ? StrikeSpacing(unit,other) : BodySeparation(unit,other);
@@ -61,14 +79,14 @@ public sealed partial class SimWorld
             var (x,z) = Navigation.Center(item.Node); int y = Navigation.NodeHeight(item.Node);
             long range = DistanceSquared(x,z,target.X,target.Z)+(long)(y-target.Y)*(y-target.Y);
             int minimum = Math.Max(1100,BodySeparation(unit,target));
-            int outer = Math.Max(4500,MeleeRange(unit,target)+2000);
+            int outer = Math.Max(4500,AttackRange(unit,target)+2000);
             if (range >= (long)minimum*minimum && range <= (long)outer*outer
                 && Nav(unit).IsConnected(unit.Node,item.Node) && CombatPositionFree(unit,target,item.Node))
             {
-                bool waiting = !MeleeReach(unit,item.Node,x,y,z,target);
+                bool waiting = !AttackReach(unit,item.Node,x,y,z,target);
                 candidates.Add((item.Node,waiting,DistanceSquared(x,z,unit.X,unit.Z)+(long)(y-unit.Y)*(y-unit.Y)));
             }
-            if (item.Depth >= Math.Max(5,(MeleeRange(unit,target)+2000)/Navigation.CellSize+2)) continue;
+            if (item.Depth >= Math.Max(5,(AttackRange(unit,target)+2000)/Navigation.CellSize+2)) continue;
             foreach (int next in Nav(unit).Neighbors(item.Node))
                 if (Nav(unit).CanStand(next) && seen.Add(next)) queue.Enqueue((next,item.Depth+1));
         }
@@ -86,7 +104,7 @@ public sealed partial class SimWorld
             {
                 if (unit.Order != OrderKind.AttackMove || unit.AttackMoveOrigin < 0) return true;
                 var (x,z)=Navigation.Center(node);
-                return InAttackMoveArea(unit,x,z,MeleeRange(unit,target),target.Id);
+                return InAttackMoveArea(unit,x,z,AttackRange(unit,target),target.Id);
             }
             foreach (bool waiting in new[] {false,true})
             {
@@ -104,7 +122,7 @@ public sealed partial class SimWorld
 
     private bool ClearCombatStep(SimUnit unit, int x, int y, int z)
     {
-        int approachMargin=unit.Target>=0 ? MeleeRange(unit,Units[unit.Target]) : 0;
+        int approachMargin=unit.Target>=0 ? AttackRange(unit,Units[unit.Target]) : 0;
         if (unit.Order==OrderKind.AttackMove && (unit.Target>=0 || unit.AttackMoveReturning) && unit.Definition.BodyRadiusMm>350 && unit.AttackMoveOrigin>=0
             && !InAttackMoveArea(unit,x,z,approachMargin) && InAttackMoveArea(unit,unit.X,unit.Z,approachMargin)) return false;
         foreach (var other in Units.Where(u => u.Id != unit.Id && u.Team == unit.Team && u.Health > 0
@@ -135,6 +153,7 @@ public sealed partial class SimWorld
         // the following tick instead of starting another swing in this one.
         if (unit.LastStopTick==Tick) return true;
         if (unit.Order == OrderKind.Move) return false;
+        EngageMeleeThreat(unit);
         EngageImmediateOpponent(unit);
         if (unit.Order==OrderKind.AttackMove && unit.AttackMoveReturning) return false;
         if (unit.Order==OrderKind.AttackMove && unit.Definition.BodyRadiusMm>350 && unit.Target>=0 && unit.AttackMoveOrigin>=0
@@ -153,7 +172,7 @@ public sealed partial class SimWorld
         }
         bool released = false;
         if (unit.Target >= 0 && (Units[unit.Target].Health <= 0 || (HoldsPosition(unit)
-            && !MeleeReach(unit,unit.Node,unit.X,unit.Y,unit.Z,Units[unit.Target]))))
+            && !AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,Units[unit.Target]))))
         {
             bool explicitForce = unit.Order == OrderKind.ForceAttack && unit.OrderTarget >= 0;
             if (unit.OrderTarget == unit.Target) unit.OrderTarget = -1;
@@ -183,7 +202,7 @@ public sealed partial class SimWorld
         }
         RedirectCrowdedAttacker(unit);
         var target = Units[unit.Target];
-        bool inReach = MeleeReach(unit,unit.Node,unit.X,unit.Y,unit.Z,target);
+        bool inReach = AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,target);
         bool canFight = inReach && (HoldsPosition(unit) || RoomToFight(unit));
         if (canFight && !AttackerSlot(unit,target)) { CancelStrike(unit); unit.CombatWaiting = true; return true; }
         if (canFight)
@@ -192,6 +211,7 @@ public sealed partial class SimWorld
             unit.Path.Clear(); unit.Waypoint = 0; unit.Goal = -1;
             unit.FreeMovement = false; unit.AttackNode = unit.Node; unit.CombatTarget = target.Id;
             unit.CombatWaiting = false; unit.BlockedTicks = 0; unit.Attacking = true;
+            if (!FaceForAttack(unit,target) && !unit.StrikeActive) return true;
             Strike(unit,target);
             return true;
         }
@@ -201,7 +221,7 @@ public sealed partial class SimWorld
         if (valid && !unit.CombatWaiting)
         {
             var (x,z) = Navigation.Center(unit.AttackNode);
-            valid = MeleeReach(unit,unit.AttackNode,x,Navigation.NodeHeight(unit.AttackNode),z,target);
+            valid = AttackReach(unit,unit.AttackNode,x,Navigation.NodeHeight(unit.AttackNode),z,target);
         }
         bool replan = unit.CombatTarget != target.Id || unit.CombatPlanTick < 0
             || (Tick-unit.CombatPlanTick >= (unit.Definition.BodyRadiusMm > 350 && unit.CombatWaiting && unit.Goal < 0 ? 20 : 6)

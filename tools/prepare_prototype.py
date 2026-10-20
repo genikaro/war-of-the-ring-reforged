@@ -69,7 +69,7 @@ def demo_layout(allowed, width, height, anchor):
                            'anchor': chosen[0]})
             for index, cell in enumerate(chosen):
                 spawns.append({'team': team, 'cell': cell, 'group': group,
-                               'model': (0 if band == 0 and index == 0 else 1) if team == 0 else 2})
+                               'model': (3 if band == 2 else 0 if band == 0 and index == 0 else 1) if team == 0 else 2})
     xs, zs = [s['cell'] % width for s in spawns], [s['cell'] // width for s in spawns]
     camera = ((min(zs) + max(zs)) // 2) * width + (min(xs) + max(xs)) // 2
     return spawns, groups, camera
@@ -80,12 +80,51 @@ def refresh_demo(output):
     if output.is_relative_to(wor.ROOT / 'extracted') or output.is_relative_to(wor.ROOT / 'TLOTR - War of the Ring'):
         raise ValueError('cache must be outside original and extracted data')
     manifest = json.loads((output / 'manifest.json').read_text())
+    if [m['unit'] for m in manifest['models']] != combat_rules.UNITS:
+        raise ValueError('unit roster changed; refresh the cache with --units-only first')
     nav = json.loads((output / 'navigation.json').read_text())
     allowed = base64.b64decode(nav['allowed_base64'])
     anchor = next(s['cell'] for s in manifest['spawns'] if s['team'] == 0)
     manifest['spawns'], manifest['groups'], manifest['camera_cell'] = demo_layout(allowed, nav['width'], nav['height'], anchor)
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     return manifest
+
+
+def export_units(output, resolver):
+    models = []
+    units_dir = output / 'units'; units_dir.mkdir(exist_ok=True)
+    for unit_name in combat_rules.UNITS:
+        unit = resolver.db['Units'].by_name[unit_name]
+        model = resolver.db['Models'].get(unit['Model'])
+        target = units_dir / (model.name + '.glb')
+        info = convert_model(resolver, model.name, str(target))
+        locomotion = prototype_assets.adapt(target, center_pivot=unit_name == 'UNIT_G_ELVEN_ARCHER')
+        clips = info['clips']
+        def clip(*terms):
+            return next((c for c in clips if all(t.lower() in c.lower() for t in terms)), '')
+        models.append({'unit': unit_name, 'file': 'units/' + target.name,
+                       'in_place_locomotion': locomotion,
+                       'idle': clip('Idle_01'), 'walk': clip('Run'),
+                       'attack': clip('Attack', '01'), 'death': clip('Death') or clip('Defeated')})
+    return models
+
+
+def refresh_units(output):
+    output = Path(output).resolve()
+    if any(output.is_relative_to(wor.ROOT/p) for p in ['extracted', 'TLOTR - War of the Ring']):
+        raise ValueError('cache must be outside original and extracted data')
+    path = output/'manifest.json'
+    manifest = json.loads(path.read_text())
+    manifest['models'] = export_units(output, Resolver())
+    for model in manifest['models']:
+        manifest['files'][model['file']] = hashlib.sha256((output/model['file']).read_bytes()).hexdigest()
+    path.write_text(json.dumps(manifest,indent=2)+'\n')
+    index = [{'unit': manifest['name'], 'file': manifest['map'], 'clips': []}]
+    index.extend({'unit': m['unit'], 'file': m['file'], 'clips': []} for m in manifest['models'])
+    (output/'index.json').write_text(json.dumps(index,indent=2)+'\n')
+    combat_rules.refresh(output)
+    prototype_interface.refresh(output)
+    return refresh_demo(output)
 
 
 def prepare(output, install=None):
@@ -101,7 +140,7 @@ def prepare(output, install=None):
         if not (db_path / 'Models.lqr').is_file():
             raise ValueError('installation has no Database/Models.lqr')
         for name in ['Cloths', 'Effects', 'Levels', 'Materials', 'Meshes', 'MeshPathLookups',
-                     'Models', 'Skeletons', 'SoundEffects', 'TerrainSets', 'TextureAnimations', 'Textures', 'UVAs', 'Weights']:
+                     'Models', 'Projectiles', 'Skeletons', 'SoundEffects', 'TerrainSets', 'TextureAnimations', 'Textures', 'UVAs', 'Weights']:
             source = install / 'Archives' / (name + '.H2O')
             # Validate paths before using the archive extractor.
             archive = h2o.H2OArchive(str(source))
@@ -152,28 +191,14 @@ def prepare(output, install=None):
     (output / 'navigation.json').write_text(json.dumps(nav, indent=2) + '\n')
     heights = [round(h * 1000) for h in scene['world'].heights]
     (output / 'heights.bin').write_bytes(struct.pack('<%di' % len(heights), *heights))
-    models = []
-    units_dir = output / 'units'; units_dir.mkdir(exist_ok=True)
-    for unit_name in ['UNIT_G_HERO_ARAGORN', 'UNIT_G_ELF_KNIGHT', 'UNIT_E_URUK_HAI']:
-        unit = resolver.db['Units'].by_name[unit_name]
-        model = resolver.db['Models'].get(unit['Model'])
-        target = units_dir / (model.name + '.glb')
-        info = convert_model(resolver, model.name, str(target))
-        locomotion = prototype_assets.adapt(target)
-        clips = info['clips']
-        def clip(*terms):
-            return next((c for c in clips if all(t.lower() in c.lower() for t in terms)), '')
-        models.append({'unit': unit_name, 'file': 'units/' + target.name,
-                       'in_place_locomotion': locomotion,
-                       'idle': clip('Idle_01'), 'walk': clip('Run'),
-                       'attack': clip('Attack', '01'), 'death': clip('Death') or clip('Defeated')})
+    models = export_units(output, resolver)
     spawns, groups, camera_cell = demo_layout(allowed, width, height, anchor)
     manifest = {'format_version': 1, 'name': "Helm's Deep — Skirmish Sandbox", 'map': 'map/scene.glb',
                 'team_colors': [[resolver.db['TeamColors'].by_name[name][channel] / 255
                                  for channel in ['Red', 'Green', 'Blue']]
                                 for name in ['TEAM_COLOR_BLUE', 'TEAM_COLOR_RED']],
                 'models': models, 'spawns': spawns, 'groups': groups, 'camera_cell': camera_cell,
-                'rules': 'Imported melee stats and fixed-tick clip hits; see combat/rules.json Policy for approximations.',
+                'rules': 'Imported combat stats, fixed-tick melee hits and Elven Archer projectiles; see combat/rules.json Policy for approximations.',
                 'source_sha256': scene['world'].metadata['sha256']}
     prototype_interface.export(output,resolver)
     combat_rules.export(output,resolver)
@@ -199,8 +224,13 @@ if __name__ == '__main__':
     parser.add_argument('--demo-only', action='store_true', help='Refresh squads and camera in an existing local cache without reconverting assets')
     parser.add_argument('--ui-only', action='store_true', help='Extract original HUD artwork into an existing cache')
     parser.add_argument('--rules-only', action='store_true', help='Refresh imported combat rules, equipment geometry and impact sounds')
+    parser.add_argument('--units-only', action='store_true', help='Refresh unit models, combat rules, portraits and demo squads in an existing cache')
     args = parser.parse_args()
-    if args.rules_only:
+    if args.units_only:
+        if args.install or args.demo_only or args.ui_only or args.rules_only:
+            parser.error('--units-only requires an existing cache and no other preparation mode')
+        refresh_units(args.out)
+    elif args.rules_only:
         if args.install or args.demo_only or args.ui_only:
             parser.error('--rules-only requires an existing cache and no other preparation mode')
         combat_rules.refresh(args.out)

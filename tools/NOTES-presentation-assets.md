@@ -105,6 +105,16 @@ and Haradrim poison dart declares no visual resource. Those cases are
 explicit data-only entries. GLBs preview the first model; they do not
 simulate trajectory or impact.
 
+The bounded Elven Archer runtime adapter now interprets launch event 7 with
+eight-byte payload `(46, SoundEvents ID)` as a launch sound. It preserves unknown
+payloads and opcodes. Elven arrows select sound event 172; ordinary arrows 43,
+fire arrows 125, and ballista arrows 151 use the same layout. Resource bindings
+on Elven/ordinary arrows reference Effects 12 (`Test_Arrow_Trail.lfx`), while
+fire and ballista bindings reference their matching effects 91 and 382. The
+Elven adapter imports that trail's 250 ms track, width and packed color keys;
+full runtime effect support remains open. See prototype/COMBAT.md for the
+explicit ribbon, blending and sound scheduling policies.
+
 Cloth begins with an integer version. V100 stores counts, 83-byte particles,
 20-byte springs, a 112-byte configuration plus pins, and two legacy texture
 words. V102/v103 move configuration/pins first, use 79-byte particles, and

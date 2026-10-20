@@ -20,6 +20,8 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int MaxHealth => Definition.MaxHealth;
     public int KillCount { get; internal set; }
     public bool Walking { get; internal set; }
+    public int Facing { get; internal set; }
+    public int PreviousFacing { get; internal set; }
     public long MovementBudget => Walking ? Math.Max(1,SimWorld.MovementTickSpan*Definition.WalkScale/1_000_000) : SimWorld.MovementTickSpan;
     public int AttackStartTick { get; internal set; } = -1;
     public int AttackVictim { get; internal set; } = -1;
@@ -491,6 +493,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         }
         foreach (var unit in Units)
         {
+            unit.PreviousFacing = unit.Facing;
             unit.Movement.Clear(); unit.Movement.Add(new(0,unit.X,unit.Y,unit.Z)); unit.MovementTick = Tick;
         }
         foreach (var unit in Units)
@@ -628,6 +631,8 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 else unit.BlockedTicks = unit.Moving ? 0 : unit.BlockedTicks + 1;
             }
         }
+        FaceMovement();
+        AdvanceProjectiles();
         Tick++;
     }
 
@@ -642,6 +647,8 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         var text = Rules.Hash + ":" + Tick + ":" + Navigation.Revision + ":" + string.Join(',', Navigation.ObstacleIds.Where(Navigation.IsObstacleActive))
             + ":" + string.Join(";", Units.Select(u => $"{u.Id},{u.Team},{u.X},{u.Y},{u.Z},{u.Node},{u.TransitNode},{u.TravelProgress},{u.Health},{u.Target},{u.Cooldown},{u.Waypoint},{u.Goal},{u.BlockedTicks},{u.YieldFor},{u.YieldGoal},{u.OrderSequence},{u.ReturningToRest},{u.FreeMovement},{u.GroundSegment},{u.GroundStartX},{u.GroundStartY},{u.GroundStartZ},{u.AvoidanceTicks},{u.AttackNode},{u.CombatTarget},{u.CombatPlanTick},{u.CombatWaiting},{u.AutoEngage},{u.Order},{u.OrderDestination},{u.OrderTarget},{u.PatrolStart},{u.PatrolEnd},{u.PatrolForward},{u.GuardPlanTick},{u.GuardOrigin}:{string.Join(',', u.Path)}:{string.Join('|',u.OrderQueue.Select(o => $"{o.Kind},{o.Cell},{o.Target},{o.Sequence}"))}"));
         text += ":"+string.Join(';',Units.Select(u => $"{u.Definition.Id},{u.HealthMilli},{u.KillCount},{u.Walking},{u.AttackStartTick},{u.AttackVictim},{u.AttackVariant},{u.AttackSerial},{u.NextHit},{u.AvoidanceSide},{u.AvoidanceLockTicks},{u.AttackMoveOrigin},{u.AttackMoveForward},{u.AttackMoveRouteStart},{u.AttackMoveReturning},{u.AttackMoveIgnoredTarget},{u.AttackMoveIgnoreUntil},{u.IdleGuardOrigin},{u.IdleGuardReturning},{u.LastStopTick}"));
+        text += ":"+string.Join(';',Units.Select(u => $"{u.Facing},{u.PreviousFacing}"));
+        text += ":"+_projectileSequence+":"+string.Join(';',Projectiles);
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
     }
 }

@@ -107,6 +107,27 @@ public sealed class GridNavigation
         }
     }
 
+    // Conservative projectile visibility from navigation data. Blocked ground
+    // columns are opaque, except where a deck supports the ray above them.
+    // Surface planes and terrain block crossings; units do not block arrows.
+    public bool HasLineOfFire(int ax,int ay,int az,int bx,int by,int bz)
+    {
+        int steps = Math.Max(1,(Math.Max(Math.Abs(bx-ax),Math.Abs(bz-az))+199)/200);
+        int previousY = ay;
+        for (int i = 0; i <= steps; i++)
+        {
+            int x = ax+(int)((long)(bx-ax)*i/steps),z = az+(int)((long)(bz-az)*i/steps);
+            int y = ay+(int)((long)(by-ay)*i/steps),cell = Cell(x,z);
+            if (cell < 0 || GroundHeight(x,z) >= y) return false;
+            _surfaceColumns.TryGetValue(cell,out var surfaces);
+            if (!CanStand(cell) && (surfaces == null || !surfaces.Any(n => CanStand(n) && NodeHeight(n) < Math.Min(previousY,y)))) return false;
+            if (surfaces != null && surfaces.Any(n => NodeHeight(n) >= Math.Min(previousY,y)
+                && NodeHeight(n) <= Math.Max(previousY,y))) return false;
+            previousY = y;
+        }
+        return true;
+    }
+
     public GridNavigation ForBody(int radius,int height)
     {
         if (radius == BodyRadiusMm && height == BodyHeightMm) return this;

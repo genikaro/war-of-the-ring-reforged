@@ -9,7 +9,7 @@ public sealed partial class SimWorld
 
     private bool IdleGuardMayAcquire(SimUnit unit,SimUnit enemy)
     {
-        if (MeleeReach(unit,unit.Node,unit.X,unit.Y,unit.Z,enemy)) return true;
+        if (AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,enemy)) return true;
         if (unit.IdleGuardReturning) return false;
         var anchor=Navigation.Center(unit.IdleGuardOrigin>=0 ? unit.IdleGuardOrigin : unit.Node);
         long distance=DistanceSquared(anchor.X,anchor.Z,enemy.X,enemy.Z);
@@ -35,7 +35,7 @@ public sealed partial class SimWorld
         if (unit.Target>=0)
         {
             var target=Units[unit.Target];
-            if (target.Health>0 && !MeleeReach(unit,unit.Node,unit.X,unit.Y,unit.Z,target)
+            if (target.Health>0 && !AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,target)
                 && (DistanceSquared(anchor.X,anchor.Z,target.X,target.Z)>(long)IdleLeashMm*IdleLeashMm
                     || DistanceSquared(anchor.X,anchor.Z,unit.X,unit.Z)>(long)IdleLeashMm*IdleLeashMm))
             { ReleaseCombat(unit); unit.IdleGuardReturning=true; }

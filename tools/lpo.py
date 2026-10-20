@@ -5,6 +5,23 @@ gameplay enums/parameters retain their original values. All 37 shipped files
 are read sequentially to EOF. See NOTES-presentation-assets.md for readers.
 """
 from asset_io import Reader
+import struct
+
+
+def launch_sound_events(projectile):
+    """Known launch-event payload: event 7, opcode 46, SoundEvents ID.
+
+    Preserve the raw payload in parse(); unknown opcodes remain uninterpreted.
+    The mapping agrees across Elven, ordinary, fire, ballista and axe launches.
+    """
+    result = []
+    for event in projectile.get('events', []):
+        payload = bytes.fromhex(event.get('name_bytes', ''))
+        if event['id'] == 7 and event['type'] == 0 and len(payload) == 8:
+            opcode, sound = struct.unpack('<ii', payload)
+            if opcode == 46 and sound >= 0 and sound not in result:
+                result.append(sound)
+    return result
 
 
 def _action(r, version):

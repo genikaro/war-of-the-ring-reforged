@@ -131,5 +131,15 @@ static class BodyCollisionChecks
         }
         army.Enqueue(0,army.Units.Select(u => u.Id),OrderKind.Move,walk.Nearest(army.Units[8].Node+12)); Advance(army,1000);
         check(army.Units.All(u => u.Goal < 0),"all eighteen source-sized demo allies finish a combined real-map move");
+        var encounter = new SimWorld(nav,rules);
+        foreach (var spawn in manifest.GetProperty("spawns").EnumerateArray())
+        {
+            string type = manifest.GetProperty("models")[spawn.GetProperty("model").GetInt32()].GetProperty("unit").GetString()!;
+            encounter.Spawn(spawn.GetProperty("team").GetInt32(),spawn.GetProperty("cell").GetInt32(),rules.Units[type]);
+        }
+        encounter.Step();
+        check(encounter.Units.All(u => u.Target < 0 && !u.StrikeActive),"source-sized demo armies start outside automatic engagement range");
+        check(encounter.Units.Where(u => u.Team == 0).Skip(12).All(u => u.Definition.Name == "UNIT_G_ELVEN_ARCHER"),
+            "third friendly squad contains six Elven Archers");
     }
 }
