@@ -154,18 +154,19 @@ def demo_body_tuning(name, radius, height):
             'ModelScalePpm': scale, 'FriendlyCompressionPpm': 500_000}
 
 
-def export(output, resolver=None):
+def export(output, resolver=None, roster=None):
     output = Path(output).resolve()
     if any(output.is_relative_to(ROOT/p) for p in ['extracted','TLOTR - War of the Ring']):
         raise ValueError('rules cache must be outside original and extracted data')
     resolver = resolver or Resolver()
+    roster = list(roster or UNITS)
     sources = {}
     def trace(path):
         path = Path(path).resolve()
         relative = path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) else path.name
         sources[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
     units = []
-    for name in UNITS:
+    for name in roster:
         unit = resolver.db['Units'].get(name)
         ranged = name == 'UNIT_G_ELVEN_ARCHER'
         weapon = resolver.db['Weapons'].get(unit['MissileWeapon'] if ranged else unit['MeleeWeapon'])
@@ -274,10 +275,11 @@ def export(output, resolver=None):
 
 def refresh(output):
     output = Path(output).resolve()
-    data = export(output)
+    manifest_path = output/'manifest.json'; manifest = json.loads(manifest_path.read_text())
+    data = export(output, roster=[m['unit'] for m in manifest['models']])
     import prototype_clearance
     prototype_clearance.refresh(output,data['Units'])
-    manifest_path = output/'manifest.json'; manifest = json.loads(manifest_path.read_text())
+    manifest = json.loads(manifest_path.read_text())
     for model in manifest['models']:
         prototype_assets.restore_geometry(output/model['file'])
     manifest['combat_rules'] = 'combat/rules.json'

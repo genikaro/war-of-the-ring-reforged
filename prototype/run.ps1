@@ -7,6 +7,8 @@ param(
     [switch]$CommandSmoke,
     [switch]$OrdersSmoke,
     [switch]$AbilitySmoke,
+    [switch]$Skirmish,
+    [switch]$SkirmishSmoke,
     [switch]$MeleeSmoke,
     [switch]$EngagementSmoke,
     [switch]$AttackMoveEngagementSmoke,
@@ -41,7 +43,8 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 if ($LASTEXITCODE -ne 0) { throw 'C# build failed' }
 $arguments = @('--path', $PSScriptRoot)
 if ($Resolution) { $arguments += @('--resolution',$Resolution) }
-if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $AbilitySmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
+if ($SkirmishSmoke) { $Skirmish = $true }
+if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $AbilitySmoke -or $SkirmishSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
     $renderRate = if ($MotionSmoke -or $FormationSmoke) { '80' } else { '20' }
     if (-not $CapturePath) { $arguments += '--headless' }
     $arguments += @('--fixed-fps', $renderRate)
@@ -56,6 +59,7 @@ if ($CombatSmoke) { $arguments += '--combat-smoke' }
 if ($CommandSmoke) { $arguments += '--command-smoke' }
 if ($OrdersSmoke) { $arguments += '--orders-smoke' }
 if ($AbilitySmoke) { $arguments += '--ability-smoke' }
+if ($SkirmishSmoke) { $arguments += '--skirmish-smoke' }
 if ($MeleeSmoke) { $arguments += '--melee-smoke' }
 if ($EngagementSmoke) { $arguments += '--engagement-smoke' }
 if ($AttackMoveEngagementSmoke) { $arguments += '--attack-move-engagement-smoke' }
@@ -64,6 +68,7 @@ if ($SurfaceSmoke) { $arguments += '--surface-smoke' }
 if ($ObstacleSmoke) { $arguments += '--obstacle-smoke' }
 if ($CapturePath) { $arguments += "--capture=$([System.IO.Path]::GetFullPath($CapturePath))" }
 if ($CapturePath -and $Resolution) { $arguments += "--capture-resolution=$Resolution" }
+if ($Skirmish -and -not $CachePath) { $CachePath = Join-Path $repo 'converted/skirmish' }
 if ($CachePath) { $arguments += "--cache=$([System.IO.Path]::GetFullPath($CachePath))" }
 & $GodotPath @arguments
 exit $LASTEXITCODE

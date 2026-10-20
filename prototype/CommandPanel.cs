@@ -31,6 +31,9 @@ public partial class CommandPanel : Control
     private int _detailUnit = -1;
     private TextureRect _background = null!;
     private Label _title = null!, _order = null!, _hint = null!, _armies = null!;
+    private Control _resources = null!;
+    private TextureRect _populationIcon = null!, _foodIcon = null!, _oreIcon = null!;
+    private Label _populationText = null!, _foodText = null!, _oreText = null!;
     private TextureButton _menu = null!;
     private TextureButton _walkRun = null!;
     private BattleMinimap _map = null!;
@@ -66,6 +69,10 @@ public partial class CommandPanel : Control
         _title = Text("Select your forces",new(265,59),new(505,22),17); _content.AddChild(_title);
         _order = Text("",new(265,192),new(505,18),12); _content.AddChild(_order);
         _armies = Text("",new(787,8),new(229,18),12); _content.AddChild(_armies);
+        _resources = new Control { Position = new(787,6),Size = new(229,22),Visible = false,MouseFilter = MouseFilterEnum.Ignore }; _content.AddChild(_resources);
+        (_populationIcon,_populationText) = ResourceCell(0,10,"Population · units / capacity");
+        (_foodIcon,_foodText) = ResourceCell(72,21,"Food");
+        (_oreIcon,_oreText) = ResourceCell(150,24,"Ore");
         _roster = new Control { Position = new(265,84),Size = new(505,104),MouseFilter = MouseFilterEnum.Ignore }; _content.AddChild(_roster);
         _single = new Control { Position = new(265,59),Size = new(505,129),Visible = false,MouseFilter = MouseFilterEnum.Ignore }; _content.AddChild(_single);
         _singlePortrait = new Button { Size = new(62,62),ExpandIcon = true,FocusMode = FocusModeEnum.None };
@@ -138,6 +145,23 @@ public partial class CommandPanel : Control
         var config = new ConfigFile(); config.SetValue("hud","scale_percent",ScalePercent); config.Save("user://interface.cfg");
     }
 
+    private (TextureRect Icon,Label Text) ResourceCell(float x,float iconWidth,string tip)
+    {
+        var icon = new TextureRect { Position = new(x,3),Size = new(iconWidth,15),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Stop,TooltipText = tip };
+        var text = Text("",new(x+iconWidth+4,2),new(74-iconWidth,18),14); text.MouseFilter = MouseFilterEnum.Stop; text.TooltipText = tip;
+        _resources.AddChild(icon); _resources.AddChild(text); return (icon,text);
+    }
+
+    /// <summary>Skirmish resource strip: population, food and ore, in the original icon order.</summary>
+    public void ShowResources(bool visible) { _resources.Visible = visible; _armies.Visible = !visible; }
+    public void SetResources(int population,int capacity,int food,int ore)
+    {
+        _populationText.Text = $"{population}/{capacity}"; _foodText.Text = food.ToString(); _oreText.Text = ore.ToString();
+    }
+    public bool ResourcesVisible => _resources.Visible;
+    public string ResourceReadout => $"{_populationText.Text} {_foodText.Text} {_oreText.Text}";
+    public bool ResourceIconsLoaded => _populationIcon.Texture != null && _foodIcon.Texture != null && _oreIcon.Texture != null;
+
     private static Label Text(string value,Vector2 position,Vector2 size,int fontSize)
     {
         var label = new Label { Text = value,Position = position,Size = size,MouseFilter = MouseFilterEnum.Ignore,ClipText = true,VerticalAlignment = VerticalAlignment.Center };
@@ -183,12 +207,15 @@ public partial class CommandPanel : Control
         _walkRun.TextureNormal = _art["console_g_run"];
         _walkRun.TexturePressed = _art["console_g_run_highlighted"];
         _walkRun.TextureHover = _art["console_g_run_highlighted"];
+        _populationIcon.Texture = _art.GetValueOrDefault("console_g_resourcepopulation");
+        _foodIcon.Texture = _art.GetValueOrDefault("console_g_resourcefood");
+        _oreIcon.Texture = _art.GetValueOrDefault("console_g_resourcewater");
         foreach (var command in Commands) _buttons[command.Kind].Icon = _art[command.Icon];
         _map.Configure(world);
     }
 
     public static string OrderName(OrderKind kind) => kind switch { OrderKind.AttackMove => "Attack-move",OrderKind.HoldGround => "Hold Position",OrderKind.ForceAttack => "Force Attack",OrderKind.ToggleWalkRun => "Walk / Run",OrderKind.UseAbility => "Greater Kingsfoil",_ => kind.ToString() };
-    private static string PortraitName(string name) => name switch { "Aragorn" => "Portrait_G_Aragorn","Elf Knight" or "Elven Knight" => "Portrait_G_Elven_Knight","Elven Archer" => "Portrait_G_Elven_Archer",_ => "Portrait_E_Uruk_Hai" };
+    private static string PortraitName(string name) => name switch { "Aragorn" => "Portrait_G_Aragorn","Elf Knight" or "Elven Knight" => "Portrait_G_Elven_Knight","Elven Archer" => "Portrait_G_Elven_Archer","Human Worker" => "Portrait_G_Human_Worker",_ => "Portrait_E_Uruk_Hai" };
 
     public void Refresh(IReadOnlyList<SimUnit> units,Func<int,string> name,OrderKind? pending,bool paused,IReadOnlyList<int[]>? groups = null,int allies = 0,int enemies = 0,bool walking = false,int tick = 0,int pendingAbilitySlot = -1)
     {

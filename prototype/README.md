@@ -165,7 +165,15 @@ and `Archives/`). Extraction verifies CRCs and paths; the install is read only:
 python tools/prepare_prototype.py --install "C:/Games/War of the Ring"
 ```
 
-All generated game data stays in ignored `converted/prototype/`. The source
+Bilbo's Bluffs skirmish start (build-4; see [SKIRMISH.md](SKIRMISH.md)) uses its own
+cache, so the Helm's Deep sandbox above stays untouched:
+
+```powershell
+python tools/prepare_prototype.py --skirmish
+./prototype/run.ps1 -Skirmish
+```
+
+All generated game data stays in ignored `converted/prototype/` and `converted/skirmish/`. The source
 project contains no game assets. At launch the manifest's content hashes are
 checked before loading. Never distribute the local cache with the project.
 
@@ -229,6 +237,7 @@ a normal viewport capture with `-CapturePath`.
 ./prototype/run.ps1 -MeleeSmoke
 ./prototype/run.ps1 -CommandSmoke
 ./prototype/run.ps1 -OrdersSmoke
+./prototype/run.ps1 -SkirmishSmoke
 ./prototype/run.ps1 -SurfaceSmoke
 ./prototype/run.ps1 -ObstacleSmoke
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --movement-benchmark converted/prototype/movement-after.json

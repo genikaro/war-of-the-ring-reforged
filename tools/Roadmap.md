@@ -30,6 +30,17 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-4 (Oct 20):** first skirmish-loop step. `prepare_prototype.py --skirmish`
+imports MP02 Bilbo's Bluffs into its own cache: the map's editor markers decode
+(Start Point 0/1), each side gets a Citadel 1 and four Human Workers, and the four
+ore/well pairs from the map remain in the scene. The console shows the original
+population/food/ore strip with the default start state (4/10, 115 food, 325 ore,
+matching the captured start). Economy, construction and production are still
+absent; they follow in builds 5-8. The Helm's Deep cache is byte-identical after
+the importer refactor. Validation: 566 simulation checks, 156 Python tests,
+11 skirmish smoke checks and the Command/Orders/Ability/Melee smokes; start
+captures inspected at 1280x800 and 4K. See [skirmish notes](../prototype/SKIRMISH.md).
+
 **Build-3 (Oct 20):** Greater Kingsfoil uses original Effects 171 texture layers
 for expanding rings, leaves, clouds and sparkles, with finite, pause-aware visual
 playback following the target. The original Kingsfoil cursor appears while
@@ -513,7 +524,7 @@ against continuous source-game evidence before claiming fidelity. Powers, econom
 and production remain later work.
 
 - [ ] Load unit, weapon, building, spell and technique stats from the JSON tables (`Units`, `Weapons`, `Buildings`, `Spells`, `Techniques`, `UnitToUnitModifiers`, `BattleGear`, `HeroExperiences`); three demo units' base melee definitions and pair-rule support are implemented.
-- [ ] Economy: resources, workers, building and training queues, places of power; use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
+- [ ] Economy: resources, workers, building and training queues, places of power (build-4 imports the skirmish map, start bases and the resource strip; gathering and production are next); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
 - [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them
 - [ ] Heroes, fate powers and spells (`SpellAndEventAndActions` chains events to actions)
 - [ ] Open `Rings.exe` in Ghidra to recover the formulas the tables only feed: damage, hit chance, experience, upgrade effects

@@ -103,6 +103,7 @@ public partial class Main : Node3D
             if (arg == "--command-smoke") _commandSmoke = true;
             if (arg == "--orders-smoke") _ordersSmoke = true;
             if (arg == "--ability-smoke") _abilitySmoke = true;
+            if (arg == "--skirmish-smoke") _skirmishSmoke = true;
             if (arg == "--melee-smoke") { _meleeSmoke = _combatSmoke = _smoke = true; }
             if (arg == "--engagement-smoke") _engagementSmoke = true;
             if (arg == "--attack-move-engagement-smoke") _attackMoveEngagementSmoke=_engagementSmoke=true;
@@ -118,7 +119,7 @@ public partial class Main : Node3D
             RefreshDebugMenu();
             _status.Text = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             GD.PushError(error.ToString());
-            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _engagementSmoke || _capture != "") GetTree().Quit(1);
+            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _engagementSmoke || _capture != "") GetTree().Quit(1);
         }
     }
 
@@ -132,6 +133,7 @@ public partial class Main : Node3D
     {
         var manifest = ReadJson("manifest.json");
         if (manifest.GetProperty("format_version").GetInt32() != 1) throw new InvalidOperationException("Unsupported cache format");
+        _skirmish = manifest.TryGetProperty("mode",out var mode) && mode.GetString() == "skirmish";
         foreach (var file in manifest.GetProperty("files").EnumerateObject())
         {
             string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(_cache, file.Name));
@@ -170,6 +172,8 @@ public partial class Main : Node3D
             foreach (var obstacle in _obstacleLayers.EnumerateArray())
             {
                 var view = Descendants(map).OfType<Node3D>().FirstOrDefault(n => n.Name.ToString() == obstacle.GetProperty("name").GetString());
+                // Skirmish start buildings are spawned after the map and bind their own obstacle view.
+                if (view == null && _skirmish && obstacle.GetProperty("id").GetInt32() >= SkirmishObstacleBase) continue;
                 if (view == null) throw new InvalidOperationException("Obstacle visual missing: " + obstacle.GetProperty("name").GetString());
                 _obstacleViews.Add(obstacle.GetProperty("id").GetInt32(), view);
             }
@@ -199,7 +203,9 @@ public partial class Main : Node3D
             bool primary = team == 0 && _primarySquad.Count < 6;
             if (_surfaceSmoke && primary) { cell = surfaceNavigation.Nearest(surfaceStart, surfaceSpawns); surfaceSpawns.Add(cell); }
             var model = manifest.GetProperty("models")[spawn.GetProperty("model").GetInt32()];
-            var unit = _world.Spawn(team, cell,_rules.Units[model.GetProperty("unit").GetString()!]);
+            var definition = _rules.Units[model.GetProperty("unit").GetString()!];
+            if (_skirmish) cell = SkirmishSpawnCell(definition,cell);
+            var unit = _world.Spawn(team, cell,definition);
             if (primary) _primarySquad.Add(unit.Id);
             var root = new Node3D { Name = "Unit_" + unit.Id, PhysicsInterpolationMode = Node.PhysicsInterpolationModeEnum.Off };
             AddChild(root); root.Position = UnitPosition(unit);
@@ -246,8 +252,10 @@ public partial class Main : Node3D
         for (int slot = 0; slot < _friendlySquads.Count; slot++) _controlGroups.Assign(slot,_friendlySquads[slot],LivingFriendly);
         _commands.LoadArtwork(_cache,_world);
         _hudScale.Value = _commands.ScalePercent;
-        float spanX = (_world.Units.Max(u => u.X)-_world.Units.Min(u => u.X))/1000f;
-        float spanZ = (_world.Units.Max(u => u.Z)-_world.Units.Min(u => u.Z))/1000f;
+        if (_skirmish) LoadSkirmishScene(manifest);
+        var framed = _skirmish ? _world.Units.Where(u => u.Team == 0).ToList() : _world.Units;
+        float spanX = (framed.Max(u => u.X)-framed.Min(u => u.X))/1000f;
+        float spanZ = (framed.Max(u => u.Z)-framed.Min(u => u.Z))/1000f;
         _squadDistance = Math.Max(48,Math.Max(spanX,spanZ)*1.9f);
         // Build each spawned body's region cache during loading, before a
         // mouse command can trigger a full-map connectivity pass mid-frame.
@@ -670,6 +678,7 @@ public partial class Main : Node3D
         if (_commandSmoke) CommandSmokeInput();
         if (_ordersSmoke) OrdersSmokeInput();
         if (_abilitySmoke) AbilitySmokeInput();
+        if (_skirmishSmoke) SkirmishSmokeInput();
         if (_engagementSmoke) { if (_formationSmoke) FormationSmokeInput(); else EngagementSmokeInput(); }
         if (_obstacleSmoke) ObstacleSmokeInput();
         if (_surfaceSmoke && _frames == 5)
@@ -695,7 +704,7 @@ public partial class Main : Node3D
         if (_smoke) SmokeInput();
         if (_smoke && _capture != "" && _frames == (_combatSmoke ? 180 : 60)) _ = CaptureFrame(false);
         if (_smoke && _world.Tick >= 420) FinishSmoke();
-        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_engagementSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
+        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_skirmishSmoke && !_engagementSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
     }
 
     private string UnitName(int id) => _world!.Units[id].Definition.DisplayName;

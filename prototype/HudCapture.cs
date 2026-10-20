@@ -17,6 +17,7 @@ public partial class Main
         root.AddChild(new BuildOverlay { Visible = _hud.Visible });
         var hud = new CommandPanel { ManageCursor = false }; root.AddChild(hud); hud.LoadArtwork(_cache,_world!);
         hud.Visible = _hud.Visible;
+        if (_skirmish) ApplySkirmishHud(hud);
         var selected = _world!.Units.Where(u => _selected.Contains(u.Id) && u.Health > 0).ToList();
         hud.Refresh(selected,UnitName,_orders.Pending,_paused,Enumerable.Range(0,10).Select(slot => _controlGroups.Recall(slot,LivingFriendly)).ToArray(),
             _world.Units.Count(u => u.Team == 0 && u.Health > 0),_world.Units.Count(u => u.Team != 0 && u.Health > 0),_world.IsWalking(0),_world.Tick,_pendingAbilitySlot);
