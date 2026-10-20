@@ -15,9 +15,17 @@ strip, current orders and queue hints. Commands support mixed unit
 selections. Active orders and targeting are highlighted; commands disable without
 living friendly units. Dead selections and group members are pruned automatically.
 
+Double-click or Ctrl-click a unit or portrait to select all living units of that
+type on the same team, across the map. Shift-click adds/removes a unit. With
+Shift and type selection, add the whole type; if all matching units are already
+selected, remove that type. Shift-drag adds friendly units. Selection never mixes
+opposing teams. The top-right overlay shows the build number, local date and
+live FPS; build-1 introduces this numbering.
+
 Click a live enemy to inspect its portrait, health, type, Attack, Armor and
-Victories. Its ring and health bar are red; action and Walk/Run controls disable.
-Enemy inspection is exclusive even with Shift, while drag selection stays
+Victories. Its ring and health bar are red; unit actions disable while the global
+Walk/Run switch stays available. Enemy inspection replaces a friendly selection,
+while drag selection stays
 friendly-only. Picking intersects the nearest live body up to the terrain/deck
 hit, rather than a fixed screen-space foot marker. Selection rings match each
 unit's collision radius. Ctrl assignment while inspecting an enemy preserves
@@ -45,7 +53,7 @@ supports click recall. Portrait clicks select one unit; Shift-click removes it.
 | Hold Position | H | Stop at the current position and proactively attack within melee reach. Drop an out-of-range target; never chase or yield. |
 | Guard | G, then friendly unit or terrain | Follow and defend a friendly unit, or defend a fixed location; return after an engagement. |
 | Patrol | T, then terrain | Repeatedly travel between the starting point and destination. Engage enemies and resume the route. |
-| Walk / Run | F2 or run icon beside minimap | Toggle movement mode at the next tick without replacing the active order or queue. Mixed selections walk together; an all-walking selection runs. |
+| Walk / Run | F2 or run icon beside minimap | Toggle global movement pace for your army at the next tick, including future units. Works with any selection; preserves orders and queues. |
 
 The visible action buttons occupy the **bottom row: Attack, Hold, Guard, Patrol**,
 left to right. Move and Stop retain their controls without visible buttons.
@@ -201,7 +209,7 @@ tracks implemented corrections and unresolved comparisons.
   camera buttons, launch-time views and the F4 menu remain available.
   Reserve R for ability 4 rather than a future enter-building command. These
   intentional differences do not change the recorded original S/F1–F4 bindings.
-  **F2 is implemented** as a persistent selection Walk/Run toggle and has a
+  **F2 is implemented** as a persistent player-wide Walk/Run toggle and has a
   matching run-icon button. Source animation ratios determine walking speed;
   default running retains 3 m/s. No camera shortcut uses F2. Q/W/E/R remain
   reserved until hero abilities are connected.

@@ -172,12 +172,14 @@ and a maximum 10.617 m group width.
 
 ## Walk/run control — October 20, 2026
 
-F2 and the original run icon beside the minimap toggle selected units' movement
-mode. A mixed selection switches to Walk; an entirely walking selection switches
-to Run. No selected units means no command. `ToggleWalkRun` is recorded against
-the explicit living unit IDs and applied in sequence at the next fixed tick,
-including after a pause. It changes no route, queue, target, windup or cooldown.
-The mode participates in the state digest and survives later orders.
+As of build-1, F2 and the original run icon beside the minimap toggle the issuing
+player's global movement pace. All living units on that team switch together;
+new units inherit the team's setting. Selection is irrelevant, including an
+empty selection or enemy inspection. Each team's pace is independent.
+`ToggleWalkRun` records the issuing team with no required unit IDs and applies
+in sequence at the next fixed tick, including after a pause. It changes no route,
+queue, target, windup or cooldown. Both team settings and unit modes participate
+in the state digest and survive later orders.
 
 Running keeps the accepted **3 m/s** baseline. Walking scales that speed using
 the first positive Walk/Run state choices' `J_Position` displacement divided by

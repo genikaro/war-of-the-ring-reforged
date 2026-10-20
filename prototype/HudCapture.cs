@@ -14,11 +14,12 @@ public partial class Main
             VOffset = _camera.VOffset,Current = true }; viewport.AddChild(camera);
         var canvas = new CanvasLayer(); viewport.AddChild(canvas);
         var root = new Control { Size = _captureResolution,MouseFilter = Control.MouseFilterEnum.Ignore }; canvas.AddChild(root);
+        root.AddChild(new BuildOverlay { Visible = _hud.Visible });
         var hud = new CommandPanel { ManageCursor = false }; root.AddChild(hud); hud.LoadArtwork(_cache,_world!);
         hud.Visible = _hud.Visible;
         var selected = _world!.Units.Where(u => _selected.Contains(u.Id) && u.Health > 0).ToList();
         hud.Refresh(selected,UnitName,_orders.Pending,_paused,Enumerable.Range(0,10).Select(slot => _controlGroups.Recall(slot,LivingFriendly)).ToArray(),
-            _world.Units.Count(u => u.Team == 0 && u.Health > 0),_world.Units.Count(u => u.Team != 0 && u.Health > 0));
+            _world.Units.Count(u => u.Team == 0 && u.Health > 0),_world.Units.Count(u => u.Team != 0 && u.Health > 0),_world.IsWalking(0));
         await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
         await ToSignal(RenderingServer.Singleton,RenderingServer.SignalName.FramePostDraw);
         using var image = viewport.GetTexture().GetImage();

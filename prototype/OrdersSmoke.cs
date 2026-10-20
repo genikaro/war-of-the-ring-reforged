@@ -118,7 +118,8 @@ public partial class Main
             case 110: _modeCamera = (_focus,_yaw,_distance,_view); PushKey(Key.M); break;
             case 112: PushKey(Key.F2); break;
             case 115:
-                _ordersChecks["f2_walk_preserves_targeting"] = _selected.All(id => world.Units[id].Walking)
+                _ordersChecks["f2_walk_preserves_targeting"] = world.IsWalking(0) && world.Units.Where(u => u.Team == 0 && u.Health > 0).All(u => u.Walking)
+                    && world.Units.Where(u => u.Team == 1 && u.Health > 0).All(u => !u.Walking)
                     && _orders.Pending == OrderKind.Move && _commands.WalkRunButton.ButtonPressed;
                 _ordersChecks["f2_preserves_camera"] = (_focus,_yaw,_distance,_view) == _modeCamera;
                 TargetPoint(Destination(15000,3000)); break;
@@ -141,7 +142,8 @@ public partial class Main
             case 133: PushKey(Key.Escape); _modeCommandCount = world.Commands.Count; break;
             case 135: PushKey(Key.F2); break;
             case 138:
-                _ordersChecks["empty_selection_ignores_f2"] = world.Commands.Count == _modeCommandCount && _commands.WalkRunButton.Disabled;
+                _ordersChecks["empty_selection_global_f2"] = world.Commands.Count == _modeCommandCount+1 && !_commands.WalkRunButton.Disabled
+                    && world.IsWalking(0) && world.Units.Where(u => u.Team == 0 && u.Health > 0).All(u => u.Walking);
                 var report = new { checks = _ordersChecks,passed = _ordersChecks.Count == 27 && _ordersChecks.Values.All(v => v),commands = world.Commands,
                     final_digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"orders-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));

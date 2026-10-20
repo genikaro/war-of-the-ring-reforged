@@ -13,10 +13,12 @@ public partial class Main
 
     private void PushKey(Key key) => GetViewport().PushInput(new InputEventKey { Keycode = key,Pressed = true },true);
 
-    private void Click(Vector2 point,MouseButton button = MouseButton.Left)
+    private void Click(Vector2 point,MouseButton button = MouseButton.Left,bool ctrl = false,bool shift = false,bool doubleClick = false)
     {
-        GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = button,Pressed = true,Position = point,GlobalPosition = point },true);
-        GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = button,Pressed = false,Position = point,GlobalPosition = point },true);
+        GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = button,Pressed = true,Position = point,GlobalPosition = point,
+            CtrlPressed = ctrl,ShiftPressed = shift,DoubleClick = doubleClick },true);
+        GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = button,Pressed = false,Position = point,GlobalPosition = point,
+            CtrlPressed = ctrl,ShiftPressed = shift },true);
     }
 
     private void ClickCommand(OrderKind kind) => Click(_commands.ButtonFor(kind).GetGlobalRect().GetCenter());
@@ -164,10 +166,13 @@ public partial class Main
             case 153:
                 _commandChecks["enemy_click_inspects_stats"] = _selected.SetEquals([_inspectedEnemy]) && _commands.SingleUnitDetailsVisible
                     && _commands.DisplayedName == UnitName(_inspectedEnemy) && _commands.DisplayedHealth == $"{world.Units[_inspectedEnemy].Health}/{world.Units[_inspectedEnemy].MaxHealth}";
-                _commandChecks["enemy_selection_disables_controls"] = !_commands.CommandsAvailable && _commands.WalkRunButton.Disabled;
+                _commandChecks["enemy_selection_keeps_global_pace_enabled"] = !_commands.CommandsAvailable && !_commands.WalkRunButton.Disabled;
                 break;
             case 155: PushKey(Key.A); PushKey(Key.M); PushKey(Key.H); PushKey(Key.F2); break;
-            case 158: _commandChecks["enemy_hotkeys_cannot_command"] = world.Commands.Count == _commandsBeforeCancel && _orders.Pending == null; break;
+            case 158:
+                _commandChecks["enemy_inspection_global_pace_only"] = world.Commands.Count == _commandsBeforeCancel+1 && _orders.Pending == null
+                    && world.Commands.Last().Kind == OrderKind.ToggleWalkRun && world.IsWalking(0) && !world.Units[_inspectedEnemy].Walking;
+                _commandsBeforeCancel = world.Commands.Count; break;
             case 160: Click(CommandGoalPoint(),MouseButton.Right); break;
             case 163: _commandChecks["enemy_context_cannot_command"] = world.Commands.Count == _commandsBeforeCancel; break;
             case 165: GroupKey(Key.Key1,ctrl:true); break;
@@ -184,13 +189,60 @@ public partial class Main
                 _commandChecks["enemy_shiftclick_keeps_inspection_exclusive"] = _selected.SetEquals([_inspectedEnemy]) && !_commands.CommandsAvailable;
                 world.Units[_inspectedEnemy].Health = 0; break;
             case 183: _commandChecks["dead_enemy_selection_pruned"] = _selected.Count == 0 && !_commands.CommandsAvailable; break;
-            case 190:
+            case 186:
+                SetPaused(true);
+                var picked = world.Units.First(u => LivingFriendly(u.Id)
+                    && UnitAt(_camera.UnprojectPosition(UnitPosition(u)+Vector3.Up))?.Id == u.Id);
+                _selectionSmokeId = picked.Id;
+                Click(SelectionSmokePoint()); break;
+            case 189:
+                _commandChecks["battlefield_single_click"] = _selected.SetEquals([_selectionSmokeId]);
+                Click(SelectionSmokePoint(),doubleClick:true); break;
+            case 192:
+                _commandChecks["battlefield_double_click_type"] = _selected.SetEquals(SelectionSmokeType());
+                PushKey(Key.Escape); Click(SelectionSmokePoint(),ctrl:true); break;
+            case 195:
+                _commandChecks["battlefield_ctrl_click_type"] = _selected.SetEquals(SelectionSmokeType());
+                Click(SelectionSmokePoint(),shift:true); break;
+            case 198:
+                _commandChecks["battlefield_shift_removes"] = !_selected.Contains(_selectionSmokeId) && _selected.Count == SelectionSmokeType().Length-1;
+                Click(SelectionSmokePoint(),shift:true); break;
+            case 201:
+                _commandChecks["battlefield_shift_adds"] = _selected.SetEquals(SelectionSmokeType());
+                Click(_commands.PortraitButton(_selectionSmokeId).GetGlobalRect().GetCenter()); break;
+            case 204:
+                _commandChecks["portrait_plain_click"] = _selected.SetEquals([_selectionSmokeId]);
+                Click(_commands.PortraitButton(_selectionSmokeId).GetGlobalRect().GetCenter(),ctrl:true); break;
+            case 207:
+                _commandChecks["portrait_ctrl_click_type"] = _selected.SetEquals(SelectionSmokeType());
+                Click(_commands.PortraitButton(_selectionSmokeId).GetGlobalRect().GetCenter()); break;
+            case 210: Click(_commands.PortraitButton(_selectionSmokeId).GetGlobalRect().GetCenter(),doubleClick:true); break;
+            case 213:
+                _commandChecks["portrait_double_click_type"] = _selected.SetEquals(SelectionSmokeType());
+                _commandChecks["native_console_button_bounds"] = _commands.MenuButton.Position == new Vector2(14,5)
+                    && _commands.MenuButton.Size == new Vector2(66,17) && _commands.WalkRunButton.Position == new Vector2(198,147)
+                    && _commands.WalkRunButton.Size == new Vector2(34,27);
+                var overlay = _hud.GetChildren().OfType<BuildOverlay>().Single();
+                var viewport = GetViewport().GetVisibleRect();
+                _commandChecks["build_date_fps_top_right"] = overlay.Text.Contains(BuildInfo.Label) && overlay.Text.Contains(DateTime.Now.ToString("yyyy-MM-dd"))
+                    && overlay.Text.Contains("FPS") && overlay.GetGlobalRect().End.X <= viewport.End.X && overlay.GetGlobalRect().Position.Y < 40;
+                Click(_commands.MenuButton.GetGlobalRect().GetCenter()); break;
+            case 216:
+                _commandChecks["menu_button_opens"] = _toolsPanel.Visible;
+                Click(_commands.MenuButton.GetGlobalRect().GetCenter()); break;
+            case 219: _commandChecks["menu_button_closes"] = !_toolsPanel.Visible; break;
+            case 225:
                 var report = new { ticks = world.Tick, checks = _commandChecks, commands = world.Commands,
-                    final_digest = world.StateDigest(), passed = _commandChecks.Count == 34 && _commandChecks.Values.All(v => v) };
+                    final_digest = world.StateDigest(), passed = _commandChecks.Count == 46 && _commandChecks.Values.All(v => v) };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"command-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("COMMAND_SMOKE "+JsonSerializer.Serialize(report)); GetTree().Quit(report.passed ? 0 : 1);
                 break;
         }
     }
+
+    private int _selectionSmokeId;
+    private Vector2 SelectionSmokePoint() => _camera.UnprojectPosition(UnitPosition(_world!.Units[_selectionSmokeId])+Vector3.Up);
+    private int[] SelectionSmokeType() => _world!.Units.Where(u => LivingFriendly(u.Id)
+        && u.Definition.Id == _world.Units[_selectionSmokeId].Definition.Id).Select(u => u.Id).ToArray();
 }

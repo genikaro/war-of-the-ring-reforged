@@ -30,6 +30,17 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-1 (Oct 20):** the top-right overlay shows the build number, current local
+date and live FPS, with readable scaling through 4K. Menu and Walk/Run use native
+artwork proportions in the matching console slots. Double-click/Ctrl-click
+selects all living same-type units on the clicked unit's team; Shift-click
+adds/removes units. Walk/Run is now global for the issuing player's army,
+independent of selection, and new units inherit its setting. Orders, queues,
+targeting and attack timing continue. Validation: 524 simulation checks,
+46 Godot command checks and 27 Godot Orders checks pass; 1280x800 and 4K captures
+were inspected. `AGENTS.md` requires one build-number increment per implemented
+change set.
+
 Latest checks: 137 Python tests, eight JavaScript tests (unchanged), and 420 total
 synthetic/cache C# checks pass. Cache checks include imported combat definitions,
 four repeated duels and runtime masks matching the initial
@@ -90,7 +101,7 @@ collapsed current-controls guide. Menu visibility is independent of the guide;
 obsolete shortcut labels and the old static sandbox banner are removed.
 
 The October 20 command correction adds the agreed **F2 Walk/Run** toggle and
-original run-icon button. Mixed selections walk together; changing mode preserves
+original run-icon button. Build-1 makes pace global to the player's army; changing mode preserves
 orders, queues, targeting, swing timing and the camera. Source root-track ratios
 set walking speeds; default running stays at 3 m/s. The visible Hold label is
 now **Hold Position**. The [command behavior matrix](../references/original-game/COMMAND-BEHAVIOR-MATRIX.md)

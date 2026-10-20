@@ -28,12 +28,21 @@ static class MovementModeChecks
         var mixed = Open(); var a = mixed.Spawn(0,403); var b = mixed.Spawn(0,405);
         var dead = mixed.Spawn(0,407); dead.Health = 0; var enemy = mixed.Spawn(1,409);
         mixed.Enqueue(0,[a.Id],OrderKind.ToggleWalkRun); mixed.Step();
+        check(a.Walking && b.Walking && mixed.IsWalking(0) && !enemy.Walking,
+            "a pace command changes every living unit on the issuing team regardless of selection");
         mixed.Enqueue(0,[-1,a.Id,a.Id,b.Id,dead.Id,enemy.Id,999],OrderKind.ToggleWalkRun); mixed.Step();
-        check(a.Walking && b.Walking && !dead.Walking && !enemy.Walking,"mixed selection walks together and ignores dead foreign invalid duplicate IDs");
+        check(!a.Walking && !b.Walking && !dead.Walking && !enemy.Walking,"pace is a team toggle independent of supplied IDs");
         mixed.Enqueue(0,[a.Id,b.Id],OrderKind.ToggleWalkRun); mixed.Step();
-        check(!a.Walking && !b.Walking,"an entirely walking selection switches together to running");
+        check(a.Walking && b.Walking,"the next team toggle restores walking");
+        var reinforcement = mixed.Spawn(0,411);
+        check(reinforcement.Walking,"new units inherit their team's global pace");
         mixed.Enqueue(0,[],OrderKind.ToggleWalkRun); mixed.Step();
-        check(!a.Walking && !b.Walking,"empty pace commands change no unit");
+        check(!a.Walking && !b.Walking && !reinforcement.Walking,"global pace works without a selection");
+        mixed.Enqueue(1,[],OrderKind.ToggleWalkRun); mixed.Step();
+        check(enemy.Walking && !a.Walking,"each player's global pace is independent");
+        var empty = Open();
+        empty.Enqueue(0,[],OrderKind.ToggleWalkRun); empty.Step();
+        check(empty.IsWalking(0) && empty.Spawn(0,403).Walking,"pace can be chosen before any units spawn");
 
         var fight = Open(); var attacker = fight.Spawn(0,403,UnitDefinition.Probe with {
             Attacks = [new("swing",1,20,[new(8,1000000)])] });

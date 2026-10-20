@@ -4,6 +4,14 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
+**build-1:** the top-right corner shows the build number, current local date and
+live FPS. Each implemented change set increments `BuildInfo.Number` once.
+Double-click or Ctrl-click a unit (or portrait) to select every living unit of
+that type on its team across the map. Shift-click adds/removes a unit;
+Shift with type selection adds that type, or removes it when fully selected.
+Shift-drag adds friendly units. Menu and Walk/Run use their native artwork sizes
+inside the console's matching slots.
+
 Squads now traverse layered walkable geometry with terrain entrances and
 congestion replanning. Static building/object footprints now block movement.
 Walkway edges now require support for each type's full collision radius.
@@ -52,7 +60,8 @@ orders and Walk/Run use the existing controls. Arrow speed and target following
 are prototype policies; [ranged details and limits](COMBAT.md#elven-archer).
 
 Click an enemy to inspect the same stats with a red ring and health bar.
-Commands disable while inspecting it; drag selection remains friendly-only.
+Unit commands disable while inspecting it; the global Walk/Run switch remains
+available. Drag selection remains friendly-only.
 Selection rings show the full body envelope: Aragorn **0.800 m**, Elven Knight
 **0.927 m**, Uruk-hai **0.693 m** radius. Aragorn's demo model is enlarged 12%,
 with a wider hitbox; raw source bounds remain recorded. Friendly personal space
@@ -75,9 +84,10 @@ They pursue within a 12 m limit and return near their resting position afterward
 Completing Move starts guarding the new position. Stop cancels the current action
 and resumes default guarding on the next tick; Hold Position stays stationary.
 
-**F2** or the original run icon beside the minimap switches the selection
-between walking and running. Mixed selections switch to walking together;
-toggle again to run. Orders, queued waypoints and attack timing continue.
+**F2** or the original run icon beside the minimap switches your entire army
+between walking and running, including units spawned afterward. It works with
+an empty selection or while inspecting enemies. Each player's setting is
+independent. Orders, queued waypoints and attack timing continue.
 Running retains the accepted 3 m/s speed; walking uses the source animation
 ratio for each unit. See [movement details](MOVEMENT.md#walkrun-control--october-20-2026).
 

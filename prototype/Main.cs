@@ -39,7 +39,7 @@ public partial class Main : Node3D
     private bool _hideHud;
     private float _distance = 48, _yaw = 0.25f;
     private Vector2 _dragStart;
-    private bool _dragging, _panning, _paused;
+    private bool _dragging, _panning, _paused, _selectSameType;
     private string _cache = "", _capture = "";
     private Vector2I _captureResolution;
     private bool _smoke;
@@ -279,15 +279,16 @@ public partial class Main : Node3D
         _hud = new SandboxHud(); canvas.AddChild(_hud);
         _hud.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _hud.MouseFilter = Control.MouseFilterEnum.Ignore;
+        _hud.AddChild(new BuildOverlay());
         CreateDebugMenu();
         _commands = new CommandPanel(); _hud.AddChild(_commands);
         _commands.MenuChosen += ToggleDebugMenu;
         _commands.CommandChosen += ChooseCommand;
         _commands.WalkRunChosen += ToggleWalkRun;
         _commands.GroupChosen += slot => UseGroup(slot,Input.IsPhysicalKeyPressed(Key.Ctrl),Input.IsPhysicalKeyPressed(Key.Shift));
-        _commands.UnitChosen += (id,remove) => {
+        _commands.UnitChosen += (id,append,sameType) => {
             _orders.Cancel();
-            if (remove) _selected.Remove(id); else { _selected.Clear(); if (LivingUnit(id)) _selected.Add(id); }
+            if (_world != null) UnitSelection.Click(_selected,_world.Units,LivingUnit(id) ? _world.Units[id] : null,append,sameType);
         };
         _commands.MapChosen += point => {
             if (_world == null) return;
@@ -307,8 +308,8 @@ public partial class Main : Node3D
             if (mouse.ButtonIndex == MouseButton.Left)
             {
                 if (mouse.Pressed && _orders.Pending != null) Order(mouse.Position,mouse.CtrlPressed,mouse.ShiftPressed);
-                else if (mouse.Pressed) { _dragStart = mouse.Position; _dragging = true; }
-                else if (_dragging) { SelectUnits(_dragStart, mouse.Position, mouse.ShiftPressed); _dragging = false; _hud.SelectionBox = null; }
+                else if (mouse.Pressed) { _dragStart = mouse.Position; _dragging = true; _selectSameType = mouse.CtrlPressed || mouse.DoubleClick; }
+                else if (_dragging) { SelectUnits(_dragStart, mouse.Position, mouse.ShiftPressed,_selectSameType); _dragging = false; _hud.SelectionBox = null; }
             }
             if (mouse.ButtonIndex == MouseButton.Right && mouse.Pressed)
             {
@@ -390,19 +391,13 @@ public partial class Main : Node3D
         }
     }
 
-    private void SelectUnits(Vector2 start, Vector2 end, bool append)
+    private void SelectUnits(Vector2 start, Vector2 end, bool append,bool sameType = false)
     {
         _orders.Cancel();
         var rect = new Rect2(start, end - start).Abs();
         if (rect.Size.Length() < 7)
         {
-            var hit = UnitAt(end);
-            if (!append || (hit != null && (hit.Team != 0 || !_selected.All(LivingFriendly)))) _selected.Clear();
-            if (hit != null)
-            {
-                if (append && hit.Team == 0 && _selected.Contains(hit.Id)) _selected.Remove(hit.Id);
-                else _selected.Add(hit.Id);
-            }
+            UnitSelection.Click(_selected,_world!.Units,UnitAt(end),append,sameType);
             return;
         }
         if (!append || !_selected.All(LivingFriendly)) _selected.Clear();
@@ -411,11 +406,7 @@ public partial class Main : Node3D
             var pos = UnitPosition(unit) + Vector3.Up;
             if (_camera.IsPositionBehind(pos)) continue;
             var screen = _camera.UnprojectPosition(pos);
-            if (rect.Size.Length() < 7 ? screen.DistanceTo(end) < 22 : rect.HasPoint(screen))
-            {
-                if (append && rect.Size.Length() < 7 && _selected.Contains(unit.Id)) _selected.Remove(unit.Id);
-                else _selected.Add(unit.Id);
-            }
+            if (rect.HasPoint(screen)) _selected.Add(unit.Id);
         }
     }
 
@@ -469,10 +460,8 @@ public partial class Main : Node3D
     private void ToggleWalkRun()
     {
         if (_world == null) return;
-        var living = _selected.Where(LivingFriendly).ToArray();
-        if (living.Length == 0) return;
-        _world.Enqueue(0,living,OrderKind.ToggleWalkRun);
-        _status.Text = _paused ? "Walk / Run queued (paused)" : "Walk / Run changed";
+        _world.Enqueue(0,[],OrderKind.ToggleWalkRun);
+        _status.Text = _paused ? "Global Walk / Run queued (paused)" : "Global Walk / Run changed";
     }
 
     private void SendOrder(PlayerOrder order,bool queued = false)
@@ -654,7 +643,7 @@ public partial class Main : Node3D
         if (units.Count == 0) _orders.Cancel();
         _commands.Refresh(units,UnitName,_orders.Pending,_paused,
             Enumerable.Range(0,10).Select(slot => _controlGroups.Recall(slot,LivingFriendly)).ToArray(),
-            _world.Units.Count(u => u.Team == 0 && u.Health > 0),_world.Units.Count(u => u.Team != 0 && u.Health > 0));
+            _world.Units.Count(u => u.Team == 0 && u.Health > 0),_world.Units.Count(u => u.Team != 0 && u.Health > 0),_world.IsWalking(0));
         _presentStep = false;
         if (_toolsPanel.Visible) RefreshDebugMenu();
         _hud.DestinationTime -= dt; _hud.QueueRedraw();

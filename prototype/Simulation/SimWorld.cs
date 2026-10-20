@@ -91,6 +91,8 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     public List<SimObstacleCommand> ObstacleCommands { get; } = [];
     public int Tick { get; private set; }
     private int _sequence;
+    private readonly Dictionary<int,bool> _walkingTeams = [];
+    public bool IsWalking(int team) => _walkingTeams.GetValueOrDefault(team);
     private int _navigationRevision = navigation.Revision;
 
     public SimUnit Spawn(int team, int cell,UnitDefinition? definition = null)
@@ -99,7 +101,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         if (!Navigation.ForBody(definition.BodyRadiusMm,definition.BodyHeightMm).CanStand(cell)) throw new ArgumentException("Spawn cell is blocked for this body");
         var (x, z) = Navigation.Center(cell);
         int y = Navigation.NodeHeight(cell);
-        var candidate = new SimUnit(Units.Count,team,x,z) { Node = cell,Y = y,Definition = definition,
+        var candidate = new SimUnit(Units.Count,team,x,z) { Node = cell,Y = y,Definition = definition,Walking = IsWalking(team),
             HealthMilli = (long)definition.MaxHealth*1000*definition.StartingHealthPercent/100 };
         if (!CanReserveMovement(candidate,cell) || OccupiedNodes(-1).Contains(cell) || Units.Any(u => u.Health > 0
             && BodiesOverlap(candidate,u)))
@@ -141,10 +143,9 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     {
         if (command.Kind == OrderKind.ToggleWalkRun)
         {
-            var selected = command.Units.Distinct().Where(id => id >= 0 && id < Units.Count).Select(id => Units[id])
-                .Where(u => u.Team == command.Team && u.Health > 0).ToArray();
-            bool walk = !selected.All(u => u.Walking);
-            foreach (var unit in selected) unit.Walking = walk;
+            bool walk = !IsWalking(command.Team);
+            _walkingTeams[command.Team] = walk;
+            foreach (var unit in Units.Where(u => u.Team == command.Team && u.Health > 0)) unit.Walking = walk;
             return;
         }
         var reserved = new HashSet<int>();
@@ -648,6 +649,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             + ":" + string.Join(";", Units.Select(u => $"{u.Id},{u.Team},{u.X},{u.Y},{u.Z},{u.Node},{u.TransitNode},{u.TravelProgress},{u.Health},{u.Target},{u.Cooldown},{u.Waypoint},{u.Goal},{u.BlockedTicks},{u.YieldFor},{u.YieldGoal},{u.OrderSequence},{u.ReturningToRest},{u.FreeMovement},{u.GroundSegment},{u.GroundStartX},{u.GroundStartY},{u.GroundStartZ},{u.AvoidanceTicks},{u.AttackNode},{u.CombatTarget},{u.CombatPlanTick},{u.CombatWaiting},{u.AutoEngage},{u.Order},{u.OrderDestination},{u.OrderTarget},{u.PatrolStart},{u.PatrolEnd},{u.PatrolForward},{u.GuardPlanTick},{u.GuardOrigin}:{string.Join(',', u.Path)}:{string.Join('|',u.OrderQueue.Select(o => $"{o.Kind},{o.Cell},{o.Target},{o.Sequence}"))}"));
         text += ":"+string.Join(';',Units.Select(u => $"{u.Definition.Id},{u.HealthMilli},{u.KillCount},{u.Walking},{u.AttackStartTick},{u.AttackVictim},{u.AttackVariant},{u.AttackSerial},{u.NextHit},{u.AvoidanceSide},{u.AvoidanceLockTicks},{u.AttackMoveOrigin},{u.AttackMoveForward},{u.AttackMoveRouteStart},{u.AttackMoveReturning},{u.AttackMoveIgnoredTarget},{u.AttackMoveIgnoreUntil},{u.IdleGuardOrigin},{u.IdleGuardReturning},{u.LastStopTick}"));
         text += ":"+string.Join(';',Units.Select(u => $"{u.Facing},{u.PreviousFacing}"));
+        text += ":pace:"+string.Join(';',_walkingTeams.OrderBy(p => p.Key).Select(p => $"{p.Key},{p.Value}"));
         text += ":"+_projectileSequence+":"+string.Join(';',Projectiles);
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
     }
