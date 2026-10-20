@@ -38,7 +38,7 @@ public sealed partial class SimWorld
     {
         RebaseCombatGround(unit);
         unit.Goal = destination;
-        unit.Path = Nav(unit).FindPath(unit.Node,unit.Goal);
+        unit.Path = PathFromCurrentPosition(unit,unit.Goal);
         unit.Waypoint = 0; unit.BlockedTicks = 0;
         unit.FreeMovement = unit.TransitNode < 0 && unit.Path.Count > 0 && unit.Path.All(FreeGround);
         if (unit.Path.Count == 0) { unit.Goal = -1; CompleteTravelOrder(unit); }

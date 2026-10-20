@@ -30,6 +30,17 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-7 (Oct 20):** corrected the owner's worker-stalling report for gathering
+and ordinary movement near buildings/resources. Off-center bodies now reconnect
+to the route graph through a short, collision-checked ground leg when their
+cell-center routes are disconnected. Long raw/construction cases reduce maximum
+route stalls from 8,884/7,754 ticks to 7/8; all workers keep delivering. Move
+orders recover the exact stranded position. Validation: 624 synthetic / 691
+cached simulation checks, 29 worker-cache checks and expanded 23-check gathering
+smoke, plus Construction/Command/Orders regressions. No asset refresh required.
+See [movement notes](../prototype/MOVEMENT.md#build-7-reconnecting-from-an-off-center-ground-position).
+Remaining Tier 1 buildings, building selection and production are still next.
+
 **Build-6 (Oct 20):** Mill/Foundry construction is connected to worker portraits
 and resource-site placement, including a green/red ghost, imported costs and
 prerequisites, shared worker progress, original scaffold stages, Stop/resume and

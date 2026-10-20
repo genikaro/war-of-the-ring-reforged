@@ -1,6 +1,12 @@
 using Reforged.Simulation;
 using System.Text.Json;
 
+if (Array.IndexOf(args,"--worker-traffic-probe") is int workerProbe && workerProbe >= 0)
+{
+    Console.WriteLine(JsonSerializer.Serialize(WorkerTrafficChecks.Probe(args[workerProbe+1])));
+    return;
+}
+
 if (args.Contains("--crowd-motion-benchmark"))
 {
     Console.WriteLine(JsonSerializer.Serialize(new[] {CrowdMotionChecks.Measure(OrderKind.Move),CrowdMotionChecks.Measure(OrderKind.AttackMove)}));
@@ -22,6 +28,12 @@ if (Array.IndexOf(args,"--movement-benchmark") is int benchmark && benchmark >= 
 
 int passed = 0;
 void Check(bool value, string name) { if (!value) throw new Exception(name); passed++; }
+if (Array.IndexOf(args,"--worker-cache") is int workerCache && workerCache >= 0)
+{
+    WorkerTrafficChecks.Run(Check);
+    WorkerTrafficChecks.RunCached(Check,args[workerCache+1]);
+    Console.WriteLine($"{passed} worker traffic checks passed"); return;
+}
 GridNavigation Grid(int width = 10, int height = 8, bool[]? allowed = null)
     => new(width, height, 1000, allowed ?? Enumerable.Repeat(true, width * height).ToArray(), new int[(width + 1) * (height + 1)]);
 NavigationPickerChecks.Run(Check);
@@ -42,6 +54,7 @@ AbilityChecks.Run(Check);
 HealingPlaybackChecks.Run(Check);
 EconomyChecks.Run(Check);
 ConstructionChecks.Run(Check);
+WorkerTrafficChecks.Run(Check);
 BodyCollisionChecks.Run(Check);
 EngagementChecks.Run(Check);
 CloseCombatChecks.Run(Check);

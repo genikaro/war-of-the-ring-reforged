@@ -503,6 +503,37 @@ public sealed class GridNavigation
         return [];
     }
 
+    // Continuous ground motion can round a footprint where cell-center graph
+    // edges are closed. Connect the actual body position to a nearby reachable
+    // center instead of treating that graph pocket as a permanently lost unit.
+    private IEnumerable<int> GroundRouteStarts(int x,int z,int goal,IReadOnlySet<int>? blocked = null)
+    {
+        if (!TypedBody || !CanTraverseGroundPoints(x,z,x,z)) yield break;
+        int from = Cell(x,z),radius = 2*CellSize;
+        foreach (int node in NearbyNodes(x,z,radius).Where(n => n < GroundCount && n != from)
+            .OrderBy(n => { var p = Center(n); return (long)(p.X-x)*(p.X-x)+(long)(p.Z-z)*(p.Z-z); }).ThenBy(n => n))
+        {
+            if (blocked?.Contains(node) == true || !IsConnected(node,goal)) continue;
+            var p = Center(node);
+            if (CanTraverseGroundPoints(x,z,p.X,p.Z,blocked)) yield return node;
+        }
+    }
+
+    public bool CanReachGroundPosition(int x,int z,int goal)
+        => IsConnected(Cell(x,z),goal) || GroundRouteStarts(x,z,goal).Any();
+
+    public List<int> FindPathFromGroundPosition(int x,int z,int goal,IReadOnlySet<int>? blocked = null)
+    {
+        var path = FindPath(Cell(x,z),goal,blocked);
+        if (path.Count > 0) return path;
+        foreach (int start in GroundRouteStarts(x,z,goal,blocked))
+        {
+            path = FindPath(start,goal,blocked);
+            if (path.Count > 0) return path;
+        }
+        return [];
+    }
+
     // One bounded search for an entire ring of acceptable combat positions.
     public List<int> FindPathToAny(int start,IEnumerable<int> destinations,IReadOnlySet<int>? blocked,int maxVisited = 2048,Func<int,bool>? allowed = null)
     {

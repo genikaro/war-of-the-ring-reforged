@@ -2,6 +2,22 @@ namespace Reforged.Simulation;
 
 public sealed partial class SimWorld
 {
+    private bool CanReachDestination(SimUnit unit,int goal)
+        => Nav(unit).IsConnected(unit.Node,goal) || unit.Node < Navigation.GroundCount
+            && (unit.TransitNode < 0 || unit.GroundSegment) && Nav(unit).CanReachGroundPosition(unit.X,unit.Z,goal);
+
+    private List<int> PathFromCurrentPosition(SimUnit unit,int goal,IReadOnlySet<int>? blocked = null)
+    {
+        var nav = Nav(unit);
+        if (unit.Node >= Navigation.GroundCount || unit.TransitNode >= 0 && !unit.GroundSegment)
+            return nav.FindPath(unit.Node,goal,blocked);
+        // A connector must avoid standing workers even when the main wide-ground
+        // route delegates ordinary traffic avoidance to the continuous follower.
+        if (!nav.IsConnected(unit.Node,goal) && blocked == null)
+        { var occupied = OccupiedNodes(unit.Id); occupied.Remove(unit.Node); blocked = occupied; }
+        return nav.FindPathFromGroundPosition(unit.X,unit.Z,goal,blocked);
+    }
+
     private static bool StableArrival(SimUnit unit) => unit.Definition.BodyRadiusMm > 350 && unit.Target < 0;
     // Normalize consumed distance to one shared tick clock for rendering,
     // including ticks that cross multiple waypoints or finish early.

@@ -121,7 +121,7 @@ public sealed partial class SimWorld
         for (int col = minX; col <= maxX; col++)
         {
             int node = row*nav.Width+col; var at = nav.Center(node);
-            if (!reserved.Contains(node) && nav.CanStand(node) && nav.IsConnected(unit.Node,node)
+            if (!reserved.Contains(node) && nav.CanStand(node) && CanReachDestination(unit,node)
                 && DistanceSquared(at.X,at.Z,x,z) <= (long)radius*radius) candidates.Add(node);
         }
         return candidates.OrderBy(n => { var p = nav.Center(n); return DistanceSquared(unit.X,unit.Z,p.X,p.Z); }).ThenBy(n => n);
@@ -129,10 +129,9 @@ public sealed partial class SimWorld
 
     private bool PlanEconomyRoute(SimUnit unit,int x,int z,int radius)
     {
-        var nav = Nav(unit);
         foreach (int node in EconomyRouteCandidates(unit,x,z,radius))
         {
-            if (nav.FindPath(unit.Node,node).Count == 0) continue;
+            if (PathFromCurrentPosition(unit,node).Count == 0) continue;
             unit.OrderDestination = node; PlanOrderRoute(unit,node); return true;
         }
         return false;

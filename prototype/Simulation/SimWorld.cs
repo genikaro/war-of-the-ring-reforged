@@ -178,8 +178,8 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         int anchor = travels ? formationNav.Nearest(command.Cell) : -1;
         if (command.Kind == OrderKind.Guard && command.Target >= 0 && command.Target < Units.Count) reserved.Add(Units[command.Target].Node);
         var ordered = command.Units.Where(id => id >= 0 && id < Units.Count).Select(id => Units[id])
-            .Where(u => u.Team == command.Team && u.Health > 0 && anchor >= 0 && Nav(u).IsConnected(u.Node,anchor)).ToArray();
-        bool free = travels && ordered.All(u => Nav(u).FindPath(u.Node,anchor).All(FreeGround));
+            .Where(u => u.Team == command.Team && u.Health > 0 && anchor >= 0 && CanReachDestination(u,anchor)).ToArray();
+        bool free = travels && ordered.All(u => PathFromCurrentPosition(u,anchor).All(FreeGround));
         var slots = new List<int>();
         foreach (var unit in ordered)
         {
@@ -243,11 +243,11 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 yielding.Path.Clear(); yielding.Waypoint = 0; yielding.BlockedTicks = 10;
             }
             if (!travels) continue;
-            if (anchor < 0 || !Nav(unit).IsConnected(unit.Node,anchor)) { CompleteTravelOrder(unit); continue; }
+            if (anchor < 0 || !CanReachDestination(unit,anchor)) { CompleteTravelOrder(unit); continue; }
             int goal = assignments.GetValueOrDefault(id,-1);
             if (goal < 0) { CompleteTravelOrder(unit); continue; }
             reserved.Add(goal);
-            unit.Path = Nav(unit).FindPath(unit.Node, goal);
+            unit.Path = PathFromCurrentPosition(unit,goal);
             unit.FreeMovement &= unit.Path.All(FreeGround);
             unit.Goal = unit.Path.Count > 0 ? goal : -1;
             unit.OrderDestination = unit.Goal;
@@ -509,7 +509,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             {
                 RebaseGround(unit);
                 unit.YieldFor = unit.YieldGoal = -1;
-                unit.Path = Nav(unit).FindPath(unit.Node, unit.Goal);
+                unit.Path = PathFromCurrentPosition(unit,unit.Goal);
                 unit.FreeMovement &= unit.Path.All(FreeGround);
                 if (unit.Path.Count == 0) unit.Path.Add(unit.Node);
                 unit.Waypoint = 0; unit.BlockedTicks = 0;
@@ -582,7 +582,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 int start = unit.Node;
                 var blocked = OccupiedNodes(unit.Id);
                 blocked.Remove(start);
-                unit.Path = Nav(unit).FindPath(start, unit.YieldGoal >= 0 ? unit.YieldGoal : unit.Goal,
+                unit.Path = PathFromCurrentPosition(unit,unit.YieldGoal >= 0 ? unit.YieldGoal : unit.Goal,
                     unit.FreeMovement && unit.Definition.BodyRadiusMm > 350 ? null : blocked);
                 unit.Waypoint = 0; unit.BlockedTicks = 0;
                 // A blocked idle unit has no destination worth displacing
@@ -601,6 +601,16 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             while (budget > 0 && unit.Waypoint < unit.Path.Count)
             {
                 int nextNode = unit.Path[unit.Waypoint];
+                // A physical-position connector is the first ground leg even
+                // when the remaining route uses constrained cells or a deck.
+                bool connector = !unit.FreeMovement && unit.Waypoint == 0 && nextNode != unit.Node
+                    && unit.Node < Navigation.GroundCount && nextNode < Navigation.GroundCount
+                    && (unit.GroundSegment ? unit.TransitNode == nextNode : !Nav(unit).IsConnected(unit.Node,nextNode));
+                if (connector)
+                {
+                    if (!MoveGround(unit,nextNode,ref budget)) break;
+                    unit.Waypoint++; continue;
+                }
                 bool align = unit.Node < Navigation.GroundCount && unit.TransitNode < 0
                     && (unit.X,unit.Z) != Navigation.Center(unit.Node);
                 if (unit.FreeMovement || unit.GroundSegment || align)

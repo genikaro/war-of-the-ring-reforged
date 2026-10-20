@@ -149,3 +149,31 @@ green/red previews, refunds, stop/resume, pause, all stages, deliveries, ownersh
 and exact food/ore conservation. A freshly prepared cache and an upgraded cache
 both pass. Command, Orders and Ability smoke checks also pass. Construction views
 are inspected at 1280x800 and 4K; original-game fidelity remains unverified.
+
+## Build-7: worker corner stalls
+
+The owner reported stalled workers during gathering and ordinary movement.
+Long runs reproduced workers safely rounding the starting ore pile but ending
+in a cell whose center has no open graph edges. Replanning returned no route;
+new Move orders also rejected the disconnected starting cell.
+
+Ground routes now try nearby graph connections from the worker's actual body
+position when the cell-center route fails. Each connection must pass the same
+swept terrain/footprint checks, avoid occupied connector cells, and reach the
+destination's connected region. Workers walk the connector at normal speed;
+impassable walls, body collisions and elevated-route reservations still apply.
+Move acceptance, gathering/building approaches and route retries use this path.
+No importer or collision-mask refresh is required.
+
+In 10,000-tick raw-ore and Mill/Foundry cases, maximum stationary route waits
+fall from 8,884/7,754 ticks to 7/8 ticks. Every worker completes 9–10 raw deliveries
+or 17–18 deliveries after construction. The exact stuck position also accepts
+and completes a new Move order. Synthetic checks cover Move, Attack-move,
+connection to a deck, replay, swept safety and a genuinely impassable wall.
+
+Validation: 624 synthetic / 691 Helm's Deep simulation checks and 29 worker-cache
+checks pass. The Godot gathering smoke now runs 10,300 frames and requires
+repeated deliveries by every worker, bounded route waits and an actual contextual
+Move that all four finish (23 checks). Construction (23), Command (46) and
+Orders (27) smoke checks pass. Resource conservation and body safety hold across
+all four long worker scenarios. Build number is 7; restart to load the fix.

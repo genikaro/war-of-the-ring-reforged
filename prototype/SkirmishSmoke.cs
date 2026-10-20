@@ -9,6 +9,7 @@ public partial class Main
     private int _smokeOreId = -1;
     private readonly Dictionary<int,long> _smokeCargo = [];
     private readonly HashSet<int> _smokeDelivered = [];
+    private readonly Dictionary<int,int> _smokeDeliveries = [],_smokeStillTicks = [],_smokeMaxStillTicks = [];
 
     private void SkirmishSmokeInput()
     {
@@ -17,8 +18,12 @@ public partial class Main
         {
             foreach (var worker in world.Units.Where(u => u.Team == 0))
             {
-                if (_smokeCargo.GetValueOrDefault(worker.Id) > 0 && worker.CargoMilli == 0 && worker.Health > 0) _smokeDelivered.Add(worker.Id);
+                if (_smokeCargo.GetValueOrDefault(worker.Id) > 0 && worker.CargoMilli == 0 && worker.Health > 0)
+                { _smokeDelivered.Add(worker.Id); _smokeDeliveries[worker.Id] = _smokeDeliveries.GetValueOrDefault(worker.Id)+1; }
                 _smokeCargo[worker.Id] = worker.CargoMilli;
+                int still = worker.Goal >= 0 && !worker.Moving ? _smokeStillTicks.GetValueOrDefault(worker.Id)+1 : 0;
+                _smokeStillTicks[worker.Id] = still;
+                _smokeMaxStillTicks[worker.Id] = Math.Max(still,_smokeMaxStillTicks.GetValueOrDefault(worker.Id));
             }
             _skirmishChecks["carried_ore_observed"] = _skirmishChecks.GetValueOrDefault("carried_ore_observed")
                 || world.Units.Any(u => u.Team == 0 && u.CargoMilli > 0 && u.CargoMilli <= 9000);
@@ -80,15 +85,26 @@ public partial class Main
             case 1250:
                 if (_capture != "") _ = CaptureFrame(false);
                 break;
-            case 1400:
+            case 10000:
+                _skirmishChecks["every_worker_keeps_delivering"] = world.Units.Where(u => u.Team == 0).All(u => _smokeDeliveries.GetValueOrDefault(u.Id) >= 8);
+                _skirmishChecks["no_persistent_route_stalls"] = _smokeMaxStillTicks.Values.All(v => v < 200);
+                PushKey(Key.Key1); _focus = PositionOf(50500,50500); UpdateCamera(); break;
+            case 10001:
+                var movePoint = _camera.UnprojectPosition(PositionOf(50500,50500));
+                Click(movePoint,MouseButton.Right); break;
+            case 10003:
+                _skirmishChecks["context_move_after_gathering"] = world.Commands.Any(c => c.Kind == OrderKind.Move && c.Units.Length == 4 && c.Tick > 9900); break;
+            case 10300:
+                _skirmishChecks["every_worker_finishes_context_move"] = world.Units.Where(u => u.Team == 0)
+                    .All(u => u.Goal < 0 && u.Order == OrderKind.Idle && SimWorld.DistanceSquared(u.X,u.Z,50500,50500) < 3500L*3500);
                 _skirmishChecks["every_worker_delivered"] = _smokeDelivered.Count == 4;
                 _skirmishChecks["shared_ore_conserved"] = world.Resources.Values.Sum(r => r.Kind == ResourceKind.Ore ? 4500000-r.RemainingMilli : 0)
                     == world.Economies.Values.Sum(b => b.OreMilli-325000)+world.Units.Sum(u => u.CargoMilli);
                 _skirmishChecks["enemy_economy_inert"] = world.Economies[1].Ore == 325 && world.Economies[1].Food == 115;
-                var report = new { build = BuildInfo.Label,checks = _skirmishChecks,passed = _skirmishChecks.Count == 19 && _skirmishChecks.Values.All(v => v),
+                var report = new { build = BuildInfo.Label,checks = _skirmishChecks,passed = _skirmishChecks.Count == 23 && _skirmishChecks.Values.All(v => v),
                     start_state = new { _startState.Population,_startState.Capacity,_startState.Food,_startState.Ore },
                     workers = world.Units.Where(u => u.Team == 0).Select(u => new { u.Id,u.Order,u.X,u.Z,u.Goal,u.OrderTarget,u.CargoMilli,u.ReturningCargo }),
-                    source = world.Resources.GetValueOrDefault(_smokeOreId),digest = world.StateDigest() };
+                    source = world.Resources.GetValueOrDefault(_smokeOreId),deliveries = _smokeDeliveries,max_still_ticks = _smokeMaxStillTicks,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"skirmish-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("SKIRMISH_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
         }

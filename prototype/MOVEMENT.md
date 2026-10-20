@@ -214,3 +214,27 @@ mixed selections, paused double toggles, full-tick/early-arrival playback, deck
 traversal, mixed-speed squad separation and serialized replay. The Orders smoke
 also checks both UI paths and distinct source clip playback; a 4K capture is
 saved at `converted/prototype/walk-run-4k.png`.
+
+## Build-7: reconnecting from an off-center ground position
+
+Continuous body sweeps can round an obstacle corner even when conservative
+cell-center edges are closed. The skirmish ore-pile footprint reproduced a
+standable cell with no outgoing graph edges; a worker off-center in that cell
+could safely walk out, but graph-only replanning and Move acceptance could not.
+
+`FindPathFromGroundPosition` keeps the ordinary route first. If it fails, a
+bounded neighborhood supplies a collision-checked connector to a standing cell
+in the destination's region. The connector starts at the actual position,
+avoids occupied connector cells and is walked as the first ground leg, including
+when the rest of the route is constrained or elevated. No snapping, obstacle
+removal, body compression changes or additional movement budget is involved.
+
+The Bilbo's Bluffs regression runs 10,000 ticks each for raw ore, resource
+construction followed by gathering, moves around the Citadel and a gathering-to-
+Move redirect. The raw case's longest stationary route wait falls from 8,884
+ticks to 7; the construction case falls from 7,754 to 8. Every worker continues
+delivering. The exact stranded position completes a Move, and synthetic fixtures
+check normal-speed escape, Attack-move, deck transitions, replay and rejection
+of a truly blocked route. Worker sweeps, pair separation and resource conservation
+are checked throughout the cached runs. Run the bounded suite with
+`dotnet run --project tests/simulation -- --worker-cache converted/skirmish`.

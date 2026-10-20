@@ -4,6 +4,11 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
+**build-7:** workers recover from movement stalls at building/resource corners.
+Gathering, return trips and Move orders reconnect from the actual body position
+when the cell-center graph cannot find a route. Collision checks still apply.
+Restart the sandbox to load the fix; the existing asset cache works unchanged.
+
 **build-6:** workers can build a Mill on a food well or a Foundry on an ore pile.
 Select workers, choose the building icon, then click its resource site. A green/red
 preview shows placement validity. Workers approach and build together; Stop pauses
@@ -244,6 +249,7 @@ a normal viewport capture with `-CapturePath`.
 ```powershell
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --cache converted/prototype
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --worker-cache converted/skirmish
 ./prototype/run.ps1 -Smoke
 ./prototype/run.ps1 -MotionSmoke
 ./prototype/run.ps1 -CombatSmoke
@@ -257,8 +263,9 @@ a normal viewport capture with `-CapturePath`.
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --movement-benchmark converted/prototype/movement-after.json
 ```
 
-The simulation runner has no Godot or test-package dependency. Build-6 passes
-613 synthetic checks and 680 checks with the Helm's Deep cache. These cover
+The simulation runner has no Godot or test-package dependency. Build-7 passes
+624 synthetic checks and 691 checks with the Helm's Deep cache. The separate
+worker-cache suite passes 29 checks on Bilbo's Bluffs. These cover
 blocked routes, unreachable areas, adjacent-cell paths, deterministic ties,
 terrain interpolation, repeatable command playback, movement, combat,
 ownership and non-overlapping units, stationary-blocker detours, a six-unit
