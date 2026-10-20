@@ -23,7 +23,7 @@ public sealed partial class SimWorld
         if (limit == 0) return true;
         return Units.Where(u => u.Health > 0 && u.Target == target.Id
             && (HoldsPosition(u) || RoomToFight(u))
-            && MeleeReach(u.Node,u.X,u.Y,u.Z,target,u.Definition.ReachMm)).OrderBy(u => u.Id).Take(limit).Any(u => u.Id == unit.Id);
+            && MeleeReach(u,u.Node,u.X,u.Y,u.Z,target)).OrderBy(u => u.Id).Take(limit).Any(u => u.Id == unit.Id);
     }
 
     private void Strike(SimUnit unit,SimUnit target)
@@ -51,7 +51,7 @@ public sealed partial class SimWorld
         while (unit.NextHit < attack.Hits.Length && attack.Hits[unit.NextHit].Tick <= elapsed)
         {
             int index = unit.NextHit++;
-            if (target.Health <= 0 || unit.Target != target.Id || !MeleeReach(unit.Node,unit.X,unit.Y,unit.Z,target,unit.Definition.ReachMm)) continue;
+            if (target.Health <= 0 || unit.Target != target.Id || !MeleeReach(unit,unit.Node,unit.X,unit.Y,unit.Z,target)) continue;
             var pair = Rules.Pair(unit.Definition.Id,target.Definition.Id);
             int typeScale = Rules.TypeScale(unit.Definition.DamageType,target.Definition.DamageType);
             long typedDps = (long)unit.Definition.DpsMilli*typeScale/1_000_000;

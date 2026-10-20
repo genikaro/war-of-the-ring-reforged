@@ -3,6 +3,10 @@
 Byte layouts live in the module docstrings of `lqr.py` and `lmd.py`; this file
 records how they were verified and what is still open.
 
+[Unit collision sizes](NOTES-unit-collision.md) records the Main/Selection/Visual
+box layers, model scale, sampled unit sizes and the prototype's remaining shared
+body-radius approximation.
+
 ## Tools
 
 | Script | Purpose |

@@ -8,7 +8,7 @@ public sealed record MeleeHit(int Tick,int Scale);
 public sealed record MeleeAttack(string Clip,int Weight,int DurationTicks,MeleeHit[] Hits);
 public sealed record UnitDefinition(int Id,string Name,string DisplayName,int MaxHealth,int ArmorMilli,int DamageType,
     string DamageTypeName,int MaxAttackers,int DpsMilli,int ReachMm,string ReadyClip,MeleeAttack[] Attacks,int StartingHealthPercent = 100,
-    int WalkScale = 500_000,string WalkClip = "",string RunClip = "")
+    int WalkScale = 500_000,string WalkClip = "",string RunClip = "",int BodyRadiusMm = 350,int BodyHeightMm = 700,int SelectionRadiusMm = 650,int AttackGapMm = 0)
 {
     // A stable probe profile preserves the existing navigation/spacing fixtures.
     // Actual demo units always receive a definition from the hashed rules cache.
@@ -20,6 +20,8 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
         if (MaxHealth <= 0 || MaxHealth > 1_000_000 || ArmorMilli < 0 || DpsMilli < 0 || DpsMilli > 1_000_000
             || ReachMm is < 700 or > 10000 || MaxAttackers < 0 || StartingHealthPercent is <= 0 or > 100
             || WalkScale is <= 0 or > 1_000_000
+            || BodyRadiusMm is < 100 or > 5000 || BodyHeightMm is < 100 or > 15000 || SelectionRadiusMm is < 100 or > 6000
+            || AttackGapMm is < 0 or > 10000
             || Attacks == null || Attacks.Length == 0 || string.IsNullOrEmpty(Name)) throw new ArgumentException("Invalid unit definition");
         foreach (var attack in Attacks)
             if (attack.Weight <= 0 || attack.DurationTicks is <= 0 or > 1200 || attack.Hits == null || attack.Hits.Length == 0
@@ -43,7 +45,7 @@ public sealed class CombatRules
     public static CombatRules Parse(string json)
     {
         using var document = JsonDocument.Parse(json); var root = document.RootElement;
-        if (root.GetProperty("FormatVersion").GetInt32() != 2 || root.GetProperty("TicksPerSecond").GetInt32() != SimWorld.TicksPerSecond)
+        if (root.GetProperty("FormatVersion").GetInt32() != 3 || root.GetProperty("TicksPerSecond").GetInt32() != SimWorld.TicksPerSecond)
             throw new ArgumentException("Unsupported combat rules");
         var rules = new CombatRules { Hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json))) };
         foreach (var item in root.GetProperty("TypeMatchups").EnumerateArray())

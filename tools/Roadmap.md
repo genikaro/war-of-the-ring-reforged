@@ -1,6 +1,6 @@
 # War of the Ring Reforged Roadmap
 
-Updated Oct 19, 2026 · @Evgenii
+Updated Oct 20, 2026 · @Evgenii
 
 Phases 1 and 2 implementation are complete. All 54 maps decode through EOF, including 752 decals. Helm's Deep and a decal-heavy Birth of the Uruk-Hai scene render and validate. An initial reference review has corrected prototype rendering bugs; controlled original-game fidelity validation remains open. The user has accepted Phase 3's movement and combat-spacing baseline. The command panel, explicit orders and first imported melee slice are implemented in the Godot 4 C# sandbox (engine chosen Oct 19). The next milestone is a bounded original-game command/combat comparison and correction pass, followed by one ranged unit with projectile resolution. Original armor/range formulas remain unresolved.
 
@@ -30,7 +30,7 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
-Latest checks: 131 Python tests, eight JavaScript tests (unchanged), and 344 total
+Latest checks: 136 Python tests, eight JavaScript tests (unchanged), and 397 total
 synthetic/cache C# checks pass. Cache checks include imported combat definitions,
 four repeated duels and runtime masks matching the initial
 snapshot, all ten building centers being
@@ -38,7 +38,8 @@ blocked and all six friendly units traversing the four Helm's Deep surfaces
 without overlap, plus opposing six-unit squads swapping between the clearing
 and each walkway, plus safe startup for all 36 demo units. The cache contains
 1,342 separate surface nodes and 48 terrain entrances, preserving elevation
-and 350 mm body support along mesh edges. A 54-map audit
+and base 350 mm body support along mesh edges, with additional per-type
+clearance/headroom/object masks for the three demo bodies. A 54-map audit
 (`tools/verify_walker_masks.py`) matches the painted walker bits to the
 original walker region graphs.
 Eight-way weighted routes now use straight diagonal motion at the same speed as
@@ -75,7 +76,7 @@ with height, supports a saved 75–150% size setting and fits 4K/ultrawide displ
 Editable groups 1–0 support Ctrl assignment, Shift additions, recall, lead-unit
 centering and death pruning. Shift-click queues formation waypoints; queued
 orders are recorded and replayed. Twenty-seven actual Godot input checks cover
-these additions, alongside 26 command checks. Explicit intent survives temporary
+these additions, alongside 34 command checks. Explicit intent survives temporary
 combat routes; Attack-move resumes after combat, force moves ignore retaliation,
 and stationary orders never chase. Names, health, tooltips, active orders and
 disabled commands are visible. Twenty-two actual Godot input checks cover all
@@ -95,7 +96,26 @@ set walking speeds; default running stays at 3 m/s. The visible Hold label is
 now **Hold Position**. The [command behavior matrix](../references/original-game/COMMAND-BEHAVIOR-MATRIX.md)
 records evidence and intentional choices; original timing comparisons and
 Q/W/E/R abilities remain open. The 4K Walk UI was inspected; 27 Orders checks,
-26 Command checks and the unchanged 206-hit melee smoke pass.
+34 Command checks pass. The 206-hit historical melee result predates the larger bodies.
+
+The October 20 collision correction imports scaled Main boxes for the demo:
+Aragorn 561 mm, Elven Knight 927 mm and Uruk-hai 693 mm radii. Body contact,
+formations, passage clearance, swept reservations and melee spacing now use
+these sizes; selection rings show collision radius. Rules format 3 and
+`--rules-only` rebuild body-specific clearance over the existing map graph.
+Combined 18-unit orders reproduced jitter/stalling from cell-center fallback
+and sealed arrival slots. Large units now retain wide-ground avoidance and
+exchange blocked/crossing formation slots. Enemy clicks inspect live combat
+stats with a red ring and disabled controls, preserving friendly groups.
+See [collision provenance and limits](NOTES-unit-collision.md).
+
+The army-engagement correction distributes overflow attackers, shares nearby
+active threats and replans stalled steering. Three units plan per tick using
+bounded goal-set searches; region caches warm while loading. A new 18-versus-18
+fixture requires broad participation and replay stability. The measured fixture
+uses about 52% less simulation CPU time than the reported-bug baseline; actual
+Godot reproduction checks all-ally input, both armies, body safety and step times.
+See [engagement measurements](../prototype/ENGAGEMENT.md).
 
 The three types now use imported health (485/350/240), armor, melee DPS,
 classification and attacker caps. Original clip durations and `.lmd` hit events
@@ -104,7 +124,7 @@ multi-hit damage preserves cycle DPS. Rendering seeks from simulation state;
 equipment visibility and three converted impact sounds are connected. The
 [combat notes](../prototype/COMBAT.md) record provenance and explicit armor,
 range and event-scale approximations. Four source-unit duels replay identically.
-The melee Godot check records 200 correctly timed hits over 420 ticks with all
+The current melee Godot check records correctly timed hits over 420 ticks with all
 three squads fighting safely; a 4K capture was inspected. Original-game formula
 and duel comparisons remain open.
 
@@ -391,7 +411,7 @@ The engine is chosen. Remaining choices can be made as their implementation appr
 
 **Gate:** a skirmish sandbox on one map where you select units, order them to move and attack, and they path, animate and fight with placeholder rules.
 
-**Status (Oct 19): playable baseline accepted; commands and first imported melee implemented.** `prototype/run.ps1` launches 36 animated units in six squads with original console art, a scalable four-button bottom row (Attack, Hold, Guard, Patrol), target-dependent Attack/A, hidden Move/Stop controls, editable groups and queued waypoints. The integer 20 Hz core passes 321 synthetic/cache checks; 26 command checks plus existing group/debug and combat/motion/picking checks cover actual Godot dispatch. The user accepts current movement and spacing. Imported melee definitions, type ratings, kill counts, single-unit stats, animation-timed damage, equipment visibility and impact sounds are connected. Original formula validation, advanced navigation, complete presentation and importer packaging remain open. See `prototype/README.md` and `prototype/COMBAT.md`.
+**Status (Oct 20): per-type bodies and enemy inspection implemented.** `prototype/run.ps1` launches 36 animated units in six squads with original console art, a scalable four-button bottom row (Attack, Hold, Guard, Patrol), target-dependent Attack/A, hidden Move/Stop controls, editable groups and queued waypoints. The integer 20 Hz core passes 397 synthetic/cache checks; 34 command checks plus existing group/debug and combat/motion/picking checks cover actual Godot dispatch. Source body sizes replace the shared radius, rings show collision size, and an 18-unit jitter/stalling regression is corrected. Imported melee definitions, type ratings, kill counts, single-unit stats, animation-timed damage, equipment visibility and impact sounds are connected. Original formula validation, advanced navigation, complete presentation and importer packaging remain open. See `prototype/README.md` and `prototype/COMBAT.md`.
 
 - [x] Settle the engine: Godot 4 with C#; current local cache is generated from the owner's install, with no assets in source control. Production asset-delivery packaging remains open.
 - [ ] Package the first-run importer: `prepare_prototype.py --install` now extracts/verifies source archives and writes a hashed runtime cache; in-game install selection and production packaging remain.

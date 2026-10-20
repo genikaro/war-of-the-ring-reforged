@@ -1,0 +1,80 @@
+# Crowded army engagement and performance — October 20, 2026
+
+The owner reported that only three or four units fought while the others waited,
+on both teams, and that performance worsened after importing collision sizes.
+The existing checks required every squad to fight; they did not require broad
+participation within each squad. A new 18-versus-18 fixture reproduced the gap.
+
+## Behavior correction
+
+Imported units use their physical pair radii for approach positions and strikes.
+The legacy probe's additional comfort margins could immobilize units in a packed
+formation even when their collision bodies fitted. Target allocation estimates
+available ring capacity, accounts for already assigned attackers, and prefers
+nearby opponents with room. Waiting or repeatedly blocked attackers may choose
+another reachable hostile target. Allies within 6 m share active threats so rear
+units can join a nearby fight. These are prototype policies, not recovered AI.
+
+Attack retains its original `OrderTarget` while `Target` can be an overflow
+opponent. Queued orders advance when the primary target dies, including while
+an overflow opponent is still alive. Force Attack keeps its explicit target;
+Hold never pursues and Guard retains its leashes. Active swings are not retargeted.
+Source attacker caps, timed damage and full body separation remain enforced.
+
+Approachers that repeatedly steer around bodies replan their route instead of
+circling forever. A full isolated target can still have waiting attackers; the
+new army check requires nearly all units to participate when other opponents
+are available, rather than requiring every unit to hit one victim simultaneously.
+
+## Performance correction
+
+Each approach uses one bounded search for a set of acceptable ring nodes instead
+of separate full paths to many candidates. Each search expands at most 2,048
+nodes. Three large-body units may revise plans per fixed tick; strikes and
+existing movement continue at 20 Hz. Failed, settled waiting plans retry less
+often. Ground sweeps inspect indexed obstacle-edge neighbors rather than all
+pairs of crossed cells. Legacy 350 mm probe fixtures retain their earlier policies.
+
+Body-region caches now warm during scene loading. The first real-map attack had
+triggered an approximately 0.86-second full-map connectivity pass during play;
+moving that work before interaction removes that particular command-time hitch.
+
+Local Debug benchmark: 800 simulation ticks, 18 large infantry per side, high HP
+to keep the front intact, one initial friendly focus-attack command, no renderer.
+Both versions use the same fixture. Timings are one local measurement, not FPS.
+
+| Measurement | Before | Corrected |
+|---|---:|---:|
+| Distinct friendly / enemy units landing hits | 2 / 15 | 18 / 17 |
+| Average friendly / enemy fighters during ticks 400–799 | 1 / 11 | 16.70 / 16.73 |
+| Total simulation CPU time | 3,572 ms | 1,729 ms |
+| 95th-percentile step | 11.67 ms | 8.18 ms |
+| Slowest step, including cold setup | 150.22 ms | 60.03 ms |
+
+This fixture uses about 52% less simulation CPU time while many more units fight.
+The rendered Helm's Deep reproduction records separate step timings after
+loading-time warmup. Generated reports and captures stay in ignored `converted/`.
+
+## Verification
+
+The deterministic fixture requires at least 16 of 18 units on each side to land
+hits, an average of at least 12 fighters per side during the second half,
+non-overlapping bodies, and identical replay state. Force Attack, Hold and queued
+primary-target death have focused checks. Existing narrow-route, traffic,
+equipment, timing, order/input and 80 FPS interpolation checks remain enabled.
+
+The actual Godot `-EngagementSmoke` drag-selects all 18 allies, right-clicks an
+enemy, runs 800 ticks and checks at least 14 distinct hitters per side and body
+separation. Casualties and physical access can keep every unit from landing a hit
+in a particular source-stat encounter. The report includes peak fighters and
+simulation step timings; it does not assert a machine-dependent timing threshold.
+The inspected 4K run recorded 18 friendly and 17 enemy hitters, peaks of 17
+fighters per side, 1.40 ms average / 6.51 ms 95th-percentile / 29.72 ms maximum
+simulation steps, plus roughly 1 second of region-cache setup during loading.
+
+```powershell
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --cache converted/prototype
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --engagement-benchmark converted/prototype/engagement-benchmark-after.json
+./prototype/run.ps1 -EngagementSmoke
+./prototype/run.ps1 -EngagementSmoke -Resolution 3840x2160 -CapturePath converted/prototype/engagement-fixed-4k.png
+```

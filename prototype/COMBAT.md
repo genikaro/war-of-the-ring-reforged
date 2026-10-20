@@ -2,7 +2,7 @@
 
 The existing 36-unit demo uses source definitions for Aragorn, Elven Knight and
 Uruk-Hai. Original damage-formula fidelity has not been established. Movement
-and combat spacing retain the accepted baseline.
+and combat spacing now use imported per-type bodies.
 
 ## Definitions and provenance
 
@@ -38,7 +38,7 @@ Equal types and attacks against Hero use a documented neutral 100% policy.
 | Blunt | 125% | 75% | 100% | 100% |
 | Hero | 100% | 100% | 100% | 100% |
 
-Rules format 2 includes all 16 integer `TypeMatchups` and their provenance in
+Rules format 3 includes per-type bodies, all 16 integer `TypeMatchups` and their provenance in
 the hashed cache. The parser rejects incomplete/duplicate tables; unclassified
 probe types remain neutral. Type scaling precedes explicit pair scaling and
 armor. Pair invincibility overrides damage. Stacking with explicit pair rules
@@ -82,6 +82,13 @@ orders preserve the current swing. Dead victims cannot finish pending swings.
 The attacker cap admits nearby eligible units in stable ID order; waiting units
 can take released slots.
 
+Imported-body armies now redistribute overflow attackers among reachable hostile
+targets and replan after repeated avoidance. Contact clearance permits a legal
+strike without the old probe's extra comfort margin. Three units may plan per tick;
+current movement and timed hits continue every tick. Force Attack, stationary
+orders and queued primary-target completion have separate regressions. See
+[the engagement correction and performance measurements](ENGAGEMENT.md).
+
 The damage policy is explicitly approximate:
 
 ```
@@ -111,9 +118,13 @@ current Good console uses its matching gold-framed variants.
 **Unverified interpretations:** subtracting armor from DPS and normalizing event
 scales are implementation policies, not recovered formulas. Controlled
 original-game duels or executable analysis remain required. Raw weapon ranges
-are 1.0 for Aragorn and 0.5 for the others; body/range origin semantics are
-unknown. Effective center reach therefore stays at the accepted 2,000 mm with
-wall/layer checks. Default running stays at 3 m/s; F2 walking uses the
+are 1.0 for Aragorn and 0.5 for the others; original range origin semantics are
+unknown. Effective center reach is `max(2000 mm, both body radii + source range)`
+with wall/layer checks, so larger bodies can fight without overlapping.
+The gap interpretation is an adapter policy. Radius/height are 561/2095 mm for
+Aragorn, 927/2534 mm for Elven Knights and 693/2197 mm for Uruk-hai, traced from
+scaled Main collision boxes. [Collision notes](../tools/NOTES-unit-collision.md)
+describe clearance profiles and limits. Default running stays at 3 m/s; F2 walking uses the
 [source animation ratio](MOVEMENT.md#walkrun-control--october-20-2026). Awareness, spacing and opponent AI
 remain prototype policies.
 
@@ -155,7 +166,7 @@ calls for a repeatable swordsman/worker reference fixture and matching continuou
 recordings or health traces, followed by the current three demo types. Hold,
 retaliation, retreat, interruption and regeneration must be isolated. Cross-check
 the swordsman's source records without adding it to the demo by default. Correct
-only measured rules; the current armor/event normalization and 2 m reach stay
+only measured rules; the current armor/event normalization and body-based reach stay
 explicit approximations until evidence resolves them. Projectile work then needs
 Uruk-hai launch/flight/impact and interruption references.
 

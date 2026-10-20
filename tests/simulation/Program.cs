@@ -1,6 +1,18 @@
 using Reforged.Simulation;
 using System.Text.Json;
 
+if (args.Contains("--crowd-motion-benchmark"))
+{
+    Console.WriteLine(JsonSerializer.Serialize(new[] {CrowdMotionChecks.Measure(OrderKind.Move),CrowdMotionChecks.Measure(OrderKind.AttackMove)}));
+    return;
+}
+
+if (Array.IndexOf(args,"--engagement-benchmark") is int engagement && engagement >= 0)
+{
+    Console.WriteLine(JsonSerializer.Serialize(EngagementChecks.Measure(engagement+1 < args.Length ? args[engagement+1] : null)));
+    return;
+}
+
 if (Array.IndexOf(args,"--movement-benchmark") is int benchmark && benchmark >= 0)
 {
     string? output = benchmark+1 < args.Length ? args[benchmark+1] : null;
@@ -22,6 +34,9 @@ OrderChecks.Run(Check);
 ExtendedOrderChecks.Run(Check);
 MeleeChecks.Run(Check);
 MovementModeChecks.Run(Check);
+BodyCollisionChecks.Run(Check);
+EngagementChecks.Run(Check);
+CrowdMotionChecks.Run(Check);
 
 var allowed = Enumerable.Repeat(true, 80).ToArray();
 for (int z = 0; z < 7; z++) allowed[z * 10 + 4] = false;
@@ -297,6 +312,7 @@ if (cacheArg >= 0)
         Convert.FromBase64String(nav.GetProperty("allowed_base64").GetString()!).Select(b => b != 0)),
         "runtime obstacle layers reproduce the static ground snapshot");
     var realWorld = new SimWorld(realNav);
+    BodyCollisionChecks.Cached(Check,realNav,CombatRules.Parse(File.ReadAllText(Path.Combine(cache,"combat/rules.json"))),nav,manifest);
     var mapScene = JsonDocument.Parse(File.ReadAllText(Path.Combine(cache, "map", "scene.json"))).RootElement;
     var buildings = mapScene.GetProperty("placements").GetProperty("objects").EnumerateArray()
         .Where(o => o.GetProperty("database_table").GetString() == "Buildings").ToArray();

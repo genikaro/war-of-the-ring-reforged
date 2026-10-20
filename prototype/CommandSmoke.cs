@@ -9,6 +9,7 @@ public partial class Main
     private int _commandsBeforeCancel;
     private int _commandGoal;
     private int _commandPauseTick;
+    private int _inspectedEnemy;
 
     private void PushKey(Key key) => GetViewport().PushInput(new InputEventKey { Keycode = key,Pressed = true },true);
 
@@ -156,8 +157,36 @@ public partial class Main
                 _commandChecks["group_restores_portrait_roster"] = _selected.Count == 5 && !_commands.SingleUnitDetailsVisible && _commands.CommandsAvailable;
                 break;
             case 150:
+                var visibleEnemy = world.Units.First(u => u.Team == 1 && u.Health > 0
+                    && UnitAt(_camera.UnprojectPosition(UnitPosition(u)+Vector3.Up))?.Id == u.Id);
+                _inspectedEnemy = visibleEnemy.Id; _commandsBeforeCancel = world.Commands.Count;
+                Click(_camera.UnprojectPosition(UnitPosition(visibleEnemy)+Vector3.Up)); break;
+            case 153:
+                _commandChecks["enemy_click_inspects_stats"] = _selected.SetEquals([_inspectedEnemy]) && _commands.SingleUnitDetailsVisible
+                    && _commands.DisplayedName == UnitName(_inspectedEnemy) && _commands.DisplayedHealth == $"{world.Units[_inspectedEnemy].Health}/{world.Units[_inspectedEnemy].MaxHealth}";
+                _commandChecks["enemy_selection_disables_controls"] = !_commands.CommandsAvailable && _commands.WalkRunButton.Disabled;
+                break;
+            case 155: PushKey(Key.A); PushKey(Key.M); PushKey(Key.H); PushKey(Key.F2); break;
+            case 158: _commandChecks["enemy_hotkeys_cannot_command"] = world.Commands.Count == _commandsBeforeCancel && _orders.Pending == null; break;
+            case 160: Click(CommandGoalPoint(),MouseButton.Right); break;
+            case 163: _commandChecks["enemy_context_cannot_command"] = world.Commands.Count == _commandsBeforeCancel; break;
+            case 165: GroupKey(Key.Key1,ctrl:true); break;
+            case 168: _commandChecks["enemy_inspection_preserves_groups"] = _controlGroups.Recall(0,LivingFriendly).Length == 5; break;
+            case 170: if (_capture != "") _ = CaptureFrame(false); break;
+            case 173: PushKey(Key.Key1); break;
+            case 176: _commandChecks["friendly_group_restores_control"] = _selected.Count == 5 && _selected.All(LivingFriendly) && _commands.CommandsAvailable; break;
+            case 178:
+                var point = _camera.UnprojectPosition(UnitPosition(world.Units[_inspectedEnemy])+Vector3.Up);
+                foreach (bool pressed in new[] {true,false}) GetViewport().PushInput(new InputEventMouseButton {
+                    ButtonIndex = MouseButton.Left,Pressed = pressed,Position = point,GlobalPosition = point,ShiftPressed = true },true);
+                break;
+            case 180:
+                _commandChecks["enemy_shiftclick_keeps_inspection_exclusive"] = _selected.SetEquals([_inspectedEnemy]) && !_commands.CommandsAvailable;
+                world.Units[_inspectedEnemy].Health = 0; break;
+            case 183: _commandChecks["dead_enemy_selection_pruned"] = _selected.Count == 0 && !_commands.CommandsAvailable; break;
+            case 190:
                 var report = new { ticks = world.Tick, checks = _commandChecks, commands = world.Commands,
-                    final_digest = world.StateDigest(), passed = _commandChecks.Count == 26 && _commandChecks.Values.All(v => v) };
+                    final_digest = world.StateDigest(), passed = _commandChecks.Count == 34 && _commandChecks.Values.All(v => v) };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"command-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("COMMAND_SMOKE "+JsonSerializer.Serialize(report)); GetTree().Quit(report.passed ? 0 : 1);

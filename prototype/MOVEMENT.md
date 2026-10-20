@@ -5,7 +5,7 @@ ahead six grid edges only after a bend. Integer interpolation follows that
 heading at 3 m/s by default. A replacement order starts from the current physical position,
 and cancellation stops there instead of walking back to an old waypoint.
 
-Each tick checks the unit's swept 350 mm body against terrain, other bodies,
+Each tick checks the unit's swept body against terrain, other bodies,
 motion already recorded during that tick and constrained movement reservations.
 Distant waypoints do not own the empty space between them. Local avoidance tries
 directions relative to the requested heading, with 450 mm lookahead. After twenty
@@ -61,17 +61,19 @@ gradual turning and rendering at 80 FPS over the 20 Hz simulation.
 
 ## Combat positioning
 
-Attackers reserve reachable navigation nodes around a target within the existing
-2 m melee range. They prefer the nearest available attack position and retain it
+Attackers reserve reachable navigation nodes around a target within the effective
+body-based melee range described in [combat notes](COMBAT.md). They prefer the nearest available attack position and retain it
 while it stays useful. When the ring is occupied, additional attackers reserve
 holding positions up to 4.5 m away and wait for a slot. Slot reservations account
 for other allies' planned positions as well as actual bodies, including allies
 attacking a different nearby target.
 
-Ground approaches use the free-ground follower where supported. Approaching
-allies keep 1 m apart where possible; an already crowded unit can move away to
-increase separation. Settled fighters require 1.1 m of allied space, stop their
-route and face their opponent. The hard 700 mm body separation remains in force.
+Ground approaches use the free-ground follower where supported. Imported bodies
+use the sum of both radii for approach slots, contact and permission to strike.
+Adding a comfort margin trapped units inside their starting formations and
+prevented otherwise legal attacks. Settled fighters stop and face their opponent.
+The original 350 mm probe fixtures retain
+their historical 700 mm / 1 m / 1.1 m spacing.
 Plans are reconsidered after six ticks if the target moves out of reach, a
 position becomes blocked or a holding unit can take an attack position. Positions
 are released when a move order replaces combat. Fighters can acquire a nearby
@@ -102,8 +104,71 @@ their validated graph links; cutting across unverified deck geometry is unsafe.
 
 Clicks still select integer navigation cells. The graph search remains eight-way;
 the free-ground route follower and local steering produce the additional angles.
-The 350 mm clearance, conservative corner policy and original movement/combat
-constants have not been reverse-engineered further in this pass.
+The conservative corner policy and original movement/combat response formulas
+remain unverified.
+
+## Per-type bodies and crowd correction — October 20, 2026
+
+The three demo types now use scaled Main collision boxes: radius/height in mm
+are Aragorn 561/2095, Elven Knight 927/2534 and Uruk-hai 693/2197. Full pair radii
+and vertical intervals apply to spawn safety, swept contact and reservations.
+Each type routes through its own cached terrain/object/mesh clearance and
+headroom profile. Formations allocate slots using their largest body. The base
+mesh graph still starts from 350 mm support; larger profiles only remove nodes
+and links, so some routes remain conservatively excluded. See
+[the source interpretation](../tools/NOTES-unit-collision.md).
+
+An 18-unit formation reproduced jitter and stalled arrivals after the size
+change. Large units on wide ground now keep continuous avoidance when crowded,
+instead of retreating toward a cell center that no longer fits. Blocked early
+arrivals can advance into unfinished slots, and crossing units exchange slots
+when both benefit, within the same Move or Attack-move order. Narrow passages retain the
+constrained solver. Tests require combined and redirected 18-unit formations to
+arrive, stay still afterward, and never overlap during tick interpolation.
+Another fixture requires excess melee attackers to settle around a stationary
+target rather than shuffle indefinitely. Selection rings now show body radius.
+
+The subsequent [engagement correction](ENGAGEMENT.md) covers both armies fighting,
+crowded-target redistribution, stalled-approach replanning and performance. Three
+large-body units may revise approaches per fixed tick; current routes and strikes
+continue every tick. Initial body-region caches are built while loading.
+
+## Crowded arrival and attack-move cohesion — October 20, 2026
+
+Large bodies marching without a combat target retain their chosen passing side
+for eight ticks (0.4 seconds). Local steering uses forward or lateral steps;
+when those are blocked, it waits or replans instead of alternating backward
+steps. Replans skip the starting cell center, avoiding a short reverse correction.
+Attack-move shares Move's formation-slot exchanges while travelling. Active
+melee keeps its separate approach policy so attackers can surround opponents.
+
+Attack-move pursuit uses an 8 m encounter radius, a 3 m lateral corridor and a
+2 m rear allowance. Wide-ground orders keep the original start-to-destination
+direction across encounters; constrained routes use a local path direction.
+Targets leaving this area are released for four seconds, unless attacking in
+melee reach. Units regroup within 2.5 m of the encounter origin and resume the
+destination. Completion clears retaliation-driven acquisition. Explicit Attack
+still pursues its target. These bounds are prototype policy, not recovered AI.
+
+Visual facing uses net movement across the entire fixed tick, filters lateral
+changes, ignores corrections below 20% of a stride, and retains its heading
+inside a 10-degree deadband. New orders reset that filter; strikes face the target.
+This affects presentation only, retaining deterministic integer movement.
+
+The 18-unit open-ground regression now finishes both Move and enemy-free
+Attack-move in 218 ticks, with identical trajectories, no overlap and no motion
+after settling. Abrupt net direction changes drop from 163 (Move) / 1,439
+(Attack-move) to 28 each in the same 900-tick fixture. Previously only 13 of 18
+Attack-move units had arrived. A second fixture sends enemies fleeing toward
+both flanks and requires the whole group to resume its destination.
+
+`./prototype/run.ps1 -FormationSmoke` runs at 80 rendering frames per simulated
+second. It drag-selects all 18 allies, dispatches a common-point Move and a
+subsequent contextual Attack-move near stationary enemies, and requires both
+arrivals, bounded group width and body separation. It runs 2,400 simulation
+ticks to allow source-stat combat to finish; its report includes turn changes,
+participation and step timing. The inspected real-map run retained all 18 allies
+and a maximum 10.617 m group width.
 
 ## Walk/run control — October 20, 2026
 

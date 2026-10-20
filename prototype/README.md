@@ -6,7 +6,7 @@ fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
 Squads now traverse layered walkable geometry with terrain entrances and
 congestion replanning. Static building/object footprints now block movement.
-Walkway edges now require support for the full 350 mm unit radius.
+Walkway edges now require support for each type's full collision radius.
 Placed obstacles can be removed and restored while units replan their routes.
 Painted walker bits match the original walker region graphs on all 54 maps.
 Narrow walkways keep off-center nodes, and squads clear longer gridlocks.
@@ -19,8 +19,8 @@ units to formation slots by travel cost. The six-unit benchmark finishes in
 The remaining Phase 3 work and acceptance criteria are in
 [the local roadmap](../tools/Roadmap.md).
 
-The user has accepted movement and combat spacing for this prototype. Further
-polish is deferred. The original console artwork, scalable HUD, control groups,
+The accepted movement baseline now includes per-type body sizes and a correction
+for large formations getting stuck behind early arrivals. The original console artwork, scalable HUD, control groups,
 queued waypoints and explicit orders are implemented. The bottom action row is
 Attack, Hold, Guard, Patrol. Attack/A resolves by target: enemy pursuit,
 neutral/friendly force attack, or ground attack-move. Move and Stop work without
@@ -33,6 +33,16 @@ favorable direction, 75% in reverse, and 100% for Hero attacks. Equal types
 and Hero targets are neutral. Single selection shows the original type icon,
 Attack, Armor, Victories and live health; hover the icon for its matchups.
 Group selection retains the portrait roster. Enemy kills update Victories.
+
+Click an enemy to inspect the same stats with a red ring and health bar.
+Commands disable while inspecting it; drag selection remains friendly-only.
+Selection rings match collision size: Aragorn **0.561 m**, Elven Knight
+**0.927 m**, Uruk-hai **0.693 m** radius, imported from scaled Main collision
+boxes. Body contact, formations, melee spacing and route clearance use these
+sizes. Large combined formations retain continuous movement and exchange
+blocked arrival slots. See [collision details](../tools/NOTES-unit-collision.md).
+Refresh an existing cache with `python tools/prepare_prototype.py --rules-only`;
+this also rebuilds body-specific navigation profiles for rules format 3.
 
 **F2** or the original run icon beside the minimap switches the selection
 between walking and running. Mixed selections switch to walking together;
@@ -50,7 +60,8 @@ The map starts with all six squads in view. The Menu has Squad, Fortress and Map
 camera buttons; their F1/F2/F3 shortcuts are removed. Runtime textures have mipmaps and
 anisotropic filtering, painted lake colours/opacity render correctly, and the
 spawned teams use the original blue/red colours. Selected units have hollow
-gold rings. The [reference review](../references/original-game/PROTOTYPE-REVIEW.md)
+gold rings for friendlies and red rings for inspected enemies, sized to the
+collision body. The [reference review](../references/original-game/PROTOTYPE-REVIEW.md)
 records before/after captures, fixes and remaining fidelity gaps. Lighting and
 selection art remain preview approximations.
 
@@ -83,7 +94,7 @@ python tools/prepare_prototype.py --demo-only
 To refresh imported combat rules, equipment bindings and impact sounds in an
 existing cache, run `python tools/prepare_prototype.py --rules-only`.
 Existing caches also need `python tools/prepare_prototype.py --ui-only` for the
-new type icons. Rules format 2 requires regenerating older combat caches.
+new type icons. Rules format 3 requires refreshing older combat/clearance caches.
 
 For another owner's install, provide its folder (containing `Database/`
 and `Archives/`). Extraction verifies CRCs and paths; the install is read only:
@@ -100,7 +111,8 @@ checked before loading. Never distribute the local cache with the project.
 
 | Input | Action |
 |---|---|
-| Left-click / drag | Select friendly units |
+| Left-click | Select a friendly unit or inspect an enemy |
+| Left-drag | Select friendly units |
 | Shift + selection | Add to selection |
 | 1 / 2 / 3 | Select the corresponding blue squad |
 | Ctrl + 1–9 / 0 | Assign the selection to a control group (1–3 start with the demo squads) |
@@ -160,7 +172,7 @@ a normal viewport capture with `-CapturePath`.
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --movement-benchmark converted/prototype/movement-after.json
 ```
 
-The simulation runner has no Godot or test-package dependency. Its 243 checks cover
+The simulation runner has no Godot or test-package dependency. Its 341 checks cover
 blocked routes, unreachable areas, adjacent-cell paths, deterministic ties,
 terrain interpolation, repeatable command playback, movement, combat,
 ownership and non-overlapping units, stationary-blocker detours, a six-unit
@@ -212,7 +224,7 @@ death, friendly force attacks, and proportional HUD layouts through 4K and
 ultrawide sizes.
 Melee checks cover timed windup/hits/recovery, cancellation, retargeting,
 multi-hit damage, armor/pair policies, fractional health and attacker limits.
-The optional cache check adds 31 checks, including four repeatable source-unit
+The optional cache check adds 56 checks, including four repeatable source-unit
 duels and imported definitions. Navigation checks retain runtime
 layers reproduce the static ground snapshot, all placed building centers are
 blocked, and all six friendly units visit each of Helm's Deep's four walkable
@@ -237,7 +249,8 @@ The melee smoke test adds source stats, exact hit timing, animation seeks,
 equipment changes and impact playback. It writes `melee-smoke-report.json` and
 `melee-hit-trace.json`; source-unit duel evidence is in `melee-duels-report.json`.
 The command smoke test exercises actual panel buttons and hotkeys across all
-three blue squads. Its 26 checks cover the four bottom-row actions, target-dependent
+three blue squads. Its 34 checks cover enemy inspection and command protection,
+the four bottom-row actions, target-dependent
 Attack/A, hidden Move/Stop controls, targeted and immediate orders, disabled
 commands, cancellation, mixed unit types, combat interruption, pause/resume,
 drag release over the panel and removal of dead selected units. Its report is
@@ -315,7 +328,8 @@ Static footprints use the source's oriented-collision layer for Buildings and
 objects with `IsPathingObstacle`: 108 Helm's Deep placements block 1,741 painted
 ground cells. The prototype interprets the records as half-extents, center and
 quaternion, transforms their corners, and applies a conservative swept-cell
-envelope with a 350 mm radius and 1.8 m body. Vertical bounds preserve separate
+envelope. The base graph uses a 350 mm radius and 1.8 m body; per-type profiles
+rebuild each object's masks with the imported radius/height. Vertical bounds preserve separate
 floors. Original executable collision formulas remain unverified; rotated
 boxes may be over-conservative. Unsupported or missing collision boxes fail
 cache generation. The obstacle-free graph and independent per-object node/edge
@@ -342,7 +356,10 @@ gaps. Support must match the local slope and interpolated height within 150 mm,
 so lower floors cannot fill holes in a deck. Where a cell center cannot hold
 the body, a node takes the nearest supported point within 400 mm (135 on Helm's
 Deep). Off-center nodes keep 700 mm from other nodes and from links between
-them, so a parked unit never blocks another link. Mouse orders intersect source terrain and walkable mesh
+them in the base graph. Per-type clearance profiles reject unsupported larger
+bodies, insufficient headroom and narrow links, then body reservations protect
+moving/parked units. This conservatively subsets the base graph rather than
+resampling it for every body. Mouse orders intersect source terrain and walkable mesh
 triangles. Ctrl + Alt + right-click bypasses decks to target terrain beneath them.
 Grid traversal limits terrain queries to cells crossed by the ray; precise
 triangle calculations avoid cracks along shared edges. The input adapter uses
@@ -393,7 +410,8 @@ or in the refuge when they cannot return without crossing a destination.
 Corridors without passing space wait safely. Dense random orders that park
 units inside single-file passages others must cross can still wait. Continuous
 movement through mixed wide/narrow routes and free-angle elevated motion remain
-open. The larger 6-to-14-unit stress suite has not been revalidated for this pass.
+open. Source-sized 18-unit moves and stationary-target melee have additional
+arrival, settled-waiting and interpolated-separation checks.
 
 The three demo types use imported stats and animation-timed melee. Armor math,
 event-scale normalization and effective range remain documented approximations;
@@ -402,9 +420,18 @@ walk/run animation ratio. Original world speeds and stamina remain unverified.
 Enemies acquire nearby reachable targets; attacked units retaliate. Attack orders
 retain nearby combat intent after a target dies; move orders clear it. Melee
 requires a supported route between attacker and target, so walls and disconnected
-floors cannot become attack shortcuts. Settled allies keep 1.1 m spacing, and
-approaching allies keep 1 m where possible, allowing already crowded units to
-separate. The hard body diameter stays 700 mm. This is not the
+floors cannot become attack shortcuts. Imported units use the sum of both radii
+for physical contact, approach slots and permission to strike. Overflow attackers
+can choose other reachable enemies; nearby allies share active threats. Stalled
+steering triggers a new approach rather than circling indefinitely. Bounded goal-set
+searches, staggered planning and loading-time region warmup reduce combat spikes.
+See [engagement checks and measurements](ENGAGEMENT.md).
+Attack-move uses a bounded encounter corridor and regroups after flank pursuits.
+Large marching bodies retain a passing side briefly and exchange arrival slots;
+visual facing filters small corrections and lateral changes. See the
+[crowd movement regression and real-map smoke](MOVEMENT.md#crowded-arrival-and-attack-move-cohesion--october-20-2026).
+The collision cylinders and surface-gap reach are adapter interpretations.
+This is not the
 original combat/economy or skirmish AI. Unit states choose original idle/run/
 ready/attack/death clips; supported equipment visibility and impact sounds
 now have adapters. Complete texture/effect events, voices, particles, water animation, cloth simulation,

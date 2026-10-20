@@ -75,6 +75,7 @@ public partial class Main : Node3D
         public float RingYaw;
         public int AttackSerial = -1;
         public UnitAppearance? Appearance;
+        public HeadingPlayback Heading = new();
     }
 
     public override void _Ready()
@@ -101,6 +102,8 @@ public partial class Main : Node3D
             if (arg == "--command-smoke") _commandSmoke = true;
             if (arg == "--orders-smoke") _ordersSmoke = true;
             if (arg == "--melee-smoke") { _meleeSmoke = _combatSmoke = _smoke = true; }
+            if (arg == "--engagement-smoke") _engagementSmoke = true;
+            if (arg == "--formation-smoke") _formationSmoke=_engagementSmoke=true;
         }
         _hud.Visible = !_hideHud;
         if (_cache == "") _cache = System.IO.Path.GetFullPath(ProjectSettings.GlobalizePath("res://../converted/prototype"));
@@ -112,7 +115,7 @@ public partial class Main : Node3D
             RefreshDebugMenu();
             _status.Text = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             GD.PushError(error.ToString());
-            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _capture != "") GetTree().Quit(1);
+            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _engagementSmoke || _capture != "") GetTree().Quit(1);
         }
     }
 
@@ -153,6 +156,7 @@ public partial class Main : Node3D
             dynamic ? _obstacleLayers.EnumerateArray().Select(o => new NavigationObstacle(o.GetProperty("id").GetInt32(),
                 o.GetProperty("nodes").EnumerateArray().Select(n => n.GetInt32()).ToArray(),
                 o.GetProperty("edges").EnumerateArray().Select(e => new NavigationEdge(e[0].GetInt32(), e[1].GetInt32())).ToArray())).ToArray() : null);
+        navigation.LoadBodyProfiles(nav);
         _world = new SimWorld(navigation,_rules);
         _picker = NavigationPicker.FromCache(navigation, nav);
         var map = LoadGlb(manifest.GetProperty("map").GetString()!); AddChild(map);
@@ -179,8 +183,10 @@ public partial class Main : Node3D
         var (cx, cz) = navigation.Center(manifest.GetProperty("camera_cell").GetInt32());
         _squadFocus = PositionOf(cx, cz);
         var surfaceSpawns = new HashSet<int>();
+        var largestBody = _rules.Units.Values.MaxBy(u => u.BodyRadiusMm)!;
+        var surfaceNavigation = navigation.ForBody(largestBody.BodyRadiusMm,largestBody.BodyHeightMm);
         int surfaceStart = _surfaceSmoke ? Enumerable.Range(navigation.GroundCount, navigation.NodeCount-navigation.GroundCount)
-            .Where(navigation.CanStand).OrderByDescending(n => {
+            .Where(surfaceNavigation.CanStand).OrderByDescending(n => {
                 var (x,z) = navigation.Center(n); return navigation.NodeHeight(n)-navigation.GroundHeight(x,z);
             }).First() : -1;
         var modelTemplates = new Dictionary<(string File,int Team),Node3D>();
@@ -188,7 +194,7 @@ public partial class Main : Node3D
         {
             int team = spawn.GetProperty("team").GetInt32(), cell = spawn.GetProperty("cell").GetInt32();
             bool primary = team == 0 && _primarySquad.Count < 6;
-            if (_surfaceSmoke && primary) { cell = navigation.Nearest(surfaceStart, surfaceSpawns); surfaceSpawns.Add(cell); }
+            if (_surfaceSmoke && primary) { cell = surfaceNavigation.Nearest(surfaceStart, surfaceSpawns); surfaceSpawns.Add(cell); }
             var model = manifest.GetProperty("models")[spawn.GetProperty("model").GetInt32()];
             var unit = _world.Spawn(team, cell,_rules.Units[model.GetProperty("unit").GetString()!]);
             if (primary) _primarySquad.Add(unit.Id);
@@ -201,7 +207,7 @@ public partial class Main : Node3D
             root.AddChild(visual);
             var ring = new MeshInstance3D { Mesh = ScenePresentation.SelectionRing(), Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 MaterialOverride = new StandardMaterial3D {
-                    AlbedoColor = new Color("e9c22d"), CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+                    AlbedoColor = new Color(team == 0 ? "e9c22d" : "e65045"), CullMode = BaseMaterial3D.CullModeEnum.Disabled,
                     ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
             root.AddChild(ring);
             if (!_appearanceData.ContainsKey(modelKey.Item1)) _appearanceData[modelKey.Item1] = UnitAppearance.Read(System.IO.Path.Combine(_cache,modelKey.Item1));
@@ -230,6 +236,12 @@ public partial class Main : Node3D
         float spanX = (_world.Units.Max(u => u.X)-_world.Units.Min(u => u.X))/1000f;
         float spanZ = (_world.Units.Max(u => u.Z)-_world.Units.Min(u => u.Z))/1000f;
         _squadDistance = Math.Max(48,Math.Max(spanX,spanZ)*1.9f);
+        // Build each spawned body's region cache during loading, before a
+        // mouse command can trigger a full-map connectivity pass mid-frame.
+        long warmStart=System.Diagnostics.Stopwatch.GetTimestamp();
+        foreach (var type in _world.Units.GroupBy(u=>(u.Definition.BodyRadiusMm,u.Definition.BodyHeightMm)))
+            navigation.ForBody(type.Key.BodyRadiusMm,type.Key.BodyHeightMm).WarmConnectedRegion(type.First().Node);
+        _navigationWarmMs=System.Diagnostics.Stopwatch.GetElapsedTime(warmStart).TotalMilliseconds;
         SetCameraView(_smoke || _surfaceSmoke || _obstacleSmoke ? "squad" : _view);
         if (_surfaceSmoke) _focus = UnitPosition(_world.Units[0]);
         UpdateCamera();
@@ -264,7 +276,7 @@ public partial class Main : Node3D
         _commands.GroupChosen += slot => UseGroup(slot,Input.IsPhysicalKeyPressed(Key.Ctrl),Input.IsPhysicalKeyPressed(Key.Shift));
         _commands.UnitChosen += (id,remove) => {
             _orders.Cancel();
-            if (remove) _selected.Remove(id); else { _selected.Clear(); if (LivingFriendly(id)) _selected.Add(id); }
+            if (remove) _selected.Remove(id); else { _selected.Clear(); if (LivingUnit(id)) _selected.Add(id); }
         };
         _commands.MapChosen += point => {
             if (_world == null) return;
@@ -328,6 +340,7 @@ public partial class Main : Node3D
     }
 
     private bool LivingFriendly(int id) => _world != null && id >= 0 && id < _world.Units.Count && _world.Units[id].Team == 0 && _world.Units[id].Health > 0;
+    private bool LivingUnit(int id) => _world != null && id >= 0 && id < _world.Units.Count && _world.Units[id].Health > 0;
 
     private void UseGroup(int slot,bool assign,bool append)
     {
@@ -335,6 +348,7 @@ public partial class Main : Node3D
         _orders.Cancel(); _dragging = false; _hud.SelectionBox = null;
         if (assign || append)
         {
+            if (_selected.Count > 0 && !_selected.Any(LivingFriendly)) return;
             _controlGroups.Assign(slot,_selected,LivingFriendly,append);
             _lastGroup = -1;
             _status.Text = $"Group {(slot == 9 ? 0 : slot+1)} updated"; return;
@@ -368,8 +382,19 @@ public partial class Main : Node3D
     private void SelectUnits(Vector2 start, Vector2 end, bool append)
     {
         _orders.Cancel();
-        if (!append) _selected.Clear();
         var rect = new Rect2(start, end - start).Abs();
+        if (rect.Size.Length() < 7)
+        {
+            var hit = UnitAt(end);
+            if (!append || (hit != null && (hit.Team != 0 || !_selected.All(LivingFriendly)))) _selected.Clear();
+            if (hit != null)
+            {
+                if (append && hit.Team == 0 && _selected.Contains(hit.Id)) _selected.Remove(hit.Id);
+                else _selected.Add(hit.Id);
+            }
+            return;
+        }
+        if (!append || !_selected.All(LivingFriendly)) _selected.Clear();
         foreach (var unit in _world!.Units.Where(u => u.Team == 0 && u.Health > 0))
         {
             var pos = UnitPosition(unit) + Vector3.Up;
@@ -386,9 +411,8 @@ public partial class Main : Node3D
     private void Order(Vector2 mouse, bool groundOnly = false,bool queued = false)
     {
         if (!_world!.Units.Any(u => u.Team == 0 && u.Health > 0 && _selected.Contains(u.Id))) return;
-        var unit = _world!.Units.Where(u => u.Health > 0 && !_camera.IsPositionBehind(UnitPosition(u)))
-            .OrderBy(u => _camera.UnprojectPosition(UnitPosition(u)+Vector3.Up).DistanceSquaredTo(mouse)).ThenBy(u => u.Id).FirstOrDefault();
-        if (!groundOnly && unit != null && _camera.UnprojectPosition(UnitPosition(unit)+Vector3.Up).DistanceTo(mouse) < 24)
+        var unit = groundOnly ? null : UnitAt(mouse);
+        if (unit != null)
         {
             if (_orders.Pending == OrderKind.Guard && unit.Team < 0) { _status.Text = "Guard requires a friendly unit or location"; return; }
             if (_orders.Resolve(unit.Node,unit.Team > 0 ? unit.Id : -1,out var targeted,unit.Team <= 0 ? unit.Id : -1,queued)) SendOrder(targeted,queued);
@@ -415,6 +439,15 @@ public partial class Main : Node3D
         _dragging = false; _hud.SelectionBox = null;
         if (_orders.Begin(kind)) _status.Text = CommandPanel.OrderName(kind)+": choose a target";
         else SendOrder(new(kind));
+    }
+
+    private SimUnit? UnitAt(Vector2 mouse)
+    {
+        var origin = _camera.ProjectRayOrigin(mouse); var direction = _camera.ProjectRayNormal(mouse);
+        var rayOrigin = new System.Numerics.Vector3(-origin.X,origin.Y,origin.Z);
+        var rayDirection = new System.Numerics.Vector3(-direction.X,direction.Y,direction.Z);
+        var terrain = _picker.Pick(rayOrigin,rayDirection);
+        return UnitPicker.Pick(_world!.Units,rayOrigin,rayDirection,terrain?.Distance+.03f ?? float.PositiveInfinity);
     }
 
     private void CancelTargeting()
@@ -488,7 +521,9 @@ public partial class Main : Node3D
         if (_world is null || _loadFailed || (_paused && !_singleStepRequested)) return;
         _presentStep = _paused;
         _singleStepRequested = false;
+        long stepStart=_engagementSmoke?System.Diagnostics.Stopwatch.GetTimestamp():0;
         _world.Step();
+        if (_engagementSmoke) RecordEngagementStep(System.Diagnostics.Stopwatch.GetElapsedTime(stepStart).TotalMilliseconds);
         PresentCombatEvents();
         if (_pendingObstacle >= 0)
         {
@@ -504,13 +539,14 @@ public partial class Main : Node3D
             if (unit.Attacking && unit.Target >= 0)
             {
                 var target = _world.Units[unit.Target];
+                view.Heading.Reset();
                 view.DesiredYaw = Mathf.Atan2(-(target.X-unit.X),target.Z-unit.Z);
             }
-            if (unit.Movement.Count >= 2)
+            else if (unit.Movement.Count >= 2)
             {
-                var previous = unit.Movement[^2]; var next = unit.Movement[^1];
+                var previous = unit.Movement[0]; var next = unit.Movement[^1];
                 int dx = next.X-previous.X, dz = next.Z-previous.Z;
-                if (dx != 0 || dz != 0) view.DesiredYaw = Mathf.Atan2(-dx,dz);
+                if (view.Heading.Update(dx,dz,unit.MovementBudget,unit.OrderSequence) is float heading) view.DesiredYaw=heading;
             }
             string state = unit.Health <= 0 ? "death" : unit.StrikeActive ? "attack" : unit.Moving ? (unit.Walking ? "walk" : "run") : unit.Target >= 0 ? "ready" : "idle";
             if (unit.Moving) _movingSeen++;
@@ -543,7 +579,7 @@ public partial class Main : Node3D
         if (_combatSmoke)
             foreach (var unit in _world.Units.Where(u => u.Health > 0))
                 foreach (var other in _world.Units.Where(u => u.Health > 0 && u.Id > unit.Id))
-                    _combatSpacingPassed &= SimWorld.SeparationSquared(unit,other) >= 700L*700;
+                    _combatSpacingPassed &= !SimWorld.BodiesOverlap(unit,other);
     }
 
     public override void _Process(double delta)
@@ -580,6 +616,7 @@ public partial class Main : Node3D
             if (!view.Ring.Visible || (view.RingPosition == view.Root.Position && view.RingYaw == view.Root.Rotation.Y)) continue;
             var transform = view.Root.GlobalTransform; var inverse = transform.AffineInverse();
             ScenePresentation.SelectionRing(local => {
+                local *= unit.Definition.BodyRadiusMm/650f;
                 var point = transform * local;
                 if (unit.Node < _world.Navigation.GroundCount)
                     point.Y = _world.Navigation.GroundHeight((int)(-point.X * 1000), (int)(point.Z * 1000)) / 1000f;
@@ -592,7 +629,7 @@ public partial class Main : Node3D
         float forward = (Input.IsPhysicalKeyPressed(Key.Down) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Up) ? 1 : 0);
         Pan(right * dt * _distance * 0.6f, forward * dt * _distance * 0.6f);
         UpdateCamera();
-        _selected.RemoveWhere(id => id < 0 || id >= _world.Units.Count || _world.Units[id].Health <= 0 || _world.Units[id].Team != 0);
+        _selected.RemoveWhere(id => !LivingUnit(id));
         var units = _world.Units.Where(u => _selected.Contains(u.Id)).ToList();
         if (units.Count == 0) _orders.Cancel();
         _commands.Refresh(units,UnitName,_orders.Pending,_paused,
@@ -604,6 +641,7 @@ public partial class Main : Node3D
         _frames++;
         if (_commandSmoke) CommandSmokeInput();
         if (_ordersSmoke) OrdersSmokeInput();
+        if (_engagementSmoke) { if (_formationSmoke) FormationSmokeInput(); else EngagementSmokeInput(); }
         if (_obstacleSmoke) ObstacleSmokeInput();
         if (_surfaceSmoke && _frames == 5)
         {
@@ -628,7 +666,7 @@ public partial class Main : Node3D
         if (_smoke) SmokeInput();
         if (_smoke && _capture != "" && _frames == (_combatSmoke ? 180 : 60)) _ = CaptureFrame(false);
         if (_smoke && _world.Tick >= 420) FinishSmoke();
-        else if (!_smoke && !_commandSmoke && !_ordersSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
+        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_engagementSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
     }
 
     private string UnitName(int id) => _world!.Units[id].Definition.DisplayName;
@@ -788,6 +826,10 @@ public partial class Main : Node3D
     {
         if (_finishing) return;
         _finishing = true;
+        if (_meleeSmoke) System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"body-combat-state.json"),JsonSerializer.Serialize(
+            _world!.Units.Select(u => new {u.Id,u.Team,u.X,u.Y,u.Z,u.Health,u.Target,u.Goal,u.Node,u.TransitNode,u.BlockedTicks,
+                u.AttackNode,u.CombatWaiting,u.Attacking,u.FreeMovement,u.Waypoint,Path=u.Path,Radius=u.Definition.BodyRadiusMm}),
+            new JsonSerializerOptions { WriteIndented = true }));
         var report = new { ticks = _world!.Tick, units = _world.Units.Count, moving_samples = _movingSeen,
             free_movement_samples = _freeMovementSeen,
             attack_samples = _attackingSeen, damage = _world.Units.Sum(u => u.MaxHealth-u.Health),
@@ -809,6 +851,7 @@ public partial class Main : Node3D
                 && _presentation.Imports[0].VertexColorSurfaces > 0 && _presentation.Imports.Skip(1).All(i => i.TeamMaterials > 0),
             turning_samples = _turningSeen, interpolated_samples = _interpolatedSeen,
             friendly_squads_fought = _squadsFought.Count, combat_spacing = _combatSpacingPassed, input_squad_keys = _squadKeysPassed,
+            body_sizes = _world.Units.Select(u => new {u.Definition.Name,u.Definition.BodyRadiusMm,u.Definition.BodyHeightMm}).Distinct().ToArray(),
             map_loaded = true, initial_digest = _initialDigest, final_digest = _world.StateDigest() };
         string path = System.IO.Path.Combine(_cache, _meleeSmoke ? "melee-smoke-report.json" : _combatSmoke ? "combat-smoke-report.json" : _motionSmoke ? "motion-smoke-report.json" : "smoke-report.json");
         System.IO.File.WriteAllText(path, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));

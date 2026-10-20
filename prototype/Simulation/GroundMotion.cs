@@ -2,6 +2,7 @@ namespace Reforged.Simulation;
 
 public sealed partial class SimWorld
 {
+    private static bool StableArrival(SimUnit unit) => unit.Definition.BodyRadiusMm > 350 && unit.Target < 0;
     // Normalize consumed distance to one shared tick clock for rendering,
     // including ticks that cross multiple waypoints or finish early.
     private static long MovementElapsed(SimUnit unit,long remaining)
@@ -24,8 +25,8 @@ public sealed partial class SimWorld
         foreach (var other in Units.Where(u => u.Id != unit.Id && u.Health > 0))
         {
             bool Near(int ax,int ay,int az,int bx,int by,int bz)
-                => Math.Min(unit.Y,y)-700 < Math.Max(ay,by) && Math.Min(ay,by)-700 < Math.Max(unit.Y,y)
-                && IntegerMotion.SegmentsNear(unit.X,unit.Z,x,z,ax,az,bx,bz);
+                => Math.Min(unit.Y,y) < Math.Max(ay,by)+other.Definition.BodyHeightMm && Math.Min(ay,by) < Math.Max(unit.Y,y)+unit.Definition.BodyHeightMm
+                && IntegerMotion.SegmentsNear(unit.X,unit.Z,x,z,ax,az,bx,bz,BodySeparation(unit,other));
             if (Near(other.X,other.Y,other.Z,other.X,other.Y,other.Z)) return false;
             if (other.TransitNode >= 0 && !other.GroundSegment)
             {
@@ -44,6 +45,8 @@ public sealed partial class SimWorld
 
     private void SmoothGroundRoute(SimUnit unit)
     {
+        if (StableArrival(unit) && unit.Waypoint == 0 && unit.Path.Count > 1 && unit.Path[0] == unit.Node)
+            unit.Waypoint=1;
         var occupied = OccupiedNodes(unit.Id);
         int end = unit.Waypoint;
         while (end < unit.Path.Count && FreeGround(unit.Path[end])) end++;
@@ -52,7 +55,7 @@ public sealed partial class SimWorld
         for (int i = end-1; i >= unit.Waypoint; i--)
         {
             var (x,z) = Navigation.Center(unit.Path[i]);
-            if (!Navigation.CanTraverseGroundPoints(unit.X,unit.Z,x,z,occupied)) continue;
+            if (!Nav(unit).CanTraverseGroundPoints(unit.X,unit.Z,x,z,occupied)) continue;
             unit.Waypoint = i; return;
         }
     }
@@ -68,6 +71,8 @@ public sealed partial class SimWorld
         // avoidance choices, not a fixed set of world-space movement angles.
         foreach (var (cos,sin) in SteeringDirections)
         {
+            if (StableArrival(unit) && cos < 0) continue;
+            if (StableArrival(unit) && unit.AvoidanceLockTicks > 0 && sin*unit.AvoidanceSide < 0) continue;
             int vx = (int)(((long)dx*cos-(long)dz*sin)/1000);
             int vz = (int)(((long)dx*sin+(long)dz*cos)/1000);
             long distance = IntegerMotion.Length(vx,0,vz);
@@ -78,13 +83,15 @@ public sealed partial class SimWorld
             int ny = Navigation.GroundHeight(nx,nz);
             int px = IntegerMotion.Interpolate(unit.X,unit.X+vx,Math.Min(distance,450_000),distance);
             int pz = IntegerMotion.Interpolate(unit.Z,unit.Z+vz,Math.Min(distance,450_000),distance);
-            if (!Navigation.CanTraverseGroundPoints(unit.X,unit.Z,px,pz)
+            if (!Nav(unit).CanTraverseGroundPoints(unit.X,unit.Z,px,pz)
                 || !ClearGroundStep(unit,px,Navigation.GroundHeight(px,pz),pz)
                 || !ClearGroundStep(unit,nx,ny,nz)) continue;
             unit.X = nx; unit.Y = ny; unit.Z = nz; unit.Node = Navigation.Cell(nx,nz);
             unit.GroundSegment = false; unit.TransitNode = -1; unit.TravelProgress = 0;
             unit.Moving = true; budget -= step;
             unit.AvoidanceTicks++;
+            if (StableArrival(unit) && sin != 0)
+            { unit.AvoidanceSide=Math.Sign(sin); unit.AvoidanceLockTicks=8; }
             unit.Movement.Add(new(MovementElapsed(unit,budget),nx,ny,nz,true));
             return true;
         }
@@ -107,10 +114,12 @@ public sealed partial class SimWorld
         int nx = IntegerMotion.Interpolate(unit.GroundStartX,x,progress,length);
         int nz = IntegerMotion.Interpolate(unit.GroundStartZ,z,progress,length);
         int ny = Navigation.GroundHeight(nx,nz);
-        if (!Navigation.CanTraverseGroundPoints(unit.X,unit.Z,nx,nz) || !ClearGroundStep(unit,nx,ny,nz))
+        if (!Nav(unit).CanTraverseGroundPoints(unit.X,unit.Z,nx,nz) || !ClearGroundStep(unit,nx,ny,nz))
         { if (unit.FreeMovement) SteerGround(unit,x,z,ref budget); return false; }
         unit.X = nx; unit.Y = ny; unit.Z = nz; unit.Node = Navigation.Cell(nx,nz);
         unit.TravelProgress = progress; unit.Moving = true; budget -= movement;
+        if (StableArrival(unit) && unit.AvoidanceLockTicks == 0)
+        { unit.AvoidanceSide=0; unit.AvoidanceTicks=0; }
         unit.Movement.Add(new(MovementElapsed(unit,budget),nx,ny,nz,true));
         if (progress < length) return false;
         unit.Node = target; unit.TransitNode = -1; unit.TravelProgress = 0; unit.GroundSegment = false;

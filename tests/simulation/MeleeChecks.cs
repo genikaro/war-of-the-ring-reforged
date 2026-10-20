@@ -19,7 +19,7 @@ static class MeleeChecks
     private static DamageTypeRule[] TypeRules => Enumerable.Range(0,4).SelectMany(from =>
         Enumerable.Range(0,4).Select(to => new DamageTypeRule(from,to,Ratings[from,to]*10000))).ToArray();
     private static CombatRules Rules(params UnitPairRule[] pairs) => CombatRules.Parse(JsonSerializer.Serialize(new {
-        FormatVersion = 2,TicksPerSecond = 20,Units = new[] { Profile },TypeMatchups = TypeRules,Pairs = pairs }));
+        FormatVersion = 3,TicksPerSecond = 20,Units = new[] { Profile },TypeMatchups = TypeRules,Pairs = pairs }));
 
     public static void Run(Action<bool,string> check)
     {
@@ -109,7 +109,7 @@ static class MeleeChecks
         }
         foreach (var invalid in new[] { TypeRules.Skip(1).ToArray(),TypeRules.Append(TypeRules[0]).ToArray() })
         {
-            try { CombatRules.Parse(JsonSerializer.Serialize(new { FormatVersion = 2,TicksPerSecond = 20,Units = new[] {Profile},TypeMatchups = invalid,Pairs = Array.Empty<UnitPairRule>() }));
+            try { CombatRules.Parse(JsonSerializer.Serialize(new { FormatVersion = 3,TicksPerSecond = 20,Units = new[] {Profile},TypeMatchups = invalid,Pairs = Array.Empty<UnitPairRule>() }));
                 check(false,"invalid matchup table must fail"); }
             catch (ArgumentException) { check(true,"incomplete or duplicate matchup table rejected"); }
         }
@@ -136,6 +136,8 @@ static class MeleeChecks
     {
         var rules = CombatRules.Parse(File.ReadAllText(Path.Combine(cache,"combat/rules.json")));
         var hero = rules.Units["UNIT_G_HERO_ARAGORN"]; var knight = rules.Units["UNIT_G_ELF_KNIGHT"]; var orc = rules.Units["UNIT_E_URUK_HAI"];
+        check((hero.BodyRadiusMm,knight.BodyRadiusMm,orc.BodyRadiusMm) == (561,927,693),"cached collision radii include original main bounds and model scale");
+        check((hero.BodyHeightMm,knight.BodyHeightMm,orc.BodyHeightMm) == (2095,2534,2197),"cached body heights are rounded outward from original boxes");
         check((hero.WalkScale,knight.WalkScale,orc.WalkScale) == (364585,469073,432872),"cached walk/run ratios derive from source root-track displacement and duration");
         check(new[] {hero,knight,orc}.All(u => u.WalkClip.EndsWith("_Walk") && u.RunClip.EndsWith("_Run")),"cached locomotion states resolve separate original walk/run clips");
         for (int from = 0; from < 4; from++) for (int to = 0; to < 4; to++)

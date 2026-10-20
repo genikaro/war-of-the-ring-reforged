@@ -10,6 +10,7 @@ import math
 from pathlib import Path
 
 import lsk
+import lmd
 from resolve_model import Resolver
 import prototype_assets
 from pcm_audio import decode_ms_adpcm
@@ -90,6 +91,23 @@ def locomotion(model, skeleton):
     return result, scale
 
 
+def collision_profile(model, skeleton, boxes):
+    main = [b for b in boxes if b['layer'] == 0]
+    if len(main) != 1:
+        raise ValueError('expected one main collision box')
+    box = main[0]; v = box['vectors']; scale = model['scale']
+    if (box['flag'] != 0 or any(not math.isfinite(x) for x in v+scale)
+            or min(v[:3]+scale) <= 0 or any(abs(a-b) > 1e-5 for a,b in zip(v[8:],[1,0,0,0]))):
+        raise ValueError('unsupported main collision box')
+    joint = skeleton.joints[box['joint']].name if box['joint'] >= 0 else None
+    if joint and joint.replace('_','').replace(' ','').lower() != 'jposition':
+        raise ValueError('main collision must use the locomotion root')
+    radius = math.ceil(max((v[0]+abs(v[4]))*scale[0],(v[1]+abs(v[5]))*scale[1])*1000)
+    height = math.ceil(max(2*v[2],v[6]+v[2])*scale[2]*1000)
+    return radius, height, {'Layer': 'BBOX_LAYER_MAIN','Box': box,'Joint': joint,'ModelScale': scale,
+        'Policy': 'Upright root-centered cylinder; max scaled XY half-extent and full Z height. Root locomotion removed; original response semantics unverified.'}
+
+
 def export(output, resolver=None):
     output = Path(output).resolve()
     if any(output.is_relative_to(ROOT/p) for p in ['extracted','TLOTR - War of the Ring']):
@@ -107,6 +125,9 @@ def export(output, resolver=None):
         skeleton_path = ROOT/model['skeletons'][0]['file']
         skeleton = lsk.parse(skeleton_path.read_bytes())
         motion, walk_scale = locomotion(model, skeleton)
+        model_record = resolver.db['Models'].get(unit['Model'])
+        collision_model = dict(model,scale=[model_record[k] for k in ['ScaleX','ScaleY','ScaleZ']])
+        radius, body_height, body_source = collision_profile(collision_model,skeleton,lmd.parse((ROOT/model['file']).read_bytes()).bounding_boxes)
         trace(ROOT/model['file']); trace(skeleton_path)
         state = next(s for s in model['animation_states'] if s['name'] == 'UNIT_ANIM_STATE_ATTACK_MELEE_01')
         durations = {clip.name: clip.duration for clip in skeleton.clips}
@@ -121,8 +142,10 @@ def export(output, resolver=None):
             'DpsMilli': quantize(weapon['CuttingDamagePerSecond']), 'SourceRangeMm': quantize(weapon['MaximumRange']),
             'ReachMm': 2000,'ReadyClip': ready_clip,'Attacks': choices,
             'WalkScale': walk_scale,'WalkClip': motion['Walk']['Clip'],'RunClip': motion['Run']['Clip'],
+            'BodyRadiusMm': radius,'BodyHeightMm': body_height,'SelectionRadiusMm': quantize(unit['SelectionRingRadius']),
+            'AttackGapMm': quantize(weapon['MaximumRange']),
             'Source': {'Unit': unit.name,'ModelId': model['id'],'ModelFile': model['file'],
-                       'StateId': state['id'],'Weapon': weapon.values,'Locomotion': motion}})
+                       'StateId': state['id'],'Weapon': weapon.values,'Locomotion': motion,'Collision': body_source}})
     ids = {u['Id'] for u in units}
     pairs = [{'From': p['FromUnit'],'To': p['ToUnit'],'Scale': quantize(p['DamageMultiplier'],1_000_000),
               'Invincible': bool(p['IsInvinicible']),'SourceId': p.id,'SourceName': p.name}
@@ -152,9 +175,9 @@ def export(output, resolver=None):
             sounds.append({'File': 'combat/sounds/'+filename,'EventId': event.id,'EffectId': effect.id,
                 'EventName': event.name,'EffectName': effect.name,'VolumePpm': quantize(event['MinVolume'],1_000_000),
                 'MaxSimultaneous': event['MaxSimultaneous'], 'Conversion': 'mono Microsoft ADPCM to 16-bit PCM'})
-    for name in ['Units','Weapons','DamageTypes','UnitToUnitModifiers','WeaponEffects','WeaponImpactTypes','SoundEvents','SoundEffects']:
+    for name in ['Units','Models','BBoxes','Weapons','DamageTypes','UnitToUnitModifiers','WeaponEffects','WeaponImpactTypes','SoundEvents','SoundEffects']:
         trace(resolver.db.files[name.lower()])
-    data = {'FormatVersion': 2,'TicksPerSecond': 20,'Units': units,'Pairs': pairs,'Sounds': sounds,
+    data = {'FormatVersion': 3,'TicksPerSecond': 20,'Units': units,'Pairs': pairs,'Sounds': sounds,
         'TypeMatchups': type_matchups(resolver.db['DamageTypes']),
         'TypeMatchupSource': {'Cycle': 'Shipped English manual addendum, PDF page 7; owner weapon-rating photograph.',
                             'Percentages': 'Owner request, 2026-10-19: advantage 125%, disadvantage 75%, heroes 100%.',
@@ -163,7 +186,8 @@ def export(output, resolver=None):
         'Sources': sources,'Policy': {
             'Armor': 'Approximation: subtract armor points from DPS after type and explicit pair multipliers; clamp rate at zero.',
             'Damage': 'Distribute DPS * quantized cycle duration across hit events in proportion to source damage_scale.',
-            'Ranges': 'Keep accepted 2000 mm center reach; raw weapon ranges are retained but their origin/body semantics are unverified.',
+            'Ranges': 'Center reach is max(legacy 2000 mm, both body radii plus source weapon range as a surface gap). Original range-origin semantics remain unverified.',
+            'Collision': 'Scaled Main collision boxes supply per-type upright cylinders. Pair clearance sums both radii; navigation uses body-specific profiles. Original response semantics remain unverified.',
             'Types': 'Apply TypeMatchups once, then explicit unit-pair multiplier once (absent pairs 1.0). Pair invincibility takes precedence. No explicit pairs exist among the three demo types. Stacking for other roster units remains unverified.',
             'Timing': 'ceil(source duration * event fraction * 20); cycle ceil(duration*20), final hit at most cycle-1.',
             'Movement': 'Retain accepted 3 m/s run speed. Walk speed uses the source J_Position XY displacement/duration ratio of first positive walk/run choices. Original world speed and stamina remain unverified.',
@@ -176,6 +200,8 @@ def export(output, resolver=None):
 def refresh(output):
     output = Path(output).resolve()
     data = export(output)
+    import prototype_clearance
+    prototype_clearance.refresh(output,data['Units'])
     manifest_path = output/'manifest.json'; manifest = json.loads(manifest_path.read_text())
     for model in manifest['models']:
         prototype_assets.restore_geometry(output/model['file'])

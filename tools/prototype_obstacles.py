@@ -93,11 +93,11 @@ def intersects(polygon, xmin, xmax, zmin, zmax):
     return True
 
 
-def blocked(a, b, footprints, spacing):
+def blocked(a, b, footprints, spacing, radius=RADIUS, body_height=BODY_HEIGHT):
     """Conservative swept-cell/body envelope, preserving separate floors."""
-    padding = spacing/2+RADIUS
+    padding = spacing/2+radius
     for item in footprints:
-        if max(a[2], b[2])+BODY_HEIGHT <= item['y_min'] or min(a[2], b[2]) >= item['y_max']:
+        if max(a[2], b[2])+body_height <= item['y_min'] or min(a[2], b[2]) >= item['y_max']:
             continue
         if intersects(item['polygon'], min(a[0], b[0])-padding, max(a[0], b[0])+padding,
                       min(a[1], b[1])-padding, max(a[1], b[1])+padding):
@@ -105,10 +105,10 @@ def blocked(a, b, footprints, spacing):
     return False
 
 
-def ground_mask(width, height, spacing, allowed, heights, footprints):
+def ground_mask(width, height, spacing, allowed, heights, footprints, radius=RADIUS, body_height=BODY_HEIGHT):
     result = bytearray(allowed)
     report = []
-    padding = spacing/2+RADIUS
+    padding = spacing/2+radius
     for item in footprints:
         polygon = item['polygon']
         xmin = max(0, math.floor((min(p[0] for p in polygon)-padding)/spacing))
@@ -123,15 +123,15 @@ def ground_mask(width, height, spacing, allowed, heights, footprints):
                     continue
                 px, pz = (x+.5)*spacing, (z+.5)*spacing
                 point = [px, pz, terrain_height(px, pz, width, spacing, heights)]
-                if blocked(point, point, [item], spacing):
+                if blocked(point, point, [item], spacing, radius, body_height):
                     result[cell] = 0; changed += 1
         report.append({'object_id': item['object_id'], 'name': item['name'], 'ground_cells_blocked': changed})
     return bytes(result), {'placements': len(footprints), 'ground_cells_blocked': sum(allowed)-sum(result),
-                          'objects': report, 'radius_m': RADIUS, 'body_height_m': BODY_HEIGHT,
+                          'objects': report, 'radius_m': radius, 'body_height_m': body_height,
                           'policy': 'Root oriented-collision boxes for Buildings and IsPathingObstacle objects; half-extents/center/wxyz pose, conservative projected swept-cell clearance. Static snapshot; original runtime collision formulas unverified.'}
 
 
-def runtime_layers(width, height, spacing, allowed, heights, nodes, footprints):
+def runtime_layers(width, height, spacing, allowed, heights, nodes, footprints, radius=RADIUS, body_height=BODY_HEIGHT):
     """Independent object masks allow removal without opening another's cells.
 
     Keep the obstacle-free graph intact. Edge masks also cover a swept height
@@ -150,15 +150,15 @@ def runtime_layers(width, height, spacing, allowed, heights, nodes, footprints):
     surface_edges = {tuple(sorted((base+i, link))) for i, n in enumerate(nodes) for link in n['links']}
     result = []
     for object_id, boxes in sorted(grouped.items()):
-        mask, _ = ground_mask(width, height, spacing, allowed, heights, boxes)
+        mask, _ = ground_mask(width, height, spacing, allowed, heights, boxes, radius, body_height)
         blocked_nodes = [i for i, (before, after) in enumerate(zip(allowed, mask)) if before and not after]
-        blocked_nodes.extend(base+i for i in range(len(nodes)) if blocked(point(base+i), point(base+i), boxes, spacing))
+        blocked_nodes.extend(base+i for i in range(len(nodes)) if blocked(point(base+i), point(base+i), boxes, spacing, radius, body_height))
         blocked_set = set(blocked_nodes)
         edges = set(surface_edges)
         # A steep terrain edge can cross a box's vertical interval even when
         # both endpoint bodies are clear. Audit all local eight-way edges.
         for box in boxes:
-            padding = spacing*1.5+RADIUS
+            padding = spacing*1.5+radius
             xmin = max(0,math.floor((min(p[0] for p in box['polygon'])-padding)/spacing))
             xmax = min(width-1,math.floor((max(p[0] for p in box['polygon'])+padding)/spacing))
             zmin = max(0,math.floor((min(p[1] for p in box['polygon'])-padding)/spacing))
@@ -172,7 +172,7 @@ def runtime_layers(width, height, spacing, allowed, heights, nodes, footprints):
                         if 0 <= nx < width and 0 <= nz < height and allowed[nz*width+nx]:
                             edges.add(tuple(sorted((cell,nz*width+nx))))
         blocked_edges = [list(edge) for edge in sorted(edges) if not blocked_set.intersection(edge)
-                         and blocked(point(edge[0]), point(edge[1]), boxes, spacing)]
+                         and blocked(point(edge[0]), point(edge[1]), boxes, spacing, radius, body_height)]
         result.append({'id': object_id, 'name': boxes[0]['name'], 'nodes': blocked_nodes,
                        'edges': blocked_edges, 'footprints': boxes})
     return result

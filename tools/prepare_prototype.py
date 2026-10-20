@@ -177,6 +177,8 @@ def prepare(output, install=None):
                 'source_sha256': scene['world'].metadata['sha256']}
     prototype_interface.export(output,resolver)
     combat_rules.export(output,resolver)
+    import prototype_clearance
+    prototype_clearance.refresh(output)
     manifest['interface'] = 'interface/index.json'
     manifest['combat_rules'] = 'combat/rules.json'
     files = [output / 'map/scene.glb', output / 'navigation.json', output / 'heights.bin'] + [output / m['file'] for m in models]

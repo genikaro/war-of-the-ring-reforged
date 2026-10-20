@@ -15,6 +15,14 @@ strip, current orders and queue hints. Commands support mixed unit
 selections. Active orders and targeting are highlighted; commands disable without
 living friendly units. Dead selections and group members are pruned automatically.
 
+Click a live enemy to inspect its portrait, health, type, Attack, Armor and
+Victories. Its ring and health bar are red; action and Walk/Run controls disable.
+Enemy inspection is exclusive even with Shift, while drag selection stays
+friendly-only. Picking intersects the nearest live body up to the terrain/deck
+hit, rather than a fixed screen-space foot marker. Selection rings match each
+unit's collision radius. Ctrl assignment while inspecting an enemy preserves
+stored friendly groups; recalling a friendly group restores command controls.
+
 The console scales uniformly with screen height, clamps to narrow windows and
 stays centered on ultrawide screens. **Menu/F4 → Interface size** adjusts it from 75% to
 150%; the setting persists in `user://interface.cfg`. Resize updates are live.
@@ -97,10 +105,20 @@ Idle blue units may retaliate when struck; idle red units acquire nearby
 enemies. Move suppresses retaliation while travelling. Stop only retaliates
 within reach when struck, while Hold Ground acquires enemies within reach
 automatically. Attack and Attack-move acquire connected enemies within the
-existing 10,000 mm prototype awareness radius, with distance then unit ID as
-deterministic tie breakers. Melee reach remains the existing 2,000 mm prototype
-rule with terrain/layer checks. These values do not establish original rules.
+10,000 mm prototype awareness radius. Imported units also share the active target
+of allies within 6 m. Selection favors available target capacity, then distance
+with a load penalty and stable unit IDs. Crowded Attack targets may redirect
+overflow attackers to other reachable enemies while preserving the primary
+order target; queued orders advance when that primary target dies. Explicit
+Force Attack targets and Hold/Guard limits remain intact. Melee reach is the greater of 2,000 mm and both body
+radii plus the source weapon range, with terrain/layer checks. This gap policy
+does not establish the original range formula.
 Imported stats and animation-timed melee are described in [combat notes](COMBAT.md).
+Large-body Attack-move adds the [movement policy](MOVEMENT.md#crowded-arrival-and-attack-move-cohesion--october-20-2026)
+limits: an 8 m encounter, 3 m lateral corridor and 2 m rear allowance. Units
+release fleeing targets, regroup and resume their destination. Wide-ground
+encounters preserve the order's original direction instead of drifting toward
+successive flank targets. Completion clears retaliation-driven roaming.
 Replacing an order cancels pending hits while preserving remaining recovery;
 queuing an order preserves the current swing. Health bars use each type's source
 maximum. Single selection shows the original type icon, Attack, Armor and
@@ -196,12 +214,15 @@ the original timing and behavior comparison gate remains open.
 
 ## Validation
 
-- 295 synthetic checks: original regressions, timed melee, type ratings, kills, walk/run, contextual Attack/neutral target
+- 341 synthetic checks: crowded arrivals, attack-move cohesion and facing, army engagement/distribution, force/hold/queue preservation,
+  variable-body crowd movement, narrow passages, ray picking,
+  original regressions, timed melee, type ratings, kills, walk/run, contextual Attack/neutral target
   checks, order/group checks and responsive
   layout checks through 4K, ultrawide and narrow windows.
-- 49 additional real-cache checks retain map navigation, traffic and spawn safety,
+- 56 additional real-cache checks retain map navigation, traffic and spawn safety,
   and cover imported definitions and four repeatable duels.
-- `-CommandSmoke`: 26 actual Godot panel/input checks, including single-unit
+- `-CommandSmoke`: 34 actual Godot panel/input checks, including enemy inspection,
+  ownership/control-group protection, single-unit
   stats, live victory refresh, return to the group roster and the four-button
   bottom-row layout and working hidden Move/Stop controls; report in
   `converted/prototype/command-smoke-report.json`.
@@ -213,6 +234,9 @@ the original timing and behavior comparison gate remains open.
   clips, unchanged camera, paused double toggles and empty selection.
 - Existing combat and 80 FPS motion smoke checks retain real input, damage,
   all three friendly squads fighting, spacing and interpolation checks.
+- `-EngagementSmoke` drag-selects all 18 allies and attacks through actual input,
+  then checks participation on both sides, body separation and step timings over
+  800 ticks. See [the benchmark and acceptance criteria](ENGAGEMENT.md).
 - `-CommandSmoke -CapturePath converted/prototype/command-panel.png` saves a
   rendered preview and companion camera/import metadata. It uses long enemy
   cooldowns to isolate input checks; normal launches retain the existing AI.

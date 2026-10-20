@@ -10,6 +10,14 @@ public partial class Main
     private int _debugPauseTick;
     private (Vector3 Focus,float Yaw,float Distance,string View) _modeCamera;
     private int _modeCommandCount;
+    private int _orderSmokeWard;
+
+    private void ClickVisibleWard()
+    {
+        _orderSmokeWard = _friendlySquads[2].First(id => LivingFriendly(id)
+            && UnitAt(_camera.UnprojectPosition(UnitPosition(_world!.Units[id])+Vector3.Up))?.Id == id);
+        Click(_camera.UnprojectPosition(UnitPosition(_world!.Units[_orderSmokeWard])+Vector3.Up));
+    }
     private void GroupKey(Key key,bool ctrl = false,bool shift = false)
         => GetViewport().PushInput(new InputEventKey { Keycode = key,Pressed = true,CtrlPressed = ctrl,ShiftPressed = shift },true);
 
@@ -82,14 +90,14 @@ public partial class Main
             case 62: PushKey(Key.S); break;
             case 65: _ordersChecks["stop_clears_queued_squad"] = _selected.All(id => world.Units[id].OrderQueue.Count == 0 && world.Units[id].Order == OrderKind.Stop); break;
             case 68: ClickCommand(OrderKind.Guard); break;
-            case 70: Click(_camera.UnprojectPosition(UnitPosition(world.Units[_friendlySquads[2][0]])+Vector3.Up)); break;
-            case 73: _ordersChecks["guard_friendly_input"] = _selected.All(id => world.Units[id].Order == OrderKind.Guard && world.Units[id].OrderTarget == _friendlySquads[2][0]); break;
+            case 70: ClickVisibleWard(); break;
+            case 73: _ordersChecks["guard_friendly_input"] = _selected.All(id => world.Units[id].Order == OrderKind.Guard && world.Units[id].OrderTarget == _orderSmokeWard); break;
             case 76: PushKey(Key.T); break;
             case 78: TargetPoint(Destination(8000,5000)); break;
             case 81: _ordersChecks["patrol_hotkey_input"] = _selected.All(id => world.Units[id].Order == OrderKind.Patrol); break;
             case 84: ClickCommand(OrderKind.Attack); break;
-            case 86: Click(_camera.UnprojectPosition(UnitPosition(world.Units[_friendlySquads[2][0]])+Vector3.Up)); break;
-            case 89: _ordersChecks["attack_button_friendly_input"] = world.Commands.Last().Kind == OrderKind.ForceAttack && world.Commands.Last().Target == _friendlySquads[2][0]; PushKey(Key.S); break;
+            case 86: ClickVisibleWard(); break;
+            case 89: _ordersChecks["attack_button_friendly_input"] = world.Commands.Last().Kind == OrderKind.ForceAttack && world.Commands.Last().Target == _orderSmokeWard; PushKey(Key.S); break;
             case 92: PushKey(Key.A); break;
             case 94: TargetPoint(Destination(8000,6000)); break;
             case 97: _ordersChecks["attack_hotkey_ground_input"] = world.Commands.Last() is { Kind: OrderKind.AttackMove,Target: -1 }; break;

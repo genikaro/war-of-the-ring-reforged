@@ -161,6 +161,7 @@ public partial class CommandPanel : Control
     public void Refresh(IReadOnlyList<SimUnit> units,Func<int,string> name,OrderKind? pending,bool paused,IReadOnlyList<int[]>? groups = null,int allies = 0,int enemies = 0)
     {
         bool available = units.Count > 0;
+        bool controllable = available && units.All(u => u.Team == 0);
         bool single = units.Count == 1;
         _single.Visible = single; _roster.Visible = !single;
         _title.Position = single ? new(335,59) : new(265,59); _title.Size = single ? new(435,22) : new(505,22);
@@ -169,11 +170,12 @@ public partial class CommandPanel : Control
         _order.Text = available ? string.Join(" · ",units.GroupBy(u => u.Order).Select(g => $"{OrderName(g.Key)} ({g.Count()})"))
             + (units.Sum(u => u.OrderQueue.Count) > 0 ? $"   +{units.Sum(u => u.OrderQueue.Count)} queued" : "") : "Ctrl + number: assign group · Shift + number: add units";
         _armies.Text = $"Allies {allies}    Enemies {enemies}";
-        _walkRun.Disabled = !available;
-        _walkRun.SetPressedNoSignal(available && units.All(u => u.Walking));
+        _walkRun.Disabled = !controllable;
+        _walkRun.SetPressedNoSignal(controllable && units.All(u => u.Walking));
         string pace = !available ? "No units selected" : units.All(u => u.Walking) ? "Walking" : units.Any(u => u.Walking) ? "Mixed pace" : "Running";
         _walkRun.TooltipText = $"Walk / Run [F2] · {pace}\nSwitch selected units to walking; if all are walking, switch to running.\nCurrent orders and queued waypoints continue.";
         if (available) _order.Text += " · "+pace;
+        if (available && !controllable) _order.Text = "Enemy unit · Inspecting";
         string key = string.Join(',',units.Select(u => u.Id));
         if (_rosterKey != key)
         {
@@ -195,6 +197,7 @@ public partial class CommandPanel : Control
         {
             var stats = UnitHudStats.From(unit,_rules);
             var portrait = _portraits[unit.Id]; portrait.Health.Size = new(46*Math.Clamp(unit.Health/(float)unit.MaxHealth,0,1),4);
+            portrait.Health.Color = new Color(unit.Team == 0 ? "69ae63" : "d05b4c");
             portrait.Button.TooltipText = $"{name(unit.Id)} #{unit.Id+1} · {unit.Health}/{unit.MaxHealth}\n{OrderName(unit.Order)}"
                 + (unit.Walking ? " · Walking" : " · Running")
                 + $"\nAttack {stats.Attack} · Armor {stats.Armor} · Victories {stats.Victories}\n{stats.Type}\n{stats.Matchups}"
@@ -206,13 +209,14 @@ public partial class CommandPanel : Control
                 _typeIcon.Texture = _art.GetValueOrDefault(stats.Icon); _typeIcon.TooltipText = stats.Type+" damage\n"+stats.Matchups;
                 _attackValue.Text = stats.Attack; _armorValue.Text = stats.Armor; _victoriesValue.Text = stats.Victories;
                 _singleHealthText.Text = stats.Health;
+                _singleHealth.Color = new Color(unit.Team == 0 ? "48972e" : "b84c3c");
                 _singleHealth.Size = new(244*Math.Clamp(unit.HealthMilli/(float)(unit.MaxHealth*1000L),0,1),12);
             }
         }
         foreach (var (kind,button) in _buttons)
         {
-            button.Disabled = !available;
-            button.SetPressedNoSignal(available && (PanelCommand(pending) == kind || (pending == null && units.All(u => PanelCommand(u.Order) == kind))));
+            button.Disabled = !controllable;
+            button.SetPressedNoSignal(controllable && (PanelCommand(pending) == kind || (pending == null && units.All(u => PanelCommand(u.Order) == kind))));
         }
         if (groups != null) for (int slot = 0; slot < 10; slot++)
         {
@@ -245,4 +249,6 @@ public partial class CommandPanel : Control
     public bool CommandsAvailable => _buttons.Values.All(b => !b.Disabled);
     public bool SingleUnitDetailsVisible => _single.Visible;
     public string DisplayedVictories => _victoriesValue.Text;
+    public string DisplayedName => _title.Text;
+    public string DisplayedHealth => _singleHealthText.Text;
 }

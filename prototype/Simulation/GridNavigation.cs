@@ -1,9 +1,12 @@
+using System.Text.Json;
+
 namespace Reforged.Simulation;
 
 /// <summary>A mesh node, at its column center unless an off-center X/Z in millimeters is given.</summary>
-public sealed record SurfaceCell(int Cell, int Height, int[] Links, int? X = null, int? Z = null);
+public sealed record SurfaceCell(int Cell, int Height, int[] Links, int? X = null, int? Z = null,int ClearanceRadiusMm = 350);
 public sealed record NavigationEdge(int A, int B);
 public sealed record NavigationObstacle(int Id, int[] Nodes, NavigationEdge[] Edges);
+public sealed record BodyNavigationProfile(int Radius,int Height,int[] Nodes,NavigationEdge[] Edges,NavigationObstacle[] Obstacles);
 
 /// <summary>Integer A* over eight-neighbor terrain and separate mesh layers. Stable node-ID ties.</summary>
 public sealed class GridNavigation
@@ -22,18 +25,32 @@ public sealed class GridNavigation
     private readonly HashSet<int> _activeObstacles = [];
     private readonly Dictionary<int, int> _blockedNodes = [];
     private readonly Dictionary<(int, int), int> _blockedEdges = [];
+    private readonly Dictionary<int,HashSet<int>> _obstacleEdgeNeighbors = [];
     private int[]? _components;
     private readonly Dictionary<int,bool> _bottlenecks = [];
+    private readonly Dictionary<(int,int),BodyNavigationProfile> _profiles = [];
+    private readonly Dictionary<(int,int),GridNavigation> _bodyGraphs = [];
+    private readonly HashSet<int> _bodyBlocked = [];
+    private readonly HashSet<(int,int)> _bodyEdges = [];
+    private readonly Dictionary<int,bool> _terrainFits = [];
+    private readonly Dictionary<(int,int),bool> _groundEdges = [];
+    public int BodyRadiusMm { get; }
+    public int BodyHeightMm { get; }
+    private bool TypedBody => BodyRadiusMm != 350 || BodyHeightMm != 700;
     public int Revision { get; private set; }
     public IEnumerable<int> ObstacleIds => _obstacles.Keys.Order();
 
     public GridNavigation(int width, int height, int cellSize, bool[] allowed, int[] heights,
-        IReadOnlyList<SurfaceCell>? surfaces = null, IReadOnlyList<NavigationObstacle>? obstacles = null)
+        IReadOnlyList<SurfaceCell>? surfaces = null, IReadOnlyList<NavigationObstacle>? obstacles = null,
+        int bodyRadiusMm = 350,int bodyHeightMm = 700,int[]? bodyBlocked = null,NavigationEdge[]? bodyEdges = null)
     {
         if (width <= 0 || height <= 0 || cellSize <= 0 || allowed.Length != checked(width * height)
             || heights.Length != checked((width + 1) * (height + 1)))
             throw new ArgumentException("Invalid navigation dimensions");
         Width = width; Height = height; CellSize = cellSize;
+        BodyRadiusMm = bodyRadiusMm; BodyHeightMm = bodyHeightMm;
+        _bodyBlocked.UnionWith(bodyBlocked ?? []);
+        foreach (var edge in bodyEdges ?? []) _bodyEdges.Add((Math.Min(edge.A,edge.B),Math.Max(edge.A,edge.B)));
         Allowed = (bool[])allowed.Clone(); Heights = (int[])heights.Clone();
         _surfaces = surfaces?.Select(s => s with { Links = (int[])s.Links.Clone() }).ToArray() ?? [];
         for (int i = 0; i < _surfaces.Length; i++)
@@ -63,9 +80,55 @@ public sealed class GridNavigation
                 throw new ArgumentException("Invalid obstacle layer");
             _obstacles.Add(obstacle.Id, new(obstacle.Id, obstacle.Nodes.Distinct().Order().ToArray(),
                 obstacle.Edges.Select(e => e.A < e.B ? e : new(e.B, e.A)).Distinct().ToArray()));
+            foreach (var edge in obstacle.Edges)
+            {
+                int a=Math.Min(edge.A,edge.B),b=Math.Max(edge.A,edge.B);
+                if (!_obstacleEdgeNeighbors.TryGetValue(a,out var neighbors)) _obstacleEdgeNeighbors[a]=neighbors=[];
+                neighbors.Add(b);
+            }
             SetObstacle(obstacle.Id, true);
         }
         Revision = 0;
+    }
+
+    public void LoadBodyProfiles(JsonElement cache)
+    {
+        foreach (var p in cache.GetProperty("body_profiles").EnumerateArray())
+        {
+            var profile = new BodyNavigationProfile(p.GetProperty("radius_mm").GetInt32(),p.GetProperty("height_mm").GetInt32(),
+                p.GetProperty("nodes").EnumerateArray().Select(n => n.GetInt32()).ToArray(),
+                p.GetProperty("edges").EnumerateArray().Select(e => new NavigationEdge(e[0].GetInt32(),e[1].GetInt32())).ToArray(),
+                p.GetProperty("obstacles").EnumerateArray().Select(o => new NavigationObstacle(o.GetProperty("id").GetInt32(),
+                    o.GetProperty("nodes").EnumerateArray().Select(n => n.GetInt32()).ToArray(),
+                    o.GetProperty("edges").EnumerateArray().Select(e => new NavigationEdge(e[0].GetInt32(),e[1].GetInt32())).ToArray())).ToArray());
+            if (profile.Nodes.Any(n => n < 0 || n >= NodeCount) || profile.Edges.Any(e => e.A < 0 || e.B < 0 || e.A >= NodeCount || e.B >= NodeCount)
+                || !profile.Obstacles.Select(o => o.Id).Order().SequenceEqual(ObstacleIds)) throw new ArgumentException("Invalid body clearance profile");
+            _profiles.Add((profile.Radius,profile.Height),profile);
+        }
+    }
+
+    public GridNavigation ForBody(int radius,int height)
+    {
+        if (radius == BodyRadiusMm && height == BodyHeightMm) return this;
+        if (_bodyGraphs.TryGetValue((radius,height),out var found)) return found;
+        _profiles.TryGetValue((radius,height),out var profile);
+        if (_profiles.Count > 0 && profile == null) throw new ArgumentException("Missing body clearance profile; refresh rules cache");
+        var blocked = profile?.Nodes ?? Enumerable.Range(0,_surfaces.Length)
+            .Where(i => radius > _surfaces[i].ClearanceRadiusMm).Select(i => GroundCount+i).ToArray();
+        var graph = new GridNavigation(Width,Height,CellSize,Allowed,Heights,_surfaces,
+            profile?.Obstacles ?? _obstacles.Values.ToArray(),radius,height,blocked,profile?.Edges);
+        foreach (int id in ObstacleIds.Where(id => !IsObstacleActive(id))) graph.SetObstacle(id,false);
+        _bodyGraphs.Add((radius,height),graph); return graph;
+    }
+
+    public IEnumerable<int> NearbyNodes(int x,int z,int radius)
+    {
+        for (int row = Math.Max(0,(z-radius)/CellSize); row <= Math.Min(Height-1,(z+radius)/CellSize); row++)
+        for (int col = Math.Max(0,(x-radius)/CellSize); col <= Math.Min(Width-1,(x+radius)/CellSize); col++)
+        {
+            int cell = row*Width+col; yield return cell;
+            if (_surfaceColumns.TryGetValue(cell,out var layers)) foreach (int n in layers) yield return n;
+        }
     }
 
     public bool IsObstacleActive(int id) => _activeObstacles.Contains(id);
@@ -88,13 +151,23 @@ public sealed class GridNavigation
         if (active) _activeObstacles.Add(id); else _activeObstacles.Remove(id);
         _components = null;
         _bottlenecks.Clear();
+        _groundEdges.Clear();
         Revision++;
+        foreach (var graph in _bodyGraphs.Values) graph.SetObstacle(id,active);
     }
 
     public int Cell(int x, int z) => x < 0 || z < 0 || x >= Width * CellSize || z >= Height * CellSize
         ? -1 : z / CellSize * Width + x / CellSize;
-    public bool CanStand(int cell) => cell >= 0 && cell < NodeCount && (cell >= GroundCount || Allowed[cell])
-        && !_blockedNodes.ContainsKey(cell);
+    public bool CanStand(int cell) => BasicStand(cell) && (!TypedBody || cell >= GroundCount || TerrainFits(cell));
+    private bool BasicStand(int cell) => cell >= 0 && cell < NodeCount && (cell >= GroundCount || Allowed[cell])
+        && !_blockedNodes.ContainsKey(cell) && !_bodyBlocked.Contains(cell);
+    private bool TerrainFits(int cell)
+    {
+        if (_terrainFits.TryGetValue(cell,out bool fit)) return fit;
+        var (x,z) = Center(cell);
+        return _terrainFits[cell] = x >= BodyRadiusMm && z >= BodyRadiusMm && x+BodyRadiusMm <= Width*(long)CellSize
+            && z+BodyRadiusMm <= Height*(long)CellSize && SweptColumns(x,z,x,z).All(n => Allowed[n]);
+    }
     private int Column(int node) => node < GroundCount ? node : _surfaces[node-GroundCount].Cell;
     public (int X, int Z) Center(int cell)
     {
@@ -200,7 +273,9 @@ public sealed class GridNavigation
         foreach (int other in reserved)
         {
             var (ox, oz) = Center(other); int oy = NodeHeight(other);
-            if ((long)(x-ox)*(x-ox) + (long)(z-oz)*(z-oz) + (long)(y-oy)*(y-oy) < 700L*700) return false;
+            long horizontal = (long)(x-ox)*(x-ox)+(long)(z-oz)*(z-oz);
+            if (TypedBody ? Math.Abs(y-oy) < BodyHeightMm && horizontal < 4L*BodyRadiusMm*BodyRadiusMm
+                : horizontal+(long)(y-oy)*(y-oy) < 700L*700) return false;
         }
         return true;
     }
@@ -209,29 +284,46 @@ public sealed class GridNavigation
     {
         if (!CanStand(a) || !CanStand(b)) return false;
         if (a == b) return true;
+        WarmConnectedRegion(a);
+        return _components![a] == _components[b];
+    }
+
+    public void WarmConnectedRegion(int node)
+    {
+        if (!CanStand(node)) return;
         if (_components == null)
         {
             _components = new int[NodeCount]; Array.Fill(_components,-1);
         }
-        if (_components[a] < 0)
+        if (_components[node] < 0)
         {
-            var queue = new Queue<int>(); queue.Enqueue(a); _components[a] = a;
-            while (queue.TryDequeue(out int node))
-                foreach (int next in Neighbors(node))
+            var queue = new Queue<int>(); queue.Enqueue(node); _components[node] = node;
+            while (queue.TryDequeue(out int current))
+                foreach (int next in Neighbors(current))
                     if (CanStand(next) && _components[next] < 0)
-                    { _components[next] = a; queue.Enqueue(next); }
+                    { _components[next] = node; queue.Enqueue(next); }
         }
-        return _components[a] == _components[b];
     }
 
     public IEnumerable<int> Neighbors(int id)
         => TopologyNeighbors(id).Where(n => EdgeOpen(id,n));
 
-    private bool ClearEdge(int a, int b) => !_blockedEdges.ContainsKey((Math.Min(a,b), Math.Max(a,b)));
+    private bool ClearEdge(int a, int b) => !_blockedEdges.ContainsKey((Math.Min(a,b), Math.Max(a,b)))
+        && !_bodyEdges.Contains((Math.Min(a,b),Math.Max(a,b)));
 
     private bool EdgeOpen(int a, int b)
     {
         if (!ClearEdge(a,b)) return false;
+        if (TypedBody)
+        {
+            if (!CanStand(a) || !CanStand(b)) return false;
+            if (a < GroundCount && b < GroundCount)
+            {
+                var key = (Math.Min(a,b),Math.Max(a,b));
+                if (!_groundEdges.TryGetValue(key,out bool clear)) _groundEdges[key] = clear = CanTraverseGround(a,b);
+                if (!clear) return false;
+            }
+        }
         if (a >= GroundCount || b >= GroundCount || a%Width == b%Width || a/Width == b/Width) return true;
         int sideA = a/Width*Width+b%Width, sideB = b/Width*Width+a%Width;
         return CanStand(sideA) && CanStand(sideB) && ClearEdge(a,sideA) && ClearEdge(sideA,b)
@@ -246,7 +338,7 @@ public sealed class GridNavigation
         if (to < 0) return [from];
         var columns = SweptColumns(from,to);
         if (from < GroundCount && to < GroundCount) return columns;
-        int low = Math.Min(NodeHeight(from),NodeHeight(to))-700, high = Math.Max(NodeHeight(from),NodeHeight(to))+700;
+        int low = Math.Min(NodeHeight(from),NodeHeight(to))-BodyHeightMm, high = Math.Max(NodeHeight(from),NodeHeight(to))+BodyHeightMm;
         var nodes = new HashSet<int> { from,to };
         foreach (int column in columns)
         {
@@ -267,13 +359,13 @@ public sealed class GridNavigation
     {
         long dx = bx-ax, dz = bz-az;
         var cells = new List<int>();
-        int xmin = Math.Max(0,Math.Min(ax,bx)-350)/CellSize, xmax = Math.Min(Width-1,(Math.Max(ax,bx)+350)/CellSize);
-        int zmin = Math.Max(0,Math.Min(az,bz)-350)/CellSize, zmax = Math.Min(Height-1,(Math.Max(az,bz)+350)/CellSize);
+        int xmin = Math.Max(0,Math.Min(ax,bx)-BodyRadiusMm)/CellSize, xmax = Math.Min(Width-1,(Math.Max(ax,bx)+BodyRadiusMm)/CellSize);
+        int zmin = Math.Max(0,Math.Min(az,bz)-BodyRadiusMm)/CellSize, zmax = Math.Min(Height-1,(Math.Max(az,bz)+BodyRadiusMm)/CellSize);
         for (int z = zmin; z <= zmax; z++)
         for (int x = xmin; x <= xmax; x++)
         {
             long cross = (2*x*(long)CellSize+CellSize-2L*ax)*dz-(2*z*(long)CellSize+CellSize-2L*az)*dx;
-            if (Math.Abs(cross) <= (CellSize+700L)*(Math.Abs(dx)+Math.Abs(dz))) cells.Add(z*Width+x);
+            if (Math.Abs(cross) <= (CellSize+2L*BodyRadiusMm)*(Math.Abs(dx)+Math.Abs(dz))) cells.Add(z*Width+x);
         }
         return cells.ToArray();
     }
@@ -313,12 +405,28 @@ public sealed class GridNavigation
 
     public bool CanTraverseGroundPoints(int ax, int az, int bx, int bz, IReadOnlySet<int>? occupied = null)
     {
-        if (Math.Min(ax,bx) < 350 || Math.Min(az,bz) < 350
-            || Math.Max(ax,bx)+350L > Width*(long)CellSize || Math.Max(az,bz)+350L > Height*(long)CellSize) return false;
+        if (Math.Min(ax,bx) < BodyRadiusMm || Math.Min(az,bz) < BodyRadiusMm
+            || Math.Max(ax,bx)+(long)BodyRadiusMm > Width*(long)CellSize || Math.Max(az,bz)+(long)BodyRadiusMm > Height*(long)CellSize) return false;
         int from = Cell(ax,az);
         var cells = SweptColumns(ax,az,bx,bz).ToHashSet();
-        if (cells.Any(n => !CanStand(n) || (n != from && occupied?.Contains(n) == true))) return false;
-        return !_blockedEdges.Keys.Any(e => cells.Contains(e.Item1) && cells.Contains(e.Item2));
+        if (cells.Any(n => !(TypedBody ? Allowed[n] : CanStand(n)) || (!TypedBody && n != from && occupied?.Contains(n) == true))) return false;
+        if (TypedBody)
+        {
+            // Object masks already include this body's radius and half a cell.
+            // Check center-line cells against them, not another inflated sweep.
+            int steps = Math.Max(Math.Abs(bx-ax),Math.Abs(bz-az))/Math.Max(1,CellSize/2)+1;
+            for (int i = 0; i <= steps; i++)
+            {
+                int cell = Cell(ax+(int)((long)(bx-ax)*i/steps),az+(int)((long)(bz-az)*i/steps));
+                if (!BasicStand(cell) || (cell != from && occupied?.Contains(cell) == true)) return false;
+            }
+        }
+        if (_blockedEdges.Count > 0)
+            foreach (int a in cells)
+                if (_obstacleEdgeNeighbors.TryGetValue(a,out var neighbors))
+                    foreach (int b in neighbors)
+                        if (cells.Contains(b) && _blockedEdges.ContainsKey((a,b))) return false;
+        return true;
     }
 
     private IEnumerable<int> TopologyNeighbors(int id)
@@ -369,6 +477,32 @@ public sealed class GridNavigation
                 if (cost.TryGetValue(next, out int old) && old <= candidate) continue;
                 cost[next] = candidate; previous[next] = cell;
                 open.Enqueue(next, (candidate + Heuristic(next), next));
+            }
+        }
+        return [];
+    }
+
+    // One bounded search for an entire ring of acceptable combat positions.
+    public List<int> FindPathToAny(int start,IEnumerable<int> destinations,IReadOnlySet<int>? blocked,int maxVisited = 2048)
+    {
+        var goals=destinations.Where(n => CanStand(n) && blocked?.Contains(n) != true && IsConnected(start,n)).ToHashSet();
+        if (goals.Count == 0) return [];
+        var open=new PriorityQueue<int,(int Cost,int Id)>(); open.Enqueue(start,(0,start));
+        var cost=new Dictionary<int,int> {[start]=0}; var previous=new Dictionary<int,int>(); var closed=new HashSet<int>();
+        while (open.TryDequeue(out int node,out _) && closed.Count < maxVisited)
+        {
+            if (!closed.Add(node)) continue;
+            if (goals.Contains(node))
+            {
+                var path=new List<int> {node}; while (previous.TryGetValue(node,out node)) path.Add(node);
+                path.Reverse(); return path;
+            }
+            foreach (int next in Neighbors(node))
+            {
+                if (!CanStand(next) || blocked?.Contains(next) == true || closed.Contains(next)) continue;
+                int score=cost[node]+EdgeCost(node,next);
+                if (cost.TryGetValue(next,out int old) && old <= score) continue;
+                cost[next]=score; previous[next]=node; open.Enqueue(next,(score,next));
             }
         }
         return [];
