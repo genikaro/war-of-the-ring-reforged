@@ -32,9 +32,11 @@ unit's collision radius. Ctrl assignment while inspecting an enemy preserves
 stored friendly groups; recalling a friendly group restores command controls.
 
 Skirmish buildings and neutral interactables select separately from units.
-Buildings show only their own available actions (currently Cancel for an owned
-foundation), while neutral structures and inspected enemy/neutral units have
-empty palettes. Source-selectable food wells, ore piles and the Place of Power
+Buildings show only their own available actions (Cancel for an owned foundation,
+worker training for your Citadel), while neutral structures and inspected
+enemy/neutral units have empty palettes. With your Citadel selected, right-click
+sets its rally point and Backspace cancels the last queued unit, following the
+original manual; see [training](SKIRMISH.md#build-12-citadel-worker-training). Source-selectable food wells, ore piles and the Place of Power
 show original portraits; resources show remaining stock. See [skirmish selection](SKIRMISH.md#build-9-neutral-inspection-and-command-palettes).
 
 A structure-only drag opens one inspector, choosing the visible structure whose

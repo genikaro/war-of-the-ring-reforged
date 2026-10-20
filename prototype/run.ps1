@@ -11,6 +11,7 @@ param(
     [switch]$SkirmishSmoke,
     [switch]$ConstructionSmoke,
     [switch]$StructureSmoke,
+    [switch]$ProductionSmoke,
     [switch]$MeleeSmoke,
     [switch]$EngagementSmoke,
     [switch]$AttackMoveEngagementSmoke,
@@ -45,8 +46,8 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 if ($LASTEXITCODE -ne 0) { throw 'C# build failed' }
 $arguments = @('--path', $PSScriptRoot)
 if ($Resolution) { $arguments += @('--resolution',$Resolution) }
-if ($SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke) { $Skirmish = $true }
-if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $AbilitySmoke -or $SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
+if ($SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke) { $Skirmish = $true }
+if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $AbilitySmoke -or $SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
     $renderRate = if ($MotionSmoke -or $FormationSmoke) { '80' } else { '20' }
     if (-not $CapturePath) { $arguments += '--headless' }
     $arguments += @('--fixed-fps', $renderRate)
@@ -64,6 +65,7 @@ if ($AbilitySmoke) { $arguments += '--ability-smoke' }
 if ($SkirmishSmoke) { $arguments += '--skirmish-smoke' }
 if ($ConstructionSmoke) { $arguments += '--construction-smoke' }
 if ($StructureSmoke) { $arguments += '--structure-smoke' }
+if ($ProductionSmoke) { $arguments += '--production-smoke' }
 if ($MeleeSmoke) { $arguments += '--melee-smoke' }
 if ($EngagementSmoke) { $arguments += '--engagement-smoke' }
 if ($AttackMoveEngagementSmoke) { $arguments += '--attack-move-engagement-smoke' }

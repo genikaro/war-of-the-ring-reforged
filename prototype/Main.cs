@@ -23,6 +23,8 @@ public partial class Main : Node3D
     private ulong _lastGroupTime;
     private readonly HashSet<int> _selected = [];
     private readonly Dictionary<int, UnitView> _views = [];
+    private readonly Dictionary<string,JsonElement> _unitModels = [];
+    private readonly Dictionary<(string File,int Team),Node3D> _modelTemplates = [];
     private readonly Dictionary<int, Node3D> _obstacleViews = [];
     private JsonElement _obstacleLayers;
     private int _pendingObstacle = -1;
@@ -106,6 +108,7 @@ public partial class Main : Node3D
             if (arg == "--skirmish-smoke") _skirmishSmoke = true;
             if (arg == "--construction-smoke") _constructionSmoke = true;
             if (arg == "--structure-smoke") _structureSmoke = true;
+            if (arg == "--production-smoke") _productionSmoke = true;
             if (arg == "--melee-smoke") { _meleeSmoke = _combatSmoke = _smoke = true; }
             if (arg == "--engagement-smoke") _engagementSmoke = true;
             if (arg == "--attack-move-engagement-smoke") _attackMoveEngagementSmoke=_engagementSmoke=true;
@@ -121,7 +124,7 @@ public partial class Main : Node3D
             RefreshDebugMenu();
             _status.Text = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             GD.PushError(error.ToString());
-            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _engagementSmoke || _capture != "") GetTree().Quit(1);
+            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _engagementSmoke || _capture != "") GetTree().Quit(1);
         }
     }
 
@@ -193,7 +196,7 @@ public partial class Main : Node3D
             .Where(surfaceNavigation.CanStand).OrderByDescending(n => {
                 var (x,z) = navigation.Center(n); return navigation.NodeHeight(n)-navigation.GroundHeight(x,z);
             }).First() : -1;
-        var modelTemplates = new Dictionary<(string File,int Team),Node3D>();
+        foreach (var model in manifest.GetProperty("models").EnumerateArray()) _unitModels[model.GetProperty("unit").GetString()!] = model;
         foreach (var spawn in manifest.GetProperty("spawns").EnumerateArray())
         {
             int team = spawn.GetProperty("team").GetInt32(), cell = spawn.GetProperty("cell").GetInt32();
@@ -204,45 +207,7 @@ public partial class Main : Node3D
             if (_skirmish) cell = SkirmishSpawnCell(definition,cell);
             var unit = _world.Spawn(team, cell,definition);
             if (primary) _primarySquad.Add(unit.Id);
-            var root = new Node3D { Name = "Unit_" + unit.Id, PhysicsInterpolationMode = Node.PhysicsInterpolationModeEnum.Off };
-            AddChild(root); root.Position = UnitPosition(unit);
-            var modelKey = (model.GetProperty("file").GetString()!,team);
-            Node3D visual;
-            if (modelTemplates.TryGetValue(modelKey,out var template)) visual = (Node3D)template.Duplicate();
-            else { visual = LoadGlb(modelKey.Item1,_teamColors[team]); modelTemplates.Add(modelKey,visual); }
-            var modelSize = new Node3D { Name = "ModelSize", Scale = Vector3.One*(unit.Definition.ModelScalePpm/1_000_000f) };
-            root.AddChild(modelSize); modelSize.AddChild(visual);
-            var ring = new MeshInstance3D { Mesh = ScenePresentation.SelectionRing(), Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-                MaterialOverride = new StandardMaterial3D {
-                    AlbedoColor = new Color(team == 0 ? "e9c22d" : "e65045"), CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-                    ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
-            root.AddChild(ring);
-            if (!_appearanceData.ContainsKey(modelKey.Item1)) _appearanceData[modelKey.Item1] = UnitAppearance.Read(System.IO.Path.Combine(_cache,modelKey.Item1));
-            var appearance = new UnitAppearance(visual,_appearanceData[modelKey.Item1]);
-            appearance.Apply(model.GetProperty("idle").GetString()!,0);
-            var player = Descendants(visual).OfType<AnimationPlayer>().FirstOrDefault()
-                ?? throw new InvalidOperationException("Missing animation player for "+unit.Definition.Name);
-            foreach (string clip in unit.Definition.Attacks.Select(a => a.Clip).Append(unit.Definition.ReadyClip))
-                if (!player.GetAnimationList().Any(a => a == clip || a.EndsWith('/'+clip)))
-                    throw new InvalidOperationException("Missing combat animation: "+clip);
-            if (_meleeSmoke && unit.Definition.HasMelee)
-                foreach (var attack in unit.Definition.Attacks.Where(a => a.Melee))
-                {
-                    string clip = player.GetAnimationList().First(a => a == attack.Clip || a.EndsWith('/'+attack.Clip));
-                    player.Play(clip); player.Advance(0);
-                    player.Seek(player.CurrentAnimationLength*attack.Hits[0].Tick/attack.DurationTicks,true);
-                    appearance.Apply(attack.Clip,attack.Hits[0].Tick/(double)attack.DurationTicks);
-                    _archerMeleeClipSamples++;
-                }
-            if (_meleeSmoke && unit.Definition.Id == 16)
-            {
-                var idle = appearance.VisibleNodes;
-                appearance.Apply(unit.Definition.ReadyClip,0); var ready = appearance.VisibleNodes;
-                appearance.Apply(unit.Definition.Attacks[0].Clip,0); var attack = appearance.VisibleNodes;
-                appearance.Apply(model.GetProperty("idle").GetString()!,0);
-                _equipmentStatesVerified = !idle.SequenceEqual(ready) && ready.SequenceEqual(attack) && idle.SequenceEqual(appearance.VisibleNodes);
-            }
-            _views[unit.Id] = new UnitView(root,ring,player,model) { Appearance = appearance };
+            AddUnitView(unit);
         }
         _spawnCount = _world.Units.Count;
         _friendlySquads.AddRange(_world.Units.Where(u => u.Team == 0).Select(u => u.Id).Chunk(6));
@@ -271,6 +236,51 @@ public partial class Main : Node3D
         }
     }
 
+    /// <summary>Model, ring and appearance for a start unit or one trained during play.</summary>
+    private void AddUnitView(SimUnit unit)
+    {
+        int team = unit.Team; var model = _unitModels[unit.Definition.Name];
+        var root = new Node3D { Name = "Unit_" + unit.Id, PhysicsInterpolationMode = Node.PhysicsInterpolationModeEnum.Off };
+        AddChild(root); root.Position = UnitPosition(unit);
+        var modelKey = (model.GetProperty("file").GetString()!,team);
+        Node3D visual;
+        if (_modelTemplates.TryGetValue(modelKey,out var template)) visual = (Node3D)template.Duplicate();
+        else { visual = LoadGlb(modelKey.Item1,_teamColors[team]); _modelTemplates.Add(modelKey,visual); }
+        var modelSize = new Node3D { Name = "ModelSize", Scale = Vector3.One*(unit.Definition.ModelScalePpm/1_000_000f) };
+        root.AddChild(modelSize); modelSize.AddChild(visual);
+        var ring = new MeshInstance3D { Mesh = ScenePresentation.SelectionRing(), Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            MaterialOverride = new StandardMaterial3D {
+                AlbedoColor = new Color(team == 0 ? "e9c22d" : "e65045"), CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
+        root.AddChild(ring);
+        if (!_appearanceData.ContainsKey(modelKey.Item1)) _appearanceData[modelKey.Item1] = UnitAppearance.Read(System.IO.Path.Combine(_cache,modelKey.Item1));
+        var appearance = new UnitAppearance(visual,_appearanceData[modelKey.Item1]);
+        appearance.Apply(model.GetProperty("idle").GetString()!,0);
+        var player = Descendants(visual).OfType<AnimationPlayer>().FirstOrDefault()
+            ?? throw new InvalidOperationException("Missing animation player for "+unit.Definition.Name);
+        foreach (string clip in unit.Definition.Attacks.Select(a => a.Clip).Append(unit.Definition.ReadyClip))
+            if (!player.GetAnimationList().Any(a => a == clip || a.EndsWith('/'+clip)))
+                throw new InvalidOperationException("Missing combat animation: "+clip);
+        if (_meleeSmoke && unit.Definition.HasMelee)
+            foreach (var attack in unit.Definition.Attacks.Where(a => a.Melee))
+            {
+                string clip = player.GetAnimationList().First(a => a == attack.Clip || a.EndsWith('/'+attack.Clip));
+                player.Play(clip); player.Advance(0);
+                player.Seek(player.CurrentAnimationLength*attack.Hits[0].Tick/attack.DurationTicks,true);
+                appearance.Apply(attack.Clip,attack.Hits[0].Tick/(double)attack.DurationTicks);
+                _archerMeleeClipSamples++;
+            }
+        if (_meleeSmoke && unit.Definition.Id == 16)
+        {
+            var idle = appearance.VisibleNodes;
+            appearance.Apply(unit.Definition.ReadyClip,0); var ready = appearance.VisibleNodes;
+            appearance.Apply(unit.Definition.Attacks[0].Clip,0); var attack = appearance.VisibleNodes;
+            appearance.Apply(model.GetProperty("idle").GetString()!,0);
+            _equipmentStatesVerified = !idle.SequenceEqual(ready) && ready.SequenceEqual(attack) && idle.SequenceEqual(appearance.VisibleNodes);
+        }
+        _views[unit.Id] = new UnitView(root,ring,player,model) { Appearance = appearance };
+    }
+
     private static IEnumerable<Node> Descendants(Node root)
     {
         yield return root;
@@ -294,6 +304,8 @@ public partial class Main : Node3D
         _commands.WalkRunChosen += ToggleWalkRun;
         _commands.AbilityChosen += ChooseAbility;
         _commands.ConstructionChosen += ChooseConstruction;
+        _commands.TrainingChosen += ChooseTraining;
+        _commands.TrainingCancelled += CancelTraining;
         _commands.StructurePortraitChosen += () => {
             if (_selectedStructure is int id && _structureViews.TryGetValue(id,out var structure))
             { _focus = structure.Root.GlobalPosition; UpdateCamera(); }
@@ -331,7 +343,7 @@ public partial class Main : Node3D
             {
                 if (_orders.Pending != null || _constructionTargeting) CancelTargeting();
                 else if (mouse.AltPressed && !mouse.CtrlPressed) ToggleObstacle(mouse.Position);
-                else
+                else if (!TrySetRallyPoint(mouse.Position))
                 {
                     if (mouse.CtrlPressed && !mouse.AltPressed) _orders.Begin(OrderKind.AttackMove);
                     Order(mouse.Position,mouse.CtrlPressed && mouse.AltPressed,mouse.ShiftPressed);
@@ -364,6 +376,7 @@ public partial class Main : Node3D
             if (abilitySlot >= 0 && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed) ChooseAbility(abilitySlot);
             int groupSlot = key.Keycode == Key.Key0 ? 9 : key.Keycode is >= Key.Key1 and <= Key.Key9 ? (int)key.Keycode-(int)Key.Key1 : -1;
             if (groupSlot >= 0 && !key.AltPressed && !key.MetaPressed) UseGroup(groupSlot,key.CtrlPressed,key.ShiftPressed);
+            if (key.Keycode == Key.Backspace) CancelTraining(-1);
             if (key.Keycode == Key.F4) ToggleDebugMenu();
             if (key.Keycode == Key.F2 && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed) ToggleWalkRun();
             if (key.Keycode == Key.F10) _hud.Visible = !_hud.Visible;
@@ -403,7 +416,7 @@ public partial class Main : Node3D
     public override void _Input(InputEvent input)
     {
         // Rendered automation must not consume live desktop input between its scripted events.
-        if ((_constructionSmoke || _structureSmoke) && !_injectingConstructionInput) { GetViewport().SetInputAsHandled(); return; }
+        if ((_constructionSmoke || _structureSmoke || _productionSmoke) && !_injectingConstructionInput) { GetViewport().SetInputAsHandled(); return; }
         if (input is InputEventMouseMotion motion) _pointerPosition = motion.Position;
         else if (input is InputEventMouseButton pointer) _pointerPosition = pointer.Position;
         // GUI controls consume their own releases. End any battlefield drag
@@ -567,6 +580,7 @@ public partial class Main : Node3D
         _singleStepRequested = false;
         long stepStart=_engagementSmoke?System.Diagnostics.Stopwatch.GetTimestamp():0;
         _world.Step();
+        while (_views.Count < _world.Units.Count) AddUnitView(_world.Units[_views.Count]);
         if (_skirmish) ApplySkirmishHud(_commands);
         if (_engagementSmoke) RecordEngagementStep(System.Diagnostics.Stopwatch.GetElapsedTime(stepStart).TotalMilliseconds);
         PresentCombatEvents();
@@ -691,7 +705,7 @@ public partial class Main : Node3D
         PresentHealingEffects();
         float right = (Input.IsPhysicalKeyPressed(Key.Right) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Left) ? 1 : 0);
         float forward = (Input.IsPhysicalKeyPressed(Key.Down) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Up) ? 1 : 0);
-        if (_constructionSmoke || _structureSmoke) right = forward = 0;
+        if (_constructionSmoke || _structureSmoke || _productionSmoke) right = forward = 0;
         Pan(right * dt * _distance * 0.6f, forward * dt * _distance * 0.6f);
         UpdateCamera();
         _selected.RemoveWhere(id => !LivingUnit(id));
@@ -707,6 +721,7 @@ public partial class Main : Node3D
             _commands.RefreshConstruction(_world,units,_constructionTargeting,_constructionKind);
             PresentConstruction();
             PresentStructureSelection();
+            PresentProduction();
             UpdateConstructionPreview();
         }
         _presentStep = false;
@@ -717,10 +732,10 @@ public partial class Main : Node3D
         if (_ordersSmoke) OrdersSmokeInput();
         if (_abilitySmoke) AbilitySmokeInput();
         if (_skirmishSmoke) SkirmishSmokeInput();
-        if (_constructionSmoke || _structureSmoke)
+        if (_constructionSmoke || _structureSmoke || _productionSmoke)
         {
             _injectingConstructionInput = true;
-            try { if (_structureSmoke) StructureSmokeInput(); else ConstructionSmokeInput(); }
+            try { if (_structureSmoke) StructureSmokeInput(); else if (_productionSmoke) ProductionSmokeInput(); else ConstructionSmokeInput(); }
             finally { _injectingConstructionInput = false; }
         }
         if (_engagementSmoke) { if (_formationSmoke) FormationSmokeInput(); else EngagementSmokeInput(); }
@@ -748,7 +763,7 @@ public partial class Main : Node3D
         if (_smoke) SmokeInput();
         if (_smoke && _capture != "" && _frames == (_combatSmoke ? 180 : 60)) _ = CaptureFrame(false);
         if (_smoke && _world.Tick >= 420) FinishSmoke();
-        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_engagementSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
+        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_productionSmoke && !_engagementSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
     }
 
     private string UnitName(int id) => _world!.Units[id].Definition.DisplayName;

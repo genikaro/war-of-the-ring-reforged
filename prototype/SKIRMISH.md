@@ -9,10 +9,12 @@ tracks what exists; planning lives in `tools/Roadmap.md` (Phase 4 economy).
 ```powershell
 python tools/prepare_prototype.py --skirmish   # one-time, builds converted/skirmish
 python tools/skirmish_construction.py --cache converted/skirmish  # upgrade an existing build-4 through build-8 cache
+python tools/skirmish_production.py --cache converted/skirmish    # add build-12 training data to a build-8 through build-11 cache
 ./prototype/run.ps1 -Skirmish
 ./prototype/run.ps1 -SkirmishSmoke             # headless checks
 ./prototype/run.ps1 -ConstructionSmoke         # construction, cancellation and both resources
 ./prototype/run.ps1 -StructureSmoke            # buildings, neutral interactables, palettes, counters and gap movement
+./prototype/run.ps1 -ProductionSmoke           # Citadel worker training, queue cancellation, rally point and spawning
 ```
 
 The cache is separate from `converted/prototype` (Helm's Deep), so both sandboxes
@@ -38,8 +40,9 @@ no behavior and no AI; nothing in build-4 changes unit rules.
 ## Known limits
 
 - Mill/Foundry construction and gathering, building and neutral-object selection
-  work. General placement, the remaining Tier 1 buildings, training, repair and
-  combat against buildings remain open.
+  and Citadel worker training work. General placement, the remaining Tier 1
+  buildings, Frodo and Barracks/Dwarf Hall training, repair and combat against
+  buildings remain open.
 - Worker build/gather animation and equipment, exact work ranges and controlled
   original-game timing comparisons remain open.
 - Start Citadel orientation is 0 degrees, not the original game's. Start-worker
@@ -301,3 +304,62 @@ Validation: clean C# build; the 61-case structure/selection smoke passes with
 rendered captures at 1280x800 and 4K. Helm's Deep's gameplay smoke and import
 audit pass, retaining mipmaps, vertex-color/water bindings and team materials.
 Both maps' rendered views were inspected.
+
+## Build-12: Citadel worker training
+
+Select your Citadel and click the Human Worker portrait in the action panel.
+Each click queues one more worker, up to five. The cost is paid and the
+population is reserved on the click, as in the original manual and `local-019`
+(4/10 becomes 5/10 before the worker exists). The selection panel shows the
+worker in training on the original purple `console_g_progressbar`, followed by
+the queued portraits. Click any of those portraits to cancel that unit, or press
+Backspace to cancel the last one queued, as the manual describes. The Train
+button is disabled with its reason when food, population or queue space runs
+out. Pause freezes training.
+
+The finished worker appears outside the Citadel on the training tick and inherits
+the army's Walk/Run pace. It is selectable, receives an animated model and offers
+the normal worker construction actions. Right-click the battlefield with your
+Citadel selected to set a rally point, shown by the original `MODEL_G_GATHER_POINT`
+banner in team color. New units walk to it. Right-clicking again moves it.
+Enemy Citadels show no training controls.
+
+| Source rule | Value |
+|---|---|
+| Citadel `UnitProduced1..6` | Human Worker; Frodo (model not exported), Gimli/Aragorn/Legolas (Citadel 2) and Gandalf (Citadel 5) are listed as unavailable |
+| Human Worker `FoodCost / OreCost / PopulationCost` | 35 / 0 / 1 |
+| `UnitTrainingTime` (milliseconds, rounded up to 20 Hz ticks) | 12,000 / 240 |
+| Citadel / Camp `AdditionalPopAdded` | 10 / 11 |
+| `WorldVariables.DefaultInitialPopulationCapacity / MaxPopulationCap` | 0 / 100 |
+
+`tools/skirmish_production.py` imports these rules for every Tier 1 producer and
+records why each listed unit is unavailable. Barracks (Gondor Swordsman) and
+Dwarf Hall (Dwarf Axethrower) data is already present for later builds. The HUD
+population now comes from the simulation: living units plus queued reservations
+against building capacity.
+
+Adapter policies awaiting original-game measurement: cancelling refunds the full
+cost (no source refund field exists for training); the queue holds five units;
+a unit appears on the nearest free standing cell to the building center that
+connects to the base, rather than at a recovered door position. When every exit
+cell is occupied, the finished unit waits at 100% until space clears. A rally
+point is a ground move; rallying onto a resource or unit is not interpreted.
+
+Existing build-8 through build-11 caches need
+`python tools/skirmish_production.py --cache converted/skirmish` (seconds; it
+exports only the banner and training data). The full upgrade and fresh
+preparation also include it. The local cache is already updated. Restart to load
+build-12.
+
+Validation: 655 synthetic / 722 Helm's Deep simulation checks, 30 worker-cache
+checks and 166 Python tests pass. The new production checks cover payment,
+reservation, exact timing, spawning just outside the footprint, queue and
+population limits, active/last cancellation refunds, ownership, rally arrival,
+pace inheritance, blocked exits and replay. The 17-case Godot production check
+drives the real Train button, queue portrait, Backspace, right-click rally, pause
+and enemy inspection, then waits for the trained worker to reach the rally point
+and selects it. Structure (61), command (49), gathering (23), construction (23),
+orders (27) and ability (38) checks, plus the Helm's Deep gameplay and melee
+smokes, pass. The structure check now expects the Citadel palette to contain
+training and right-click to set only a rally point. Rendered captures at 1280x800
+and 4K were inspected.

@@ -17,6 +17,7 @@ import prototype_assets
 import skirmish_map
 import skirmish_economy
 import skirmish_construction
+import skirmish_production
 import prototype_navigation
 import prototype_obstacles
 import prototype_interface
@@ -306,6 +307,7 @@ def prepare_skirmish(output, install=None):
         if name in skirmish_construction.BUILDINGS.values():
             prototype_assets.restore_building(target)
         building_files[name] = 'buildings/' + target.name
+    production = skirmish_production.export(output, resolver, roster)
     variables = resolver.db['WorldVariables'].records[0]
     citadel = resolver.db['Buildings'].get(skirmish_map.CITADEL)
     population = sum(resolver.db['Units'].get('UNIT_G_HUMAN_WORKER')['PopulationCost'] for _ in range(skirmish_map.START_WORKERS))
@@ -315,16 +317,17 @@ def prepare_skirmish(output, install=None):
     camera_cell = int(y / spacing) * width + int(x / spacing)
     manifest = {'format_version': 1, 'mode': 'skirmish', 'name': "Bilbo's Bluffs — Good Skirmish", 'map': 'map/scene.glb',
                 'team_colors': team_colors(resolver), 'models': models, 'spawns': spawns, 'groups': groups, 'camera_cell': camera_cell,
-                'rules': 'Imported combat stats, resource-site construction and carried food/ore; training and the rest of Tier 1 remain open.',
+                'rules': 'Imported combat stats, resource-site construction, carried food/ore and Citadel worker training; the rest of Tier 1 remains open.',
                 'skirmish': {'start_state': start_state, 'resources': nodes, 'building_files': building_files,
                              'selectable_objects': skirmish_map.selectable_objects(scene, resolver),
                              'economy': skirmish_economy.economy_data(resolver),
                              'construction': construction,
+                             'production': production,
                              'bases': [{'team': b['team'], 'start_point': b['start_point'], 'position': b['position'],
                                         'building': skirmish_map.CITADEL, 'footprint_object': b['footprint']['object_id'],
                                         'worker_cells': b['worker_cells']} for b in bases]},
                 'source_sha256': metadata['sha256']}
-    finish_cache(output, resolver, manifest, models, sorted(building_files.values()))
+    finish_cache(output, resolver, manifest, models, sorted(building_files.values()) + [skirmish_production.RALLY_BANNER_FILE])
     return manifest
 
 

@@ -4,6 +4,14 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
+**build-12:** the Citadel trains Human Workers. Select it and click the worker
+portrait; repeated clicks queue up to five. Cost and population are paid when
+queued. Cancel from the selection-panel portraits or with Backspace for a full
+refund. Right-click the battlefield with the Citadel selected to set a rally
+point (original banner). Add the training data to an existing skirmish cache with
+`python tools/skirmish_production.py --cache converted/skirmish`, then restart.
+The local cache is already updated. See [skirmish notes](SKIRMISH.md#build-12-citadel-worker-training).
+
 **build-11:** brighter ambient lighting and softer baked terrain shadows make
 the dark patches readable. Runtime terrain shading lifts shadow intensity while
 preserving its color ratios, alpha and fully lit values. Cast building/tree
@@ -236,6 +244,9 @@ checked before loading. Never distribute the local cache with the project.
 | Shift + selection | Add to selection |
 | Shift + structure click | Select/toggle that structure separately from units |
 | Structure portrait | Center the camera on the selected structure |
+| Citadel selected: worker portrait | Train a Human Worker; click again to queue (five maximum) |
+| Citadel selected: training portrait / Backspace | Cancel that unit / the last queued unit, with a full refund |
+| Citadel selected: right-click terrain | Set the rally point for trained units |
 | 1 / 2 / 3 | Select the corresponding blue squad |
 | Ctrl + 1–9 / 0 | Assign the selection to a control group (1–3 start with the demo squads) |
 | Shift + 1–9 / 0 | Add the selection to that stored group |
@@ -293,6 +304,7 @@ a normal viewport capture with `-CapturePath`.
 ./prototype/run.ps1 -SkirmishSmoke
 ./prototype/run.ps1 -ConstructionSmoke
 ./prototype/run.ps1 -StructureSmoke
+./prototype/run.ps1 -ProductionSmoke
 ./prototype/run.ps1 -SurfaceSmoke
 ./prototype/run.ps1 -ObstacleSmoke
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --movement-benchmark converted/prototype/movement-after.json

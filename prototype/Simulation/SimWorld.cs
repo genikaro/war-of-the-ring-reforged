@@ -116,15 +116,20 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     {
         definition ??= UnitDefinition.Probe; definition.Validate();
         if (!Navigation.ForBody(definition.BodyRadiusMm,definition.BodyHeightMm).CanStand(cell)) throw new ArgumentException("Spawn cell is blocked for this body");
-        var (x, z) = Navigation.Center(cell);
-        int y = Navigation.NodeHeight(cell);
-        var candidate = new SimUnit(Units.Count,team,x,z) { Node = cell,Y = y,Definition = definition,Walking = IsWalking(team),
-            HealthMilli = (long)definition.MaxHealth*1000*definition.StartingHealthPercent/100 };
-        if (!CanReserveMovement(candidate,cell) || OccupiedNodes(-1).Contains(cell) || Units.Any(u => u.Health > 0
-            && BodiesOverlap(candidate,u)))
-            throw new ArgumentException("Spawn cell occupied");
+        var candidate = SpawnCandidate(team,cell,definition);
+        if (!CanPlace(candidate)) throw new ArgumentException("Spawn cell occupied");
         Units.Add(candidate); return candidate;
     }
+
+    private SimUnit SpawnCandidate(int team,int cell,UnitDefinition definition)
+    {
+        var (x, z) = Navigation.Center(cell);
+        return new SimUnit(Units.Count,team,x,z) { Node = cell,Y = Navigation.NodeHeight(cell),Definition = definition,Walking = IsWalking(team),
+            HealthMilli = (long)definition.MaxHealth*1000*definition.StartingHealthPercent/100 };
+    }
+
+    private bool CanPlace(SimUnit candidate) => CanReserveMovement(candidate,candidate.Node) && !OccupiedNodes(-1).Contains(candidate.Node)
+        && !Units.Any(u => u.Health > 0 && BodiesOverlap(candidate,u));
 
     public void Enqueue(int team, IEnumerable<int> units, int cell, int target = -1)
         => Enqueue(team, units, target >= 0 ? OrderKind.Attack : OrderKind.Move, cell, target);
@@ -160,6 +165,9 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     {
         if (command.Kind == OrderKind.Build) { BeginConstruction(command,activating); return; }
         if (command.Kind == OrderKind.CancelConstruction) { CancelConstruction(command); return; }
+        if (command.Kind == OrderKind.Train) { BeginTraining(command); return; }
+        if (command.Kind == OrderKind.CancelTraining) { CancelTraining(command); return; }
+        if (command.Kind == OrderKind.SetRallyPoint) { SetRallyPoint(command); return; }
         if (command.Kind == OrderKind.Gather) { BeginGather(command,activating); return; }
         if (command.Kind == OrderKind.UseAbility) { BeginAbility(command); return; }
         if (command.Kind == OrderKind.ToggleWalkRun)
@@ -501,6 +509,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         }
         ActivateQueuedOrders();
         UpdateConstruction();
+        UpdateProduction();
         if (_navigationRevision != Navigation.Revision)
         {
             // Rebuild routes at a tick boundary. Starting from the last reached
@@ -692,6 +701,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         text += ":abilities:"+string.Join(';',Units.Select(u => $"{u.AbilitySlot},{u.CastStartTick},{u.CastSerial},{u.CastApplied}:{string.Join(',',u.AbilityReadyAt)}"));
         text += EconomyDigest();
         text += ConstructionDigest();
+        text += ProductionDigest();
         text += ":"+_projectileSequence+":"+string.Join(';',Projectiles);
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
     }

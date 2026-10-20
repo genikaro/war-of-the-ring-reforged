@@ -26,6 +26,7 @@ public partial class Main
         {
             hud.RefreshConstruction(_world,selected,_constructionTargeting,_constructionKind);
             hud.RefreshStructure(SelectedStructureDetails());
+            hud.RefreshProduction(_world,SelectedProducer());
         }
         await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
         await ToSignal(RenderingServer.Singleton,RenderingServer.SignalName.FramePostDraw);

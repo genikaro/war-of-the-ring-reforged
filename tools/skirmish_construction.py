@@ -74,10 +74,13 @@ def refresh(output):
     prototype_clearance.refresh(output)
     prototype_interface.export(output, resolver)
     import skirmish_economy
+    import skirmish_production
     data['economy'] = skirmish_economy.economy_data(resolver)
+    data['production'] = skirmish_production.export(output, resolver, [m['unit'] for m in manifest['models']])
     data['construction'] = construction
     data['selectable_objects'] = skirmish_map.selectable_objects(scene, resolver)
-    for file in [output/'navigation.json', output/'heights.bin', *building_paths, *sorted((output/'interface').glob('*'))]:
+    for file in [output/'navigation.json', output/'heights.bin', *building_paths, output/skirmish_production.RALLY_BANNER_FILE,
+                 *sorted((output/'interface').glob('*'))]:
         manifest['files'][file.relative_to(output).as_posix()] = hashlib.sha256(file.read_bytes()).hexdigest()
     path.write_text(json.dumps(manifest, indent=2)+'\n')
 

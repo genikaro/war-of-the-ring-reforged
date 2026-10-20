@@ -58,7 +58,7 @@ public partial class Main
                 _structureOre = world.Resources.Values.Where(r => r.Kind == ResourceKind.Ore).MinBy(r => SimWorld.DistanceSquared(r.X,r.Z,world.Units[0].X,world.Units[0].Z))!.Id;
                 Choose(10000); break;
             case 6:
-                _structureChecks["citadel_palette_empty"] = _commands.CommandPaletteEmpty;
+                _structureChecks["citadel_palette_only_training"] = _commands.PaletteOnlyTraining;
                 _structureChecks["structure_hp_counter_centered"] = _commands.StructureHealthCounterCentered;
                 _structureChecks["resource_counters_centered"] = _commands.ResourceCountersCentered;
                 _structureChecks["all_neutral_interactables_registered"] = world.Resources.Keys.All(id => _structureViews.TryGetValue(id,out var v) && v.Team == -1)
@@ -70,7 +70,9 @@ public partial class Main
                 _structureCommandsBefore = world.Commands.Count; PushKey(Key.M); PushKey(Key.S);
                 Click(_camera.UnprojectPosition(PositionOf(50500,50500)),MouseButton.Right); break;
             case 8:
-                _structureChecks["structure_cannot_receive_unit_commands"] = world.Commands.Count == _structureCommandsBefore && !_commands.CommandsAvailable;
+                // Right-click with a producer selected sets its rally point; unit commands never reach the structure.
+                _structureChecks["structure_cannot_receive_unit_commands"] = world.Commands.Skip(_structureCommandsBefore)
+                    .All(c => c.Kind == OrderKind.SetRallyPoint && c.Units.Length == 0) && !_commands.CommandsAvailable;
                 GroupKey(Key.Key1,ctrl: true);
                 _structureChecks["structure_does_not_erase_unit_group"] = _controlGroups.Recall(0,LivingFriendly).Length == 4;
                 PushKey(Key.Key1); break;
@@ -189,7 +191,7 @@ public partial class Main
                 Box(10000); break;
             case 2033:
                 _structureChecks["box_selects_owned_structure"] = _selectedStructure == 10000 && _selected.Count == 0
-                    && _commands.StructureDetailsVisible && _commands.CommandPaletteEmpty;
+                    && _commands.StructureDetailsVisible && _commands.PaletteOnlyTraining;
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-marquee.png");
                 break;
             case 2035: PushKey(Key.Key1); break;

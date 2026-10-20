@@ -61,6 +61,7 @@ AbilityChecks.Run(Check);
 HealingPlaybackChecks.Run(Check);
 EconomyChecks.Run(Check);
 ConstructionChecks.Run(Check);
+ProductionChecks.Run(Check);
 WorkerTrafficChecks.Run(Check);
 FootprintChecks.Run(Check);
 BodyCollisionChecks.Run(Check);

@@ -47,6 +47,7 @@ public partial class Main
         LoadSkirmishEconomy(data);
         LoadSkirmishConstruction(data);
         LoadNeutralStructures(data);
+        LoadSkirmishProduction(data);
         ApplySkirmishHud(_commands);
     }
 
@@ -54,8 +55,7 @@ public partial class Main
     {
         panel.ShowResources(true);
         var bank = _world!.Economies.GetValueOrDefault(0);
-        int population = _world.Units.Count(u => u.Team == 0 && u.Health > 0);
-        panel.SetResources(population,_startState.Capacity,bank?.Food ?? _startState.Food,bank?.Ore ?? _startState.Ore);
+        panel.SetResources(_world.PopulationUsed(0),_world.PopulationCapacity(0),bank?.Food ?? _startState.Food,bank?.Ore ?? _startState.Ore);
     }
 
     private void LoadSkirmishEconomy(JsonElement data)
