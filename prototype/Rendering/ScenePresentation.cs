@@ -10,6 +10,7 @@ public sealed class ScenePresentation
         int MissingMipmapsAfter, int Materials, int TeamMaterials, int VertexColorSurfaces,
         int DisabledVertexColorsBefore, int DisabledVertexColorsAfter);
     public List<ImportAudit> Imports { get; } = [];
+    public PreviewLighting.TerrainAudit? TerrainShading { get; private set; }
 
     public Node3D Load(string path, string name, Color? teamColor = null)
     {
@@ -37,6 +38,9 @@ public sealed class ScenePresentation
         }
         var scene = document.GenerateScene(state) as Node3D
             ?? throw new InvalidOperationException("glTF scene has no 3D root");
+        if (name == "map/scene.glb")
+            foreach (var terrain in Descendants(scene).OfType<MeshInstance3D>().Where(m => m.Name == "Terrain"))
+                TerrainShading = PreviewLighting.SoftenTerrainShading(terrain);
         var materials = new HashSet<ulong>();
         int teamMaterials = 0, vertexColorSurfaces = 0, disabledBefore = 0, disabledAfter = 0;
         foreach (var mesh in Descendants(scene).OfType<MeshInstance3D>())

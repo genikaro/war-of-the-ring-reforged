@@ -179,14 +179,9 @@ public partial class Main : Node3D
                 if (view == null) throw new InvalidOperationException("Obstacle visual missing: " + obstacle.GetProperty("name").GetString());
                 _obstacleViews.Add(obstacle.GetProperty("id").GetInt32(), view);
             }
-        var environment = new WorldEnvironment { Environment = new Godot.Environment {
-            BackgroundMode = Godot.Environment.BGMode.Color, BackgroundColor = new Color("18222b"),
-            AmbientLightSource = Godot.Environment.AmbientSource.Color, AmbientLightColor = new Color("b8bfcb"), AmbientLightEnergy = 0.45f,
-            TonemapMode = Godot.Environment.ToneMapper.Linear } };
-        AddChild(environment);
         // Preview lighting, not a decoded original-game time-of-day model.
-        AddChild(new DirectionalLight3D { RotationDegrees = new Vector3(-55, -25, 0), LightEnergy = 0.85f, ShadowEnabled = true,
-            DirectionalShadowMaxDistance = 500 });
+        AddChild(PreviewLighting.CreateEnvironment());
+        AddChild(PreviewLighting.CreateSun());
         _camera = new Camera3D { Current = true, Fov = 48, Near = 0.1f, Far = 1200 };
         AddChild(_camera);
         var (cx, cz) = navigation.Center(manifest.GetProperty("camera_cell").GetInt32());
@@ -988,7 +983,7 @@ public partial class Main : Node3D
                     _commands.GetGlobalRect().Size.X,_commands.GetGlobalRect().Size.Y },
                 map_sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
                     System.IO.File.ReadAllBytes(System.IO.Path.Combine(_cache, "map/scene.glb")))).ToLowerInvariant(),
-                preview_lighting = new { ambient_energy = .45f, sun_energy = .85f, tonemapper = "Linear", diffuse = "Lambert", specular = "Disabled" },
+                preview_lighting = PreviewLighting.Metadata,terrain_shading = _presentation.TerrainShading,
                 imports = _presentation.Imports, original_game_fidelity_verified = false };
             System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(destination, ".json"),
                 JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));

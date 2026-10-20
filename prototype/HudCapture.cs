@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Rendering;
 using System.Text.Json;
 
 public partial class Main
@@ -34,6 +35,7 @@ public partial class Main
         System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(destination,".json"),JsonSerializer.Serialize(new {
             width = image.GetWidth(),height = image.GetHeight(),offscreen = true,hud_scale_percent = hud.ScalePercent,
             hud_effective_scale = hud.EffectiveScale,hud_bounds = new[] { bounds.Position.X,bounds.Position.Y,bounds.Size.X,bounds.Size.Y },
+            preview_lighting = PreviewLighting.Metadata,terrain_shading = _presentation.TerrainShading,
             original_game_fidelity_verified = false },new JsonSerializerOptions { WriteIndented = true }));
         GD.Print("CAPTURE "+destination+" "+error); viewport.QueueFree();
         if (quit) GetTree().Quit(error == Error.Ok ? 0 : 1);

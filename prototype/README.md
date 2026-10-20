@@ -4,6 +4,12 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
+**build-11:** brighter ambient lighting and softer baked terrain shadows make
+the dark patches readable. Runtime terrain shading lifts shadow intensity while
+preserving its color ratios, alpha and fully lit values. Cast building/tree
+shadows remain. The original cache stays intact; restart without rebuilding it.
+Preview settings and the terrain adjustment are recorded in capture metadata.
+
 **build-10:** drag selection includes buildings and neutral interactables when
 the box contains no friendly units. Units take priority, including those retained
 by Shift-drag. Selection stays separate: a structure-only box opens one structure

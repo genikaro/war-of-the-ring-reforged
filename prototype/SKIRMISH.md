@@ -44,7 +44,7 @@ no behavior and no AI; nothing in build-4 changes unit rules.
   original-game timing comparisons remain open.
 - Start Citadel orientation is 0 degrees, not the original game's. Start-worker
   placement is an approximation of the original layout.
-- The preview lighting is dark on this map; no lighting or fog-of-war work yet.
+- Fog of war, animated weather and original-game lighting reproduction remain open.
 - Tier 1 here means buildings and units requiring only the Citadel (see the
   Roadmap plan); Shieldbreaker (Skills structure) and Rohan Rider (Citadel 2) are
   outside it.
@@ -275,3 +275,29 @@ Validation: the structure Godot check expands to 61 cases, covering mixed
 unit/structure priority, partial mesh selection, owned/enemy/neutral structures,
 reverse dragging, Shift retention and empty boxes. The command check retains
 49 passing cases. Rendered selection checks pass at 1280x800 and 4K.
+
+## Build-11: brighter environment and softer terrain shadows
+
+The owner reported an overly dark environment, particularly the cloud-like
+patches. The imported terrain contains very dark baked vertex shading, with
+almost half of Bilbo's Bluffs' terrain vertices below 0.1 peak RGB in linear
+space. This renderer has no animated cloud-shadow layer; increasing a sun light
+alone cannot recover detail already multiplied almost to black.
+
+Ambient energy increases from 0.45 to 0.70; sun energy remains 0.85. At runtime,
+terrain vertex peak intensity becomes `0.24 + 0.76 * peak`. RGB ratios retain
+the original tint, black becomes neutral gray, alpha is preserved and fully lit
+terrain stays unchanged. Only the terrain mesh receives this adjustment. Water,
+object textures, team colors, geometry and source/cache files retain their data.
+Cast shadows remain enabled, with more ambient fill in shaded areas.
+
+`Rendering/PreviewLighting.cs` owns the preview settings. Capture metadata reads
+them directly and records the number of terrain surfaces/vertices and the
+darkest intensity before/after the adjustment. This is a readability preference;
+original-game lighting/weather fidelity remains unverified. No cache refresh is
+required: restart to load build-11.
+
+Validation: clean C# build; the 61-case structure/selection smoke passes with
+rendered captures at 1280x800 and 4K. Helm's Deep's gameplay smoke and import
+audit pass, retaining mipmaps, vertex-color/water bindings and team materials.
+Both maps' rendered views were inspected.

@@ -30,6 +30,14 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-11 (Oct 20):** brightened ambient lighting and softened the owner's
+reported dark terrain patches. Runtime shading lifts baked terrain intensity
+while preserving hue, alpha and fully lit values; cast shadows remain. Source
+assets/caches and simulation geometry are unchanged. Preview settings and terrain
+adjustment audits are recorded in captures. Clean build, 61 structure checks,
+Helm's Deep gameplay/import checks and 1280x800/4K visual checks pass. Restart;
+no cache refresh required. See [skirmish notes](../prototype/SKIRMISH.md#build-11-brighter-environment-and-softer-terrain-shadows).
+
 **Build-10 (Oct 20):** box selection includes buildings and neutral interactables
 when no friendly units are selected. Units take priority, including Shift-retained
 units; structure selection remains a single inspector. Visible triangle overlap
