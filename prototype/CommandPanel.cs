@@ -81,7 +81,7 @@ public partial class CommandPanel : Control
         var healthFrame = new Panel { Position = new(0,85),Size = new(248,16),MouseFilter = MouseFilterEnum.Ignore };
         healthFrame.AddThemeStyleboxOverride("panel",Border(new Color("282418"),new Color("bda56b"))); _single.AddChild(healthFrame);
         _singleHealth = new ColorRect { Position = new(2,87),Size = new(244,12),Color = new Color("48972e"),MouseFilter = MouseFilterEnum.Ignore }; _single.AddChild(_singleHealth);
-        _singleHealthText = Text("",new(0,85),new(248,16),11); _singleHealthText.HorizontalAlignment = HorizontalAlignment.Center; _single.AddChild(_singleHealthText);
+        _singleHealthText = Counter("",new(0,85),new(248,16),11,HorizontalAlignment.Center); _single.AddChild(_singleHealthText);
         _typeIcon = new TextureRect { Position = new(270,28),Size = new(47,48),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Stop }; _single.AddChild(_typeIcon);
         _statsBackground = new TextureRect { Position = new(333,28),Size = new(171,77),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Ignore }; _single.AddChild(_statsBackground);
         string[] statNames = ["Attack","Armor","Victories"];
@@ -150,7 +150,7 @@ public partial class CommandPanel : Control
     private (TextureRect Icon,Label Text) ResourceCell(float x,float iconWidth,string tip)
     {
         var icon = new TextureRect { Position = new(x,3),Size = new(iconWidth,15),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Stop,TooltipText = tip };
-        var text = Text("",new(x+iconWidth+4,2),new(74-iconWidth,18),14); text.MouseFilter = MouseFilterEnum.Stop; text.TooltipText = tip;
+        var text = Counter("",new(x+iconWidth+4,3),new(74-iconWidth,15),14); text.MouseFilter = MouseFilterEnum.Stop; text.TooltipText = tip;
         _resources.AddChild(icon); _resources.AddChild(text); return (icon,text);
     }
 
@@ -169,6 +169,16 @@ public partial class CommandPanel : Control
         var label = new Label { Text = value,Position = position,Size = size,MouseFilter = MouseFilterEnum.Ignore,ClipText = true,VerticalAlignment = VerticalAlignment.Center };
         label.AddThemeFontSizeOverride("font_size",fontSize); label.AddThemeColorOverride("font_color",new Color("fff3cb"));
         label.AddThemeColorOverride("font_shadow_color",new Color("201b12")); label.AddThemeConstantOverride("shadow_offset_x",1); label.AddThemeConstantOverride("shadow_offset_y",1); return label;
+    }
+
+    private static Label Counter(string value,Vector2 position,Vector2 size,int fontSize,HorizontalAlignment alignment = HorizontalAlignment.Left)
+    {
+        var label = Text(value,position,size,fontSize);
+        // A font's minimum line height can already have expanded the Label
+        // before it enters the tree. Keep its actual rect centered in the slot.
+        void Align() => label.Position = new(position.X,position.Y+(size.Y-label.Size.Y)/2);
+        label.Resized += Align; label.HorizontalAlignment = alignment; Align();
+        return label;
     }
 
     private static void Skin(Button button)
@@ -223,6 +233,7 @@ public partial class CommandPanel : Control
     {
         bool available = units.Count > 0;
         _structureDetails.Visible = false;
+        foreach (var button in _constructionButtons) { button.Visible = false; button.Disabled = true; }
         bool controllable = available && units.All(u => u.Team == 0);
         bool single = units.Count == 1;
         RefreshAbilities(units,pending,tick,pendingAbilitySlot);
@@ -237,7 +248,7 @@ public partial class CommandPanel : Control
         string pace = walking ? "Walking" : "Running";
         _walkRun.TooltipText = $"Global Walk / Run [F2] · {pace}\nSwitch movement pace for your entire army, including future units.\nWorks with any selection. Current orders and queued waypoints continue.";
         if (available) _order.Text += " · "+pace;
-        if (available && !controllable) _order.Text = "Enemy unit · Inspecting";
+        if (available && !controllable) _order.Text = (units.All(u => u.Team < 0) ? "Neutral unit" : "Enemy unit")+" · Inspecting";
         string key = string.Join(',',units.Select(u => u.Id));
         if (_rosterKey != key)
         {
@@ -278,6 +289,7 @@ public partial class CommandPanel : Control
         }
         foreach (var (kind,button) in _buttons)
         {
+            button.Visible = controllable;
             button.Disabled = !controllable;
             button.SetPressedNoSignal(controllable && (PanelCommand(pending) == kind || (pending == null && units.All(u => PanelCommand(u.Order) == kind))));
         }
@@ -319,7 +331,7 @@ public partial class CommandPanel : Control
 
     private void RefreshAbilities(IReadOnlyList<SimUnit> units,OrderKind? pending,int tick,int pendingSlot)
     {
-        var hero = units.FirstOrDefault(u => u.Team == 0 && u.Definition.Abilities?.Length > 0);
+        var hero = units.All(u => u.Team == 0) ? units.FirstOrDefault(u => u.Definition.Abilities?.Length > 0) : null;
         for (int slot = 0; slot < 4; slot++)
         {
             var button = _abilities[slot]; var ability = hero?.Ability(slot);
@@ -346,6 +358,10 @@ public partial class CommandPanel : Control
     public TextureButton WalkRunButton => _walkRun;
     public TextureButton MenuButton => _menu;
     public bool CommandsAvailable => _buttons.Values.All(b => !b.Disabled);
+    public bool CommandPaletteEmpty => !_buttons.Values.Concat(_abilities).Concat(_constructionButtons).Any(b => b.Visible);
+    public bool HealthCounterCentered => Math.Abs(_singleHealthText.GetRect().GetCenter().Y-_singleHealth.GetRect().GetCenter().Y) < .01f;
+    public bool ResourceCountersCentered => new[] {(_populationIcon,_populationText),(_foodIcon,_foodText),(_oreIcon,_oreText)}
+        .All(p => Math.Abs(p.Item1.GetRect().GetCenter().Y-p.Item2.GetRect().GetCenter().Y) < .01f);
     public bool SingleUnitDetailsVisible => _single.Visible;
     public string DisplayedVictories => _victoriesValue.Text;
     public string DisplayedName => _title.Text;

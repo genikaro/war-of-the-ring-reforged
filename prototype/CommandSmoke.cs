@@ -164,6 +164,7 @@ public partial class Main
                 _inspectedEnemy = visibleEnemy.Id; _commandsBeforeCancel = world.Commands.Count;
                 Click(_camera.UnprojectPosition(UnitPosition(visibleEnemy)+Vector3.Up)); break;
             case 153:
+                _commandChecks["enemy_palette_empty"] = _commands.CommandPaletteEmpty;
                 _commandChecks["enemy_click_inspects_stats"] = _selected.SetEquals([_inspectedEnemy]) && _commands.SingleUnitDetailsVisible
                     && _commands.DisplayedName == UnitName(_inspectedEnemy) && _commands.DisplayedHealth == $"{world.Units[_inspectedEnemy].Health}/{world.Units[_inspectedEnemy].MaxHealth}";
                 _commandChecks["enemy_selection_keeps_global_pace_enabled"] = !_commands.CommandsAvailable && !_commands.WalkRunButton.Disabled;
@@ -230,10 +231,17 @@ public partial class Main
             case 216:
                 _commandChecks["menu_button_opens"] = _toolsPanel.Visible;
                 Click(_commands.MenuButton.GetGlobalRect().GetCenter()); break;
-            case 219: _commandChecks["menu_button_closes"] = !_toolsPanel.Visible; break;
+            case 219:
+                _commandChecks["menu_button_closes"] = !_toolsPanel.Visible;
+                var neutral = new SimUnit(999,-1,0,0);
+                _commands.Refresh([neutral],_ => "Neutral unit",null,false);
+                _commandChecks["neutral_unit_palette_empty"] = _commands.CommandPaletteEmpty && _commands.SingleUnitDetailsVisible;
+                _commands.Refresh([],UnitName,null,false);
+                _commandChecks["empty_selection_palette_empty"] = _commands.CommandPaletteEmpty;
+                break;
             case 225:
                 var report = new { ticks = world.Tick, checks = _commandChecks, commands = world.Commands,
-                    final_digest = world.StateDigest(), passed = _commandChecks.Count == 46 && _commandChecks.Values.All(v => v) };
+                    final_digest = world.StateDigest(), passed = _commandChecks.Count == 49 && _commandChecks.Values.All(v => v) };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"command-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("COMMAND_SMOKE "+JsonSerializer.Serialize(report)); GetTree().Quit(report.passed ? 0 : 1);

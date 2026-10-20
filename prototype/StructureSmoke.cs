@@ -46,6 +46,11 @@ public partial class Main
                 _structureOre = world.Resources.Values.Where(r => r.Kind == ResourceKind.Ore).MinBy(r => SimWorld.DistanceSquared(r.X,r.Z,world.Units[0].X,world.Units[0].Z))!.Id;
                 Choose(10000); break;
             case 6:
+                _structureChecks["citadel_palette_empty"] = _commands.CommandPaletteEmpty;
+                _structureChecks["structure_hp_counter_centered"] = _commands.StructureHealthCounterCentered;
+                _structureChecks["resource_counters_centered"] = _commands.ResourceCountersCentered;
+                _structureChecks["all_neutral_interactables_registered"] = world.Resources.Keys.All(id => _structureViews.TryGetValue(id,out var v) && v.Team == -1)
+                    && _structureViews.Values.Count(v => v.Team < 0) == 9;
                 _structureChecks["citadel_selected_without_units"] = _selectedStructure == 10000 && _selected.Count == 0;
                 _structureChecks["citadel_source_details"] = _commands.StructureDetailsVisible && _commands.DisplayedName == "Citadel 1"
                     && _commands.DisplayedHealth == "750/750" && _commands.StructurePortraitButton.Icon != null;
@@ -85,6 +90,7 @@ public partial class Main
                     && SelectedStructureDetails() is {UnderConstruction: false} && !_commands.CancelConstructionButton.Visible;
                 Choose(10001); break;
             case 626:
+                _structureChecks["enemy_structure_palette_empty"] = _commands.CommandPaletteEmpty;
                 _structureChecks["enemy_structure_inspection"] = _selectedStructure == 10001 && _selected.Count == 0 && !_commands.CommandsAvailable
                     && !_commands.CancelConstructionButton.Visible && _commands.DisplayedHealth == "750/750";
                 PushKey(Key.Key1); break;
@@ -106,6 +112,8 @@ public partial class Main
                 PushKey(Key.Key1); break;
             case 1452: Click(_commands.PortraitButton(0).GetGlobalRect().GetCenter()); break;
             case 1454:
+                _structureChecks["unit_palette_restored"] = !_commands.CommandPaletteEmpty && _commands.CommandsAvailable;
+                _structureChecks["unit_hp_counter_centered"] = _commands.HealthCounterCentered;
                 _structureChecks["portrait_restores_unit_selection"] = _selectedStructure == null && _selected.SetEquals([0]);
                 _focus = PositionOf(47500,45500); UpdateCamera(); Click(_camera.UnprojectPosition(PositionOf(47500,45500)),MouseButton.Right); break;
             case 1690:
@@ -127,10 +135,52 @@ public partial class Main
                 _structureChecks["worker_crosses_reported_gap"] = world.Units[0].Goal < 0 && SimWorld.DistanceSquared(world.Units[0].X,world.Units[0].Z,27500,45500) < 1000;
                 _structureChecks["no_wide_building_detour"] = _structureGapDeviation < 2500;
                 _structureChecks["selection_never_mixed"] = _selected.Count == 0 && _selectedStructure == world.ConstructionSites[_structureOre].Obstacle;
-                var report = new {build = BuildInfo.Label,checks = _structureChecks,passed = _structureChecks.Count == 26 && _structureChecks.Values.All(v => v),
+                Choose(3); break;
+            case 1953:
+                _structureChecks["neutral_well_selected_exclusively"] = _selected.Count == 0 && _selectedStructure == 3 && SelectedStructureDetails() is {Team: -1,ResourceId: 3};
+                _structureChecks["well_stock_and_original_portrait"] = SelectedStructureDetails() is {Name: "Food Well",Resource: "Food remaining: 4500",Portrait: "Object_Well_Border"}
+                    && _commands.StructurePortraitButton.Icon != null;
+                _structureChecks["neutral_resource_has_no_fake_hp"] = !_commands.StructureHealthVisible && _commands.DisplayedHealth == "";
+                _structureChecks["neutral_structure_palette_empty"] = _commands.CommandPaletteEmpty;
+                _structureCommandsBefore = world.Commands.Count; PushKey(Key.M); PushKey(Key.H); PushKey(Key.S);
+                Click(_camera.UnprojectPosition(PositionOf(151500,160500)),MouseButton.Right); break;
+            case 1956:
+                _structureChecks["neutral_selection_cannot_command"] = world.Commands.Count == _structureCommandsBefore;
+                Choose(3,shift: true); break;
+            case 1959:
+                _structureChecks["neutral_shift_toggle"] = _selectedStructure == null && _selected.Count == 0;
+                Choose(2); break;
+            case 1962:
+                _structureChecks["neutral_ore_stock_and_portrait"] = _selectedStructure == 2 && SelectedStructureDetails() is {Team: -1,Resource: "Ore remaining: 4500",Portrait: "Object_Ore_Pile_Border"}
+                    && _commands.StructurePortraitButton.Icon != null && _commands.CommandPaletteEmpty;
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-ore.png"); break;
+            case 1970: Choose(521); break;
+            case 1973:
+                _structureChecks["other_interactable_selected"] = _selectedStructure == 521 && _selected.Count == 0
+                    && SelectedStructureDetails() is {Name: "Random Place of Power",HasHealth: false} && _commands.StructurePortraitButton.Icon != null
+                    && _commands.CommandPaletteEmpty;
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-power.png"); break;
+            case 1980: PushKey(Key.Key1); break;
+            case 1983:
+                _structureChecks["unit_group_restores_after_neutral"] = _selected.Count == 4 && _selectedStructure == null && _commands.CommandsAvailable;
+                // Exercise every selectable neutral placement through actual picking,
+                // including resource sites beneath completed resource buildings.
+                break;
+            case 1990: Choose(3); break;
+            case 1993:
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-well.png"); break;
+            case 2050:
+                var report = new {build = BuildInfo.Label,checks = _structureChecks,passed = _structureChecks.Count == 51 && _structureChecks.Values.All(v => v),
                     selected = _selectedStructure,details = SelectedStructureDetails(),worker = new {world.Units[0].X,world.Units[0].Z},gap_deviation_mm = _structureGapDeviation};
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"structure-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("STRUCTURE_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
+        }
+        if (_frames >= 2000 && _frames < 2027)
+        {
+            var neutrals = _structureViews.Values.Where(v => v.Team < 0).OrderBy(v => v.Id).ToArray();
+            int index = (_frames-2000)/3;
+            if ((_frames-2000)%3 == 0) Choose(neutrals[index].Id);
+            if ((_frames-2000)%3 == 2) _structureChecks["neutral_placement_"+neutrals[index].Id] = _selectedStructure == neutrals[index].Id && _commands.CommandPaletteEmpty;
         }
     }
 }

@@ -76,6 +76,7 @@ def refresh(output):
     import skirmish_economy
     data['economy'] = skirmish_economy.economy_data(resolver)
     data['construction'] = construction
+    data['selectable_objects'] = skirmish_map.selectable_objects(scene, resolver)
     for file in [output/'navigation.json', output/'heights.bin', *building_paths, *sorted((output/'interface').glob('*'))]:
         manifest['files'][file.relative_to(output).as_posix()] = hashlib.sha256(file.read_bytes()).hexdigest()
     path.write_text(json.dumps(manifest, indent=2)+'\n')

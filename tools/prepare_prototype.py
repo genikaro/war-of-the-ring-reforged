@@ -317,6 +317,7 @@ def prepare_skirmish(output, install=None):
                 'team_colors': team_colors(resolver), 'models': models, 'spawns': spawns, 'groups': groups, 'camera_cell': camera_cell,
                 'rules': 'Imported combat stats, resource-site construction and carried food/ore; training and the rest of Tier 1 remain open.',
                 'skirmish': {'start_state': start_state, 'resources': nodes, 'building_files': building_files,
+                             'selectable_objects': skirmish_map.selectable_objects(scene, resolver),
                              'economy': skirmish_economy.economy_data(resolver),
                              'construction': construction,
                              'bases': [{'team': b['team'], 'start_point': b['start_point'], 'position': b['position'],

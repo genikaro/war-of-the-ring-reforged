@@ -1,7 +1,9 @@
 """Skirmish start layout decoding; synthetic cases run without original assets."""
 import struct
 import unittest
+from types import SimpleNamespace
 
+import lqr
 import prepare_prototype
 import skirmish_map
 import wor
@@ -66,6 +68,22 @@ class ResourceTests(unittest.TestCase):
             skirmish_map.assign_resources([n for n in nodes if n['kind'] == 'ore'], points)
 
 
+class SelectableObjectTests(unittest.TestCase):
+    def test_source_selectability_excludes_scenery_and_click_through_objects(self):
+        records = [lqr.Record(i, name, {'Name': name, 'IsSelectable': selectable, 'IgnoresMouseClicks': ignores,
+            'Portrait': -1, 'HasHealth': hp, 'MaxHealth': 300, 'ArmorValue': 2})
+            for i, (name, selectable, ignores, hp) in enumerate([
+                ('RESOURCE', 1, 0, 0), ('INTERACTABLE', 1, 0, 1), ('SCENERY', 0, 0, 1), ('CLICK_THROUGH', 1, 1, 1)])]
+        scene = {'placements': {'objects': [dict(database_table='Objects', reference=i, object_id=i, name=r.name)
+            for i, r in enumerate(records)]+[dict(database_table='Buildings', reference=0)]}}
+        resolver = SimpleNamespace(db={'Objects': SimpleNamespace(get=lambda i: records[i]), 'UVAs': SimpleNamespace(get=lambda i: None)})
+        selection = skirmish_map.selectable_objects(scene, resolver)
+        self.assertEqual([p['id'] for p in selection['placements']], [0, 1])
+        self.assertEqual(selection['definitions']['RESOURCE']['max_health'], 0)
+        self.assertFalse(selection['definitions']['RESOURCE']['has_health'])
+        self.assertEqual(selection['definitions']['INTERACTABLE']['max_health'], 300)
+
+
 class WorkerCellTests(unittest.TestCase):
     def test_cells_are_deterministic_spread_and_in_ring(self):
         width = height = 60
@@ -108,6 +126,19 @@ class RosterTests(unittest.TestCase):
 
 @unittest.skipUnless((wor.ROOT / 'extracted/Levels' / skirmish_map.MAP_FILE).is_file(), 'owner install not extracted')
 class BilbosBluffsTests(unittest.TestCase):
+    def test_all_nine_interactables_keep_original_portraits_without_resource_health(self):
+        import world_scene
+        from resolve_model import Resolver
+        resolver = Resolver()
+        scene = world_scene.parse((wor.ROOT / 'extracted/Levels' / skirmish_map.MAP_FILE).read_bytes())
+        world_scene.resolve_objects(scene, resolver.db)
+        selection = skirmish_map.selectable_objects(scene, resolver)
+        self.assertEqual([p['id'] for p in selection['placements']], [2, 3, 4, 5, 6, 7, 8, 9, 521])
+        definitions = selection['definitions']
+        self.assertEqual(definitions['OBJECT_RESOURCE_ORE_PILE']['portrait'], 'Object_Ore_Pile_Border')
+        self.assertEqual(definitions['OBJECT_RESOURCE_FOOD_WELL']['portrait'], 'Object_Well_Border')
+        self.assertFalse(any(d['has_health'] for d in definitions.values()))
+
     def test_start_points_and_resources_match_the_captured_map(self):
         import world_scene
         data = (wor.ROOT / 'extracted/Levels' / skirmish_map.MAP_FILE).read_bytes()

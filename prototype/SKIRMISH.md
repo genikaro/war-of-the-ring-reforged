@@ -8,11 +8,11 @@ tracks what exists; planning lives in `tools/Roadmap.md` (Phase 4 economy).
 
 ```powershell
 python tools/prepare_prototype.py --skirmish   # one-time, builds converted/skirmish
-python tools/skirmish_construction.py --cache converted/skirmish  # upgrade an existing build-4 through build-7 cache
+python tools/skirmish_construction.py --cache converted/skirmish  # upgrade an existing build-4 through build-8 cache
 ./prototype/run.ps1 -Skirmish
 ./prototype/run.ps1 -SkirmishSmoke             # headless checks
 ./prototype/run.ps1 -ConstructionSmoke         # construction, cancellation and both resources
-./prototype/run.ps1 -StructureSmoke            # exclusive structure selection and building-gap movement
+./prototype/run.ps1 -StructureSmoke            # buildings, neutral interactables, palettes, counters and gap movement
 ```
 
 The cache is separate from `converted/prototype` (Helm's Deep), so both sandboxes
@@ -37,7 +37,7 @@ no behavior and no AI; nothing in build-4 changes unit rules.
 
 ## Known limits
 
-- Mill/Foundry construction and gathering, plus Citadel/Mill/Foundry selection,
+- Mill/Foundry construction and gathering, building and neutral-object selection
   work. General placement, the remaining Tier 1 buildings, training, repair and
   combat against buildings remain open.
 - Worker build/gather animation and equipment, exact work ranges and controlled
@@ -221,3 +221,37 @@ the actual contextual Move through the gap (26), gathering (23), construction
 (23), commands (46), orders (27) and abilities (38). The structure check runs
 headless and rendered at 1280x800 and 4K; both captures were visually inspected.
 Original executable collision formulas and selection-art fidelity remain unverified.
+
+## Build-9: neutral inspection and command palettes
+
+All eight food wells/ore piles and the map's Random Place of Power are selectable
+through their visible meshes. The importer follows `Objects.IsSelectable` and
+`IgnoresMouseClicks`, so scenery stays outside the inspector. Other source-selectable
+objects use the same path, including objects without a navigation obstacle; their
+outline uses projected mesh bounds without adding collision. Neutral inspection
+remains separate from unit selection, supports Shift-toggle and portrait camera
+focus, and preserves unit groups and current worker orders.
+
+The inspector uses original object portraits, a pale neutral outline and live
+remaining resource stock. The source marks these nine objects `HasHealth=0`;
+they have no fabricated health bar or armor. This adds inspection only; Place
+of Power capture and spells remain open.
+
+Unit action icons and hotkeys are hidden from building palettes. The selected
+owned foundation retains its construction Cancel action. Enemy and neutral unit
+palettes, neutral-object palettes and empty selections contain no action buttons.
+The global army Walk/Run control beside the minimap remains available. Returning
+to friendly units restores their actions, abilities or worker construction icons.
+
+HP labels now center their actual text rectangle on the health bar, including
+when the font's minimum line height exceeds the bar height. Population, food and
+ore labels use the same rule against their icons. This keeps alignment stable
+under uniform HUD scaling.
+
+Existing caches need the upgrade command above for neutral metadata and portraits;
+the local cache is already updated. Fresh preparation produces the same data.
+Validation: 633 simulation checks, 164 Python tests, 51 structure and 49 command
+Godot checks pass, plus construction (23), orders (27) and abilities (38). Every neutral placement is
+clicked through the actual picker, including sites under completed resource
+buildings; selection remains exclusive and sends no unit orders. Rendered checks
+and visual inspection cover 1280x800 and 4K with upgraded and fresh caches.

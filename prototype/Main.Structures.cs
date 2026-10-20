@@ -8,7 +8,7 @@ public partial class Main
     private int? _selectedStructure;
     private readonly Dictionary<string,JsonElement> _structureDefinitions = [];
     private readonly Dictionary<int,StructureVisual> _structureViews = [];
-    private sealed record StructureVisual(int Id,int Team,string Type,int Resource,Node3D Root,MeshInstance3D Ring,
+    private sealed record StructureVisual(int Id,int Team,string Type,int Resource,bool Obstacle,Node3D Root,MeshInstance3D Ring,
         (MeshInstance3D Mesh,Vector3[] Faces)[] Meshes);
 
     private void LoadStructureDefinitions(JsonElement data)
@@ -18,19 +18,46 @@ public partial class Main
         foreach (var item in buildings.EnumerateObject()) _structureDefinitions.Add(item.Name,item.Value.Clone());
     }
 
+    private void LoadNeutralStructures(JsonElement data)
+    {
+        if (!data.TryGetProperty("selectable_objects",out var objects))
+            throw new InvalidOperationException("Refresh neutral selection: python tools/skirmish_construction.py --cache converted/skirmish");
+        foreach (var item in objects.GetProperty("definitions").EnumerateObject()) _structureDefinitions.Add(item.Name,item.Value.Clone());
+        foreach (var item in objects.GetProperty("placements").EnumerateArray())
+        {
+            int id = item.GetProperty("id").GetInt32();
+            var root = _obstacleViews.GetValueOrDefault(id) ?? Descendants(this).OfType<Node3D>()
+                .First(n => n.Name.ToString() == item.GetProperty("name").GetString());
+            RegisterStructure(id,-1,item.GetProperty("type").GetString()!,root,_world!.Resources.ContainsKey(id) ? id : -1);
+        }
+    }
+
     private void RegisterStructure(int id,int team,string type,Node3D root,int resource = -1)
     {
-        var meshes = Descendants(root).OfType<MeshInstance3D>().Where(m => m.Mesh != null).Select(m => (m,m.Mesh!.GetFaces())).ToArray();
+        var meshes = Descendants(root).OfType<MeshInstance3D>().Where(m => m.Mesh != null).Select(m => (Mesh: m,Faces: m.Mesh!.GetFaces())).ToArray();
         var points = new List<Vector3>();
-        var layer = _obstacleLayers.EnumerateArray().First(o => o.GetProperty("id").GetInt32() == id);
-        foreach (var box in layer.GetProperty("footprints").EnumerateArray())
+        var layer = _obstacleLayers.EnumerateArray().FirstOrDefault(o => o.GetProperty("id").GetInt32() == id);
+        bool obstacle = layer.ValueKind != JsonValueKind.Undefined;
+        var polygons = new List<Vector2[]>();
+        if (obstacle)
+            foreach (var box in layer.GetProperty("footprints").EnumerateArray())
+                polygons.Add(box.GetProperty("polygon").EnumerateArray().Select(p => new Vector2(p[0].GetSingle(),p[1].GetSingle())).ToArray());
+        else
         {
-            var polygon = box.GetProperty("polygon").EnumerateArray().ToArray();
+            // Selectable objects need no pathing obstacle. Outline their projected
+            // mesh bounds without adding collision or changing navigation.
+            var vertices = meshes.SelectMany(m => m.Faces.Select(v => m.Mesh.GlobalTransform*v)).ToArray();
+            if (vertices.Length == 0) throw new InvalidOperationException("Selectable object has no geometry: "+root.Name);
+            float left = -vertices.Max(v => v.X),right = -vertices.Min(v => v.X),top = vertices.Min(v => v.Z),bottom = vertices.Max(v => v.Z);
+            polygons.Add([new(left,top),new(right,top),new(right,bottom),new(left,bottom)]);
+        }
+        foreach (var polygon in polygons)
+        {
             for (int i = 0; i < polygon.Length; i++)
             {
                 var a = polygon[i]; var b = polygon[(i+1)%polygon.Length];
-                var p = PositionOf((int)Math.Round(a[0].GetDouble()*1000),(int)Math.Round(a[1].GetDouble()*1000))+Vector3.Up*.07f;
-                var q = PositionOf((int)Math.Round(b[0].GetDouble()*1000),(int)Math.Round(b[1].GetDouble()*1000))+Vector3.Up*.07f;
+                var p = PositionOf((int)Math.Round(a.X*1000),(int)Math.Round(a.Y*1000))+Vector3.Up*.07f;
+                var q = PositionOf((int)Math.Round(b.X*1000),(int)Math.Round(b.Y*1000))+Vector3.Up*.07f;
                 var side = (q-p).Cross(Vector3.Up).Normalized()*.045f;
                 foreach (var v in new[] {p-side,q-side,p+side,p+side,q-side,q+side}) points.Add(root.ToLocal(v));
             }
@@ -38,9 +65,12 @@ public partial class Main
         var arrays = new Godot.Collections.Array(); arrays.Resize((int)Mesh.ArrayType.Max); arrays[(int)Mesh.ArrayType.Vertex] = points.ToArray();
         var ringMesh = new ArrayMesh(); ringMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles,arrays);
         var ring = new MeshInstance3D { Mesh = ringMesh,Visible = false,CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(team == 0 ? "e9c22d" : "e65045"),CullMode = BaseMaterial3D.CullModeEnum.Disabled,ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
-        root.AddChild(ring); _structureViews.Add(id,new(id,team,type,resource,root,ring,meshes));
+            MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(team < 0 ? "ded2a5" : team == 0 ? "e9c22d" : "e65045"),CullMode = BaseMaterial3D.CullModeEnum.Disabled,ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
+        root.AddChild(ring); _structureViews.Add(id,new(id,team,type,resource,obstacle,root,ring,meshes));
     }
+
+    private bool StructureVisible(StructureVisual entry) => entry.Root.IsVisibleInTree()
+        && (!entry.Obstacle || _world!.Navigation.IsObstacleActive(entry.Id));
 
     private (int Id,float Distance)? StructureAt(Vector2 mouse)
     {
@@ -50,7 +80,7 @@ public partial class Main
         (int Id,float Distance)? hit = null;
         foreach (var entry in _structureViews.Values.OrderBy(s => s.Id))
         {
-            if (!_world!.Navigation.IsObstacleActive(entry.Id)) continue;
+            if (!StructureVisible(entry)) continue;
             foreach (var (mesh,faces) in entry.Meshes)
             {
                 if (!mesh.IsVisibleInTree()) continue;
@@ -91,13 +121,15 @@ public partial class Main
     private StructureDetails? SelectedStructureDetails()
     {
         if (_selectedStructure is not int id || !_structureViews.TryGetValue(id,out var entry)) return null;
-        if (!_world!.Navigation.IsObstacleActive(id)) { _selectedStructure = null; return null; }
+        if (!StructureVisible(entry)) { _selectedStructure = null; return null; }
+        var world = _world!;
         var definition = _structureDefinitions[entry.Type]; int max = definition.GetProperty("max_health").GetInt32();
-        var site = entry.Resource >= 0 ? _world.ConstructionSites[entry.Resource] : null;
-        int progress = site == null || site.Complete ? 100 : (int)(site.ProgressMicroTicks*100/(_world.ConstructionRules[_world.Resources[entry.Resource].Kind].DurationTicks*1_000_000L));
-        string resource = entry.Resource < 0 ? "" : $"{_world.Resources[entry.Resource].Kind} remaining: {(_world.Resources[entry.Resource].RemainingMilli+999)/1000}";
+        var site = entry.Team >= 0 && entry.Resource >= 0 ? world.ConstructionSites[entry.Resource] : null;
+        int progress = site == null || site.Complete ? 100 : (int)(site.ProgressMicroTicks*100/(world.ConstructionRules[world.Resources[entry.Resource].Kind].DurationTicks*1_000_000L));
+        string resource = entry.Resource < 0 ? "" : $"{world.Resources[entry.Resource].Kind} remaining: {(world.Resources[entry.Resource].RemainingMilli+999)/1000}";
         return new(id,entry.Team,definition.GetProperty("display_name").GetString()!,definition.GetProperty("portrait").GetString()!,site?.Health ?? max,max,
-            definition.GetProperty("armor").GetDouble().ToString("0.##",System.Globalization.CultureInfo.InvariantCulture),progress,resource,entry.Resource);
+            definition.GetProperty("armor").GetDouble().ToString("0.##",System.Globalization.CultureInfo.InvariantCulture),progress,resource,entry.Resource,
+            !definition.TryGetProperty("has_health",out var hasHealth) || hasHealth.GetBoolean());
     }
 
     private void PresentStructureSelection()

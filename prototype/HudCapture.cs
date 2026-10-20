@@ -5,7 +5,7 @@ public partial class Main
 {
     // An offscreen target gives exact 4K/ultrawide captures even when Windows
     // constrains a window to the attached monitor's work area.
-    private async Task CaptureOffscreenFrame(bool quit)
+    private async Task CaptureOffscreenFrame(bool quit,string destination)
     {
         var viewport = new SubViewport { Size = _captureResolution,World3D = GetViewport().World3D,
             RenderTargetUpdateMode = SubViewport.UpdateMode.Always };
@@ -29,13 +29,13 @@ public partial class Main
         await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
         await ToSignal(RenderingServer.Singleton,RenderingServer.SignalName.FramePostDraw);
         using var image = viewport.GetTexture().GetImage();
-        var error = image.SavePng(_capture);
+        var error = image.SavePng(destination);
         var bounds = hud.GetGlobalRect();
-        System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(_capture,".json"),JsonSerializer.Serialize(new {
+        System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(destination,".json"),JsonSerializer.Serialize(new {
             width = image.GetWidth(),height = image.GetHeight(),offscreen = true,hud_scale_percent = hud.ScalePercent,
             hud_effective_scale = hud.EffectiveScale,hud_bounds = new[] { bounds.Position.X,bounds.Position.Y,bounds.Size.X,bounds.Size.Y },
             original_game_fidelity_verified = false },new JsonSerializerOptions { WriteIndented = true }));
-        GD.Print("CAPTURE "+_capture+" "+error); viewport.QueueFree();
+        GD.Print("CAPTURE "+destination+" "+error); viewport.QueueFree();
         if (quit) GetTree().Quit(error == Error.Ok ? 0 : 1);
     }
 }

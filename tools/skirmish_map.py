@@ -7,6 +7,7 @@ Everything here is a read-only decode; the runtime cache stores the results.
 """
 import math
 import struct
+from pathlib import Path
 
 import lmd
 import prototype_obstacles
@@ -65,6 +66,26 @@ def resource_nodes(scene):
                           'initial': obj['raw_words'][-1]})
     nodes.sort(key=lambda n: n['id'])
     return nodes
+
+
+def selectable_objects(scene, resolver):
+    """Source-selectable neutral objects, excluding scenery and click-through objects."""
+    definitions, placements = {}, []
+    for obj in scene['placements']['objects']:
+        if obj.get('database_table') != 'Objects':
+            continue
+        record = resolver.db['Objects'].get(obj['reference'])
+        if not record['IsSelectable'] or record['IgnoresMouseClicks']:
+            continue
+        if record.name not in definitions:
+            portrait = resolver.db['UVAs'].get(record['Portrait'])
+            definitions[record.name] = {'display_name': record['Name'],
+                'portrait': Path(portrait['Filename'].replace('\\', '/')).stem if portrait else '',
+                'has_health': bool(record['HasHealth']),
+                'max_health': record['MaxHealth'] if record['HasHealth'] else 0,
+                'armor': record['ArmorValue']}
+        placements.append({'id': obj['object_id'], 'name': obj['name'], 'type': record.name})
+    return {'definitions': definitions, 'placements': sorted(placements, key=lambda p: p['id'])}
 
 
 def assign_resources(nodes, points):

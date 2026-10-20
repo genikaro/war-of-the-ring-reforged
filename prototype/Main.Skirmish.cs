@@ -46,6 +46,7 @@ public partial class Main
             state.GetProperty("food").GetInt32(),state.GetProperty("ore").GetInt32());
         LoadSkirmishEconomy(data);
         LoadSkirmishConstruction(data);
+        LoadNeutralStructures(data);
         ApplySkirmishHud(_commands);
     }
 

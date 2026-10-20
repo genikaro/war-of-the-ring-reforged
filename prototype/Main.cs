@@ -963,12 +963,13 @@ public partial class Main : Node3D
         _ = FinishCombatAudio(passed ? 0 : 1);
     }
 
-    private async Task CaptureFrame(bool quit)
+    private async Task CaptureFrame(bool quit,string? path = null)
     {
-        if (_captureResolution != Vector2I.Zero) { await CaptureOffscreenFrame(quit); return; }
+        string destination = path ?? _capture;
+        if (_captureResolution != Vector2I.Zero) { await CaptureOffscreenFrame(quit,destination); return; }
         await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
         using var image = GetViewport().GetTexture().GetImage();
-        var error = image.SavePng(_capture); GD.Print("CAPTURE " + _capture + " " + error);
+        var error = image.SavePng(destination); GD.Print("CAPTURE " + destination + " " + error);
         if (error == Error.Ok)
         {
             var report = new { view = _view, focus = new[] { _focus.X, _focus.Y, _focus.Z },
@@ -983,7 +984,7 @@ public partial class Main : Node3D
                     System.IO.File.ReadAllBytes(System.IO.Path.Combine(_cache, "map/scene.glb")))).ToLowerInvariant(),
                 preview_lighting = new { ambient_energy = .45f, sun_energy = .85f, tonemapper = "Linear", diffuse = "Lambert", specular = "Disabled" },
                 imports = _presentation.Imports, original_game_fidelity_verified = false };
-            System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(_capture, ".json"),
+            System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(destination, ".json"),
                 JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
         }
         if (quit) GetTree().Quit(error == Error.Ok ? 0 : 1);

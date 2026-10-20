@@ -30,6 +30,17 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-9 (Oct 20):** all eight resource sites and the map's Place of Power are
+selectable as neutral objects with original portraits, outlines and live stock.
+Source selectability excludes scenery; objects without health omit HP/armor.
+Structure palettes contain their own actions, and enemy/neutral unit inspection
+has an empty palette. HP and resource counters center against bars/icons despite
+font minimum heights. Unit groups, worker orders and the global pace control
+remain available. Validation: 164 Python tests, 51 structure and 49 command Godot
+checks, plus construction/order/ability regressions. Fresh and upgraded caches
+pass at 1280x800 and 4K. Local cache updated; older caches use the documented
+skirmish upgrade. See [skirmish notes](../prototype/SKIRMISH.md#build-9-neutral-inspection-and-command-palettes).
+
 **Build-8 (Oct 20):** corrected excess collision clearance in the owner's
 Citadel/Foundry gap. Versioned skirmish footprints use a single swept-body circle
 against the source polygons; the real worker crosses directly in 134 ticks

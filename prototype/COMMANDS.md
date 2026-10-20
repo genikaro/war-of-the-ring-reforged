@@ -12,7 +12,7 @@ original Good faction atlas, portraits, command icons and targeting cursors,
 decoded from source UVA rectangles. It preserves the 1024x212 artwork proportions
 and includes a clickable terrain overview, portrait/health grid, control-group
 strip, current orders and queue hints. Commands support mixed unit
-selections. Active orders and targeting are highlighted; commands disable without
+selections. Active orders and targeting are highlighted; unit commands hide without
 living friendly units. Dead selections and group members are pruned automatically.
 
 Double-click or Ctrl-click a unit or portrait to select all living units of that
@@ -23,13 +23,19 @@ opposing teams. The top-right overlay shows the build number, local date and
 live FPS; build-1 introduces this numbering.
 
 Click a live enemy to inspect its portrait, health, type, Attack, Armor and
-Victories. Its ring and health bar are red; unit actions disable while the global
+Victories. Its ring and health bar are red; the action palette is empty while the global
 Walk/Run switch stays available. Enemy inspection replaces a friendly selection,
 while drag selection stays
 friendly-only. Picking intersects the nearest live body up to the terrain/deck
 hit, rather than a fixed screen-space foot marker. Selection rings match each
 unit's collision radius. Ctrl assignment while inspecting an enemy preserves
 stored friendly groups; recalling a friendly group restores command controls.
+
+Skirmish buildings and neutral interactables select separately from units.
+Buildings show only their own available actions (currently Cancel for an owned
+foundation), while neutral structures and inspected enemy/neutral units have
+empty palettes. Source-selectable food wells, ore piles and the Place of Power
+show original portraits; resources show remaining stock. See [skirmish selection](SKIRMISH.md#build-9-neutral-inspection-and-command-palettes).
 
 The console scales uniformly with screen height, clamps to narrow windows and
 stays centered on ultrawide screens. **Menu/F4 → Interface size** adjusts it from 75% to
@@ -238,7 +244,7 @@ the original timing and behavior comparison gate remains open.
   layout checks through 4K, ultrawide and narrow windows.
 - 56 additional real-cache checks retain map navigation, traffic and spawn safety,
   and cover imported definitions and four repeatable duels.
-- `-CommandSmoke`: 34 actual Godot panel/input checks, including enemy inspection,
+- `-CommandSmoke`: 49 actual Godot panel/input checks, including enemy/neutral inspection and empty palettes,
   ownership/control-group protection, single-unit
   stats, live victory refresh, return to the group roster and the four-button
   bottom-row layout and working hidden Move/Stop controls; report in
