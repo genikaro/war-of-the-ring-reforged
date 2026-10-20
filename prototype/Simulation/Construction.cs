@@ -36,8 +36,7 @@ public sealed partial class SimWorld
         foreach (var unit in Units.Where(u => u.Health > 0))
         {
             var nav = Nav(unit);
-            if (nav.ObstacleCovers(site.Obstacle,unit.Node)
-                || unit.Node < nav.GroundCount && nav.ObstacleCoversGroundBody(site.Obstacle,unit.X,unit.Z)
+            if ((unit.Node < nav.GroundCount ? nav.ObstacleCoversGroundBody(site.Obstacle,unit.X,unit.Z) : nav.ObstacleCovers(site.Obstacle,unit.Node))
                 || unit.TransitNode >= 0 && (nav.ObstacleCoversMovement(site.Obstacle,unit.Node,unit.TransitNode)
                     || nav.ObstacleCoversGroundBody(site.Obstacle,nav.Center(unit.TransitNode).X,nav.Center(unit.TransitNode).Z)))
             { reason = "Placement blocked by a unit"; return false; }

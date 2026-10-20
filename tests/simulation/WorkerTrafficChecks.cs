@@ -50,8 +50,8 @@ public static class WorkerTrafficChecks
         worker.X = 36349; worker.Z = 48754; worker.Node = world.Navigation.Cell(worker.X,worker.Z);
         worker.Y = world.Navigation.GroundHeight(worker.X,worker.Z);
         int goal = world.Navigation.Cell(50000,50000);
-        check(!world.Navigation.ForBody(worker.Definition.BodyRadiusMm,worker.Definition.BodyHeightMm).IsConnected(worker.Node,goal),
-            "real ore-pile corner reproduces the disconnected worker cell");
+        check(world.Navigation.ForBody(worker.Definition.BodyRadiusMm,worker.Definition.BodyHeightMm).CanTraverseGroundPoints(worker.X,worker.Z,worker.X,worker.Z),
+            "real ore-pile corner remains physically standable across collision cache versions");
         world.Enqueue(0,[3],OrderKind.Move,goal);
         for (int i = 0; i < 300; i++) world.Step();
         check(worker.Node == goal && worker.Order == OrderKind.Idle,"real-map Move rescues a worker from the reported building corner");
@@ -79,8 +79,7 @@ public static class WorkerTrafficChecks
             Convert.FromBase64String(nav.GetProperty("painted_allowed_base64").GetString()!).Select(b => b != 0).ToArray(),heights,
             nav.GetProperty("surface_nodes").EnumerateArray().Select(s => new SurfaceCell(s.GetProperty("cell").GetInt32(),s.GetProperty("height_mm").GetInt32(),
                 s.GetProperty("links").EnumerateArray().Select(n => n.GetInt32()).ToArray())).ToArray(),
-            layers.Select(o => new NavigationObstacle(o.GetProperty("id").GetInt32(),o.GetProperty("nodes").EnumerateArray().Select(n => n.GetInt32()).ToArray(),
-                o.GetProperty("edges").EnumerateArray().Select(e => new NavigationEdge(e[0].GetInt32(),e[1].GetInt32())).ToArray())).ToArray());
+            layers.Select(NavigationObstacle.Parse).ToArray());
         navigation.LoadBodyProfiles(nav);
         foreach (var id in nav.GetProperty("inactive_obstacles").EnumerateArray()) navigation.SetObstacle(id.GetInt32(),false);
         var world = new SimWorld(navigation,CombatRules.Parse(File.ReadAllText(Path.Combine(cache,"combat/rules.json"))));

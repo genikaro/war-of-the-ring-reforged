@@ -34,7 +34,15 @@ def construction_data(resolver, resources):
         footprint['name'] = 'Resource construction %d' % node['id']
         footprints.append(footprint)
         sites.append({'resource': node['id'], 'kind': node['kind'], 'obstacle': obstacle})
-    return {'definitions': definitions, 'sites': sites}, footprints
+    buildings = {}
+    for name in [skirmish_map.CITADEL, *BUILDINGS.values()]:
+        record = resolver.db['Buildings'].get(name)
+        portrait = resolver.db['UVAs'].get(record['Portrait'])
+        buildings[name] = {'display_name': 'Citadel 1' if name == skirmish_map.CITADEL else record['Name'],
+            'max_health': record['MaxHealth'], 'armor': record['ArmorPoints'],
+            'portrait': Path(portrait['Filename'].replace('\\', '/')).stem,
+            'selection_radius_mm': round(record['SelectionRingRadius']*1000)}
+    return {'definitions': definitions, 'sites': sites, 'buildings': buildings}, footprints
 
 
 def refresh(output):
@@ -62,7 +70,7 @@ def refresh(output):
         footprint['name'] = 'Start Citadel %d' % base['team']
     scene = world_scene.parse((wor.ROOT / 'extracted/Levels' / skirmish_map.MAP_FILE).read_bytes())
     world_scene.resolve_objects(scene, resolver.db)
-    prepare_prototype.build_navigation(scene, resolver, output, bases+footprints, [s['obstacle'] for s in construction['sites']])
+    prepare_prototype.build_navigation(scene, resolver, output, bases+footprints, [s['obstacle'] for s in construction['sites']], precise=True)
     prototype_clearance.refresh(output)
     prototype_interface.export(output, resolver)
     import skirmish_economy

@@ -37,6 +37,8 @@ class ConstructionImportTests(unittest.TestCase):
         self.assertEqual(data['sites'], [{'resource': 7, 'kind': 'food', 'obstacle': 20007}])
         self.assertEqual(masks[0]['object_id'], 20007)
         self.assertEqual(footprint.call_args.args[1], 'BUILDING_G_FOOD_STRUCTURE')
+        citadel = data['buildings']['BUILDING_G_TOWN_CENTER_LEVEL_1']
+        self.assertEqual((citadel['max_health'], citadel['armor'], citadel['portrait']), (750, 4, 'Building_G_Keep_1'))
 
 
 if __name__ == '__main__':

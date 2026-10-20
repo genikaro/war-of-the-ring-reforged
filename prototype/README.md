@@ -4,6 +4,16 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
+**build-8:** workers can cross the gap between the Citadel and Foundry. Skirmish
+collision uses the original footprint polygons with one body-radius clearance;
+the extra grid padding and repeated inflation are removed. Click a Citadel,
+Mill or Foundry to select it separately from units and inspect health, armor,
+construction progress or remaining resources. Shift-click toggles it; drag
+selection and control groups still select units. A selected owned foundation
+can be cancelled directly. Upgrade an older skirmish cache with
+`python tools/skirmish_construction.py --cache converted/skirmish`, then restart.
+The local cache is already refreshed. See [skirmish notes](SKIRMISH.md#build-8-building-clearance-and-selection).
+
 **build-7:** workers recover from movement stalls at building/resource corners.
 Gathering, return trips and Move orders reconnect from the actual body position
 when the cell-center graph cannot find a route. Collision checks still apply.
@@ -199,9 +209,11 @@ checked before loading. Never distribute the local cache with the project.
 
 | Input | Action |
 |---|---|
-| Left-click | Select a friendly unit or inspect an enemy |
+| Left-click | Select a unit or skirmish structure; inspect enemies |
 | Left-drag | Select friendly units |
 | Shift + selection | Add to selection |
+| Shift + structure click | Select/toggle that structure separately from units |
+| Structure portrait | Center the camera on the selected structure |
 | 1 / 2 / 3 | Select the corresponding blue squad |
 | Ctrl + 1–9 / 0 | Assign the selection to a control group (1–3 start with the demo squads) |
 | Shift + 1–9 / 0 | Add the selection to that stored group |
@@ -258,14 +270,15 @@ a normal viewport capture with `-CapturePath`.
 ./prototype/run.ps1 -OrdersSmoke
 ./prototype/run.ps1 -SkirmishSmoke
 ./prototype/run.ps1 -ConstructionSmoke
+./prototype/run.ps1 -StructureSmoke
 ./prototype/run.ps1 -SurfaceSmoke
 ./prototype/run.ps1 -ObstacleSmoke
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --movement-benchmark converted/prototype/movement-after.json
 ```
 
-The simulation runner has no Godot or test-package dependency. Build-7 passes
-624 synthetic checks and 691 checks with the Helm's Deep cache. The separate
-worker-cache suite passes 29 checks on Bilbo's Bluffs. These cover
+The simulation runner has no Godot or test-package dependency. Build-8 passes
+633 synthetic checks and 700 checks with the Helm's Deep cache. The separate
+worker-cache suite passes 30 checks on Bilbo's Bluffs. These cover
 blocked routes, unreachable areas, adjacent-cell paths, deterministic ties,
 terrain interpolation, repeatable command playback, movement, combat,
 ownership and non-overlapping units, stationary-blocker detours, a six-unit
@@ -433,8 +446,9 @@ Construction ahead of an open-ground route invalidates that route and replans.
 Constrained replacement orders bring moving units back to their last cell center;
 sealed orders
 retain their destination and resume after reopening. This sandbox control
-toggles existing placed objects; building health, construction and destruction
-gameplay remain Phase 4 work. New or moving footprints still require an adapter.
+toggles existing placed objects. The separate skirmish implements resource-building
+construction and selection; damage, repair and destruction remain open.
+New or moving footprints still require an adapter.
 The raw painted mask and initial blocked snapshot remain available for auditing.
 Walkable helpers append separate nodes to the ground grid; the
 current cache has 1,342 surface nodes and 48 height-matched terrain entrances.

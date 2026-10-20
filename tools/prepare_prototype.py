@@ -166,7 +166,7 @@ def walker_category(scene):
     return next(c for c in scene['pathing']['categories'] if c['name'] == 'PATHING_CATEGORY_WALKER')
 
 
-def build_navigation(scene, resolver, output, extra_footprints=(), inactive_obstacles=()):
+def build_navigation(scene, resolver, output, extra_footprints=(), inactive_obstacles=(), precise=False):
     """Write navigation.json and heights.bin; shared by the demo and skirmish maps."""
     category = walker_category(scene)
     mask_audit = verify_walker_masks.audit_category(scene, category)
@@ -179,7 +179,7 @@ def build_navigation(scene, resolver, output, extra_footprints=(), inactive_obst
     footprints = prototype_obstacles.placed_footprints(scene, resolver) + list(extra_footprints)
     allowed, obstacle_report = prototype_obstacles.ground_mask(width, height,
         scene['world'].metadata['terrain']['cell_size'], allowed, scene['world'].heights,
-        [f for f in footprints if f['object_id'] not in inactive_obstacles])
+        [f for f in footprints if f['object_id'] not in inactive_obstacles], precise=precise)
     nav = {'width': width, 'height': height, 'cell_size_mm': round(scene['world'].metadata['terrain']['cell_size'] * 1000),
            'allowed_base64': base64.b64encode(allowed).decode('ascii'),
            'painted_allowed_base64': base64.b64encode(source_allowed).decode('ascii'),
@@ -192,7 +192,9 @@ def build_navigation(scene, resolver, output, extra_footprints=(), inactive_obst
                source_allowed, scene['world'].heights, surfaces))
     nav['picking_surfaces'] = surfaces
     nav['runtime_obstacles'] = prototype_obstacles.runtime_layers(width, height, spacing,
-        source_allowed, scene['world'].heights, nav['surface_nodes'], footprints)
+        source_allowed, scene['world'].heights, nav['surface_nodes'], footprints, precise=precise)
+    if precise:
+        nav['footprint_collision'] = 'swept-circle-v1'
     if inactive_obstacles:
         nav['inactive_obstacles'] = sorted(inactive_obstacles)
     (output / 'navigation.json').write_text(json.dumps(nav, indent=2) + '\n')
@@ -277,7 +279,7 @@ def prepare_skirmish(output, install=None):
         bases.append({'team': team, 'start_point': point['name'], 'position': [x, y, z], 'footprint': footprint})
     construction, site_footprints = skirmish_construction.construction_data(resolver, skirmish_map.resource_nodes(scene))
     nav, allowed, width, height = build_navigation(scene, resolver, output, [b['footprint'] for b in bases]+site_footprints,
-        [s['obstacle'] for s in construction['sites']])
+        [s['obstacle'] for s in construction['sites']], precise=True)
     region = connected(allowed, width, height)
     ground = bytes(1 if allowed[i] and i in region else 0 for i in range(width * height))
     spawns, groups = [], []

@@ -62,6 +62,11 @@ public partial class Main
 
     private void ChooseConstruction(ResourceKind? kind)
     {
+        if (kind == null && SelectedStructureDetails() is { Team: 0,UnderConstruction: true,ResourceId: >= 0 } selected)
+        {
+            _world!.Enqueue(0,[],OrderKind.CancelConstruction,target: selected.ResourceId);
+            _status.Text = "Construction cancellation queued"; return;
+        }
         if (!_skirmish || !SelectedWorkers().Any()) return;
         ClearConstructionTargeting(); _orders.Cancel(); _dragging = false; _hud.SelectionBox = null;
         _constructionTargeting = true; _constructionKind = kind;
@@ -131,7 +136,8 @@ public partial class Main
         {
             if (site.Team < 0)
             {
-                if (_constructionViews.Remove(site.Resource,out var old)) old.Root.QueueFree();
+                if (_constructionViews.Remove(site.Resource,out var old))
+                { old.Root.QueueFree(); _structureViews.Remove(site.Obstacle); if (_selectedStructure == site.Obstacle) _selectedStructure = null; }
                 continue;
             }
             var source = _world.Resources[site.Resource]; var rules = _world.ConstructionRules[source.Kind];
@@ -149,6 +155,7 @@ public partial class Main
                 root.AddChild(label);
                 view = new(root,new UnitAppearance(model,appearanceData),Descendants(model).OfType<AnimationPlayer>().FirstOrDefault(),clips,label);
                 _constructionViews.Add(site.Resource,view);
+                RegisterStructure(site.Obstacle,site.Team,rules.Name,root,site.Resource);
             }
             int stage = site.Complete ? 3 : (int)Math.Min(2,site.ProgressMicroTicks*3/(rules.DurationTicks*1_000_000L));
             if (stage != view.Stage)

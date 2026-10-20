@@ -122,6 +122,7 @@ public partial class CommandPanel : Control
             _abilityHotkeys[slot] = key;
         }
         CreateConstructionButtons();
+        CreateStructureDetails();
         _hint = Text("",new(260,-27),new(760,24),13); _content.AddChild(_hint);
         var config = new ConfigFile();
         if (config.Load("user://interface.cfg") == Error.Ok) ScalePercent = Math.Clamp(config.GetValue("hud","scale_percent",100).AsDouble(),75,150);
@@ -221,6 +222,7 @@ public partial class CommandPanel : Control
     public void Refresh(IReadOnlyList<SimUnit> units,Func<int,string> name,OrderKind? pending,bool paused,IReadOnlyList<int[]>? groups = null,int allies = 0,int enemies = 0,bool walking = false,int tick = 0,int pendingAbilitySlot = -1)
     {
         bool available = units.Count > 0;
+        _structureDetails.Visible = false;
         bool controllable = available && units.All(u => u.Team == 0);
         bool single = units.Count == 1;
         RefreshAbilities(units,pending,tick,pendingAbilitySlot);
@@ -347,5 +349,5 @@ public partial class CommandPanel : Control
     public bool SingleUnitDetailsVisible => _single.Visible;
     public string DisplayedVictories => _victoriesValue.Text;
     public string DisplayedName => _title.Text;
-    public string DisplayedHealth => _singleHealthText.Text;
+    public string DisplayedHealth => _structureDetails.Visible ? _structureHealthText.Text : _singleHealthText.Text;
 }

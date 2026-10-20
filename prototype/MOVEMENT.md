@@ -238,3 +238,26 @@ check normal-speed escape, Attack-move, deck transitions, replay and rejection
 of a truly blocked route. Worker sweeps, pair separation and resource conservation
 are checked throughout the cached runs. Run the bounded suite with
 `dotnet run --project tests/simulation -- --worker-cache converted/skirmish`.
+
+## Build-8: skirmish footprint clearance
+
+The skirmish cache versions obstacle geometry as `swept-circle-v1`. Import-time
+ground/edge masks test a swept circle against each original convex footprint,
+without the previous half-cell padding. Runtime ground movement tests that
+geometry directly in integer millimeters with the unit's radius and height.
+It no longer sweeps through already inflated object masks. Terrain support,
+body reservations, inactive/overlapping obstacles and off-center route recovery
+retain their checks. Placement uses the worker's actual body position rather
+than rejecting it because the containing cell's center intersects a building.
+
+This opens the reported Citadel/Foundry gap without shrinking source boxes. A
+20 m cached Move takes 134 ticks with zero lateral deviation, versus 262 ticks
+and a 12 m detour under the prior cache policy. Synthetic checks retain wall
+rejection, rotated-box corners, overhead clearance and removal/restoration;
+the rendered structure test also sends the contextual Move through this gap.
+
+Refresh existing skirmish navigation with
+`python tools/skirmish_construction.py --cache converted/skirmish`. Legacy
+obstacles without the version tag keep their previous mask behavior; Helm's
+Deep is unchanged. Circle sweeps are a deterministic adapter policy, not a
+claim about the original executable's collision formulas.

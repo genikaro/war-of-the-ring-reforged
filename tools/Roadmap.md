@@ -30,6 +30,21 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-8 (Oct 20):** corrected excess collision clearance in the owner's
+Citadel/Foundry gap. Versioned skirmish footprints use a single swept-body circle
+against the source polygons; the real worker crosses directly in 134 ticks
+instead of a 262-tick route with a 12 m detour. Citadel, Mill and Foundry now
+select separately from units, with visible-mesh picking, footprint outlines,
+original portraits, health/armor/progress/resource details, enemy inspection and
+direct cancellation of a selected foundation. Unit groups remain independent.
+Existing skirmish caches need the documented upgrade; the local cache is updated.
+Validation: 633 synthetic / 700 cached simulation checks, 30 worker-cache checks,
+162 Python tests and 26 structure Godot checks, plus gathering/construction/
+command/order/ability regressions. Fresh and upgraded caches pass; 1280x800 and
+4K views are inspected. See [skirmish notes](../prototype/SKIRMISH.md#build-8-building-clearance-and-selection).
+Next: remaining Tier 1 construction and production queues. Building damage/repair,
+worker work animations, fog and the scripted opponent remain open.
+
 **Build-7 (Oct 20):** corrected the owner's worker-stalling report for gathering
 and ordinary movement near buildings/resources. Off-center bodies now reconnect
 to the route graph through a short, collision-checked ground leg when their
@@ -559,7 +574,7 @@ against continuous source-game evidence before claiming fidelity. Powers, econom
 and production remain later work.
 
 - [ ] Load unit, weapon, building, spell and technique stats from the JSON tables (`Units`, `Weapons`, `Buildings`, `Spells`, `Techniques`, `UnitToUnitModifiers`, `BattleGear`, `HeroExperiences`); three demo units' base melee definitions and pair-rule support are implemented.
-- [ ] Economy: resources, workers, building and training queues, places of power (builds 5-6 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds; other Tier 1 buildings and production are next); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
+- [ ] Economy: resources, workers, building and training queues, places of power (builds 5-8 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds, independent structure selection and worker clearance fixes; other Tier 1 buildings and production are next); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
 - [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them
 - [ ] Heroes, fate powers and spells (`SpellAndEventAndActions` chains events to actions)
 - [ ] Open `Rings.exe` in Ghidra to recover the formulas the tables only feed: damage, hit chance, experience, upgrade effects

@@ -7,6 +7,20 @@ from test_prototype_navigation import rectangle
 
 
 class PrototypeObstacleTests(unittest.TestCase):
+    def test_precise_circle_preserves_a_building_gap_without_cell_margin(self):
+        boxes = [{'name': 'upper', 'object_id': 1, 'polygon': [(3,2),(7,2),(7,4),(3,4)], 'y_min': 0, 'y_max': 2},
+                 {'name': 'lower', 'object_id': 2, 'polygon': [(3,6),(7,6),(7,8),(3,8)], 'y_min': 0, 'y_max': 2}]
+        self.assertFalse(obstacles.blocked_circle([1.5,5,0],[9.5,5,0],boxes,1,.665,1.752))
+        self.assertTrue(obstacles.blocked_circle([1.5,4.5,0],[9.5,4.5,0],boxes,1,.665,1.752))
+        self.assertTrue(obstacles.blocked_circle([1.5,3,0],[9.5,3,0],boxes,1,.665,1.752))
+
+    def test_precise_layers_keep_original_footprints_and_version_the_policy(self):
+        box = {'name': 'wall', 'object_id': 1, 'polygon': [(2,0),(3,0),(3,1),(2,1)], 'y_min': 0, 'y_max': 2}
+        layer = obstacles.runtime_layers(6,1,1,bytes([1]*6),[0]*14,[],[box],precise=True)[0]
+        self.assertEqual(layer['nodes'], [2])
+        self.assertEqual(layer['collision'], 'swept-circle-v1')
+        self.assertEqual(layer['footprints'], [box])
+
     def box(self, center=(0, 0, 0), extent=(1, 2, 3), quaternion=(1, 0, 0, 0)):
         return {'joint': -1, 'flag': 0, 'vectors': [*extent, 1, *center, 1, *quaternion]}
 

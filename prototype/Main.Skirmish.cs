@@ -26,6 +26,7 @@ public partial class Main
     private void LoadSkirmishScene(JsonElement manifest)
     {
         var data = manifest.GetProperty("skirmish");
+        LoadStructureDefinitions(data);
         var files = data.GetProperty("building_files");
         foreach (var start in data.GetProperty("bases").EnumerateArray())
         {
@@ -36,6 +37,7 @@ public partial class Main
                 Position = new(-at[0].GetSingle(),at[2].GetSingle(),at[1].GetSingle()) };
             root.AddChild(LoadGlb(files.GetProperty(start.GetProperty("building").GetString()!).GetString()!,_teamColors[team]));
             AddChild(root); _buildingViews.Add(root);
+            RegisterStructure(start.GetProperty("footprint_object").GetInt32(),team,start.GetProperty("building").GetString()!,root);
             _obstacleViews[start.GetProperty("footprint_object").GetInt32()] = root;
         }
         _skirmishResourceCount = data.GetProperty("resources").GetArrayLength();

@@ -72,7 +72,8 @@ def build(nav, heights, definitions):
                     x,z,_ = point(n); triangles += ground_patch(x,z,radius+spacing)
             if not covers_body(point(a),point(b),triangles,radius): blocked_edges.append([a,b])
         profiles.append({'radius_mm':radius_mm,'height_mm':height_mm,'nodes':sorted(blocked),'edges':blocked_edges,
-            'obstacles':runtime_layers(width,height,spacing,allowed,heights,nodes,footprints,radius,body_height)})
+            'obstacles':runtime_layers(width,height,spacing,allowed,heights,nodes,footprints,radius,body_height,
+                precise=nav.get('footprint_collision') == 'swept-circle-v1')})
     return profiles
 
 

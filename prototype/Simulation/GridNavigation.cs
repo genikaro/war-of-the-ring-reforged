@@ -5,11 +5,22 @@ namespace Reforged.Simulation;
 /// <summary>A mesh node, at its column center unless an off-center X/Z in millimeters is given.</summary>
 public sealed record SurfaceCell(int Cell, int Height, int[] Links, int? X = null, int? Z = null,int ClearanceRadiusMm = 350);
 public sealed record NavigationEdge(int A, int B);
-public sealed record NavigationObstacle(int Id, int[] Nodes, NavigationEdge[] Edges);
+public sealed record NavigationObstacle(int Id, int[] Nodes, NavigationEdge[] Edges,NavigationFootprint[]? Footprints = null)
+{
+    public static NavigationObstacle Parse(JsonElement value)
+    {
+        bool precise = value.TryGetProperty("collision",out var mode) && mode.GetString() == "swept-circle-v1";
+        return new(value.GetProperty("id").GetInt32(),value.GetProperty("nodes").EnumerateArray().Select(n => n.GetInt32()).ToArray(),
+            value.GetProperty("edges").EnumerateArray().Select(e => new NavigationEdge(e[0].GetInt32(),e[1].GetInt32())).ToArray(),
+            precise ? value.GetProperty("footprints").EnumerateArray().Select(f => new NavigationFootprint(
+                f.GetProperty("polygon").EnumerateArray().Select(p => new FootprintPoint((int)Math.Round(p[0].GetDouble()*1000),(int)Math.Round(p[1].GetDouble()*1000))).ToArray(),
+                (int)Math.Round(f.GetProperty("y_min").GetDouble()*1000),(int)Math.Round(f.GetProperty("y_max").GetDouble()*1000))).ToArray() : null);
+    }
+}
 public sealed record BodyNavigationProfile(int Radius,int Height,int[] Nodes,NavigationEdge[] Edges,NavigationObstacle[] Obstacles);
 
 /// <summary>Integer A* over eight-neighbor terrain and separate mesh layers. Stable node-ID ties.</summary>
-public sealed class GridNavigation
+public sealed partial class GridNavigation
 {
     public int Width { get; }
     public int Height { get; }
@@ -79,7 +90,8 @@ public sealed class GridNavigation
                 || obstacle.Edges.Any(e => e.A < 0 || e.B < 0 || e.A >= NodeCount || e.B >= NodeCount))
                 throw new ArgumentException("Invalid obstacle layer");
             _obstacles.Add(obstacle.Id, new(obstacle.Id, obstacle.Nodes.Distinct().Order().ToArray(),
-                obstacle.Edges.Select(e => e.A < e.B ? e : new(e.B, e.A)).Distinct().ToArray()));
+                obstacle.Edges.Select(e => e.A < e.B ? e : new(e.B, e.A)).Distinct().ToArray(),obstacle.Footprints));
+            IndexFootprints(obstacle);
             foreach (var edge in obstacle.Edges)
             {
                 int a=Math.Min(edge.A,edge.B),b=Math.Max(edge.A,edge.B);
@@ -98,9 +110,7 @@ public sealed class GridNavigation
             var profile = new BodyNavigationProfile(p.GetProperty("radius_mm").GetInt32(),p.GetProperty("height_mm").GetInt32(),
                 p.GetProperty("nodes").EnumerateArray().Select(n => n.GetInt32()).ToArray(),
                 p.GetProperty("edges").EnumerateArray().Select(e => new NavigationEdge(e[0].GetInt32(),e[1].GetInt32())).ToArray(),
-                p.GetProperty("obstacles").EnumerateArray().Select(o => new NavigationObstacle(o.GetProperty("id").GetInt32(),
-                    o.GetProperty("nodes").EnumerateArray().Select(n => n.GetInt32()).ToArray(),
-                    o.GetProperty("edges").EnumerateArray().Select(e => new NavigationEdge(e[0].GetInt32(),e[1].GetInt32())).ToArray())).ToArray());
+                p.GetProperty("obstacles").EnumerateArray().Select(NavigationObstacle.Parse).ToArray());
             if (profile.Nodes.Any(n => n < 0 || n >= NodeCount) || profile.Edges.Any(e => e.A < 0 || e.B < 0 || e.A >= NodeCount || e.B >= NodeCount)
                 || !profile.Obstacles.Select(o => o.Id).Order().SequenceEqual(ObstacleIds)) throw new ArgumentException("Invalid body clearance profile");
             _profiles.Add((profile.Radius,profile.Height),profile);
@@ -169,6 +179,11 @@ public sealed class GridNavigation
         }
         foreach (int node in obstacle.Nodes) Count(_blockedNodes, node);
         foreach (var edge in obstacle.Edges) Count(_blockedEdges, (edge.A, edge.B));
+        if (obstacle.Footprints is not { Length: > 0 })
+        {
+            foreach (int node in obstacle.Nodes) Count(_legacyBlockedNodes,node);
+            foreach (var edge in obstacle.Edges) Count(_legacyBlockedEdges,(edge.A,edge.B));
+        }
         if (active) _activeObstacles.Add(id); else _activeObstacles.Remove(id);
         _components = null;
         _bottlenecks.Clear();
@@ -393,12 +408,15 @@ public sealed class GridNavigation
 
     public bool ObstacleCoversMovement(int id, int a, int b)
     {
+        if (_obstacles[id].Footprints is { Length: > 0 })
+        { var p = Center(a); var q = Center(b); return FootprintsBlock(p.X,NodeHeight(a),p.Z,q.X,NodeHeight(b),q.Z,id); }
         var cells = MovementNodes(a,b).ToHashSet();
         return _obstacles[id].Nodes.Any(cells.Contains) || _obstacles[id].Edges.Any(e => cells.Contains(e.A) && cells.Contains(e.B));
     }
 
     public bool ObstacleCoversGroundBody(int id, int x, int z)
     {
+        if (_obstacles[id].Footprints is { Length: > 0 }) return FootprintsBlock(x,GroundHeight(x,z),z,x,GroundHeight(x,z),z,id);
         var cells = SweptColumns(x,z,x,z).ToHashSet();
         return _obstacles[id].Nodes.Any(cells.Contains)
             || _obstacles[id].Edges.Any(e => cells.Contains(e.A) && cells.Contains(e.B));
@@ -430,23 +448,26 @@ public sealed class GridNavigation
             || Math.Max(ax,bx)+(long)BodyRadiusMm > Width*(long)CellSize || Math.Max(az,bz)+(long)BodyRadiusMm > Height*(long)CellSize) return false;
         int from = Cell(ax,az);
         var cells = SweptColumns(ax,az,bx,bz).ToHashSet();
-        if (cells.Any(n => !(TypedBody ? Allowed[n] : CanStand(n)) || (!TypedBody && n != from && occupied?.Contains(n) == true))) return false;
-        if (TypedBody)
+        bool physical = TypedBody || UsesPreciseFootprints;
+        if (cells.Any(n => !(physical ? Allowed[n] : CanStand(n)) || (!physical && n != from && occupied?.Contains(n) == true))) return false;
+        if (physical)
         {
-            // Object masks already include this body's radius and half a cell.
-            // Check center-line cells against them, not another inflated sweep.
+            // Legacy masks already include body and cell padding. Exact footprints
+            // are swept below; neither kind should be inflated a second time.
             int steps = Math.Max(Math.Abs(bx-ax),Math.Abs(bz-az))/Math.Max(1,CellSize/2)+1;
             for (int i = 0; i <= steps; i++)
             {
                 int cell = Cell(ax+(int)((long)(bx-ax)*i/steps),az+(int)((long)(bz-az)*i/steps));
-                if (!BasicStand(cell) || (cell != from && occupied?.Contains(cell) == true)) return false;
+                if (cell < 0 || !Allowed[cell] || _bodyBlocked.Contains(cell) || _legacyBlockedNodes.ContainsKey(cell)
+                    || (cell != from && occupied?.Contains(cell) == true)) return false;
             }
         }
-        if (_blockedEdges.Count > 0)
+        if (UsesPreciseFootprints && FootprintsBlock(ax,GroundHeight(ax,az),az,bx,GroundHeight(bx,bz),bz)) return false;
+        if (_legacyBlockedEdges.Count > 0)
             foreach (int a in cells)
                 if (_obstacleEdgeNeighbors.TryGetValue(a,out var neighbors))
                     foreach (int b in neighbors)
-                        if (cells.Contains(b) && _blockedEdges.ContainsKey((a,b))) return false;
+                        if (cells.Contains(b) && _legacyBlockedEdges.ContainsKey((a,b))) return false;
         return true;
     }
 

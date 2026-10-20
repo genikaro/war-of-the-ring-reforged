@@ -105,7 +105,33 @@ def blocked(a, b, footprints, spacing, radius=RADIUS, body_height=BODY_HEIGHT):
     return False
 
 
-def ground_mask(width, height, spacing, allowed, heights, footprints, radius=RADIUS, body_height=BODY_HEIGHT):
+def blocked_circle(a, b, footprints, spacing, radius=RADIUS, body_height=BODY_HEIGHT):
+    """Swept body circle against the original convex footprint, without cell padding."""
+    def cross(p, q, r):
+        return (q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0])
+    def inside(p, polygon):
+        signs = [cross(c, d, p) for c, d in zip(polygon, polygon[1:]+polygon[:1])]
+        return all(s >= 0 for s in signs) or all(s <= 0 for s in signs)
+    def point_distance(p, c, d):
+        vx, vz = d[0]-c[0], d[1]-c[1]
+        length = vx*vx+vz*vz
+        t = 0 if length == 0 else max(0, min(1, ((p[0]-c[0])*vx+(p[1]-c[1])*vz)/length))
+        return (p[0]-c[0]-t*vx)**2+(p[1]-c[1]-t*vz)**2
+    for item in footprints:
+        if max(a[2], b[2])+body_height <= item['y_min'] or min(a[2], b[2]) >= item['y_max']:
+            continue
+        polygon = item['polygon']
+        if inside(a, polygon) or inside(b, polygon):
+            return True
+        for c, d in zip(polygon, polygon[1:]+polygon[:1]):
+            if cross(a,b,c)*cross(a,b,d) < 0 and cross(c,d,a)*cross(c,d,b) < 0:
+                return True
+            if min(point_distance(a,c,d), point_distance(b,c,d), point_distance(c,a,b), point_distance(d,a,b)) < radius*radius:
+                return True
+    return False
+
+
+def ground_mask(width, height, spacing, allowed, heights, footprints, radius=RADIUS, body_height=BODY_HEIGHT, precise=False):
     result = bytearray(allowed)
     report = []
     padding = spacing/2+radius
@@ -123,15 +149,17 @@ def ground_mask(width, height, spacing, allowed, heights, footprints, radius=RAD
                     continue
                 px, pz = (x+.5)*spacing, (z+.5)*spacing
                 point = [px, pz, terrain_height(px, pz, width, spacing, heights)]
-                if blocked(point, point, [item], spacing, radius, body_height):
+                if (blocked_circle if precise else blocked)(point, point, [item], spacing, radius, body_height):
                     result[cell] = 0; changed += 1
         report.append({'object_id': item['object_id'], 'name': item['name'], 'ground_cells_blocked': changed})
     return bytes(result), {'placements': len(footprints), 'ground_cells_blocked': sum(allowed)-sum(result),
                           'objects': report, 'radius_m': radius, 'body_height_m': body_height,
-                          'policy': 'Root oriented-collision boxes for Buildings and IsPathingObstacle objects; half-extents/center/wxyz pose, conservative projected swept-cell clearance. Static snapshot; original runtime collision formulas unverified.'}
+                          'policy': ('Root oriented-collision boxes with swept body-circle clearance, no grid-cell padding.' if precise else
+                                     'Root oriented-collision boxes for Buildings and IsPathingObstacle objects; half-extents/center/wxyz pose, conservative projected swept-cell clearance.')
+                                    + ' Static snapshot; original runtime collision formulas unverified.'}
 
 
-def runtime_layers(width, height, spacing, allowed, heights, nodes, footprints, radius=RADIUS, body_height=BODY_HEIGHT):
+def runtime_layers(width, height, spacing, allowed, heights, nodes, footprints, radius=RADIUS, body_height=BODY_HEIGHT, precise=False):
     """Independent object masks allow removal without opening another's cells.
 
     Keep the obstacle-free graph intact. Edge masks also cover a swept height
@@ -150,9 +178,10 @@ def runtime_layers(width, height, spacing, allowed, heights, nodes, footprints, 
     surface_edges = {tuple(sorted((base+i, link))) for i, n in enumerate(nodes) for link in n['links']}
     result = []
     for object_id, boxes in sorted(grouped.items()):
-        mask, _ = ground_mask(width, height, spacing, allowed, heights, boxes, radius, body_height)
+        hit = blocked_circle if precise else blocked
+        mask, _ = ground_mask(width, height, spacing, allowed, heights, boxes, radius, body_height, precise)
         blocked_nodes = [i for i, (before, after) in enumerate(zip(allowed, mask)) if before and not after]
-        blocked_nodes.extend(base+i for i in range(len(nodes)) if blocked(point(base+i), point(base+i), boxes, spacing, radius, body_height))
+        blocked_nodes.extend(base+i for i in range(len(nodes)) if hit(point(base+i), point(base+i), boxes, spacing, radius, body_height))
         blocked_set = set(blocked_nodes)
         edges = set(surface_edges)
         # A steep terrain edge can cross a box's vertical interval even when
@@ -172,7 +201,9 @@ def runtime_layers(width, height, spacing, allowed, heights, nodes, footprints, 
                         if 0 <= nx < width and 0 <= nz < height and allowed[nz*width+nx]:
                             edges.add(tuple(sorted((cell,nz*width+nx))))
         blocked_edges = [list(edge) for edge in sorted(edges) if not blocked_set.intersection(edge)
-                         and blocked(point(edge[0]), point(edge[1]), boxes, spacing, radius, body_height)]
+                         and hit(point(edge[0]), point(edge[1]), boxes, spacing, radius, body_height)]
         result.append({'id': object_id, 'name': boxes[0]['name'], 'nodes': blocked_nodes,
                        'edges': blocked_edges, 'footprints': boxes})
+        if precise:
+            result[-1]['collision'] = 'swept-circle-v1'
     return result

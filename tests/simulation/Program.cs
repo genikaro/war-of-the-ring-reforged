@@ -1,6 +1,11 @@
 using Reforged.Simulation;
 using System.Text.Json;
 
+if (Array.IndexOf(args,"--building-gap-probe") is int gapProbe && gapProbe >= 0)
+{
+    Console.WriteLine(JsonSerializer.Serialize(FootprintChecks.Gap(args[gapProbe+1]))); return;
+}
+
 if (Array.IndexOf(args,"--worker-traffic-probe") is int workerProbe && workerProbe >= 0)
 {
     Console.WriteLine(JsonSerializer.Serialize(WorkerTrafficChecks.Probe(args[workerProbe+1])));
@@ -32,6 +37,8 @@ if (Array.IndexOf(args,"--worker-cache") is int workerCache && workerCache >= 0)
 {
     WorkerTrafficChecks.Run(Check);
     WorkerTrafficChecks.RunCached(Check,args[workerCache+1]);
+    if (JsonDocument.Parse(File.ReadAllText(Path.Combine(args[workerCache+1],"navigation.json"))).RootElement.TryGetProperty("footprint_collision",out _))
+        Check(JsonSerializer.SerializeToElement(FootprintChecks.Gap(args[workerCache+1])).GetProperty("passed").GetBoolean(),"worker takes the direct route through the reported Citadel/Foundry gap");
     Console.WriteLine($"{passed} worker traffic checks passed"); return;
 }
 GridNavigation Grid(int width = 10, int height = 8, bool[]? allowed = null)
@@ -55,6 +62,7 @@ HealingPlaybackChecks.Run(Check);
 EconomyChecks.Run(Check);
 ConstructionChecks.Run(Check);
 WorkerTrafficChecks.Run(Check);
+FootprintChecks.Run(Check);
 BodyCollisionChecks.Run(Check);
 EngagementChecks.Run(Check);
 CloseCombatChecks.Run(Check);

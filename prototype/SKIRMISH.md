@@ -8,10 +8,11 @@ tracks what exists; planning lives in `tools/Roadmap.md` (Phase 4 economy).
 
 ```powershell
 python tools/prepare_prototype.py --skirmish   # one-time, builds converted/skirmish
-python tools/skirmish_construction.py --cache converted/skirmish  # upgrade an existing build-4/5 cache
+python tools/skirmish_construction.py --cache converted/skirmish  # upgrade an existing build-4 through build-7 cache
 ./prototype/run.ps1 -Skirmish
 ./prototype/run.ps1 -SkirmishSmoke             # headless checks
 ./prototype/run.ps1 -ConstructionSmoke         # construction, cancellation and both resources
+./prototype/run.ps1 -StructureSmoke            # exclusive structure selection and building-gap movement
 ```
 
 The cache is separate from `converted/prototype` (Helm's Deep), so both sandboxes
@@ -36,9 +37,9 @@ no behavior and no AI; nothing in build-4 changes unit rules.
 
 ## Known limits
 
-- Mill/Foundry construction and gathering work. General placement, the remaining
-  Tier 1 buildings, building selection, training, repair and combat against
-  buildings remain open.
+- Mill/Foundry construction and gathering, plus Citadel/Mill/Foundry selection,
+  work. General placement, the remaining Tier 1 buildings, training, repair and
+  combat against buildings remain open.
 - Worker build/gather animation and equipment, exact work ranges and controlled
   original-game timing comparisons remain open.
 - Start Citadel orientation is 0 degrees, not the original game's. Start-worker
@@ -177,3 +178,46 @@ repeated deliveries by every worker, bounded route waits and an actual contextua
 Move that all four finish (23 checks). Construction (23), Command (46) and
 Orders (27) smoke checks pass. Resource conservation and body safety hold across
 all four long worker scenarios. Build number is 7; restart to load the fix.
+
+## Build-8: building clearance and selection
+
+The reported Citadel/Foundry gap was narrower in navigation than in the authored
+collision geometry. Object masks included half-cell padding as well as the
+worker radius, and runtime movement checked those masks again. Skirmish caches
+now opt into `swept-circle-v1`: graph masks use circle clearance against the
+original projected convex polygons, and runtime sweeps test those same polygons
+once using integer millimeters. The authored boxes keep their original size;
+walls, rotated footprints, overlapping objects and vertical separation still
+block the appropriate bodies. Placement and restoration use the same clearance.
+Helm's Deep retains its existing cache policy and regression coverage.
+
+The real-map probe moves one worker 20 m through the reported gap with the
+Foundry active. The old cache takes 262 ticks and detours 12 m sideways; the new
+cache takes 134 ticks with no sideways detour. Gathering, return trips and
+ordinary Move orders share the corrected collision checks. The build-7 connector
+recovery remains in place for off-center graph disconnections.
+
+Click a visible Citadel, Mill or Foundry, including an unfinished foundation,
+to select it separately from units. Shift-click toggles the structure; unit
+clicks, unit portraits, control-group recall and drag selection return to unit
+selection. Structures never enter unit groups or receive unit orders. Esc
+clears selection. Enemy structures can be inspected. Picking tests visible mesh
+triangles against terrain depth, and the outline follows the source footprint.
+
+The console displays the original portrait, imported maximum health and armor,
+live construction health/progress, and remaining resource stock where relevant.
+Click its portrait to center the camera. Cancel on a selected owned foundation
+targets that foundation and applies the existing 75% refund; completion hides
+Cancel. Building combat, repair and training remain future work.
+
+Existing skirmish caches require the upgrade command above for precise navigation,
+structure metadata and the Citadel portrait. Full skirmish preparation produces
+the same data; both a fresh cache and an upgraded cache pass. The local cache is
+already refreshed. Restart to load build-8.
+
+Validation: 633 synthetic / 700 Helm's Deep simulation checks, 30 worker-cache
+checks and 162 Python tests pass. Godot checks pass for structure selection and
+the actual contextual Move through the gap (26), gathering (23), construction
+(23), commands (46), orders (27) and abilities (38). The structure check runs
+headless and rendered at 1280x800 and 4K; both captures were visually inspected.
+Original executable collision formulas and selection-art fidelity remain unverified.
