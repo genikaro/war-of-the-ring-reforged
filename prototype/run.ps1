@@ -8,6 +8,7 @@ param(
     [switch]$OrdersSmoke,
     [switch]$MeleeSmoke,
     [switch]$EngagementSmoke,
+    [switch]$AttackMoveEngagementSmoke,
     [switch]$FormationSmoke,
     [switch]$SurfaceSmoke,
     [switch]$ObstacleSmoke,
@@ -39,7 +40,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 if ($LASTEXITCODE -ne 0) { throw 'C# build failed' }
 $arguments = @('--path', $PSScriptRoot)
 if ($Resolution) { $arguments += @('--resolution',$Resolution) }
-if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $MeleeSmoke -or $EngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
+if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
     $renderRate = if ($MotionSmoke -or $FormationSmoke) { '80' } else { '20' }
     if (-not $CapturePath) { $arguments += '--headless' }
     $arguments += @('--fixed-fps', $renderRate)
@@ -55,6 +56,7 @@ if ($CommandSmoke) { $arguments += '--command-smoke' }
 if ($OrdersSmoke) { $arguments += '--orders-smoke' }
 if ($MeleeSmoke) { $arguments += '--melee-smoke' }
 if ($EngagementSmoke) { $arguments += '--engagement-smoke' }
+if ($AttackMoveEngagementSmoke) { $arguments += '--attack-move-engagement-smoke' }
 if ($FormationSmoke) { $arguments += '--formation-smoke' }
 if ($SurfaceSmoke) { $arguments += '--surface-smoke' }
 if ($ObstacleSmoke) { $arguments += '--obstacle-smoke' }

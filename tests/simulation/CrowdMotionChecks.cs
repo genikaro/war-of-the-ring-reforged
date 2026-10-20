@@ -98,7 +98,7 @@ static class CrowdMotionChecks
 
         var completed=new SimWorld(new(30,20,1000,Enumerable.Repeat(true,600).ToArray(),new int[31*21]));
         var veteran=completed.Spawn(0,305,body); completed.Enqueue(0,[0],OrderKind.AttackMove,306); completed.Step(); veteran.AutoEngage=true;
-        for (int tick=0;tick<40;tick++) completed.Step(); completed.Spawn(2,311,body);
+        for (int tick=0;tick<40;tick++) completed.Step(); completed.Spawn(2,318,body);
         for (int tick=0;tick<4;tick++) completed.Step();
         check(veteran.Order==OrderKind.Idle && !veteran.AutoEngage && veteran.Target<0,"completed attack-move does not retain retaliation-driven roaming");
 

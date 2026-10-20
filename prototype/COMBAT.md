@@ -2,7 +2,8 @@
 
 The existing 36-unit demo uses source definitions for Aragorn, Elven Knight and
 Uruk-Hai. Original damage-formula fidelity has not been established. Movement
-and combat spacing now use imported per-type bodies.
+and combat spacing use source-derived per-type envelopes, with explicit
+[demo sizing and friendly compression](ENGAGEMENT.md#crowd-and-attack-move-follow-up).
 
 ## Definitions and provenance
 
@@ -121,10 +122,13 @@ original-game duels or executable analysis remain required. Raw weapon ranges
 are 1.0 for Aragorn and 0.5 for the others; original range origin semantics are
 unknown. Effective center reach is `max(2000 mm, both body radii + source range)`
 with wall/layer checks, so larger bodies can fight without overlapping.
-The gap interpretation is an adapter policy. Radius/height are 561/2095 mm for
+The gap interpretation is an adapter policy. Source radius/height are 561/2095 mm for
 Aragorn, 927/2534 mm for Elven Knights and 693/2197 mm for Uruk-hai, traced from
 scaled Main collision boxes. [Collision notes](../tools/NOTES-unit-collision.md)
-describe clearance profiles and limits. Default running stays at 3 m/s; F2 walking uses the
+record the later Aragorn demo adjustment to 800/2347 mm and 112% visual scale.
+Friendly cores use half the combined radii; enemy contact retains full envelopes.
+The collision notes also describe clearance profiles and limits. Default running
+stays at 3 m/s; F2 walking uses the
 [source animation ratio](MOVEMENT.md#walkrun-control--october-20-2026). Awareness, spacing and opponent AI
 remain prototype policies.
 

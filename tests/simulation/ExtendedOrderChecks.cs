@@ -52,7 +52,7 @@ static class ExtendedOrderChecks
         check(squad.Units.All(u => u.Order == OrderKind.Idle && u.OrderQueue.Count == 0),"a queued squad move completes without piling onto one cell");
         squad.Enqueue(0,[0,1,2,3],OrderKind.Move,410); squad.Enqueue(0,[0,1,2,3],OrderKind.Move,710,queued:true); Advance(squad,1);
         squad.Enqueue(0,[0,1,2,3],OrderKind.Stop); Advance(squad,1);
-        check(squad.Units.All(u => u.OrderQueue.Count == 0 && u.Order == OrderKind.Stop),"stop cancels the entire queued route");
+        check(squad.Units.All(u => u.OrderQueue.Count == 0 && u.Order == OrderKind.Idle),"stop cancels the entire queued route and returns to idle");
         squad.Enqueue(0,[0],OrderKind.Move,733,queued:true); Advance(squad,1);
         check(squad.Units[0].Order == OrderKind.Move && squad.Units[0].OrderQueue.Count == 0,"shift move from a stopped unit starts immediately");
 
@@ -93,7 +93,7 @@ static class ExtendedOrderChecks
         forced.Enqueue(0,[0],OrderKind.ForceAttack,ally.Node,ally.Id); Advance(forced,120);
         check(ally.Health < 100,"force attack can damage an explicitly targeted friendly unit");
         forced.Enqueue(0,[0],OrderKind.Stop); Advance(forced,1);
-        check(attacker.Target < 0 && attacker.Order == OrderKind.Stop,"stop cancels a friendly force attack");
+        check(attacker.Target < 0 && attacker.Order == OrderKind.Idle,"stop cancels a friendly force attack and returns to idle");
         forced.Enqueue(0,[0],OrderKind.ForceAttack,420); Advance(forced,150);
         check(attacker.Node == 420 && attacker.Order == OrderKind.ForceAttack && attacker.Target < 0 && attacker.Goal < 0,"force attack at a location advances and holds without inventing ground damage");
 

@@ -5,6 +5,66 @@ on both teams, and that performance worsened after importing collision sizes.
 The existing checks required every squad to fight; they did not require broad
 participation within each squad. A new 18-versus-18 fixture reproduced the gap.
 
+## Crowd and attack-move follow-up
+
+Further owner feedback reopened crowded combat responsiveness. The source Main
+boxes were being treated as rigid allied personal space, and attack-move pursuit
+limits could exclude nearby fights. This pass changes the demo policy:
+
+- Allies use a solid core at 50% of their combined full radii. This permits
+  squeezing between friends without stacking or walking through one another.
+  Terrain, static obstacles, enemy contact, hit picking and resting formations
+  retain full envelopes. This is a feel adjustment, not recovered original physics.
+- Reachable adjacent enemies take priority over distant approach routes. This
+  also works during regrouping and for idle units after an order finishes.
+  Explicit Move, Hold Position, Force Attack and active swings retain their intent.
+- Nearby enemies fighting allies can be approached around the local battle,
+  within the existing 8 m acquisition radius. Fleeing targets still obey the march
+  corridor. Attack positions allow a melee-range approach margin, and the bounded
+  route search applies that same area throughout the route. Previously it could
+  propose a route that the movement limit would later refuse to follow.
+- Combat steering now retains its passing side, and blocked attackers examine
+  up to twelve alternative targets on their existing staggered planning turns.
+- Aragorn's demo visual scales by 1.12; his full radius is 800 mm and height
+  2,347 mm. The original measurements remain in `Source.Collision` in the cache.
+
+The new focused regressions cover passage between held allies, solid enemy
+contact, interpolated core separation, repeatable playback, immediate threats
+during regrouping, idle acquisition and preserved Move behavior. Both the
+explicit Attack fixture and the Attack-move fixture bring all 18 units per side
+into melee. The actual Godot input checks likewise record 18/18 hitters and peak
+fighters for both orders. The real-map formation check finishes both orders with
+all 18 allies alive, no core overlaps and a maximum march width of 9.088 m.
+These are implementation checks, not original-game equivalence claims.
+
+```powershell
+./prototype/run.ps1 -AttackMoveEngagementSmoke
+./prototype/run.ps1 -EngagementSmoke
+./prototype/run.ps1 -FormationSmoke
+```
+
+The sections below retain the measurements from the earlier rigid-body pass.
+
+### Automatic idle guard
+
+The owner confirmed the crowd changes feel much better, then identified idle
+units standing beside nearby fights. Idle player units now detect enemies within
+10 m and support fighting allies within 10 m, with the support target bounded to
+12 m from their resting origin. They approach and fight without an explicit order,
+drop pursuits beyond 12 m and return near their resting origin. An occupied origin
+permits settling nearby. Move completion sets a fresh origin; explicit orders
+replace this behavior, and Hold Position never pursues. The red demo opponent
+keeps its existing aggressive AI. These radii are prototype policy.
+
+Focused checks cover damage after automatic approach, support beyond immediate
+melee reach, passing enemies, bounded pursuit/return, movement arrival, explicit
+Move replacement, Hold Position, disconnected terrain and deterministic replay.
+The owner increased awareness to 10 m and requested that Stop preserve default
+guarding. Stop now cancels its current action/queue, returns to Idle, and permits
+automatic acquisition starting the following tick. Hold Position remains a
+stationary order. The 10 m boundary and Stop-to-guard transition have regressions.
+Idle origin, return state and stop tick are included in the replay digest.
+
 ## Behavior correction
 
 Imported units use their physical pair radii for approach positions and strikes.

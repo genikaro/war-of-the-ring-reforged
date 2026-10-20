@@ -36,13 +36,27 @@ Group selection retains the portrait roster. Enemy kills update Victories.
 
 Click an enemy to inspect the same stats with a red ring and health bar.
 Commands disable while inspecting it; drag selection remains friendly-only.
-Selection rings match collision size: Aragorn **0.561 m**, Elven Knight
-**0.927 m**, Uruk-hai **0.693 m** radius, imported from scaled Main collision
-boxes. Body contact, formations, melee spacing and route clearance use these
-sizes. Large combined formations retain continuous movement and exchange
+Selection rings show the full body envelope: Aragorn **0.800 m**, Elven Knight
+**0.927 m**, Uruk-hai **0.693 m** radius. Aragorn's demo model is enlarged 12%,
+with a wider hitbox; raw source bounds remain recorded. Friendly personal space
+can compress to half the combined envelope so units can squeeze between allies.
+Solid cores still prevent stacking; enemies and terrain retain full clearance.
+Resting formations keep full spacing. Large formations retain continuous movement and exchange
 blocked arrival slots. See [collision details](../tools/NOTES-unit-collision.md).
 Refresh an existing cache with `python tools/prepare_prototype.py --rules-only`;
 this also rebuilds body-specific navigation profiles for rules format 3.
+
+Attack-move reacts immediately to reachable adjacent enemies, including while
+regrouping and after arrival. Rear units may flank a nearby battle involving
+allies, while pursuit of fleeing enemies remains bounded. Combat steering keeps
+a passing side, and approach routes obey the same limits as movement. See the
+[crowd follow-up](ENGAGEMENT.md#crowd-and-attack-move-follow-up) and run
+`./prototype/run.ps1 -AttackMoveEngagementSmoke` for the full-army input check.
+
+Idle player units automatically watch a 10 m radius and help nearby allies fight.
+They pursue within a 12 m limit and return near their resting position afterward.
+Completing Move starts guarding the new position. Stop cancels the current action
+and resumes default guarding on the next tick; Hold Position stays stationary.
 
 **F2** or the original run icon beside the minimap switches the selection
 between walking and running. Mixed selections switch to walking together;
@@ -124,7 +138,7 @@ checked before loading. Never distribute the local cache with the project.
 | Right-click an enemy | Attack, approaching when outside melee range |
 | A, then left-click | Attack an enemy, force attack a neutral/friendly target, or attack-move to ground |
 | M, then left-click | Move (no visible button) |
-| S | Stop movement and pursuit; return blows within reach (no visible button) |
+| S | Cancel the current action and queued orders, then resume default idle guarding (no visible button) |
 | H | Hold Position; engage within reach without chasing |
 | F2 | Toggle Walk / Run for selected units without replacing orders |
 | G / T, then left-click | Guard / Patrol |

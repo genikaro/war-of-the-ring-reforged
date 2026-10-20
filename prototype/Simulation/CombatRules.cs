@@ -8,7 +8,8 @@ public sealed record MeleeHit(int Tick,int Scale);
 public sealed record MeleeAttack(string Clip,int Weight,int DurationTicks,MeleeHit[] Hits);
 public sealed record UnitDefinition(int Id,string Name,string DisplayName,int MaxHealth,int ArmorMilli,int DamageType,
     string DamageTypeName,int MaxAttackers,int DpsMilli,int ReachMm,string ReadyClip,MeleeAttack[] Attacks,int StartingHealthPercent = 100,
-    int WalkScale = 500_000,string WalkClip = "",string RunClip = "",int BodyRadiusMm = 350,int BodyHeightMm = 700,int SelectionRadiusMm = 650,int AttackGapMm = 0)
+    int WalkScale = 500_000,string WalkClip = "",string RunClip = "",int BodyRadiusMm = 350,int BodyHeightMm = 700,int SelectionRadiusMm = 650,int AttackGapMm = 0,
+    int FriendlyCompressionPpm = 1_000_000,int ModelScalePpm = 1_000_000)
 {
     // A stable probe profile preserves the existing navigation/spacing fixtures.
     // Actual demo units always receive a definition from the hashed rules cache.
@@ -22,6 +23,7 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
             || WalkScale is <= 0 or > 1_000_000
             || BodyRadiusMm is < 100 or > 5000 || BodyHeightMm is < 100 or > 15000 || SelectionRadiusMm is < 100 or > 6000
             || AttackGapMm is < 0 or > 10000
+            || FriendlyCompressionPpm is < 500_000 or > 1_000_000 || ModelScalePpm is < 500_000 or > 2_000_000
             || Attacks == null || Attacks.Length == 0 || string.IsNullOrEmpty(Name)) throw new ArgumentException("Invalid unit definition");
         foreach (var attack in Attacks)
             if (attack.Weight <= 0 || attack.DurationTicks is <= 0 or > 1200 || attack.Hits == null || attack.Hits.Length == 0

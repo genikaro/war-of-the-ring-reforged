@@ -13,9 +13,10 @@ public sealed partial class SimWorld
             unit.AutoEngage=false; unit.AttackMoveOrigin=unit.AttackMoveForward=unit.AttackMoveRouteStart=-1; unit.AttackMoveReturning=false;
         }
         unit.Order = OrderKind.Idle; unit.OrderDestination = unit.OrderTarget = -1;
+        unit.IdleGuardOrigin=unit.Node; unit.IdleGuardReturning=false;
     }
 
-    private static bool HoldsPosition(SimUnit unit) => unit.Order is OrderKind.Stop or OrderKind.HoldGround
+    private static bool HoldsPosition(SimUnit unit) => unit.Order is OrderKind.HoldGround
         || (unit.Order == OrderKind.ForceAttack && unit.OrderTarget < 0 && unit.Goal < 0);
 
     private void ReleaseCombat(SimUnit unit)
@@ -81,6 +82,7 @@ public sealed partial class SimWorld
 
     private void UpdatePersistentOrder(SimUnit unit)
     {
+        UpdateIdleGuard(unit);
         if (unit.Order==OrderKind.AttackMove && unit.AttackMoveReturning && unit.AttackMoveOrigin>=0)
         {
             var origin=Navigation.Center(unit.AttackMoveOrigin);
@@ -106,9 +108,15 @@ public sealed partial class SimWorld
 
     private bool MayAcquire(SimUnit unit,SimUnit enemy)
     {
+        if (IdleGuardEnabled(unit)) return IdleGuardMayAcquire(unit,enemy);
         if (unit.Order==OrderKind.AttackMove && unit.Definition.BodyRadiusMm>350)
         {
+            if (MeleeReach(unit,unit.Node,unit.X,unit.Y,unit.Z,enemy)) return true;
             if (unit.AttackMoveReturning) return false;
+            // A marching lane limits pursuit of fleeing bait, not participation
+            // in the nearby battle already occupying the rest of the squad.
+            var origin=unit.AttackMoveOrigin>=0 ? Navigation.Center(unit.AttackMoveOrigin) : (unit.X,unit.Z);
+            if (FightingAlly(unit,enemy) && DistanceSquared(origin.Item1,origin.Item2,enemy.X,enemy.Z)<=8000L*8000) return true;
             if (enemy.Id==unit.AttackMoveIgnoredTarget && Tick<unit.AttackMoveIgnoreUntil
                 && !(enemy.Target==unit.Id && MeleeReach(unit,unit.Node,unit.X,unit.Y,unit.Z,enemy))) return false;
             if (!InAttackMoveArea(unit,enemy.X,enemy.Z))
@@ -123,10 +131,12 @@ public sealed partial class SimWorld
         return true;
     }
 
-    private bool InAttackMoveArea(SimUnit unit,int x,int z)
+    private bool InAttackMoveArea(SimUnit unit,int x,int z,int approachMargin = 0,int encounterTarget = -1)
     {
         var origin=unit.AttackMoveOrigin>=0 ? Navigation.Center(unit.AttackMoveOrigin) : (unit.X,unit.Z);
-        if (DistanceSquared(origin.Item1,origin.Item2,x,z)>8000L*8000) return false;
+        if (DistanceSquared(origin.Item1,origin.Item2,x,z)>(long)(8000+approachMargin)*(8000+approachMargin)) return false;
+        int target=encounterTarget>=0 ? encounterTarget : unit.Target;
+        if (approachMargin>0 && target>=0 && FightingAlly(unit,Units[target])) return true;
         int forward=unit.AttackMoveRouteStart>=0 ? unit.OrderDestination : unit.AttackMoveForward>=0 ? unit.AttackMoveForward : MarchForward(unit);
         if (forward<0) return true;
         var point=Navigation.Center(forward);
@@ -137,8 +147,12 @@ public sealed partial class SimWorld
         long dx=point.X-routeStart.Item1,dz=point.Z-routeStart.Item2,ex=x-routeStart.Item1,ez=z-routeStart.Item2;
         Int128 length=(Int128)dx*dx+(Int128)dz*dz,cross=(Int128)ex*dz-(Int128)ez*dx;
         Int128 dot=(Int128)(x-origin.Item1)*dx+(Int128)(z-origin.Item2)*dz;
-        return length==0 || (cross*cross<=3000L*3000*length && (dot>=0 || dot*dot<=2000L*2000*length));
+        long width=3000+approachMargin,back=2000+approachMargin;
+        return length==0 || (cross*cross<=width*width*length && (dot>=0 || dot*dot<=back*back*length));
     }
+
+    private bool FightingAlly(SimUnit unit,SimUnit enemy) => enemy.Attacking && enemy.Target>=0
+        && Units[enemy.Target].Health>0 && Units[enemy.Target].Team==unit.Team;
 
     private static int MarchForward(SimUnit unit) => unit.FreeMovement ? unit.OrderDestination
         : unit.Path.Skip(unit.Waypoint).Take(6).LastOrDefault(unit.OrderDestination);

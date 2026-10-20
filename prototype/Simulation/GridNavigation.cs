@@ -483,7 +483,7 @@ public sealed class GridNavigation
     }
 
     // One bounded search for an entire ring of acceptable combat positions.
-    public List<int> FindPathToAny(int start,IEnumerable<int> destinations,IReadOnlySet<int>? blocked,int maxVisited = 2048)
+    public List<int> FindPathToAny(int start,IEnumerable<int> destinations,IReadOnlySet<int>? blocked,int maxVisited = 2048,Func<int,bool>? allowed = null)
     {
         var goals=destinations.Where(n => CanStand(n) && blocked?.Contains(n) != true && IsConnected(start,n)).ToHashSet();
         if (goals.Count == 0) return [];
@@ -499,7 +499,7 @@ public sealed class GridNavigation
             }
             foreach (int next in Neighbors(node))
             {
-                if (!CanStand(next) || blocked?.Contains(next) == true || closed.Contains(next)) continue;
+                if (!CanStand(next) || blocked?.Contains(next) == true || closed.Contains(next) || allowed?.Invoke(next) == false) continue;
                 int score=cost[node]+EdgeCost(node,next);
                 if (cost.TryGetValue(next,out int old) && old <= score) continue;
                 cost[next]=score; previous[next]=node; open.Enqueue(next,(score,next));

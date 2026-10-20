@@ -53,6 +53,9 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int CombatPlanTick { get; internal set; } = -1;
     public bool CombatWaiting { get; internal set; }
     public bool AutoEngage { get; internal set; }
+    public int IdleGuardOrigin { get; internal set; } = -1;
+    public bool IdleGuardReturning { get; internal set; }
+    public int LastStopTick { get; internal set; } = -1;
     public OrderKind Order { get; internal set; }
     public int OrderDestination { get; internal set; } = -1;
     public int OrderTarget { get; internal set; } = -1;
@@ -192,7 +195,9 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             unit.FreeMovement = free && unit.TransitNode < 0;
             unit.AvoidanceTicks = 0;
             unit.AvoidanceSide = unit.AvoidanceLockTicks = 0;
-            unit.Order = command.Kind; unit.OrderDestination = -1;
+            unit.Order = command.Kind==OrderKind.Stop ? OrderKind.Idle : command.Kind; unit.OrderDestination = -1;
+            unit.LastStopTick=command.Kind==OrderKind.Stop ? Tick : -1;
+            unit.IdleGuardOrigin=-1; unit.IdleGuardReturning=false;
             unit.AttackMoveOrigin=unit.AttackMoveForward=unit.AttackMoveRouteStart=-1; unit.AttackMoveReturning=false;
             unit.AttackMoveIgnoredTarget=-1; unit.AttackMoveIgnoreUntil=0;
             unit.OrderTarget = command.Kind is OrderKind.Attack or OrderKind.ForceAttack or OrderKind.Guard ? command.Target : -1;
@@ -413,7 +418,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         {
             nodes.Add(other.Node);
             if (other.TransitNode >= 0 && !other.GroundSegment) nodes.Add(other.TransitNode);
-            int separation = radius+other.Definition.BodyRadiusMm;
+            int separation = except >= 0 ? BodySeparation(Units[except],other) : radius+other.Definition.BodyRadiusMm;
             foreach (int n in Navigation.NearbyNodes(other.X,other.Z,separation))
             {
                 var (x,z) = Navigation.Center(n);
@@ -636,7 +641,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     {
         var text = Rules.Hash + ":" + Tick + ":" + Navigation.Revision + ":" + string.Join(',', Navigation.ObstacleIds.Where(Navigation.IsObstacleActive))
             + ":" + string.Join(";", Units.Select(u => $"{u.Id},{u.Team},{u.X},{u.Y},{u.Z},{u.Node},{u.TransitNode},{u.TravelProgress},{u.Health},{u.Target},{u.Cooldown},{u.Waypoint},{u.Goal},{u.BlockedTicks},{u.YieldFor},{u.YieldGoal},{u.OrderSequence},{u.ReturningToRest},{u.FreeMovement},{u.GroundSegment},{u.GroundStartX},{u.GroundStartY},{u.GroundStartZ},{u.AvoidanceTicks},{u.AttackNode},{u.CombatTarget},{u.CombatPlanTick},{u.CombatWaiting},{u.AutoEngage},{u.Order},{u.OrderDestination},{u.OrderTarget},{u.PatrolStart},{u.PatrolEnd},{u.PatrolForward},{u.GuardPlanTick},{u.GuardOrigin}:{string.Join(',', u.Path)}:{string.Join('|',u.OrderQueue.Select(o => $"{o.Kind},{o.Cell},{o.Target},{o.Sequence}"))}"));
-        text += ":"+string.Join(';',Units.Select(u => $"{u.Definition.Id},{u.HealthMilli},{u.KillCount},{u.Walking},{u.AttackStartTick},{u.AttackVictim},{u.AttackVariant},{u.AttackSerial},{u.NextHit},{u.AvoidanceSide},{u.AvoidanceLockTicks},{u.AttackMoveOrigin},{u.AttackMoveForward},{u.AttackMoveRouteStart},{u.AttackMoveReturning},{u.AttackMoveIgnoredTarget},{u.AttackMoveIgnoreUntil}"));
+        text += ":"+string.Join(';',Units.Select(u => $"{u.Definition.Id},{u.HealthMilli},{u.KillCount},{u.Walking},{u.AttackStartTick},{u.AttackVictim},{u.AttackVariant},{u.AttackSerial},{u.NextHit},{u.AvoidanceSide},{u.AvoidanceLockTicks},{u.AttackMoveOrigin},{u.AttackMoveForward},{u.AttackMoveRouteStart},{u.AttackMoveReturning},{u.AttackMoveIgnoredTarget},{u.AttackMoveIgnoreUntil},{u.IdleGuardOrigin},{u.IdleGuardReturning},{u.LastStopTick}"));
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
     }
 }

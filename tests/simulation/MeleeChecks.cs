@@ -136,8 +136,10 @@ static class MeleeChecks
     {
         var rules = CombatRules.Parse(File.ReadAllText(Path.Combine(cache,"combat/rules.json")));
         var hero = rules.Units["UNIT_G_HERO_ARAGORN"]; var knight = rules.Units["UNIT_G_ELF_KNIGHT"]; var orc = rules.Units["UNIT_E_URUK_HAI"];
-        check((hero.BodyRadiusMm,knight.BodyRadiusMm,orc.BodyRadiusMm) == (561,927,693),"cached collision radii include original main bounds and model scale");
-        check((hero.BodyHeightMm,knight.BodyHeightMm,orc.BodyHeightMm) == (2095,2534,2197),"cached body heights are rounded outward from original boxes");
+        check((hero.BodyRadiusMm,knight.BodyRadiusMm,orc.BodyRadiusMm) == (800,927,693)
+            && hero.ModelScalePpm == 1_120_000 && rules.Units.Values.All(u => u.FriendlyCompressionPpm == 500_000),
+            "cache applies explicit hero sizing and compressible friendly personal space");
+        check((hero.BodyHeightMm,knight.BodyHeightMm,orc.BodyHeightMm) == (2347,2534,2197),"cached body heights include the explicit hero presentation scale");
         check((hero.WalkScale,knight.WalkScale,orc.WalkScale) == (364585,469073,432872),"cached walk/run ratios derive from source root-track displacement and duration");
         check(new[] {hero,knight,orc}.All(u => u.WalkClip.EndsWith("_Walk") && u.RunClip.EndsWith("_Run")),"cached locomotion states resolve separate original walk/run clips");
         for (int from = 0; from < 4; from++) for (int to = 0; to < 4; to++)

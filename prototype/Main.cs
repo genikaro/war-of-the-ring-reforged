@@ -103,6 +103,7 @@ public partial class Main : Node3D
             if (arg == "--orders-smoke") _ordersSmoke = true;
             if (arg == "--melee-smoke") { _meleeSmoke = _combatSmoke = _smoke = true; }
             if (arg == "--engagement-smoke") _engagementSmoke = true;
+            if (arg == "--attack-move-engagement-smoke") _attackMoveEngagementSmoke=_engagementSmoke=true;
             if (arg == "--formation-smoke") _formationSmoke=_engagementSmoke=true;
         }
         _hud.Visible = !_hideHud;
@@ -204,7 +205,8 @@ public partial class Main : Node3D
             Node3D visual;
             if (modelTemplates.TryGetValue(modelKey,out var template)) visual = (Node3D)template.Duplicate();
             else { visual = LoadGlb(modelKey.Item1,_teamColors[team]); modelTemplates.Add(modelKey,visual); }
-            root.AddChild(visual);
+            var modelSize = new Node3D { Name = "ModelSize", Scale = Vector3.One*(unit.Definition.ModelScalePpm/1_000_000f) };
+            root.AddChild(modelSize); modelSize.AddChild(visual);
             var ring = new MeshInstance3D { Mesh = ScenePresentation.SelectionRing(), Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 MaterialOverride = new StandardMaterial3D {
                     AlbedoColor = new Color(team == 0 ? "e9c22d" : "e65045"), CullMode = BaseMaterial3D.CullModeEnum.Disabled,
@@ -851,7 +853,7 @@ public partial class Main : Node3D
                 && _presentation.Imports[0].VertexColorSurfaces > 0 && _presentation.Imports.Skip(1).All(i => i.TeamMaterials > 0),
             turning_samples = _turningSeen, interpolated_samples = _interpolatedSeen,
             friendly_squads_fought = _squadsFought.Count, combat_spacing = _combatSpacingPassed, input_squad_keys = _squadKeysPassed,
-            body_sizes = _world.Units.Select(u => new {u.Definition.Name,u.Definition.BodyRadiusMm,u.Definition.BodyHeightMm}).Distinct().ToArray(),
+            body_sizes = _world.Units.Select(u => new {u.Definition.Name,u.Definition.BodyRadiusMm,u.Definition.BodyHeightMm,u.Definition.ModelScalePpm,u.Definition.FriendlyCompressionPpm}).Distinct().ToArray(),
             map_loaded = true, initial_digest = _initialDigest, final_digest = _world.StateDigest() };
         string path = System.IO.Path.Combine(_cache, _meleeSmoke ? "melee-smoke-report.json" : _combatSmoke ? "combat-smoke-report.json" : _motionSmoke ? "motion-smoke-report.json" : "smoke-report.json");
         System.IO.File.WriteAllText(path, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));

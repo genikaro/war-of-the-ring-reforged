@@ -1,5 +1,14 @@
 # Unit collision sizes — October 20, 2026
 
+**Current demo policy:** the later [crowd follow-up](../prototype/ENGAGEMENT.md#crowd-and-attack-move-follow-up)
+separates full envelopes from allied personal space. Friendly pair separation
+can compress to 50%; enemy contact, terrain and selection use full envelopes.
+Aragorn's full demo radius/height are 800/2,347 mm and his visual scale is 112%.
+His original 561/2,095 mm measurements are preserved in `Source.Collision`.
+Elven Knight and Uruk-hai full dimensions are unchanged. The original response
+semantics remain unverified. The tables below record the original measurements
+and the first rigid-body implementation, rather than the current friendly cores.
+
 The owner reported visible clumping and asked whether original units have
 different collision sizes. The source does contain different per-unit geometry.
 The prototype now imports Main collision geometry for its three demo types and

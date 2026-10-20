@@ -2,11 +2,16 @@ import base64
 from types import SimpleNamespace
 import unittest
 
-from combat_rules import collision_profile
+from combat_rules import collision_profile, demo_body_tuning
 import prototype_clearance
 
 
 class UnitCollisionTests(unittest.TestCase):
+    def test_demo_tuning_preserves_source_measurements_as_separate_policy(self):
+        self.assertEqual(demo_body_tuning('UNIT_G_HERO_ARAGORN',561,2095),
+                         dict(BodyRadiusMm=800,BodyHeightMm=2347,ModelScalePpm=1120000,FriendlyCompressionPpm=500000))
+        self.assertEqual(demo_body_tuning('UNIT_G_ELF_KNIGHT',927,2534)['BodyRadiusMm'],927)
+
     def box(self):
         return {'layer':0,'joint':0,'flag':0,'vectors':[.5772516,.5772516,.9152003,1,0,0,.8560292,1,1,0,0,0]}
 

@@ -41,7 +41,7 @@ supports click recall. Portrait clicks select one unit; Shift-click removes it.
 | --- | --- | --- |
 | Move | M, then left-click | Move in formation. Ignore combat and damage en route. Return to Idle on arrival. |
 | Attack | A, then left-click | Enemy: attack and pursue. Neutral/friendly: force attack. Ground: attack-move, engaging enemies and resuming the destination. |
-| Stop | S | Clear movement, target, combat position and suspended destination. Return blows if attacked within reach; never chase. |
+| Stop | S | Cancel the current order, swing and queued route immediately, then resume default idle guarding from the next tick. |
 | Hold Position | H | Stop at the current position and proactively attack within melee reach. Drop an out-of-range target; never chase or yield. |
 | Guard | G, then friendly unit or terrain | Follow and defend a friendly unit, or defend a fixed location; return after an engagement. |
 | Patrol | T, then terrain | Repeatedly travel between the starting point and destination. Engage enemies and resume the route. |
@@ -101,9 +101,14 @@ Attack target leaves the current order intact. Unreachable Move/Attack-move
 orders end cleanly. An explicit Attack with no reachable approach waits until
 the target or navigation changes or the player replaces the order.
 
-Idle blue units may retaliate when struck; idle red units acquire nearby
-enemies. Move suppresses retaliation while travelling. Stop only retaliates
-within reach when struck, while Hold Ground acquires enemies within reach
+Idle player units automatically guard their resting position: detect connected
+enemies within 10 m, and support allies fighting within 10 m against a target up to
+12 m from the guard origin. Pursuit stops beyond 12 m, then the unit returns near
+its resting position (or settles nearby if that position is occupied). Move
+completion establishes the new guard origin. This requires no Guard command;
+the displayed order stays Idle. The red demo opponent retains its aggressive AI.
+Move suppresses retaliation while travelling. Stop returns to Idle and restores
+default guarding, while Hold Ground acquires enemies within reach
 automatically. Attack and Attack-move acquire connected enemies within the
 10,000 mm prototype awareness radius. Imported units also share the active target
 of allies within 6 m. Selection favors available target capacity, then distance
@@ -125,7 +130,8 @@ maximum. Single selection shows the original type icon, Attack, Armor and
 Victories beside the portrait and health bar. The type icon's tooltip lists
 the four damage percentages. Group portraits retain these stats in tooltips.
 
-Stop and Hold Ground preserve the exact current position. On a constrained
+Stop cancels movement at the current position and resumes idle guarding; Hold
+Ground preserves the exact position until replaced. On a constrained
 deck segment the physical reservation stays held while stationary. A later
 movement order resumes through the existing safe segment coordination. Stopped
 and holding units do not yield for passing traffic, so they can block a passage.

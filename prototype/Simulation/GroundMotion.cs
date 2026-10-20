@@ -72,7 +72,7 @@ public sealed partial class SimWorld
         foreach (var (cos,sin) in SteeringDirections)
         {
             if (StableArrival(unit) && cos < 0) continue;
-            if (StableArrival(unit) && unit.AvoidanceLockTicks > 0 && sin*unit.AvoidanceSide < 0) continue;
+            if (unit.Definition.BodyRadiusMm > 350 && unit.AvoidanceLockTicks > 0 && sin*unit.AvoidanceSide < 0) continue;
             int vx = (int)(((long)dx*cos-(long)dz*sin)/1000);
             int vz = (int)(((long)dx*sin+(long)dz*cos)/1000);
             long distance = IntegerMotion.Length(vx,0,vz);
@@ -90,7 +90,7 @@ public sealed partial class SimWorld
             unit.GroundSegment = false; unit.TransitNode = -1; unit.TravelProgress = 0;
             unit.Moving = true; budget -= step;
             unit.AvoidanceTicks++;
-            if (StableArrival(unit) && sin != 0)
+            if (unit.Definition.BodyRadiusMm > 350 && sin != 0)
             { unit.AvoidanceSide=Math.Sign(sin); unit.AvoidanceLockTicks=8; }
             unit.Movement.Add(new(MovementElapsed(unit,budget),nx,ny,nz,true));
             return true;
@@ -118,7 +118,7 @@ public sealed partial class SimWorld
         { if (unit.FreeMovement) SteerGround(unit,x,z,ref budget); return false; }
         unit.X = nx; unit.Y = ny; unit.Z = nz; unit.Node = Navigation.Cell(nx,nz);
         unit.TravelProgress = progress; unit.Moving = true; budget -= movement;
-        if (StableArrival(unit) && unit.AvoidanceLockTicks == 0)
+        if (unit.Definition.BodyRadiusMm > 350 && unit.AvoidanceLockTicks == 0)
         { unit.AvoidanceSide=0; unit.AvoidanceTicks=0; }
         unit.Movement.Add(new(MovementElapsed(unit,budget),nx,ny,nz,true));
         if (progress < length) return false;

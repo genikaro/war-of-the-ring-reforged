@@ -5,6 +5,7 @@ using System.Text.Json;
 public partial class Main
 {
     private bool _engagementSmoke,_engagementSelected,_engagementOrdered,_engagementSafe=true;
+    private bool _attackMoveEngagementSmoke;
     private readonly HashSet<int>[] _engagementHitters=[[],[]];
     private readonly int[] _engagementPeak=[0,0];
     private readonly List<double> _engagementStepTimes=[];
@@ -33,19 +34,27 @@ public partial class Main
         {
             _engagementSelected=_selected.Count==18;
             var enemy=world.Units.First(u=>u.Team==1);
-            Click(_camera.UnprojectPosition(UnitPosition(enemy)+Vector3.Up),MouseButton.Right);
-            _engagementOrdered=world.Commands.LastOrDefault() is {Kind:OrderKind.Attack,Units.Length:18};
+            if (_attackMoveEngagementSmoke)
+            {
+                int goal=world.Navigation.Nearest(world.Navigation.Cell(enemy.X+6000,enemy.Z));
+                var (x,z)=world.Navigation.Center(goal); var point=_camera.UnprojectPosition(PositionOf(x,z));
+                foreach (bool pressed in new[] {true,false}) GetViewport().PushInput(new InputEventMouseButton {
+                    ButtonIndex=MouseButton.Right,Pressed=pressed,Position=point,GlobalPosition=point,CtrlPressed=true},true);
+            }
+            else Click(_camera.UnprojectPosition(UnitPosition(enemy)+Vector3.Up),MouseButton.Right);
+            _engagementOrdered=world.Commands.LastOrDefault() is {Units.Length:18} order
+                && order.Kind==(_attackMoveEngagementSmoke ? OrderKind.AttackMove : OrderKind.Attack);
         }
         if (_frames==400 && _capture!="") _=CaptureFrame(false);
         if (world.Tick < 800 || _finishing) return;
         _finishing=true;
-        var report=new {selected_allies=_engagementSelected,attack_dispatch=_engagementOrdered,body_spacing=_engagementSafe,
+        var report=new {order=_attackMoveEngagementSmoke?"AttackMove":"Attack",selected_allies=_engagementSelected,attack_dispatch=_engagementOrdered,body_spacing=_engagementSafe,
             unique_hitters=_engagementHitters.Select(h=>h.Count).ToArray(),peak_fighters=_engagementPeak,
             average_step_ms=_engagementStepTimes.Average(),p95_step_ms=_engagementStepTimes.Order().ElementAt((int)(_engagementStepTimes.Count*.95)),
             max_step_ms=_engagementStepTimes.Max(),navigation_warmup_ms=_navigationWarmMs,digest=world.StateDigest(),
             slowest_steps=_engagementStepTimes.Select((ms,tick)=>new {tick,ms}).OrderByDescending(t=>t.ms).Take(5).ToArray(),
             passed=_engagementSelected && _engagementOrdered && _engagementSafe && _engagementHitters.All(h=>h.Count>=14)};
-        System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"engagement-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented=true}));
+        System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,_attackMoveEngagementSmoke?"attack-move-engagement-smoke-report.json":"engagement-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented=true}));
         GD.Print("ENGAGEMENT_SMOKE "+JsonSerializer.Serialize(report)); GetTree().Quit(report.passed?0:1);
     }
 }

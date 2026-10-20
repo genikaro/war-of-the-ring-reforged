@@ -88,7 +88,7 @@ public partial class Main
                     && _selected.All(id => world.Units[id].OrderQueue.Count == 2) && _orders.Pending == OrderKind.Move;
                 PushKey(Key.Escape); break;
             case 62: PushKey(Key.S); break;
-            case 65: _ordersChecks["stop_clears_queued_squad"] = _selected.All(id => world.Units[id].OrderQueue.Count == 0 && world.Units[id].Order == OrderKind.Stop); break;
+            case 65: _ordersChecks["stop_clears_queued_squad"] = _selected.All(id => world.Units[id].OrderQueue.Count == 0 && world.Units[id].Order == OrderKind.Idle); break;
             case 68: ClickCommand(OrderKind.Guard); break;
             case 70: ClickVisibleWard(); break;
             case 73: _ordersChecks["guard_friendly_input"] = _selected.All(id => world.Units[id].Order == OrderKind.Guard && world.Units[id].OrderTarget == _orderSmokeWard); break;

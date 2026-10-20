@@ -7,7 +7,7 @@ static class EngagementChecks
     public static SimWorld Crowd()
     {
         var world = new SimWorld(new(48,32,1000,Enumerable.Repeat(true,48*32).ToArray(),new int[49*33]));
-        var knight = UnitDefinition.Probe with {BodyRadiusMm=927,BodyHeightMm=2534,AttackGapMm=500,MaxAttackers=8};
+        var knight = UnitDefinition.Probe with {BodyRadiusMm=927,BodyHeightMm=2534,AttackGapMm=500,MaxAttackers=8,FriendlyCompressionPpm=500_000};
         var uruk = knight with {BodyRadiusMm=693,BodyHeightMm=2197};
         for (int team=0;team<2;team++) for (int row=0;row<6;row++) for (int col=0;col<3;col++)
             world.Spawn(team,(5+row*2)*48+(team==0?4:22)+col*2,team==0?knight:uruk).Health=10000;
@@ -29,7 +29,8 @@ static class EngagementChecks
             }
         }
         var report=new {unique_hitters=hitters.Select(h=>h.Count),average_fighters=active.Select(a=>a/400d),peak_fighters=peaks,
-            elapsed_ms=times.Sum(),p95_step_ms=times.Order().ElementAt(759),max_step_ms=times.Max(),digest=world.StateDigest()};
+            elapsed_ms=times.Sum(),p95_step_ms=times.Order().ElementAt(759),max_step_ms=times.Max(),digest=world.StateDigest(),
+            waiting=world.Units.Where(u=>!u.Attacking).Select(u=>new {u.Id,u.X,u.Z,u.Target,u.Goal,u.AttackNode,u.CombatWaiting,u.BlockedTicks,u.AvoidanceTicks}).ToArray()};
         if (output != null) File.WriteAllText(output,JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented=true}));
         return report;
     }

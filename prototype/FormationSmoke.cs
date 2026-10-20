@@ -6,7 +6,7 @@ public partial class Main
 {
     private bool _formationSmoke,_formationFirstArrival,_formationMoveDispatch,_formationMarchDispatch,_formationEngaged,_formationCaptured;
     private int _formationStage,_formationAnchor,_formationFastYawChanges;
-    private float _formationWidth;
+    private float _formationWidth,_formationIdleWidth;
     private readonly Dictionary<int,(float Yaw,int Sign,int ChangeFrame,int Sequence)> _formationFacing=[];
 
     private void FormationSmokeInput()
@@ -41,7 +41,11 @@ public partial class Main
         }
         if (_formationStage>0)
         {
-            _formationWidth=Math.Max(_formationWidth,(allies.Max(u=>u.Z)-allies.Min(u=>u.Z))/1000f);
+            // Arrived units now guard a wider local area. Measure marching
+            // cohesion among marchers rather than counting idle pursuits.
+            var marchers=allies.Where(u=>u.Order==OrderKind.AttackMove).ToArray();
+            if (marchers.Length>0) _formationWidth=Math.Max(_formationWidth,(marchers.Max(u=>u.Z)-marchers.Min(u=>u.Z))/1000f);
+            _formationIdleWidth=Math.Max(_formationIdleWidth,(allies.Max(u=>u.Z)-allies.Min(u=>u.Z))/1000f);
             _formationEngaged |= allies.Any(u=>u.Target>=0);
         }
         foreach (var u in allies)
@@ -65,7 +69,7 @@ public partial class Main
         _finishing=true; bool arrived=allies.All(u=>u.Goal<0 && u.Target<0 && u.Order==OrderKind.Idle);
         var report=new {selected_allies=_engagementSelected,move_dispatch=_formationMoveDispatch,first_formation_arrived=_formationFirstArrival,
             attack_move_dispatch=_formationMarchDispatch,engaged_enemies=_formationEngaged,attack_move_arrived=arrived,living_allies=allies.Length,
-            maximum_march_width_m=_formationWidth,rapid_yaw_changes=_formationFastYawChanges,body_spacing=_engagementSafe,
+            maximum_march_width_m=_formationWidth,maximum_width_including_idle_guards_m=_formationIdleWidth,rapid_yaw_changes=_formationFastYawChanges,body_spacing=_engagementSafe,
             unsettled=allies.Where(u=>u.Goal>=0 || u.Target>=0).Select(u=>new {u.Id,u.X,u.Z,u.Goal,u.Target,u.Order,u.AttackMoveOrigin,u.AttackMoveForward,u.AttackMoveReturning}).ToArray(),
             unique_hitters=_engagementHitters.Select(h=>h.Count).ToArray(),
             average_step_ms=_engagementStepTimes.Average(),p95_step_ms=_engagementStepTimes.Order().ElementAt((int)(_engagementStepTimes.Count*.95)),digest=world.StateDigest(),

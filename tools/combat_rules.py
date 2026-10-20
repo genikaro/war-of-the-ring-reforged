@@ -108,6 +108,14 @@ def collision_profile(model, skeleton, boxes):
         'Policy': 'Upright root-centered cylinder; max scaled XY half-extent and full Z height. Root locomotion removed; original response semantics unverified.'}
 
 
+def demo_body_tuning(name, radius, height):
+    """Owner-requested feel adjustments, separate from preserved source bounds."""
+    scale = 1_120_000 if name == 'UNIT_G_HERO_ARAGORN' else 1_000_000
+    return {'BodyRadiusMm': max(800, math.ceil(radius*scale/1_000_000)) if scale != 1_000_000 else radius,
+            'BodyHeightMm': math.ceil(height*scale/1_000_000),
+            'ModelScalePpm': scale, 'FriendlyCompressionPpm': 500_000}
+
+
 def export(output, resolver=None):
     output = Path(output).resolve()
     if any(output.is_relative_to(ROOT/p) for p in ['extracted','TLOTR - War of the Ring']):
@@ -128,6 +136,8 @@ def export(output, resolver=None):
         model_record = resolver.db['Models'].get(unit['Model'])
         collision_model = dict(model,scale=[model_record[k] for k in ['ScaleX','ScaleY','ScaleZ']])
         radius, body_height, body_source = collision_profile(collision_model,skeleton,lmd.parse((ROOT/model['file']).read_bytes()).bounding_boxes)
+        body_source['SourceRadiusMm'] = radius
+        body_source['SourceHeightMm'] = body_height
         trace(ROOT/model['file']); trace(skeleton_path)
         state = next(s for s in model['animation_states'] if s['name'] == 'UNIT_ANIM_STATE_ATTACK_MELEE_01')
         durations = {clip.name: clip.duration for clip in skeleton.clips}
@@ -143,6 +153,7 @@ def export(output, resolver=None):
             'ReachMm': 2000,'ReadyClip': ready_clip,'Attacks': choices,
             'WalkScale': walk_scale,'WalkClip': motion['Walk']['Clip'],'RunClip': motion['Run']['Clip'],
             'BodyRadiusMm': radius,'BodyHeightMm': body_height,'SelectionRadiusMm': quantize(unit['SelectionRingRadius']),
+            **demo_body_tuning(name, radius, body_height),
             'AttackGapMm': quantize(weapon['MaximumRange']),
             'Source': {'Unit': unit.name,'ModelId': model['id'],'ModelFile': model['file'],
                        'StateId': state['id'],'Weapon': weapon.values,'Locomotion': motion,'Collision': body_source}})
@@ -187,7 +198,7 @@ def export(output, resolver=None):
             'Armor': 'Approximation: subtract armor points from DPS after type and explicit pair multipliers; clamp rate at zero.',
             'Damage': 'Distribute DPS * quantized cycle duration across hit events in proportion to source damage_scale.',
             'Ranges': 'Center reach is max(legacy 2000 mm, both body radii plus source weapon range as a surface gap). Original range-origin semantics remain unverified.',
-            'Collision': 'Scaled Main collision boxes supply per-type upright cylinders. Pair clearance sums both radii; navigation uses body-specific profiles. Original response semantics remain unverified.',
+            'Collision': 'Static terrain and enemies use full envelopes. Allies compress personal space to 50% with a solid non-overlapping core; resting formations retain full spacing. Aragorn presentation scales 112%, radius floor 800 mm, height follows scale. Owner-requested feel policy; raw source bounds retained in Source.Collision. Original response semantics remain unverified.',
             'Types': 'Apply TypeMatchups once, then explicit unit-pair multiplier once (absent pairs 1.0). Pair invincibility takes precedence. No explicit pairs exist among the three demo types. Stacking for other roster units remains unverified.',
             'Timing': 'ceil(source duration * event fraction * 20); cycle ceil(duration*20), final hit at most cycle-1.',
             'Movement': 'Retain accepted 3 m/s run speed. Walk speed uses the source J_Position XY displacement/duration ratio of first positive walk/run choices. Original world speed and stamina remain unverified.',

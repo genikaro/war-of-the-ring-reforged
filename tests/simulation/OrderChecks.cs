@@ -31,11 +31,11 @@ static class OrderChecks
         var (world,unit,enemy) = Fight();
         check(unit.Attacking && unit.Order == OrderKind.Attack,"explicit attack owns pursuit independently from the route");
         world.Enqueue(0,[unit.Id],OrderKind.Stop); Advance(world,1);
-        check(unit.Order == OrderKind.Stop && unit.Target < 0 && unit.Goal < 0 && unit.Path.Count == 0 && !unit.Attacking,
+        check(unit.Order == OrderKind.Idle && unit.Target < 0 && unit.Goal < 0 && unit.Path.Count == 0 && !unit.Attacking,
             "stop clears combat and pursuit at the next fixed tick");
         var stopped = (unit.X,unit.Y,unit.Z); int health = enemy.Health;
         Advance(world,40);
-        check((unit.X,unit.Y,unit.Z) == stopped && enemy.Health == health,"stop stays still and does not proactively restart combat");
+        check((unit.X,unit.Y,unit.Z) == stopped && enemy.Health == health,"a stopped legacy probe without idle awareness stays still");
 
         world.Enqueue(0,[unit.Id],OrderKind.HoldGround); Advance(world,1);
         check(unit.Attacking && unit.Order == OrderKind.HoldGround,"hold ground engages an enemy already within reach");

@@ -30,7 +30,7 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
-Latest checks: 136 Python tests, eight JavaScript tests (unchanged), and 397 total
+Latest checks: 137 Python tests, eight JavaScript tests (unchanged), and 420 total
 synthetic/cache C# checks pass. Cache checks include imported combat definitions,
 four repeated duels and runtime masks matching the initial
 snapshot, all ten building centers being
@@ -116,6 +116,27 @@ fixture requires broad participation and replay stability. The measured fixture
 uses about 52% less simulation CPU time than the reported-bug baseline; actual
 Godot reproduction checks all-ally input, both armies, body safety and step times.
 See [engagement measurements](../prototype/ENGAGEMENT.md).
+
+Further owner feedback reopened crowded melee and attack-move responsiveness.
+Friendly personal space now compresses to a solid half-envelope core; terrain,
+enemy contact and resting formation spacing retain full envelopes. Nearby fights
+can recruit rear units across march lanes, and regrouping/idle units immediately
+react to reachable enemies. Combat routes obey the same encounter area as motion,
+and steering retains a passing side. Aragorn's demo model is enlarged 12%, with
+an 800 mm full radius and 2,347 mm height; raw source bounds remain preserved.
+Both full-army Attack and Attack-move checks now record 18 hitters per side.
+See the [crowd follow-up](../prototype/ENGAGEMENT.md#crowd-and-attack-move-follow-up).
+
+The owner confirmed the crowd changes feel much better. Idle player units now
+automatically watch a 10 m radius, assist nearby allies, and use a 12 m pursuit
+limit before returning near their resting origin. Move arrival resets that
+origin. Stop cancels the current action and returns to idle guarding from the next
+tick; Hold Position remains stationary. Focused awareness, support, return and
+replay checks cover the follow-up idle-unit report.
+
+**Owner acceptance (Oct 20):** the crowd/melee changes, 10 m default idle guard
+and Stop-to-idle behavior work well and are approved as the current checkpoint.
+This accepts the play feel of this slice; original-game fidelity remains open.
 
 The three types now use imported health (485/350/240), armor, melee DPS,
 classification and attacker caps. Original clip durations and `.lmd` hit events

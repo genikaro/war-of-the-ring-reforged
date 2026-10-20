@@ -81,7 +81,7 @@ public partial class Main
             case 23: _commandChecks["panel_attack"] = world.Units.Take(6).All(u => u.Order == OrderKind.Attack); break;
             case 26: PushKey(Key.S); break;
             case 28:
-                _commandChecks["stop_cancels_combat"] = world.Units.Take(6).All(u => u.Order == OrderKind.Stop && u.Target < 0 && !u.Attacking && !u.Moving);
+                _commandChecks["stop_restores_idle_guard"] = world.Units.Take(6).All(u => u.Order == OrderKind.Idle && u.OrderQueue.Count==0);
                 break;
             case 30: PushKey(Key.H); break;
             case 32: _commandChecks["hotkey_hold"] = world.Units.Take(6).All(u => u.Order == OrderKind.HoldGround && !u.Moving); break;

@@ -36,6 +36,8 @@ MeleeChecks.Run(Check);
 MovementModeChecks.Run(Check);
 BodyCollisionChecks.Run(Check);
 EngagementChecks.Run(Check);
+CloseCombatChecks.Run(Check);
+IdleGuardChecks.Run(Check);
 CrowdMotionChecks.Run(Check);
 
 var allowed = Enumerable.Repeat(true, 80).ToArray();
