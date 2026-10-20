@@ -430,6 +430,7 @@ public partial class Main : Node3D
         if (_orders.Pending == OrderKind.UseAbility) { TargetAbility(mouse); return; }
         if (!_world!.Units.Any(u => u.Team == 0 && u.Health > 0 && _selected.Contains(u.Id))) return;
         var unit = groundOnly ? null : UnitAt(mouse);
+        if (!groundOnly && unit == null && TryGather(mouse,queued)) return;
         if (unit != null)
         {
             if (_orders.Pending == OrderKind.Guard && unit.Team < 0) { _status.Text = "Guard requires a friendly unit or location"; return; }
@@ -539,6 +540,7 @@ public partial class Main : Node3D
         _singleStepRequested = false;
         long stepStart=_engagementSmoke?System.Diagnostics.Stopwatch.GetTimestamp():0;
         _world.Step();
+        if (_skirmish) ApplySkirmishHud(_commands);
         if (_engagementSmoke) RecordEngagementStep(System.Diagnostics.Stopwatch.GetElapsedTime(stepStart).TotalMilliseconds);
         PresentCombatEvents();
         PresentAbilityEvents();

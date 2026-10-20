@@ -16,7 +16,9 @@ public partial class Main
     {
         var body = _world!.Navigation.ForBody(definition.BodyRadiusMm,definition.BodyHeightMm);
         var taken = _world.Units.Where(u => u.Health > 0).Select(u => u.Node).ToHashSet();
-        int resolved = body.CanStand(cell) && !taken.Contains(cell) ? cell : body.Nearest(cell,taken);
+        int anchor = _world.Units.FirstOrDefault()?.Node ?? cell;
+        int resolved = body.CanStand(cell) && !taken.Contains(cell) && body.IsConnected(cell,anchor)
+            ? cell : body.Nearest(cell,taken,connectedTo: anchor);
         if (resolved < 0) throw new InvalidOperationException("No free ground for a start worker");
         return resolved;
     }
@@ -40,12 +42,72 @@ public partial class Main
         var state = data.GetProperty("start_state");
         _startState = (state.GetProperty("population").GetInt32(),state.GetProperty("population_cap").GetInt32(),
             state.GetProperty("food").GetInt32(),state.GetProperty("ore").GetInt32());
+        LoadSkirmishEconomy(data);
         ApplySkirmishHud(_commands);
     }
 
     private void ApplySkirmishHud(CommandPanel panel)
     {
         panel.ShowResources(true);
-        panel.SetResources(_startState.Population,_startState.Capacity,_startState.Food,_startState.Ore);
+        var bank = _world!.Economies.GetValueOrDefault(0);
+        int population = _world.Units.Count(u => u.Team == 0 && u.Health > 0);
+        panel.SetResources(population,_startState.Capacity,bank?.Food ?? _startState.Food,bank?.Ore ?? _startState.Ore);
+    }
+
+    private void LoadSkirmishEconomy(JsonElement data)
+    {
+        if (!data.TryGetProperty("economy",out var economy))
+            throw new InvalidOperationException("Refresh skirmish economy: python tools/skirmish_economy.py --cache converted/skirmish");
+        if (economy.GetProperty("format_version").GetInt32() != 1 || economy.GetProperty("ticks_per_second").GetInt32() != SimWorld.TicksPerSecond)
+            throw new InvalidOperationException("Unsupported economy cache");
+        foreach (var worker in economy.GetProperty("workers").EnumerateObject())
+            _world!.Workers.Add(worker.Name,new(worker.Value.GetProperty("food_capacity").GetInt32(),worker.Value.GetProperty("ore_capacity").GetInt32()));
+        foreach (var start in data.GetProperty("bases").EnumerateArray())
+        {
+            int team = start.GetProperty("team").GetInt32(); var at = start.GetProperty("position");
+            _world!.Economies.Add(team,new(_startState.Food,_startState.Ore,economy.GetProperty("food_capacity").GetInt32(),economy.GetProperty("ore_capacity").GetInt32()));
+            int x = (int)Math.Round(at[0].GetDouble()*1000),z = (int)Math.Round(at[1].GetDouble()*1000);
+            _world.DropOffs.Add(new(team,x,z,SkirmishInteractionRadius(start.GetProperty("footprint_object").GetInt32(),x,z)));
+        }
+        foreach (var resource in data.GetProperty("resources").EnumerateArray())
+        {
+            string kind = resource.GetProperty("kind").GetString()!;
+            var rules = economy.GetProperty("sources").GetProperty(kind); var at = resource.GetProperty("position");
+            int id = resource.GetProperty("id").GetInt32();
+            int x = (int)Math.Round(at[0].GetDouble()*1000),z = (int)Math.Round(at[1].GetDouble()*1000);
+            _world!.Resources.Add(id,new(id,kind == "ore" ? ResourceKind.Ore : ResourceKind.Food,
+                x,z,resource.GetProperty("initial").GetInt32(),rules.GetProperty("rate_milli_per_tick").GetInt32(),
+                rules.GetProperty("raw_fraction_ppm").GetInt32(),SkirmishInteractionRadius(id,x,z)));
+        }
+    }
+
+    private int SkirmishInteractionRadius(int objectId,int x,int z)
+    {
+        var layer = _obstacleLayers.EnumerateArray().First(o => o.GetProperty("id").GetInt32() == objectId);
+        double extent = layer.GetProperty("footprints").EnumerateArray().SelectMany(b => b.GetProperty("polygon").EnumerateArray())
+            .Max(p => Math.Sqrt(Math.Pow(p[0].GetDouble()*1000-x,2)+Math.Pow(p[1].GetDouble()*1000-z,2)));
+        int body = _world!.Units.Where(u => _world.Workers.ContainsKey(u.Definition.Name)).Max(u => u.Definition.BodyRadiusMm);
+        // Conservative collision rasterization needs a body radius and one grid cell beyond the footprint.
+        return (int)Math.Ceiling(extent)+body+_world.Navigation.CellSize;
+    }
+
+    private bool TryGather(Vector2 mouse,bool queued)
+    {
+        if (!_skirmish || _orders.Pending != null || !_world!.Units.Any(u => u.Team == 0 && u.Health > 0
+            && _selected.Contains(u.Id) && _world.Workers.ContainsKey(u.Definition.Name))) return false;
+        Vector3 origin = _camera.ProjectRayOrigin(mouse),direction = _camera.ProjectRayNormal(mouse);
+        var hit = _picker.Pick(new(-origin.X,origin.Y,origin.Z),new(-direction.X,direction.Y,direction.Z));
+        if (hit == null) return false;
+        int x = (int)Math.Round(hit.Position.X*1000),z = (int)Math.Round(hit.Position.Z*1000);
+        var source = _world.Resources.Values.Where(r => SimWorld.DistanceSquared(x,z,r.X,r.Z) <= 4000L*4000)
+            .OrderBy(r => SimWorld.DistanceSquared(x,z,r.X,r.Z)).ThenBy(r => r.Id).FirstOrDefault();
+        if (source == null) return false;
+        if (!source.CanGather && !_world.Units.Any(u => u.Team == 0 && _selected.Contains(u.Id) && u.Health > 0 && u.CargoMilli > 0))
+        { _status.Text = source.Kind == ResourceKind.Food ? "Food gathering requires a Mill (construction is next)" : "No raw ore remains; a Foundry is required"; return true; }
+        var workers = _world.Units.Where(u => u.Team == 0 && u.Health > 0 && _selected.Contains(u.Id)
+            && _world.Workers.ContainsKey(u.Definition.Name)).Select(u => u.Id);
+        _world.Enqueue(0,workers,OrderKind.Gather,target: source.Id,queued: queued);
+        _status.Text = "Gather ore"+(_paused ? " queued (paused)" : " order issued");
+        return true;
     }
 }

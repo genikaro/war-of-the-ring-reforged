@@ -86,6 +86,10 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public bool PatrolForward { get; internal set; }
     public int GuardPlanTick { get; internal set; } = -1;
     public int GuardOrigin { get; internal set; } = -1;
+    public long CargoMilli { get; internal set; }
+    public ResourceKind CargoKind { get; internal set; }
+    public bool ReturningCargo { get; internal set; }
+    public int GatherPlanTick { get; internal set; } = -1;
 }
 
 public sealed record SimCommand(int Tick, int Sequence, int Team, int[] Units, int Cell, int Target = -1,
@@ -154,6 +158,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
 
     private void Apply(SimCommand command, bool activating = false)
     {
+        if (command.Kind == OrderKind.Gather) { BeginGather(command,activating); return; }
         if (command.Kind == OrderKind.UseAbility) { BeginAbility(command); return; }
         if (command.Kind == OrderKind.ToggleWalkRun)
         {
@@ -519,6 +524,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             if (unit.AvoidanceLockTicks > 0) unit.AvoidanceLockTicks--;
             if (unit.Health <= 0)
             {
+                unit.CargoMilli = 0; unit.ReturningCargo = false;
                 CancelAbility(unit);
                 CancelStrike(unit);
                 unit.Order = OrderKind.Idle; unit.OrderDestination = unit.OrderTarget = -1;
@@ -551,6 +557,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             }
             if (unit.Cooldown > 0) unit.Cooldown--;
             if (UpdateAbility(unit)) continue;
+            UpdateGather(unit);
             UpdatePersistentOrder(unit);
             if (UpdateCombat(unit)) continue;
             if (unit.Target < 0 && unit.FreeMovement && unit.Definition.BodyRadiusMm > 350 && Tick%10 == 0)
@@ -669,6 +676,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         text += ":"+string.Join(';',Units.Select(u => $"{u.Facing},{u.PreviousFacing}"));
         text += ":pace:"+string.Join(';',_walkingTeams.OrderBy(p => p.Key).Select(p => $"{p.Key},{p.Value}"));
         text += ":abilities:"+string.Join(';',Units.Select(u => $"{u.AbilitySlot},{u.CastStartTick},{u.CastSerial},{u.CastApplied}:{string.Join(',',u.AbilityReadyAt)}"));
+        text += EconomyDigest();
         text += ":"+_projectileSequence+":"+string.Join(';',Projectiles);
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
     }

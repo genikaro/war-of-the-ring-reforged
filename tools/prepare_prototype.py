@@ -15,6 +15,7 @@ import struct
 import h2o
 import prototype_assets
 import skirmish_map
+import skirmish_economy
 import prototype_navigation
 import prototype_obstacles
 import prototype_interface
@@ -304,8 +305,9 @@ def prepare_skirmish(output, install=None):
     camera_cell = int(y / spacing) * width + int(x / spacing)
     manifest = {'format_version': 1, 'mode': 'skirmish', 'name': "Bilbo's Bluffs — Good Skirmish", 'map': 'map/scene.glb',
                 'team_colors': team_colors(resolver), 'models': models, 'spawns': spawns, 'groups': groups, 'camera_cell': camera_cell,
-                'rules': 'Imported combat stats; economy, construction and production are added in later builds.',
+                'rules': 'Imported combat stats and raw ore gathering; construction, food production and training remain open.',
                 'skirmish': {'start_state': start_state, 'resources': nodes, 'building_files': building_files,
+                             'economy': skirmish_economy.economy_data(resolver),
                              'bases': [{'team': b['team'], 'start_point': b['start_point'], 'position': b['position'],
                                         'building': skirmish_map.CITADEL, 'footprint_object': b['footprint']['object_id'],
                                         'worker_cells': b['worker_cells']} for b in bases]},

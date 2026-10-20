@@ -260,6 +260,7 @@ public partial class CommandPanel : Control
             portrait.Button.TooltipText = $"{name(unit.Id)} #{unit.Id+1} · {unit.Health}/{unit.MaxHealth}\n{OrderName(unit.Order)}"
                 + (unit.Walking ? " · Walking" : " · Running")
                 + $"\nAttack {stats.Attack} · Armor {stats.Armor} · Victories {stats.Victories}\n{stats.Type}\n{stats.Matchups}"
+                  + (unit.CargoMilli > 0 ? $"\nCarrying {unit.CargoMilli/1000.0:0.0} {unit.CargoKind.ToString().ToLowerInvariant()}" : "")
                 + (unit.OrderQueue.Count > 0 ? "\nQueue: "+string.Join(" → ",unit.OrderQueue.Select(o => OrderName(o.Kind))) : "")
                 + "\nClick to select. Shift-click adds/removes. Double-click or Ctrl-click selects all of this type.";
             if (single)

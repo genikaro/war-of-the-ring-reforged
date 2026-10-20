@@ -4,6 +4,12 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
+**build-5:** Bilbo's Bluffs workers gather raw ore and deliver it to their own
+Citadel. The resource strip reads the live simulation bank. Right-click ore to
+gather, Shift-right-click to queue; ordinary orders interrupt and preserve cargo.
+Food gathering awaits Mill construction. See [skirmish notes](SKIRMISH.md) for
+cache refresh, source values and adapter limits.
+
 **build-3:** Kingsfoil now has its original healing sprite layers and a targeting
 cursor, with invalid feedback for enemies/full-health units. Passive labels are
 removed from skill icons. Active skill hotkeys sit at the bottom-right, separate
@@ -165,7 +171,7 @@ and `Archives/`). Extraction verifies CRCs and paths; the install is read only:
 python tools/prepare_prototype.py --install "C:/Games/War of the Ring"
 ```
 
-Bilbo's Bluffs skirmish start (build-4; see [SKIRMISH.md](SKIRMISH.md)) uses its own
+Bilbo's Bluffs skirmish (build-5; see [SKIRMISH.md](SKIRMISH.md)) uses its own
 cache, so the Helm's Deep sandbox above stays untouched:
 
 ```powershell
