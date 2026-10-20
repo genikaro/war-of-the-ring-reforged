@@ -15,7 +15,7 @@ python tools/skirmish_production.py --cache converted/skirmish    # add only bui
 ./prototype/run.ps1 -ConstructionSmoke         # construction, cancellation and both resources
 ./prototype/run.ps1 -StructureSmoke            # buildings, neutral interactables, palettes, counters and gap movement
 ./prototype/run.ps1 -ProductionSmoke           # Citadel worker training, queue cancellation, rally point and spawning
-./prototype/run.ps1 -PlacementSmoke            # open-ground placement, Camp population, queued Barracks, resume and cancel
+./prototype/run.ps1 -PlacementSmoke            # placement, Camp population, queued Barracks, Swordsman training, resume and cancel
 ```
 
 The cache is separate from `converted/prototype` (Helm's Deep), so both sandboxes
@@ -40,10 +40,10 @@ no behavior and no AI; nothing in build-4 changes unit rules.
 
 ## Known limits
 
-- All seven Tier 1 buildings can be built; gathering, selection and Citadel
-  worker training work. Frodo, Gondor Swordsman and Dwarf Axethrower training,
-  Watchtower defenses and garrisons, building rotation, repair and combat
-  against buildings remain open.
+- All seven Tier 1 buildings can be built; gathering, selection, worker
+  training and Barracks Swordsman training work. Frodo and Dwarf Axethrower
+  training, Watchtower defenses and garrisons, building rotation, repair and
+  combat against buildings remain open.
 - Worker build/gather animation and equipment, exact work ranges and controlled
   original-game timing comparisons remain open.
 - Start Citadel orientation is 0 degrees, not the original game's. Start-worker
@@ -436,3 +436,44 @@ resume and cancellation. Command (49), orders (27), abilities (38), gathering
 (23), construction (23), structure (61) and production (17) checks, plus the
 Helm's Deep gameplay and melee smokes, pass. An upgraded and a freshly prepared
 cache both pass. Rendered captures at 1280x800 and 4K were inspected.
+
+## Build-14: Barracks trains the Gondor Swordsman
+
+The skirmish roster now exports `UNIT_G_GONDOR_SWORDSMAN` with its source
+model, attack clips and hit events, weapon, armor and body profile, plus its
+original portrait. A completed Barracks therefore becomes a producer with the
+Swordsman in its training panel; the Rider of Rohan stays unavailable because
+it requires Citadel 2. Training, queue cancellation, population reservation and
+rally points reuse the build-12 queue unchanged.
+
+| Source rule | Gondor Swordsman |
+|---|---:|
+| `FoodCost / OreCost / PopulationCost` | 50 / 0 / 2 |
+| `UnitTrainingTime` (ticks) | 280 |
+| `MaxHealth / ArmorPoints` | 155 / 0 |
+| Melee weapon `CuttingDamagePerSecond` | 10 |
+| Main collision body (radius / height) | 570 mm / 1,798 mm |
+
+The trained unit shows 155 HP, Attack 10, Armor 0 and Victories 0 when selected,
+which matches the original selection captured in `local-020`. Its melee timing
+uses the existing combat adapter (three source clips, one or two hit events).
+
+A trained unit can be larger than the worker whose position anchored the
+producer's exit. The exit search now starts from the nearest cell that body can
+stand on, so a larger body can still leave a placed Barracks.
+
+Refresh an existing cache with
+`python tools/prepare_prototype.py --skirmish --units-only` (a few seconds). It
+exports the Swordsman model, combat rules, body clearance, portrait and the
+updated producer lists. Fresh preparation includes them. The local cache is
+already updated. Restart to load build-14.
+
+Validation: 680 synthetic / 747 Helm's Deep simulation checks, 30 worker-cache
+checks and 167 Python tests pass. A new simulation check trains a body that
+cannot stand on the recorded exit anchor. The Godot placement check grows to 18
+cases. After the Barracks completes, it clicks the real Train button, sets the
+Barracks rally point, waits for the Swordsman to arrive and selects it to read
+the source stats. Structure (61), production (17), construction (23), gathering
+(23), command (49), orders (27) and ability (38) checks, plus the Helm's Deep
+gameplay and melee smokes, pass. Upgraded and fresh caches pass. Rendered
+captures at 1280x800 and 4K were inspected.

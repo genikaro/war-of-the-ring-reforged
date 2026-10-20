@@ -97,11 +97,14 @@ public sealed partial class SimWorld
         var body = Navigation.ForBody(definition.BodyRadiusMm,definition.BodyHeightMm);
         var taken = OccupiedNodes(-1);
         int center = Navigation.Cell(producer.X,producer.Z);
+        // The anchor was recorded for another body; a larger trained unit needs a cell it can stand on.
+        int anchor = body.CanStand(producer.ExitAnchor) ? producer.ExitAnchor : body.Nearest(producer.ExitAnchor);
+        if (anchor < 0) return -1;
         // ponytail: the nearest free standing cell to the building center, not a recovered door position.
         // Sixteen candidates bound the per-tick cost while a crowd blocks the exit.
         for (int attempt = 0; attempt < 16; attempt++)
         {
-            int cell = body.Nearest(center,taken,connectedTo: producer.ExitAnchor);
+            int cell = body.Nearest(center,taken,connectedTo: anchor);
             if (cell < 0) return -1;
             if (CanPlace(SpawnCandidate(producer.Team,cell,definition))) return cell;
             taken.Add(cell);

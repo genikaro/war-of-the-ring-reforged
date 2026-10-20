@@ -4,6 +4,12 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
+**build-14:** a completed Barracks trains the Gondor Swordsman (50 food,
+population 2, 14 s), which shows the original 155 HP / Attack 10 / Armor 0.
+Refresh an existing skirmish cache with
+`python tools/prepare_prototype.py --skirmish --units-only`, then restart.
+The local cache is already updated. See [skirmish notes](SKIRMISH.md#build-14-barracks-trains-the-gondor-swordsman).
+
 **build-13:** workers build every Tier 1 building. Citadel, Watchtower, Camp,
 Barracks and Dwarf Hall go on open ground that the map marks as buildable, near
 your buildings, with a green/red ghost and Shift-queued placement. A completed

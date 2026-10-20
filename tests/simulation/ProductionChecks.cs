@@ -83,6 +83,14 @@ public static class ProductionChecks
         rally.Enqueue(0,[],OrderKind.SetRallyPoint,-1,Producer); rally.Step();
         check(rally.Producers[Producer].RallyCell == -1,"the rally point can be cleared");
 
+        var large = Fixture(); var big = UnitDefinition.Probe with { Name = "big",BodyRadiusMm = 900 };
+        large.Rules.Units.Add("big",big); large.ProductionRules.Add("big",new("big","Big",35,0,2,20));
+        large.Producers.Remove(Producer); large.Producers.Add(Producer,new(Producer,0,10500,8500,2*30,["big"]));
+        check(!large.Navigation.ForBody(900,700).CanStand(2*30),"the recorded exit anchor does not fit the larger body");
+        Train(large); Step(large,20);
+        check(large.Units.Count == 2 && large.Units[1].Definition.Name == "big" && large.Navigation.ForBody(900,700).CanStand(large.Units[1].Node),
+            "a larger trained body exits through a cell it can stand on");
+
         // A 5x5 grid leaves sixteen exit cells around the footprint; occupy every one.
         var blocked = Fixture(width: 5,height: 5,capacity: 30);
         foreach (int cell in Enumerable.Range(0,25).Where(c => c != blocked.Units[0].Node && blocked.Navigation.CanStand(c)))

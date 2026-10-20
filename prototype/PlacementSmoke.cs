@@ -78,30 +78,56 @@ public partial class Main
                 _placementChecks["barracks_complete_with_source_health"] = barracks is { Complete: true,Health: 700 } && _constructionViews[barracks.Id].Stage == 3;
                 _focus = PositionOf(barracks!.X,barracks.Z); UpdateCamera(); Click(StructureSmokePoint(barracks.Obstacle)); break;
             case 1502:
-                _placementChecks["barracks_inspected_without_unavailable_units"] = SelectedStructureDetails() is { Name: "Barracks",Health: 700,UnderConstruction: false }
-                    && _commands.CommandPaletteEmpty;
+                _placementChecks["barracks_offers_swordsman_training"] = SelectedStructureDetails() is { Name: "Barracks",Health: 700,UnderConstruction: false }
+                    && _commands.TrainButton(0) is { Visible: true,Disabled: false,Icon: not null } && !_commands.TrainButton(1).Visible
+                    && world.Producers.Values.Any(p => p.Units.SequenceEqual(["UNIT_G_GONDOR_SWORDSMAN"]));
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-barracks.png");
                 break;
-            case 1503: PushKey(Key.Key1); _focus = PositionOf(citadel.X,citadel.Z); UpdateCamera(); break;
-            case 1504: Click(_commands.ConstructionButton(SmokeCamp).GetGlobalRect().GetCenter()); break;
-            case 1506: Click(PlacementPoint(_placementCells[2])); break;
-            case 1510: PushKey(Key.S); break;
-            case 1530:
+            case 1503: Click(_commands.TrainButton(0).GetGlobalRect().GetCenter()); break;
+            case 1504: Click(ProductionRallyPoint(_selectedStructure!.Value),MouseButton.Right); break;
+            case 1505:
+                var barracksProducer = world.Producers.Values.Single(p => p.Units.Contains("UNIT_G_GONDOR_SWORDSMAN"));
+                _placementChecks["swordsman_training_pays_and_reserves"] = world.Economies[0].Food == 5 && _commands.ResourceReadout.StartsWith("6/21 ")
+                    && barracksProducer.Queue.Count == 1 && _commands.TrainingVisible && barracksProducer.RallyCell >= 0;
+                PushKey(Key.Key1); _focus = PositionOf(citadel.X,citadel.Z); UpdateCamera(); break;
+            case 1507: Click(_commands.ConstructionButton(SmokeCamp).GetGlobalRect().GetCenter()); break;
+            case 1509: Click(PlacementPoint(_placementCells[2])); break;
+            case 1513: PushKey(Key.S); break;
+            case 1533:
                 var second = Site(SmokeCamp,_placementCells[2]);
                 _placementChecks["second_camp_paid_then_stopped"] = second is { Complete: false } && world.Economies[0].Ore == 60
                     && world.Units.Where(u => u.Team == 0).All(u => u.Order != OrderKind.Build);
                 Click(StructureSmokePoint(second!.Obstacle),MouseButton.Right); break;
-            case 1534:
+            case 1537:
                 _placementChecks["right_click_foundation_resumes"] = world.Units.Count(u => u.Team == 0 && u.Order == OrderKind.Build) == 4 && world.Economies[0].Ore == 60;
                 Click(StructureSmokePoint(Site(SmokeCamp,_placementCells[2])!.Obstacle)); break;
-            case 1536: Click(_commands.CancelConstructionButton.GetGlobalRect().GetCenter()); break;
-            case 1540:
+            case 1539: Click(_commands.CancelConstructionButton.GetGlobalRect().GetCenter()); break;
+            case 1543:
                 _placementChecks["cancel_removes_foundation_with_refund"] = Site(SmokeCamp,_placementCells[2]) == null && world.Economies[0].Ore == 120
                     && world.Navigation.CanStand(_placementCells[2]) && _selectedStructure == null
                     && !_constructionViews.Values.Any(v => v.Root.Position.DistanceTo(PlacementPoint3D(_placementCells[2])) < .01f);
-                var report = new { build = BuildInfo.Label,checks = _placementChecks,passed = _placementChecks.Count == 15 && _placementChecks.Values.All(v => v),
+                break;
+            case 1900:
+                var swordsman = world.Units.LastOrDefault(u => u.Team == 0 && u.Definition.Name == "UNIT_G_GONDOR_SWORDSMAN");
+                var (rx,rz) = world.Navigation.Center(world.Producers.Values.Single(p => p.Units.Contains("UNIT_G_GONDOR_SWORDSMAN")).RallyCell);
+                _placementChecks["swordsman_appears_and_reaches_rally"] = swordsman != null && _views.Count == world.Units.Count
+                    && _views[swordsman.Id].Player != null && _views[swordsman.Id].Clip != "" && _commands.ResourceReadout.StartsWith("6/21 ")
+                    && swordsman.Order == OrderKind.Idle && SimWorld.DistanceSquared(swordsman.X,swordsman.Z,rx,rz) <= 1500L*1500;
+                if (swordsman == null) break;
+                _focus = UnitPosition(swordsman); UpdateCamera(); Click(_camera.UnprojectPosition(UnitPosition(swordsman)+Vector3.Up)); break;
+            case 1902:
+                var selected = world.Units.LastOrDefault(u => u.Team == 0 && u.Definition.Name == "UNIT_G_GONDOR_SWORDSMAN");
+                var stats = selected == null ? null : Reforged.Presentation.UnitHudStats.From(selected,_rules);
+                _placementChecks["swordsman_selectable_with_source_stats"] = selected != null && _selected.SetEquals([selected.Id]) && _commands.SingleUnitDetailsVisible
+                    && _commands.DisplayedName == "Gondor Swordsman" && _commands.DisplayedHealth == "155/155" && stats is { Attack: "10",Armor: "0" }
+                    && !_commands.ConstructionButton(SmokeCamp).Visible;
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-swordsman.png");
+                break;
+            case 1906:
+                var report = new { build = BuildInfo.Label,checks = _placementChecks,passed = _placementChecks.Count == 18 && _placementChecks.Values.All(v => v),
                     cells = _placementCells,sites = world.ConstructionSites.Values.Where(s => s.Building != null).Select(s => new { s.Id,s.Building,s.X,s.Z,s.Team,s.Complete,s.Health }),
                     bank = new { world.Economies[0].FoodMilli,world.Economies[0].OreMilli },population = new { used = world.PopulationUsed(0),capacity = world.PopulationCapacity(0) },
+                    selected = _selected,display = new { _commands.DisplayedName,_commands.DisplayedHealth,_commands.SingleUnitDetailsVisible },
                     status = _status.Text,commands = world.Commands,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"placement-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("PLACEMENT_SMOKE "+JsonSerializer.Serialize(report)); GetTree().Quit(report.passed ? 0 : 1); break;

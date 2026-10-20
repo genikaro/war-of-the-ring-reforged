@@ -129,6 +129,11 @@ def refresh_units(output):
     (output/'index.json').write_text(json.dumps(index,indent=2)+'\n')
     combat_rules.refresh(output)
     prototype_interface.refresh(output)
+    if skirmish:
+        # The roster decides which source-listed units each producer can train.
+        manifest = json.loads(path.read_text())
+        manifest['skirmish']['production'] = skirmish_production.production_data(Resolver(), [m['unit'] for m in manifest['models']])
+        path.write_text(json.dumps(manifest,indent=2)+'\n')
     return manifest if skirmish else refresh_demo(output)
 
 

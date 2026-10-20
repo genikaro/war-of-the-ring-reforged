@@ -58,7 +58,10 @@ class ProductionImportTests(unittest.TestCase):
         self.assertEqual(citadel['units'], ['UNIT_G_HUMAN_WORKER'])
         self.assertEqual(citadel['unavailable']['UNIT_G_HERO_FRODO'], 'model and rules not exported')
         self.assertEqual(citadel['unavailable']['UNIT_G_HERO_ARAGORN'], 'requires BUILDING_G_TOWN_CENTER_LEVEL_2')
-        self.assertEqual(data['producers']['BUILDING_G_GONDORIAN_BARRACKS']['unavailable']['UNIT_G_GONDOR_SWORDSMAN'], 'model and rules not exported')
+        barracks = data['producers']['BUILDING_G_GONDORIAN_BARRACKS']
+        self.assertEqual((barracks['units'], barracks['unavailable']), (['UNIT_G_GONDOR_SWORDSMAN'], {'UNIT_G_ROHAN_RIDER': 'requires BUILDING_G_TOWN_CENTER_LEVEL_2'}))
+        self.assertEqual(data['units']['UNIT_G_GONDOR_SWORDSMAN'], {'display_name': 'Gondor Swordsman', 'food_cost': 50, 'ore_cost': 0,
+                         'population': 2, 'duration_ticks': 280})
         self.assertEqual(data['units']['UNIT_G_HUMAN_WORKER'], {'display_name': 'Human Worker', 'food_cost': 35, 'ore_cost': 0,
                          'population': 1, 'duration_ticks': 240})
         self.assertEqual(data['population_provided'][skirmish_map.CITADEL], 10)

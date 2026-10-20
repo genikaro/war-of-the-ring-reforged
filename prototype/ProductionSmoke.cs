@@ -9,9 +9,9 @@ public partial class Main
     private int _productionActiveSequence = -1,_productionPausedTick,_productionPausedProgress,_productionRally = -1,_productionTrained = -1;
     private float _productionPausedBar;
 
-    private Vector2 ProductionRallyPoint()
+    private Vector2 ProductionRallyPoint(int id = 10000)
     {
-        var producer = _world!.Producers[10000];
+        var producer = _world!.Producers[id];
         foreach (var (dx,dz) in new[] {(12000,0),(-12000,0),(0,12000),(0,-12000)})
         {
             int cell = _world.Navigation.Nearest(_world.Navigation.Cell(producer.X+dx,producer.Z+dz));
