@@ -86,21 +86,26 @@ public sealed partial class GridNavigation
                 throw new ArgumentException("Surface edges must be bidirectional");
         foreach (var obstacle in obstacles ?? [])
         {
-            if (_obstacles.ContainsKey(obstacle.Id) || obstacle.Nodes.Any(n => n < 0 || n >= NodeCount)
-                || obstacle.Edges.Any(e => e.A < 0 || e.B < 0 || e.A >= NodeCount || e.B >= NodeCount))
-                throw new ArgumentException("Invalid obstacle layer");
-            _obstacles.Add(obstacle.Id, new(obstacle.Id, obstacle.Nodes.Distinct().Order().ToArray(),
-                obstacle.Edges.Select(e => e.A < e.B ? e : new(e.B, e.A)).Distinct().ToArray(),obstacle.Footprints));
-            IndexFootprints(obstacle);
-            foreach (var edge in obstacle.Edges)
-            {
-                int a=Math.Min(edge.A,edge.B),b=Math.Max(edge.A,edge.B);
-                if (!_obstacleEdgeNeighbors.TryGetValue(a,out var neighbors)) _obstacleEdgeNeighbors[a]=neighbors=[];
-                neighbors.Add(b);
-            }
+            RegisterObstacle(obstacle);
             SetObstacle(obstacle.Id, true);
         }
         Revision = 0;
+    }
+
+    private void RegisterObstacle(NavigationObstacle obstacle)
+    {
+        if (_obstacles.ContainsKey(obstacle.Id) || obstacle.Nodes.Any(n => n < 0 || n >= NodeCount)
+            || obstacle.Edges.Any(e => e.A < 0 || e.B < 0 || e.A >= NodeCount || e.B >= NodeCount))
+            throw new ArgumentException("Invalid obstacle layer");
+        _obstacles.Add(obstacle.Id, new(obstacle.Id, obstacle.Nodes.Distinct().Order().ToArray(),
+            obstacle.Edges.Select(e => e.A < e.B ? e : new(e.B, e.A)).Distinct().ToArray(),obstacle.Footprints));
+        IndexFootprints(obstacle);
+        foreach (var edge in obstacle.Edges)
+        {
+            int a=Math.Min(edge.A,edge.B),b=Math.Max(edge.A,edge.B);
+            if (!_obstacleEdgeNeighbors.TryGetValue(a,out var neighbors)) _obstacleEdgeNeighbors[a]=neighbors=[];
+            neighbors.Add(b);
+        }
     }
 
     public void LoadBodyProfiles(JsonElement cache)
@@ -147,8 +152,11 @@ public sealed partial class GridNavigation
         var blocked = profile?.Nodes ?? Enumerable.Range(0,_surfaces.Length)
             .Where(i => radius > _surfaces[i].ClearanceRadiusMm).Select(i => GroundCount+i).ToArray();
         var graph = new GridNavigation(Width,Height,CellSize,Allowed,Heights,_surfaces,
-            profile?.Obstacles ?? _obstacles.Values.ToArray(),radius,height,blocked,profile?.Edges);
-        foreach (int id in ObstacleIds.Where(id => !IsObstacleActive(id))) graph.SetObstacle(id,false);
+            profile?.Obstacles ?? _obstacles.Values.Where(o => !_runtimeFootprints.ContainsKey(o.Id)).ToArray(),radius,height,blocked,profile?.Edges);
+        // Runtime placements are rasterized for this body's own clearance; they start inactive.
+        foreach (var (id,footprints) in _runtimeFootprints) graph.AddObstacle(id,footprints);
+        foreach (int id in ObstacleIds.Where(id => !_runtimeFootprints.ContainsKey(id) && !IsObstacleActive(id))) graph.SetObstacle(id,false);
+        foreach (int id in _runtimeFootprints.Keys.Where(IsObstacleActive)) graph.SetObstacle(id,true);
         _bodyGraphs.Add((radius,height),graph); return graph;
     }
 

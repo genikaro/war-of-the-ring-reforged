@@ -39,6 +39,23 @@ class ConstructionImportTests(unittest.TestCase):
         self.assertEqual(footprint.call_args.args[1], 'BUILDING_G_FOOD_STRUCTURE')
         citadel = data['buildings']['BUILDING_G_TOWN_CENTER_LEVEL_1']
         self.assertEqual((citadel['max_health'], citadel['armor'], citadel['portrait']), (750, 4, 'Building_G_Keep_1'))
+        self.assertEqual(data['buildings']['BUILDING_G_DWARF_BARRACKS']['portrait'], 'Building_G_Dwarvish_Hall')
+
+    @unittest.skipUnless((wor.ROOT / 'TLOTR - War of the Ring/Database/Buildings.lqr').exists(), 'owner install not available')
+    def test_original_open_ground_placement(self):
+        data = skirmish_construction.placement_data(Resolver())
+        self.assertEqual(data['order'][:3], ['BUILDING_G_TOWN_CENTER_LEVEL_1', 'BUILDING_G_FOOD_STRUCTURE', 'BUILDING_G_BLACKSMITH'])
+        self.assertEqual(sorted(data['placeable']), ['BUILDING_G_DWARF_BARRACKS', 'BUILDING_G_GONDORIAN_BARRACKS',
+                         'BUILDING_G_TOWER', 'BUILDING_G_TOWN_CENTER_LEVEL_1', 'BUILDING_G_WORKER_STRUCTURE'])
+        camp, citadel = data['placeable']['BUILDING_G_WORKER_STRUCTURE'], data['placeable']['BUILDING_G_TOWN_CENTER_LEVEL_1']
+        self.assertEqual((camp['ore_cost'], camp['duration_ticks'], camp['max_health'], camp['must_be_near'], camp['drop_off']),
+                         (80, 600, 400, True, False))
+        self.assertEqual(camp['prerequisites'], ['BUILDING_G_TOWN_CENTER_LEVEL_1'])
+        self.assertEqual((citadel['display_name'], citadel['must_be_near'], citadel['drop_off']), ('Citadel 1', False, True))
+        self.assertEqual(data['placeable']['BUILDING_G_TOWER']['footprint'],
+                         {'polygon_mm': [[-1956, -1956], [1956, -1956], [1956, 1956], [-1956, 1956]], 'min_height_mm': -400, 'max_height_mm': 400})
+        self.assertEqual((data['placement_radius_mm']['BUILDING_G_TOWN_CENTER_LEVEL_1'], data['placement_radius_mm']['BUILDING_G_FOOD_STRUCTURE']),
+                         (25000, 15000))
 
 
 if __name__ == '__main__':

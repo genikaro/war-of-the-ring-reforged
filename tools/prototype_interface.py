@@ -34,7 +34,7 @@ def export(output, resolver=None):
     paths += [source / ('Console/UnitPortraits/' + name) for name in [
         'Good/Portrait_G_Aragorn.uva', 'Good/Portrait_G_Elven_Knight.uva', 'Evil/Portrait_E_Uruk_Hai.uva', 'Good/Portrait_G_Elven_Archer.uva',
         'Good/Portrait_G_Human_Worker.uva']]
-    paths += [source / ('Console/BuildingPortraits/Good/Building_G_' + name + '.uva') for name in ['Mill','Foundry','Keep_1']]
+    paths += [source / ('Console/BuildingPortraits/Good/Building_G_' + name + '.uva') for name in ['Mill','Foundry','Keep_1','Camp','Barracks','Dwarvish_Hall','Tower']]
     paths += list((source / 'Console/ObjectPortraits').glob('*.uva'))
     paths += [p for p in (source / 'Cursors/Good').glob('*.uva')
               if any(word in p.stem for word in ['attack', 'move', 'guard', 'patrol', 'greater_kingsfoil', 'negative'])]

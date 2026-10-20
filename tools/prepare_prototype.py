@@ -196,6 +196,11 @@ def build_navigation(scene, resolver, output, extra_footprints=(), inactive_obst
         source_allowed, scene['world'].heights, nav['surface_nodes'], footprints, precise=precise)
     if precise:
         nav['footprint_collision'] = 'swept-circle-v1'
+    building = next((c for c in scene['pathing']['categories'] if c['name'] == 'PATHING_CATEGORY_BUILDING' and 'painted' in c), None)
+    if building and building['grid'] == category['grid']:
+        # Source building passability is separate from (and stricter on slopes than) the walker grid.
+        bits = building['painted']['words']
+        nav['building_allowed_base64'] = base64.b64encode(bytes((bits[i // 32] >> (i % 32)) & 1 for i in range(width * height))).decode('ascii')
     if inactive_obstacles:
         nav['inactive_obstacles'] = sorted(inactive_obstacles)
     (output / 'navigation.json').write_text(json.dumps(nav, indent=2) + '\n')
@@ -279,6 +284,7 @@ def prepare_skirmish(output, install=None):
         footprint['name'] = 'Start Citadel %d' % team
         bases.append({'team': team, 'start_point': point['name'], 'position': [x, y, z], 'footprint': footprint})
     construction, site_footprints = skirmish_construction.construction_data(resolver, skirmish_map.resource_nodes(scene))
+    construction.update(skirmish_construction.placement_data(resolver))
     nav, allowed, width, height = build_navigation(scene, resolver, output, [b['footprint'] for b in bases]+site_footprints,
         [s['obstacle'] for s in construction['sites']], precise=True)
     region = connected(allowed, width, height)
@@ -304,8 +310,8 @@ def prepare_skirmish(output, install=None):
         model = resolver.db['Models'].get(resolver.db['Buildings'].get(name)['Model'])
         target = building_dir / (model.name + '.glb')
         convert_model(resolver, model.name, str(target))
-        if name in skirmish_construction.BUILDINGS.values():
-            prototype_assets.restore_building(target)
+        # Scaffold stages and the healthy state are selected at runtime for every Tier 1 building.
+        prototype_assets.restore_building(target)
         building_files[name] = 'buildings/' + target.name
     production = skirmish_production.export(output, resolver, roster)
     variables = resolver.db['WorldVariables'].records[0]

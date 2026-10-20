@@ -46,9 +46,9 @@ public partial class CommandPanel
         _order.Text = details.Team < 0 ? "Neutral structure · Inspecting" : details.Team == 0
             ? details.UnderConstruction ? "Under construction · select workers to resume or assist" : "Your structure" : "Enemy structure · Inspecting";
         bool cancel = details.Team == 0 && details.UnderConstruction;
-        _constructionButtons[2].Visible = cancel; _constructionButtons[2].Disabled = !cancel;
-        _constructionButtons[2].SetPressedNoSignal(false);
-        if (cancel) _constructionButtons[2].TooltipText = "Cancel this construction and receive its resource refund";
+        CancelConstructionButton.Visible = cancel; CancelConstructionButton.Disabled = !cancel;
+        CancelConstructionButton.SetPressedNoSignal(false);
+        if (cancel) CancelConstructionButton.TooltipText = "Cancel this construction and receive its resource refund";
     }
 
     public bool StructureHealthVisible => _structureHealthDetails.IsVisibleInTree();

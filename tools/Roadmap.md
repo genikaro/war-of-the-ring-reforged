@@ -30,6 +30,19 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-13 (Oct 20):** workers place all seven Tier 1 buildings in the original
+panel order. Open-ground placement uses the map's source building passability
+grid, walker clearance, structure/resource spacing, unit blocking and the
+source `MaxRadiusAllowingNewBuildings` proximity rule. Placed footprints become
+runtime navigation obstacles, rasterized per body profile. Foundations share the
+existing construction, resume, cancellation and scaffold presentation. A completed
+Camp adds 11 population; a new Citadel accepts deliveries and trains workers.
+Validation: 678 synthetic / 745 cached simulation checks, 30 worker-cache checks,
+167 Python tests, a 15-case Godot placement check and all skirmish/Helm's Deep
+regressions; upgraded and fresh caches pass; 1280x800 and 4K captures inspected. See [skirmish notes](../prototype/SKIRMISH.md#build-13-tier-1-building-placement).
+Next: export the Gondor Swordsman and Dwarf Axethrower and train them at the
+Barracks and Dwarf Hall, then Frodo at the Citadel.
+
 **Build-12 (Oct 20):** the Citadel trains Human Workers with source costs, time,
 population and capacity. Clicks pay and reserve population immediately; the
 queue holds five, and selection-panel portraits or Backspace cancel with a full
@@ -616,7 +629,7 @@ against continuous source-game evidence before claiming fidelity. Powers, econom
 and production remain later work.
 
 - [ ] Load unit, weapon, building, spell and technique stats from the JSON tables (`Units`, `Weapons`, `Buildings`, `Spells`, `Techniques`, `UnitToUnitModifiers`, `BattleGear`, `HeroExperiences`); three demo units' base melee definitions and pair-rule support are implemented.
-- [ ] Economy: resources, workers, building and training queues, places of power (builds 5-8 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds, independent structure selection and worker clearance fixes; build-12 adds Citadel worker training with population reservation, cancellation and rally points; other Tier 1 buildings and their units are next); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
+- [ ] Economy: resources, workers, building and training queues, places of power (builds 5-8 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds, independent structure selection and worker clearance fixes; build-12 adds Citadel worker training with population reservation, cancellation and rally points; build-13 places every Tier 1 building with source passability and proximity; Swordsman/Axethrower/Frodo training is next); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
 - [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them
 - [ ] Heroes, fate powers and spells (`SpellAndEventAndActions` chains events to actions)
 - [ ] Open `Rings.exe` in Ghidra to recover the formulas the tables only feed: damage, hit chance, experience, upgrade effects

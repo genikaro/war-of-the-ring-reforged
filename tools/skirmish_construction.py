@@ -1,4 +1,4 @@
-"""Mill/Foundry rules and precomputed resource-site collision layers.
+"""Tier 1 construction rules, resource-site collision layers and open-ground placement footprints.
 
 python tools/skirmish_construction.py --cache converted/skirmish
 """
@@ -12,14 +12,19 @@ import wor
 
 BUILDINGS = {'food': 'BUILDING_G_FOOD_STRUCTURE', 'ore': 'BUILDING_G_BLACKSMITH'}
 OBSTACLE_BASE = 20000
+# Good worker construction panel order observed in local-009 (original 1.01.0011).
+CONSTRUCTION_ORDER = [skirmish_map.CITADEL, BUILDINGS['food'], BUILDINGS['ore'], 'BUILDING_G_TOWER',
+                      'BUILDING_G_WORKER_STRUCTURE', 'BUILDING_G_GONDORIAN_BARRACKS', 'BUILDING_G_DWARF_BARRACKS']
 
 
-def construction_data(resolver, resources):
+def display_name(name, record):
+    return 'Citadel 1' if name == skirmish_map.CITADEL else record['Name']
+
+
+def building_rules(resolver, name):
     variables = resolver.db['WorldVariables'].records[0]
-    definitions = {}
-    for kind, name in BUILDINGS.items():
-        record = resolver.db['Buildings'].get(name)
-        definitions[kind] = {'name': name, 'display_name': record['Name'], 'food_cost': record['CostFood'],
+    record = resolver.db['Buildings'].get(name)
+    return {'name': name, 'display_name': display_name(name, record), 'food_cost': record['CostFood'],
             'ore_cost': record['CostOre'], 'duration_ticks': (record['BuildTime']+49)//50,
             'max_health': record['MaxHealth'], 'food_refund_ppm': round(record['RefundFoodPct']*1_000_000),
             'ore_refund_ppm': round(record['RefundOrePct']*1_000_000),
@@ -27,6 +32,30 @@ def construction_data(resolver, resources):
             'initial_health_ppm': round(variables['BldgInitialHealthPct']*1_000_000),
             'prerequisites': [resolver.db['Buildings'].get(record['BuildingRequired%d' % i]).name
                               for i in range(1, 4) if record['BuildingRequired%d' % i] >= 0]}
+
+
+def placement_data(resolver):
+    """Open-ground Tier 1 buildings: source rules plus the oriented-collision footprint relative to the origin."""
+    placeable = {}
+    for name in CONSTRUCTION_ORDER:
+        if name in BUILDINGS.values():
+            continue
+        record = resolver.db['Buildings'].get(name)
+        footprint, _ = skirmish_map.building_footprint(resolver, name, (0, 0, 0), 0)
+        placeable[name] = {**building_rules(resolver, name),
+            'footprint': {'polygon_mm': [[round(x*1000), round(z*1000)] for x, z in footprint['polygon']],
+                          'min_height_mm': round(footprint['y_min']*1000), 'max_height_mm': round(footprint['y_max']*1000)},
+            'must_be_near': bool(record['MustBePlacedNearOtherBuildings']), 'drop_off': bool(record['IsResourceDropOffBuilding'])}
+    return {'order': CONSTRUCTION_ORDER, 'placeable': placeable,
+            'placement_radius_mm': {name: round(resolver.db['Buildings'].get(name)['MaxRadiusAllowingNewBuildings']*1000)
+                                    for name in skirmish_map.TIER1_BUILDINGS},
+            'placement_adapter': 'Footprints use source building passability (PATHING_CATEGORY_BUILDING) and current walker '
+                                 'clearance under the oriented-collision box, no rotation. MustBePlacedNearOtherBuildings uses '
+                                 'center distance to completed buildings within their MaxRadiusAllowingNewBuildings.'}
+
+
+def construction_data(resolver, resources):
+    definitions = {kind: building_rules(resolver, name) for kind, name in BUILDINGS.items()}
     sites, footprints = [], []
     for node in resources:
         obstacle = OBSTACLE_BASE + node['id']
@@ -35,10 +64,10 @@ def construction_data(resolver, resources):
         footprints.append(footprint)
         sites.append({'resource': node['id'], 'kind': node['kind'], 'obstacle': obstacle})
     buildings = {}
-    for name in [skirmish_map.CITADEL, *BUILDINGS.values()]:
+    for name in skirmish_map.TIER1_BUILDINGS:
         record = resolver.db['Buildings'].get(name)
         portrait = resolver.db['UVAs'].get(record['Portrait'])
-        buildings[name] = {'display_name': 'Citadel 1' if name == skirmish_map.CITADEL else record['Name'],
+        buildings[name] = {'display_name': display_name(name, record),
             'max_health': record['MaxHealth'], 'armor': record['ArmorPoints'],
             'portrait': Path(portrait['Filename'].replace('\\', '/')).stem,
             'selection_radius_mm': round(record['SelectionRingRadius']*1000)}
@@ -60,7 +89,7 @@ def refresh(output):
     if manifest.get('mode') != 'skirmish':
         raise ValueError('construction refresh requires a skirmish cache')
     data = manifest['skirmish']
-    building_paths = [output / data['building_files'][name] for name in BUILDINGS.values()]
+    building_paths = [output / data['building_files'][name] for name in skirmish_map.TIER1_BUILDINGS]
     for building_path in building_paths:
         prototype_assets.restore_building(building_path)
     construction, footprints = construction_data(resolver, data['resources'])
@@ -77,7 +106,7 @@ def refresh(output):
     import skirmish_production
     data['economy'] = skirmish_economy.economy_data(resolver)
     data['production'] = skirmish_production.export(output, resolver, [m['unit'] for m in manifest['models']])
-    data['construction'] = construction
+    data['construction'] = {**construction, **placement_data(resolver)}
     data['selectable_objects'] = skirmish_map.selectable_objects(scene, resolver)
     for file in [output/'navigation.json', output/'heights.bin', *building_paths, output/skirmish_production.RALLY_BANNER_FILE,
                  *sorted((output/'interface').glob('*'))]:

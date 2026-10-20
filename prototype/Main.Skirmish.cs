@@ -35,7 +35,11 @@ public partial class Main
             var root = new Node3D { Name = "Building_" + _buildingViews.Count,
                 // Source metres are Z-up; the map export uses (-x, z, y) for placements.
                 Position = new(-at[0].GetSingle(),at[2].GetSingle(),at[1].GetSingle()) };
-            root.AddChild(LoadGlb(files.GetProperty(start.GetProperty("building").GetString()!).GetString()!,_teamColors[team]));
+            string file = files.GetProperty(start.GetProperty("building").GetString()!).GetString()!;
+            var model = LoadGlb(file,_teamColors[team]); root.AddChild(model);
+            // Restored building models carry every source state; show the healthy one.
+            var appearance = Reforged.Rendering.UnitAppearance.Read(System.IO.Path.Combine(_cache,file));
+            new Reforged.Rendering.UnitAppearance(model,appearance).Apply(BuildingStateClips(appearance)[3],0);
             AddChild(root); _buildingViews.Add(root);
             RegisterStructure(start.GetProperty("footprint_object").GetInt32(),team,start.GetProperty("building").GetString()!,root);
             _obstacleViews[start.GetProperty("footprint_object").GetInt32()] = root;
@@ -89,8 +93,13 @@ public partial class Main
     private int SkirmishInteractionRadius(int objectId,int x,int z)
     {
         var layer = _obstacleLayers.EnumerateArray().First(o => o.GetProperty("id").GetInt32() == objectId);
-        double extent = layer.GetProperty("footprints").EnumerateArray().SelectMany(b => b.GetProperty("polygon").EnumerateArray())
-            .Max(p => Math.Sqrt(Math.Pow(p[0].GetDouble()*1000-x,2)+Math.Pow(p[1].GetDouble()*1000-z,2)));
+        return InteractionRadius(layer.GetProperty("footprints").EnumerateArray().SelectMany(b => b.GetProperty("polygon").EnumerateArray())
+            .Max(p => Math.Sqrt(Math.Pow(p[0].GetDouble()*1000-x,2)+Math.Pow(p[1].GetDouble()*1000-z,2))));
+    }
+
+    /// <summary>Work envelope from the footprint's farthest corner (millimeters from the building center).</summary>
+    private int InteractionRadius(double extent)
+    {
         int body = _world!.Units.Where(u => _world.Workers.ContainsKey(u.Definition.Name)).Max(u => u.Definition.BodyRadiusMm);
         // Conservative collision rasterization needs a body radius and one grid cell beyond the footprint.
         return (int)Math.Ceiling(extent)+body+_world.Navigation.CellSize;
@@ -100,6 +109,12 @@ public partial class Main
     {
         if (!_skirmish || _orders.Pending != null || !_world!.Units.Any(u => u.Team == 0 && u.Health > 0
             && _selected.Contains(u.Id) && _world.Workers.ContainsKey(u.Definition.Name))) return false;
+        if (StructureAt(mouse) is { } structure && _world.ConstructionSites.Values.FirstOrDefault(s => s.Obstacle == structure.Id && s.Building != null)
+            is { Team: 0,Complete: false } placed)
+        {
+            _world.Enqueue(0,SelectedWorkers(),OrderKind.Build,target: placed.Id,queued: queued);
+            _status.Text = "Resume construction"; return true;
+        }
         var source = ResourceAt(mouse);
         if (source == null) return false;
         if (_world.ConstructionSites.TryGetValue(source.Id,out var site) && site.Team == 0 && !site.Complete)

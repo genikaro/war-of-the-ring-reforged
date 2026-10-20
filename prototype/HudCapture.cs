@@ -24,7 +24,7 @@ public partial class Main
             _world.Units.Count(u => u.Team == 0 && u.Health > 0),_world.Units.Count(u => u.Team != 0 && u.Health > 0),_world.IsWalking(0),_world.Tick,_pendingAbilitySlot);
         if (_skirmish)
         {
-            hud.RefreshConstruction(_world,selected,_constructionTargeting,_constructionKind);
+            hud.RefreshConstruction(_world,selected,_constructionTargeting,_constructionBuilding,_constructionChoices);
             hud.RefreshStructure(SelectedStructureDetails());
             hud.RefreshProduction(_world,SelectedProducer());
         }

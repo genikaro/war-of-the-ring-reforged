@@ -8,13 +8,14 @@ tracks what exists; planning lives in `tools/Roadmap.md` (Phase 4 economy).
 
 ```powershell
 python tools/prepare_prototype.py --skirmish   # one-time, builds converted/skirmish
-python tools/skirmish_construction.py --cache converted/skirmish  # upgrade an existing build-4 through build-8 cache
-python tools/skirmish_production.py --cache converted/skirmish    # add build-12 training data to a build-8 through build-11 cache
+python tools/skirmish_construction.py --cache converted/skirmish  # upgrade any earlier skirmish cache (required for build-13)
+python tools/skirmish_production.py --cache converted/skirmish    # add only build-12 training data to a build-8 through build-11 cache
 ./prototype/run.ps1 -Skirmish
 ./prototype/run.ps1 -SkirmishSmoke             # headless checks
 ./prototype/run.ps1 -ConstructionSmoke         # construction, cancellation and both resources
 ./prototype/run.ps1 -StructureSmoke            # buildings, neutral interactables, palettes, counters and gap movement
 ./prototype/run.ps1 -ProductionSmoke           # Citadel worker training, queue cancellation, rally point and spawning
+./prototype/run.ps1 -PlacementSmoke            # open-ground placement, Camp population, queued Barracks, resume and cancel
 ```
 
 The cache is separate from `converted/prototype` (Helm's Deep), so both sandboxes
@@ -39,10 +40,10 @@ no behavior and no AI; nothing in build-4 changes unit rules.
 
 ## Known limits
 
-- Mill/Foundry construction and gathering, building and neutral-object selection
-  and Citadel worker training work. General placement, the remaining Tier 1
-  buildings, Frodo and Barracks/Dwarf Hall training, repair and combat against
-  buildings remain open.
+- All seven Tier 1 buildings can be built; gathering, selection and Citadel
+  worker training work. Frodo, Gondor Swordsman and Dwarf Axethrower training,
+  Watchtower defenses and garrisons, building rotation, repair and combat
+  against buildings remain open.
 - Worker build/gather animation and equipment, exact work ranges and controlled
   original-game timing comparisons remain open.
 - Start Citadel orientation is 0 degrees, not the original game's. Start-worker
@@ -363,3 +364,75 @@ orders (27) and ability (38) checks, plus the Helm's Deep gameplay and melee
 smokes, pass. The structure check now expects the Citadel palette to contain
 training and right-click to set only a rally point. Rendered captures at 1280x800
 and 4K were inspected.
+
+## Build-13: Tier 1 building placement
+
+Workers now offer all seven Tier 1 buildings in the order of the original worker
+panel (`local-009`): Citadel, Mill, Foundry, Watchtower, Camp, Barracks and Dwarf
+Hall, with Cancel in the eighth slot. Unaffordable buildings and those with a
+missing prerequisite are disabled, and the tooltip gives the reason. Mill and Foundry
+still snap to their resource sites. The other five go on open ground: the ghost
+follows the pointer over ground cells and turns red where placement fails. Click
+to place, or Shift-click to queue the placement after the current order. Right-click an
+unfinished foundation to resume or assist, select it to cancel it, or use Cancel.
+
+| Source rule | Citadel | Watchtower | Camp | Barracks | Dwarf Hall |
+|---|---:|---:|---:|---:|---:|
+| `CostFood / CostOre` | 250 / 250 | 105 / 105 | 0 / 80 | 60 / 105 | 80 / 100 |
+| `BuildTime` (ticks) | 1,400 | 800 | 600 | 600 | 640 |
+| `MaxHealth / ArmorPoints` | 750 / 4 | 400 / 1 | 400 / 1 | 700 / 1 | 750 / 2 |
+| `MustBePlacedNearOtherBuildings` | no | yes | yes | yes | yes |
+| `AdditionalPopAdded` | 10 | 0 | 11 | 0 | 0 |
+
+Placement uses source data where it exists:
+- Every ground cell under the building's oriented-collision footprint must be
+  painted in the map's `PATHING_CATEGORY_BUILDING` grid. That grid is stricter
+  than the walker grid on slopes (15° against 30°). The importer now exports it
+  as `building_allowed_base64`.
+- The same cells must also be free for walkers. Footprints cannot touch another
+  structure or the reserved Mill/Foundry footprint over a resource.
+- Units inside the footprint block placement.
+- Buildings marked `MustBePlacedNearOtherBuildings` need their center within
+  `MaxRadiusAllowingNewBuildings` of one of your completed buildings (Citadel
+  25 m, others 15 m).
+- Some selected worker must be able to reach the work envelope; otherwise
+  nothing is paid.
+
+The placed footprint becomes a runtime navigation obstacle. It is rasterized in
+C# with the same swept body-circle test as runtime movement, separately for every
+body profile (including graphs created later). Its vertical extent spans the
+terrain under the footprint. Cancelling removes the foundation and footprint and
+refunds the source 75%.
+
+Completion uses the same cooperative work, scaffold states (19/17/18) and health
+growth as the Mill/Foundry. Workers then go idle. A completed Camp adds 11
+population, and the HUD capacity follows. A completed Citadel accepts deliveries
+and trains workers through the build-12 queue. Barracks and Dwarf Hall can be
+built and inspected, but their units are not exported yet, so they offer no
+training. Every Tier 1 building model is now restored with its scaffold geometry;
+start Citadels select their healthy state explicitly.
+
+Adapter policies awaiting original-game measurement: buildings are not rotated;
+the placement point snaps to the one-meter navigation cell under the pointer;
+proximity uses center distance to completed buildings only; covered cells are
+those whose center lies within half a cell of the footprint. Construction-panel
+order comes from the `local-009` capture.
+
+Existing caches need the full upgrade (`python tools/skirmish_construction.py
+--cache converted/skirmish`, about ten seconds). It refreshes navigation with the
+building grid, restores the building models and adds the placement rules and the
+four new building portraits. Fresh preparation produces the same data. The local
+cache is already updated. Restart to load build-13.
+
+Validation: 678 synthetic / 745 Helm's Deep simulation checks, 30 worker-cache
+checks and 167 Python tests pass. The new placement checks cover payment,
+per-body rasterization (including graphs created after placement), prerequisites,
+passability, proximity growth, structure/resource spacing, unit blocking, map
+bounds, cancellation refunds, queued placement joining one foundation, Camp
+population, Citadel delivery and training, and replay. The 15-case Godot
+placement check drives the real construction buttons, green/red ghost, invalid
+click, placement, Shift-queued Barracks, completion, inspection, right-click
+resume and cancellation. Command (49), orders (27), abilities (38), gathering
+(23), construction (23), structure (61) and production (17) checks, plus the
+Helm's Deep gameplay and melee smokes, pass. An upgraded and a freshly prepared
+cache both pass. Rendered captures at 1280x800 and 4K were inspected.

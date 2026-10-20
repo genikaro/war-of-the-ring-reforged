@@ -33,7 +33,7 @@ stored friendly groups; recalling a friendly group restores command controls.
 
 Skirmish buildings and neutral interactables select separately from units.
 Buildings show only their own available actions (Cancel for an owned foundation,
-worker training for your Citadel), while neutral structures and inspected
+worker training for a completed Citadel), while neutral structures and inspected
 enemy/neutral units have empty palettes. With your Citadel selected, right-click
 sets its rally point and Backspace cancels the last queued unit, following the
 original manual; see [training](SKIRMISH.md#build-12-citadel-worker-training). Source-selectable food wells, ore piles and the Place of Power

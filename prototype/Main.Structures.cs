@@ -172,12 +172,12 @@ public partial class Main
         if (!StructureVisible(entry)) { _selectedStructure = null; return null; }
         var world = _world!;
         var definition = _structureDefinitions[entry.Type]; int max = definition.GetProperty("max_health").GetInt32();
-        var site = entry.Team >= 0 && entry.Resource >= 0 ? world.ConstructionSites[entry.Resource] : null;
-        int progress = site == null || site.Complete ? 100 : (int)(site.ProgressMicroTicks*100/(world.ConstructionRules[world.Resources[entry.Resource].Kind].DurationTicks*1_000_000L));
+        var site = entry.Team >= 0 ? world.ConstructionSites.Values.FirstOrDefault(s => s.Obstacle == id && s.Team == entry.Team) : null;
+        int progress = site == null || site.Complete ? 100 : (int)(site.ProgressMicroTicks*100/(world.SiteRules(site).DurationTicks*1_000_000L));
         string resource = entry.Resource < 0 ? "" : $"{world.Resources[entry.Resource].Kind} remaining: {(world.Resources[entry.Resource].RemainingMilli+999)/1000}";
         return new(id,entry.Team,definition.GetProperty("display_name").GetString()!,definition.GetProperty("portrait").GetString()!,site?.Health ?? max,max,
             definition.GetProperty("armor").GetDouble().ToString("0.##",System.Globalization.CultureInfo.InvariantCulture),progress,resource,entry.Resource,
-            !definition.TryGetProperty("has_health",out var hasHealth) || hasHealth.GetBoolean());
+            !definition.TryGetProperty("has_health",out var hasHealth) || hasHealth.GetBoolean(),site?.Id ?? -1);
     }
 
     private void PresentStructureSelection()

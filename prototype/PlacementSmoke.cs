@@ -1,0 +1,112 @@
+using Godot;
+using Reforged.Simulation;
+using System.Text.Json;
+
+public partial class Main
+{
+    private bool _placementSmoke;
+    private readonly Dictionary<string,bool> _placementChecks = [];
+    private readonly int[] _placementCells = [-1,-1,-1];
+    private const string SmokeCamp = "BUILDING_G_WORKER_STRUCTURE",SmokeBarracks = "BUILDING_G_GONDORIAN_BARRACKS";
+
+    /// <summary>Three valid, visible, mutually distant cells near the player's Citadel: Camp, Barracks, second Camp.</summary>
+    private void ChoosePlacementCells()
+    {
+        var world = _world!; var citadel = world.StartStructures.First(s => s.Team == 0);
+        var chosen = new List<int>();
+        foreach (string building in new[] {SmokeCamp,SmokeBarracks,SmokeCamp})
+            for (int step = 0; step < 64 && chosen.Count < _placementCells.Length && (chosen.Count == 0 || _placementCells[chosen.Count-1] >= 0); step++)
+            {
+                double angle = step*Math.PI/8; int distance = 13000+step/16*2000;
+                int cell = world.Navigation.Cell(citadel.X+(int)(Math.Cos(angle)*distance),citadel.Z+(int)(Math.Sin(angle)*distance));
+                if (cell < 0 || !world.CanPlaceBuilding(0,building,cell,out _)) continue;
+                var (x,z) = world.Navigation.Center(cell); var point = _camera.UnprojectPosition(PositionOf(x,z));
+                if (_camera.IsPositionBehind(PositionOf(x,z)) || !GetViewport().GetVisibleRect().HasPoint(point) || _commands.GetGlobalRect().HasPoint(point)
+                    || chosen.Any(c => { var p = world.Navigation.Center(c); return SimWorld.DistanceSquared(p.X,p.Z,x,z) < 12000L*12000; })) continue;
+                chosen.Add(cell); _placementCells[chosen.Count-1] = cell; break;
+            }
+        if (chosen.Count != _placementCells.Length) throw new InvalidOperationException("No visible placement cells near the Citadel");
+    }
+
+    private Vector2 PlacementPoint(int cell) { var (x,z) = _world!.Navigation.Center(cell); return _camera.UnprojectPosition(PositionOf(x,z)); }
+
+    private void PlacementSmokeInput()
+    {
+        var world = _world!; var citadel = world.StartStructures.First(s => s.Team == 0);
+        void Pointer(Vector2 point) => GetViewport().PushInput(new InputEventMouseMotion {Position = point,GlobalPosition = point},true);
+        ConstructionSite? Site(string building,int cell) => world.ConstructionSites.Values.FirstOrDefault(s => s.Building == building && world.Navigation.Cell(s.X,s.Z) == cell);
+        switch (_frames)
+        {
+            case 3: PushKey(Key.Key1); _focus = PositionOf(citadel.X,citadel.Z); UpdateCamera(); break;
+            case 6:
+                ChoosePlacementCells();
+                _placementChecks["seven_buildings_in_original_order"] = _constructionChoices.Length == 7 && _constructionChoices.All(c => _commands.ConstructionButton(c.Building) is { Visible: true,Icon: not null })
+                    && _commands.CancelConstructionButton.Visible && _constructionChoices[3].Building == "BUILDING_G_TOWER";
+                _placementChecks["unaffordable_citadel_disabled"] = _commands.ConstructionButton("BUILDING_G_TOWN_CENTER_LEVEL_1") is { Disabled: true } citadelButton
+                    && citadelButton.TooltipText.Contains("Insufficient resources") && !_commands.ConstructionButton(SmokeCamp).Disabled;
+                Click(_commands.ConstructionButton(SmokeCamp).GetGlobalRect().GetCenter()); Pointer(PlacementPoint(_placementCells[0])); break;
+            case 8:
+                _placementChecks["open_ground_preview_green"] = _constructionTargeting && _constructionBuilding == SmokeCamp && _constructionPreview is { Visible: true } && _previewValid;
+                Pointer(_camera.UnprojectPosition(PositionOf(citadel.X,citadel.Z))); break;
+            case 10:
+                _placementChecks["structure_overlap_preview_red"] = !_previewValid && _previewMaterial?.AlbedoColor.R > .9f;
+                Click(_camera.UnprojectPosition(PositionOf(citadel.X,citadel.Z)));
+                _placementChecks["invalid_click_keeps_targeting_and_bank"] = _constructionTargeting && world.Economies[0].Ore == 325
+                    && !world.Commands.Any(c => c.Kind == OrderKind.PlaceBuilding);
+                Pointer(PlacementPoint(_placementCells[0]));
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-ghost.png");
+                break;
+            case 12: Click(PlacementPoint(_placementCells[0])); break;
+            case 14:
+                var camp = Site(SmokeCamp,_placementCells[0]);
+                _placementChecks["camp_placed_with_source_cost"] = camp is { Team: 0,Complete: false } && world.Economies[0].Ore == 245 && world.Economies[0].Food == 115
+                    && world.Commands.Any(c => c.Kind == OrderKind.PlaceBuilding && c.Units.Length == 4) && !_constructionTargeting;
+                _placementChecks["runtime_footprint_blocks_ground"] = camp != null && world.Navigation.IsObstacleActive(camp.Obstacle)
+                    && !world.Navigation.CanStand(_placementCells[0]) && _structureViews.ContainsKey(camp.Obstacle);
+                Click(_commands.ConstructionButton(SmokeBarracks).GetGlobalRect().GetCenter()); break;
+            case 16: Click(PlacementPoint(_placementCells[1]),shift: true); break;
+            case 18:
+                _placementChecks["shift_placement_queued_without_payment"] = Site(SmokeBarracks,_placementCells[1]) == null && world.Economies[0].Ore == 245
+                    && world.Units.Where(u => u.Team == 0).All(u => u.OrderQueue.Any(o => o.Kind == OrderKind.PlaceBuilding)); break;
+            case 800:
+                _placementChecks["camp_complete_adds_population"] = Site(SmokeCamp,_placementCells[0]) is { Complete: true,Health: 400 } && world.PopulationCapacity(0) == 21
+                    && _commands.ResourceReadout.StartsWith("4/21 ");
+                _placementChecks["queued_barracks_placed_once"] = world.ConstructionSites.Values.Count(s => s.Building == SmokeBarracks) == 1
+                    && Site(SmokeBarracks,_placementCells[1]) is { Team: 0 } && world.Economies[0].Ore == 140 && world.Economies[0].Food == 55; break;
+            case 1500:
+                var barracks = Site(SmokeBarracks,_placementCells[1]);
+                _placementChecks["barracks_complete_with_source_health"] = barracks is { Complete: true,Health: 700 } && _constructionViews[barracks.Id].Stage == 3;
+                _focus = PositionOf(barracks!.X,barracks.Z); UpdateCamera(); Click(StructureSmokePoint(barracks.Obstacle)); break;
+            case 1502:
+                _placementChecks["barracks_inspected_without_unavailable_units"] = SelectedStructureDetails() is { Name: "Barracks",Health: 700,UnderConstruction: false }
+                    && _commands.CommandPaletteEmpty;
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-barracks.png");
+                break;
+            case 1503: PushKey(Key.Key1); _focus = PositionOf(citadel.X,citadel.Z); UpdateCamera(); break;
+            case 1504: Click(_commands.ConstructionButton(SmokeCamp).GetGlobalRect().GetCenter()); break;
+            case 1506: Click(PlacementPoint(_placementCells[2])); break;
+            case 1510: PushKey(Key.S); break;
+            case 1530:
+                var second = Site(SmokeCamp,_placementCells[2]);
+                _placementChecks["second_camp_paid_then_stopped"] = second is { Complete: false } && world.Economies[0].Ore == 60
+                    && world.Units.Where(u => u.Team == 0).All(u => u.Order != OrderKind.Build);
+                Click(StructureSmokePoint(second!.Obstacle),MouseButton.Right); break;
+            case 1534:
+                _placementChecks["right_click_foundation_resumes"] = world.Units.Count(u => u.Team == 0 && u.Order == OrderKind.Build) == 4 && world.Economies[0].Ore == 60;
+                Click(StructureSmokePoint(Site(SmokeCamp,_placementCells[2])!.Obstacle)); break;
+            case 1536: Click(_commands.CancelConstructionButton.GetGlobalRect().GetCenter()); break;
+            case 1540:
+                _placementChecks["cancel_removes_foundation_with_refund"] = Site(SmokeCamp,_placementCells[2]) == null && world.Economies[0].Ore == 120
+                    && world.Navigation.CanStand(_placementCells[2]) && _selectedStructure == null
+                    && !_constructionViews.Values.Any(v => v.Root.Position.DistanceTo(PlacementPoint3D(_placementCells[2])) < .01f);
+                var report = new { build = BuildInfo.Label,checks = _placementChecks,passed = _placementChecks.Count == 15 && _placementChecks.Values.All(v => v),
+                    cells = _placementCells,sites = world.ConstructionSites.Values.Where(s => s.Building != null).Select(s => new { s.Id,s.Building,s.X,s.Z,s.Team,s.Complete,s.Health }),
+                    bank = new { world.Economies[0].FoodMilli,world.Economies[0].OreMilli },population = new { used = world.PopulationUsed(0),capacity = world.PopulationCapacity(0) },
+                    status = _status.Text,commands = world.Commands,digest = world.StateDigest() };
+                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"placement-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
+                GD.Print("PLACEMENT_SMOKE "+JsonSerializer.Serialize(report)); GetTree().Quit(report.passed ? 0 : 1); break;
+        }
+    }
+
+    private Vector3 PlacementPoint3D(int cell) { var (x,z) = _world!.Navigation.Center(cell); return PositionOf(x,z); }
+}

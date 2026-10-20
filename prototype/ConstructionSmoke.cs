@@ -81,7 +81,7 @@ public partial class Main
                 var ore = world.Resources[_smokeFoundrySite]; _focus = PositionOf(ore.X,ore.Z); UpdateCamera(); break;
             case 1202:
                 Click(_commands.ConstructionButton(ResourceKind.Ore).GetGlobalRect().GetCenter());
-                _constructionChecks["foundry_button_arms_targeting"] = _constructionTargeting && _constructionKind == ResourceKind.Ore; break;
+                _constructionChecks["foundry_button_arms_targeting"] = _constructionTargeting && _constructionBuilding == world.ConstructionRules[ResourceKind.Ore].Name; break;
             case 1204:
                 Click(Point(_smokeFoundrySite));
                 _constructionChecks["foundry_placement_dispatched"] = world.Commands.Any(c => c.Kind == OrderKind.Build && c.Target == _smokeFoundrySite); break;

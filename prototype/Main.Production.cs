@@ -24,6 +24,8 @@ public partial class Main
         world.InitialPopulationCapacity = production.GetProperty("initial_population_capacity").GetInt32();
         world.MaxPopulation = production.GetProperty("max_population").GetInt32();
         var producers = production.GetProperty("producers");
+        foreach (var producer in producers.EnumerateObject())
+            world.ProducedUnits.Add(producer.Name,producer.Value.GetProperty("units").EnumerateArray().Select(u => u.GetString()!).ToArray());
         foreach (var start in data.GetProperty("bases").EnumerateArray())
         {
             if (!producers.TryGetProperty(start.GetProperty("building").GetString()!,out var producer)) continue;

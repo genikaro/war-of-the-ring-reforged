@@ -164,6 +164,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     private void Apply(SimCommand command, bool activating = false)
     {
         if (command.Kind == OrderKind.Build) { BeginConstruction(command,activating); return; }
+        if (command.Kind == OrderKind.PlaceBuilding) { PlaceBuilding(command,activating); return; }
         if (command.Kind == OrderKind.CancelConstruction) { CancelConstruction(command); return; }
         if (command.Kind == OrderKind.Train) { BeginTraining(command); return; }
         if (command.Kind == OrderKind.CancelTraining) { CancelTraining(command); return; }
@@ -702,6 +703,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         text += EconomyDigest();
         text += ConstructionDigest();
         text += ProductionDigest();
+        text += PlacementDigest();
         text += ":"+_projectileSequence+":"+string.Join(';',Projectiles);
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
     }

@@ -30,7 +30,7 @@ public sealed partial class SimWorld
     public int PopulationCapacity(int team) => Math.Min(MaxPopulation,InitialPopulationCapacity
         + (StartBuildings.GetValueOrDefault(team) ?? []).Sum(name => PopulationProvided.GetValueOrDefault(name))
         + ConstructionSites.Values.Where(s => s.Team == team && s.Complete)
-            .Sum(s => PopulationProvided.GetValueOrDefault(ConstructionRules[Resources[s.Resource].Kind].Name)));
+            .Sum(s => PopulationProvided.GetValueOrDefault(SiteRules(s).Name)));
 
     /// <summary>Living units plus queued training: the original reserves population when a unit is queued.</summary>
     public int PopulationUsed(int team) => Units.Where(u => u.Team == team && u.Health > 0)
