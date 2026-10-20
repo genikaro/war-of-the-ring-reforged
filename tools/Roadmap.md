@@ -30,6 +30,28 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-3 (Oct 20):** Greater Kingsfoil uses original Effects 171 texture layers
+for expanding rings, leaves, clouds and sparkles, with finite, pause-aware visual
+playback following the target. The original Kingsfoil cursor appears while
+targeting; enemies/full-health units show the invalid cursor, and UI/cancel/cast
+returns the normal pointer. Passive labels are removed, with active skill
+hotkeys at the bottom-right and the cooldown centered separately. Validation:
+566 simulation/presentation checks, 147 Python tests and 38 Ability input checks;
+healing captures inspected at 1280x800 and 4K. Legacy particle motion remains a
+documented adapter in [ability notes](../prototype/ABILITIES.md).
+
+**Build-2 (Oct 20):** Aragorn's source ability slice is implemented. Q and the
+original Kingsfoil icon target injured allies/self, approach within 10 m, heal
+250 HP on source toolscript tick 8 and recharge over 17 seconds. The original
+clip/sound, health popup and cooldown overlay are connected. Fury and Immunity
+are equipped passive trial upgrades; W/E do not activate spells and R is empty.
+Fury replaces weapon Attack 20 with 30, with the source Wraith/Black Rider bonus.
+Immunity flags are imported; status producers, poison cleansing, original spell
+effects and purchase progression remain open. See [source trace and limits](../prototype/ABILITIES.md).
+Validation: 626 C# checks with the local cache, 145 Python tests, 25 Ability,
+46 Command and 27 Orders Godot checks, plus the 420-tick Melee smoke pass.
+The hero console was inspected at 1280x800 and 4K.
+
 **Build-1 (Oct 20):** the top-right overlay shows the build number, current local
 date and live FPS, with readable scaling through 4K. Menu and Walk/Run use native
 artwork proportions in the matching console slots. Double-click/Ctrl-click
@@ -106,7 +128,7 @@ orders, queues, targeting, swing timing and the camera. Source root-track ratios
 set walking speeds; default running stays at 3 m/s. The visible Hold label is
 now **Hold Position**. The [command behavior matrix](../references/original-game/COMMAND-BEHAVIOR-MATRIX.md)
 records evidence and intentional choices; original timing comparisons and
-Q/W/E/R abilities remain open. The 4K Walk UI was inspected; 27 Orders checks,
+Aragorn's Q/W/E slots are connected in build-2; other heroes remain open. The 4K Walk UI was inspected; 27 Orders checks,
 34 Command checks pass. The 206-hit historical melee result predates the larger bodies.
 
 The October 20 collision correction imports scaled Main boxes for the demo:
@@ -278,8 +300,8 @@ valid; they demonstrate our behavior, not equivalence to the original.
      G Guard and T Patrol. Q/E rotation and F1/F2/F3 camera shortcuts are now
      removed; Menu camera buttons, launch-time views and the F4 menu remain.
      F2 and the run-icon button are now implemented; source-ratio walking leaves
-     the accepted run speed unchanged. Q/W/E/R remain reserved until abilities
-     are connected. Any future enter-building shortcut must also
+     the accepted run speed unchanged. Build-2 connects Aragorn's Q heal and W/E
+     passives; R and other heroes remain open. Any future enter-building shortcut must also
      avoid R. These are intentional control differences from the original;
      Stop remains a prototype convenience until its original behavior is known.
    - Compare stationary Hold, guarding a unit/building/area, and Patrol against
@@ -329,7 +351,11 @@ valid; they demonstrate our behavior, not equivalence to the original.
      navigation-based line of fire are explicit adapter policies. The earlier
      melee comparison gate remains unverified; implementation is not evidence
      of original-game timing or formula fidelity.
-   - Follow with hero abilities using the reserved Q/W/E/R bindings. Collect Evil,
+   - **Build-2: first hero ability slice implemented.** Aragorn uses source slot
+     Q for Greater Kingsfoil, W/E for passive Fury/Immunity, and no fourth slot.
+     The sandbox equips these without purchase progression. Original spell
+     effects, status producers/cleansing and continuous reference comparison
+     remain open; see [ability notes](../prototype/ABILITIES.md). Collect Evil,
      hero and mixed-selection panels before generalizing the Good infantry HUD.
 4. **Build the skirmish loop from the captured selection cases.**
    - Separate infantry statistics, worker construction choices and building
@@ -491,7 +517,7 @@ and production remain later work.
 - [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them
 - [ ] Heroes, fate powers and spells (`SpellAndEventAndActions` chains events to actions)
 - [ ] Open `Rings.exe` in Ghidra to recover the formulas the tables only feed: damage, hit chance, experience, upgrade effects
-- [ ] Validate original command semantics against recorded inputs and connect the reserved Q/W/E/R abilities; F2 Walk/Run and Hold Position labeling are implemented. Preserve documented prototype conveniences.
+- [ ] Validate original command semantics against recorded inputs and expand hero abilities; build-2 connects Aragorn's source Q heal and W/E passive slots. F2 global Walk/Run and Hold Position labeling are implemented. Preserve documented prototype conveniences.
 - [ ] Record continuous reference fights and controlled health traces, then compare outcomes; the 30 local stills establish HUD/encounter observations, not timing or damage formulas
 - [ ] Skirmish visibility: explored terrain/building memory, currently visible enemy units and minimap markers; match the captured fog behavior before calling the skirmish loop complete
 

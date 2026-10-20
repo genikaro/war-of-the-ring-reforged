@@ -54,6 +54,8 @@ supports click recall. Portrait clicks select one unit; Shift-click removes it.
 | Guard | G, then friendly unit or terrain | Follow and defend a friendly unit, or defend a fixed location; return after an engagement. |
 | Patrol | T, then terrain | Repeatedly travel between the starting point and destination. Engage enemies and resume the route. |
 | Walk / Run | F2 or run icon beside minimap | Toggle global movement pace for your army at the next tick, including future units. Works with any selection; preserves orders and queues. |
+| Greater Kingsfoil | Q or hero ability icon | With Aragorn selected, choose an injured ally or self. Heal up to 250 HP within 10 m; approach if needed. 17-second cooldown. |
+| Hero slots 2–4 | W/E/R | Aragorn's W/E abilities are passive Fury/Immunity; R is empty. Other heroes are not connected. |
 
 The visible action buttons occupy the **bottom row: Attack, Hold, Guard, Patrol**,
 left to right. Move and Stop retain their controls without visible buttons.
@@ -211,8 +213,9 @@ tracks implemented corrections and unresolved comparisons.
   intentional differences do not change the recorded original S/F1–F4 bindings.
   **F2 is implemented** as a persistent player-wide Walk/Run toggle and has a
   matching run-icon button. Source animation ratios determine walking speed;
-  default running retains 3 m/s. No camera shortcut uses F2. Q/W/E/R remain
-  reserved until hero abilities are connected.
+  default running retains 3 m/s. No camera shortcut uses F2. Q/W/E/R are
+  assigned by source ability slot. Build-2 connects Aragorn's Q Kingsfoil; his
+  W/E slots show passive Fury/Immunity and R is empty. See [ability details](ABILITIES.md).
 - Verify Guard for a friendly unit, building and terrain area, plus Patrol
   interruption/return and Hold-versus-idle behavior. Existing 6 m/8 m Guard
   leashes and automatic target policies remain unverified.

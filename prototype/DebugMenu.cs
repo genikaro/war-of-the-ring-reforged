@@ -94,7 +94,7 @@ public partial class Main
         _paused = paused; _singleStepRequested = false;
         if (_world == null) return;
         foreach (var (id,view) in _views)
-            if (view.Player != null) view.Player.SpeedScale = paused || _world.Units[id].StrikeActive ? 0 : 1;
+            if (view.Player != null) view.Player.SpeedScale = paused || _world.Units[id].StrikeActive || _world.Units[id].Casting ? 0 : 1;
         foreach (var player in _impactPlayers.Concat(_launchPlayers)) player.StreamPaused = paused;
     }
 

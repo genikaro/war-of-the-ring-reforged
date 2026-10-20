@@ -11,7 +11,7 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
     int WalkScale = 500_000,string WalkClip = "",string RunClip = "",int BodyRadiusMm = 350,int BodyHeightMm = 700,int SelectionRadiusMm = 650,int AttackGapMm = 0,
     int FriendlyCompressionPpm = 1_000_000,int ModelScalePpm = 1_000_000,
     int ProjectileSpeedMmPerSecond = 0,int MinimumRangeMm = 0,
-    int MeleeDpsMilli = 0,int MeleeReachMm = 2000,int MeleeGapMm = 0)
+    int MeleeDpsMilli = 0,int MeleeReachMm = 2000,int MeleeGapMm = 0,AbilityDefinition[]? Abilities = null)
 {
     public bool IsRanged => ProjectileSpeedMmPerSecond > 0;
     public bool HasMelee => IsRanged && Attacks.Any(a => a.Melee);
@@ -23,6 +23,12 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
 
     public void Validate()
     {
+        if (Abilities != null)
+        {
+            if (Abilities.Any(a => a == null) || Abilities.Select(a => a.Slot).Distinct().Count() != Abilities.Length)
+                throw new ArgumentException("Invalid hero ability slots");
+            foreach (var ability in Abilities) ability.Validate();
+        }
         if (MaxHealth <= 0 || MaxHealth > 1_000_000 || ArmorMilli < 0 || DpsMilli < 0 || DpsMilli > 1_000_000
             || ReachMm is < 700 or > 50000 || MaxAttackers < 0 || StartingHealthPercent is <= 0 or > 100
             || ProjectileSpeedMmPerSecond is < 0 or > 200000 || MinimumRangeMm < 0 || MinimumRangeMm >= ReachMm

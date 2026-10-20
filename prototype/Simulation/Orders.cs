@@ -1,6 +1,6 @@
 namespace Reforged.Simulation;
 
-public enum OrderKind { Idle, Move, Attack, AttackMove, Stop, HoldGround, Guard, Patrol, ForceAttack, ToggleWalkRun }
+public enum OrderKind { Idle, Move, Attack, AttackMove, Stop, HoldGround, Guard, Patrol, ForceAttack, ToggleWalkRun, UseAbility }
 public sealed record PendingOrder(OrderKind Kind,int Cell,int Target,int Sequence);
 
 public sealed partial class SimWorld
@@ -166,7 +166,7 @@ public sealed partial class SimWorld
     {
         // A force move keeps its destination even when struck. A stationary
         // order can return blows within reach, but can never start a pursuit.
-        if (victim.Health <= 0 || victim.Order == OrderKind.Move || victim.AttackMoveReturning) return;
+        if (victim.Health <= 0 || victim.Order is OrderKind.Move or OrderKind.UseAbility || victim.AttackMoveReturning) return;
         if (HoldsPosition(victim) && !AttackReach(victim,victim.Node,victim.X,victim.Y,victim.Z,attacker)) return;
         victim.AutoEngage = !HoldsPosition(victim);
         if (victim.Target < 0) { BeginAttackMoveEncounter(victim); victim.Target = attacker.Id; }

@@ -39,6 +39,7 @@ public sealed partial class SimWorld
         CombatEvents.Add(new(Tick,CombatEventKind.Hit,unit.Id,target.Id,attack,hit,damage,startTick,target.X,target.Y,target.Z));
         if (target.Health <= 0)
         {
+            CancelAbility(target);
             if (damage > 0 && target.Team != unit.Team) unit.KillCount++;
             CancelStrike(target);
         }

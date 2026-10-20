@@ -20,6 +20,19 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int MaxHealth => Definition.MaxHealth;
     public int KillCount { get; internal set; }
     public bool Walking { get; internal set; }
+    public int[] AbilityReadyAt { get; } = new int[4];
+    public int AbilitySlot { get; internal set; } = -1;
+    public int CastStartTick { get; internal set; } = -1;
+    public int CastSerial { get; internal set; }
+    public bool CastApplied { get; internal set; }
+    public bool Casting => CastStartTick >= 0;
+    public AbilityDefinition? Ability(int slot) => Definition.Abilities?.FirstOrDefault(a => a.Slot == slot);
+    public StatusProtection Immunities => (Definition.Abilities ?? []).Where(a => a.Passive)
+        .Aggregate(StatusProtection.None,(flags,a) => flags | a.Immunities);
+    public int MeleeDamageRate => Definition.Abilities?.FirstOrDefault(a => a.Passive && a.Kind == AbilityKind.Fury)?.DpsMilli
+        ?? Definition.DpsMilli;
+    public int AbilityDamageScale(int targetType) => Definition.Abilities?.FirstOrDefault(a => a.Passive && a.Kind == AbilityKind.Fury
+        && a.BonusTargets?.Contains(targetType) == true)?.BonusScale ?? 1_000_000;
     public int Facing { get; internal set; }
     public int PreviousFacing { get; internal set; }
     public long MovementBudget => Walking ? Math.Max(1,SimWorld.MovementTickSpan*Definition.WalkScale/1_000_000) : SimWorld.MovementTickSpan;
@@ -76,7 +89,7 @@ public sealed class SimUnit(int id, int team, int x, int z)
 }
 
 public sealed record SimCommand(int Tick, int Sequence, int Team, int[] Units, int Cell, int Target = -1,
-    OrderKind Kind = OrderKind.Move, bool Queued = false);
+    OrderKind Kind = OrderKind.Move, bool Queued = false,int AbilitySlot = 0);
 public sealed record SimObstacleCommand(int Tick, int Sequence, int Obstacle, bool Active);
 
 /// <summary>20 Hz integer simulation. No renderer, wall clock, random state or Godot APIs.</summary>
@@ -141,6 +154,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
 
     private void Apply(SimCommand command, bool activating = false)
     {
+        if (command.Kind == OrderKind.UseAbility) { BeginAbility(command); return; }
         if (command.Kind == OrderKind.ToggleWalkRun)
         {
             bool walk = !IsWalking(command.Team);
@@ -190,6 +204,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 continue;
             }
             if (!activating) unit.OrderQueue.Clear();
+            CancelAbility(unit);
             CancelStrike(unit);
             if (free && unit.TransitNode >= 0 && unit.TransitNode < Navigation.GroundCount
                 && FreeGround(unit.Node) && FreeGround(unit.TransitNode)) unit.GroundSegment = true;
@@ -468,6 +483,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     public void Step()
     {
         CombatEvents.Clear();
+        AbilityEvents.Clear();
         var actions = Commands.Where(c => c.Tick == Tick).Select(c => (c.Sequence, Action: (Action)(() => Apply(c))))
             .Concat(ObstacleCommands.Where(c => c.Tick == Tick)
                 .Select(c => (c.Sequence, Action: (Action)(() => ApplyObstacle(c)))));
@@ -503,6 +519,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             if (unit.AvoidanceLockTicks > 0) unit.AvoidanceLockTicks--;
             if (unit.Health <= 0)
             {
+                CancelAbility(unit);
                 CancelStrike(unit);
                 unit.Order = OrderKind.Idle; unit.OrderDestination = unit.OrderTarget = -1;
                 unit.OrderQueue.Clear();
@@ -533,6 +550,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 unit.Path = Nav(unit).FindPath(unit.Node,unit.Goal); unit.Waypoint = 0;
             }
             if (unit.Cooldown > 0) unit.Cooldown--;
+            if (UpdateAbility(unit)) continue;
             UpdatePersistentOrder(unit);
             if (UpdateCombat(unit)) continue;
             if (unit.Target < 0 && unit.FreeMovement && unit.Definition.BodyRadiusMm > 350 && Tick%10 == 0)
@@ -650,6 +668,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         text += ":"+string.Join(';',Units.Select(u => $"{u.Definition.Id},{u.HealthMilli},{u.KillCount},{u.Walking},{u.AttackStartTick},{u.AttackVictim},{u.AttackVariant},{u.AttackSerial},{u.NextHit},{u.AvoidanceSide},{u.AvoidanceLockTicks},{u.AttackMoveOrigin},{u.AttackMoveForward},{u.AttackMoveRouteStart},{u.AttackMoveReturning},{u.AttackMoveIgnoredTarget},{u.AttackMoveIgnoreUntil},{u.IdleGuardOrigin},{u.IdleGuardReturning},{u.LastStopTick}"));
         text += ":"+string.Join(';',Units.Select(u => $"{u.Facing},{u.PreviousFacing}"));
         text += ":pace:"+string.Join(';',_walkingTeams.OrderBy(p => p.Key).Select(p => $"{p.Key},{p.Value}"));
+        text += ":abilities:"+string.Join(';',Units.Select(u => $"{u.AbilitySlot},{u.CastStartTick},{u.CastSerial},{u.CastApplied}:{string.Join(',',u.AbilityReadyAt)}"));
         text += ":"+_projectileSequence+":"+string.Join(';',Projectiles);
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
     }

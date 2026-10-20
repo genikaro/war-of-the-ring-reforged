@@ -38,6 +38,8 @@ FacingChecks.Run(Check);
 ProjectileTrailChecks.Run(Check);
 MovementModeChecks.Run(Check);
 SelectionChecks.Run(Check);
+AbilityChecks.Run(Check);
+HealingPlaybackChecks.Run(Check);
 BodyCollisionChecks.Run(Check);
 EngagementChecks.Run(Check);
 CloseCombatChecks.Run(Check);

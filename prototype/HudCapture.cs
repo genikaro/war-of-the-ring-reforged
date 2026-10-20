@@ -19,7 +19,7 @@ public partial class Main
         hud.Visible = _hud.Visible;
         var selected = _world!.Units.Where(u => _selected.Contains(u.Id) && u.Health > 0).ToList();
         hud.Refresh(selected,UnitName,_orders.Pending,_paused,Enumerable.Range(0,10).Select(slot => _controlGroups.Recall(slot,LivingFriendly)).ToArray(),
-            _world.Units.Count(u => u.Team == 0 && u.Health > 0),_world.Units.Count(u => u.Team != 0 && u.Health > 0),_world.IsWalking(0));
+            _world.Units.Count(u => u.Team == 0 && u.Health > 0),_world.Units.Count(u => u.Team != 0 && u.Health > 0),_world.IsWalking(0),_world.Tick,_pendingAbilitySlot);
         await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
         await ToSignal(RenderingServer.Singleton,RenderingServer.SignalName.FramePostDraw);
         using var image = viewport.GetTexture().GetImage();

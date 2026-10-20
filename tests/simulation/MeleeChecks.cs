@@ -136,6 +136,15 @@ static class MeleeChecks
     {
         var rules = CombatRules.Parse(File.ReadAllText(Path.Combine(cache,"combat/rules.json")));
         var hero = rules.Units["UNIT_G_HERO_ARAGORN"]; var knight = rules.Units["UNIT_G_ELF_KNIGHT"]; var orc = rules.Units["UNIT_E_URUK_HAI"];
+        var abilities = hero.Abilities ?? throw new Exception("Cached Aragorn abilities missing");
+        var heal = abilities.Single(a => a.Kind == AbilityKind.Heal);
+        check((heal.Slot,heal.HealMilli,heal.RechargeTicks,heal.RangeMm,heal.CastTicks,heal.EffectTick) == (0,250000,340,10000,21,8)
+            && heal.CastClip == "G_Aragorn_Greater_Kingsfoil","cached Greater Kingsfoil follows the source spell and toolscript timeline");
+        var fury = abilities.Single(a => a.Kind == AbilityKind.Fury);
+        check(fury.Passive && fury.Slot == 1 && fury.DpsMilli == 30000 && fury.BonusScale == 1500000
+            && fury.BonusTargets!.SequenceEqual(new[] {52,33}),"cached Fury imports its replacement weapon and exact target-type bonus");
+        check(abilities.Single(a => a.Kind == AbilityKind.Immunity) is {Passive:true,Slot:2,Immunities:(StatusProtection)15}
+            && knight.Abilities!.Length == 0,"cached Immunity remains passive and infantry gain no hero abilities");
         var archer = rules.Units["UNIT_G_ELVEN_ARCHER"];
         check(archer.IsRanged && (archer.MaxHealth,archer.DpsMilli,archer.ArmorMilli,archer.DamageType) == (180,14000,0,1),
             "Elven Archer imports source health, missile DPS, armor and piercing classification");

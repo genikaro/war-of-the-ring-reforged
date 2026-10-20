@@ -11,7 +11,7 @@ public sealed class OrderInput
 
     public bool Begin(OrderKind kind)
     {
-        Pending = kind is OrderKind.Move or OrderKind.Attack or OrderKind.AttackMove or OrderKind.Guard or OrderKind.Patrol or OrderKind.ForceAttack ? kind : null;
+        Pending = kind is OrderKind.Move or OrderKind.Attack or OrderKind.AttackMove or OrderKind.Guard or OrderKind.Patrol or OrderKind.ForceAttack or OrderKind.UseAbility ? kind : null;
         return Pending != null;
     }
 

@@ -4,6 +4,20 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
+**build-3:** Kingsfoil now has its original healing sprite layers and a targeting
+cursor, with invalid feedback for enemies/full-health units. Passive labels are
+removed from skill icons. Active skill hotkeys sit at the bottom-right, separate
+from the cooldown countdown. Effects follow the target and freeze when paused.
+
+**build-2: Aragorn abilities.** Select Aragorn or a group containing him, press
+**Q** (or the Kingsfoil icon), then click an injured ally or Aragorn. Greater
+Kingsfoil heals up to **250 HP** within **10 m**, with a **17-second cooldown**.
+He approaches distant targets and uses the source heal animation/sound. The
+trial equips Andúril's Fury and Immunity as passives; W/E do not cast them and
+R remains unused. Fury raises his displayed Attack to 30. Status-inflicting
+weapons, poison cleansing and other original spell effects remain future work.
+See [abilities, controls and source trace](ABILITIES.md).
+
 **build-1:** the top-right corner shows the build number, current local date and
 live FPS. Each implemented change set increments `BuildInfo.Number` once.
 Double-click or Ctrl-click a unit (or portrait) to select every living unit of

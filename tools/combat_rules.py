@@ -16,6 +16,8 @@ import lpo
 import lfx
 from resolve_model import Resolver
 import prototype_assets
+import hero_abilities
+import healing_visual
 from pcm_audio import decode_ms_adpcm
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -200,6 +202,7 @@ def export(output, resolver=None):
             'MeleeReachMm': 2000,'MeleeGapMm': quantize(melee_weapon['MaximumRange']) if ranged else 0,
             'WalkScale': walk_scale,'WalkClip': motion['Walk']['Clip'],'RunClip': motion['Run']['Clip'],
             'BodyRadiusMm': radius,'BodyHeightMm': body_height,'SelectionRadiusMm': quantize(unit['SelectionRingRadius']),
+            'Abilities': hero_abilities.export(resolver,unit,model,skeleton),
             **demo_body_tuning(name, radius, body_height),
             'AttackGapMm': 0 if ranged else quantize(weapon['MaximumRange']),
             'Source': {'Unit': unit.name,'ModelId': model['id'],'ModelFile': model['file'],
@@ -219,7 +222,10 @@ def export(output, resolver=None):
             if effect and effect['SoundEvent'] >= 0:
                 sound_event_ids.add(effect['SoundEvent'])
     sounds = export_sounds(output,resolver,sound_event_ids,trace)
-    for name in ['Units','Models','BBoxes','Weapons','DamageTypes','UnitToUnitModifiers','WeaponEffects','WeaponImpactTypes','SoundEvents','SoundEffects']:
+    ability_sounds = export_sounds(output,resolver,{event for unit in units for ability in unit['Abilities']
+        for event in ability['Source'].get('SoundEvents',[])},trace,slots=3)
+    for name in ['Units','Models','BBoxes','Weapons','DamageTypes','UnitToUnitModifiers','WeaponEffects','WeaponImpactTypes','SoundEvents','SoundEffects',
+                 'BattleGear','Spells','SpellAndEvents','SpellAndEventAndActions','SpellValidTargets','SpellActions','SpellEvents','SpellUsageTypes','SpellRanges','ToolScriptCommands','UVAs']:
         trace(resolver.db.files[name.lower()])
     from lms2gltf import convert_model
     projectile_record = resolver.db['Projectiles'].get(resolver.db['Weapons'].get(
@@ -239,6 +245,7 @@ def export(output, resolver=None):
     convert_model(resolver,str(projectile_model),str(arrow_path),extras={'wotrProjectile':projectile})
     trace(projectile_path); trace(resolver.db.files['projectiles'])
     trace(ROOT/resolver.resolve(str(projectile_model),recurse=False)['file'])
+    heal_visual = healing_visual.export(output,resolver,trace)
     data = {'FormatVersion': 3,'TicksPerSecond': 20,'Units': units,'Pairs': pairs,'Sounds': sounds,
         'TypeMatchups': type_matchups(resolver.db['DamageTypes']),
         'TypeMatchupSource': {'Cycle': 'Shipped English manual addendum, PDF page 7; owner weapon-rating photograph.',
@@ -246,7 +253,7 @@ def export(output, resolver=None):
                             'NeutralPolicy': 'Same type and attacks against Hero: 100%.',
                             'Guide': 'https://gamefaqs.gamespot.com/pc/563555-the-lord-of-the-rings-war-of-the-ring/faqs/29079'},
         'ProjectileVisual': 'combat/elven_archer_arrow.glb',
-        'LaunchSounds': launch_sounds,'ArrowTrail': trail,
+        'LaunchSounds': launch_sounds,'ArrowTrail': trail,'AbilitySounds': ability_sounds,'HealVisual': heal_visual,
         'ProjectileSource': {'Id': projectile_record.id,'Name': projectile_record.name,'Data': projectile},
         'Sources': sources,'Policy': {
             'Armor': 'Approximation: subtract armor points from DPS after type and explicit pair multipliers; clamp rate at zero.',
@@ -258,7 +265,8 @@ def export(output, resolver=None):
             'Movement': 'Retain accepted 3 m/s run speed. Walk speed uses the source J_Position XY displacement/duration ratio of first positive walk/run choices. Original world speed and stamina remain unverified.',
             'Ranged': 'Elven Archer only. Source missile range in center meters; source release event. Target-following arrows use an approximate 25 m/s travel speed, snapshot damage at release and survive shooter death/order replacement. Conservative navigation line of fire at release; no flight collision. Switch to source melee weapon/animations at the same body-based reach as infantry; switch cancellation preserves cooldown. Exact switch threshold/timing and LPO motion semantics remain unverified.',
             'ArrowPresentation': 'Launch sound event from LPO event 7/opcode 46; original PCM variants at release with source minimum volume and voice cap. Trail binding references Effects 12. Track duration interpreted as point lifetime, key word 3 as full width, word 5 as ARGB. Runtime uses a 70% gray tint, feathered ribbon and smooth age fade; exact legacy blending and trail semantics remain unverified. Presentation never drives hits.',
-            'Unsupported': 'Upgrades, levels, regeneration, height bonuses, poison, knockback, other ranged units and critical deaths.'}}
+            'Abilities': 'Aragorn sandbox pre-equips three source abilities without purchase/level progression. Greater Kingsfoil heals 250 HP within 10 m at source toolscript tick 8 of its 21-tick clip, cooldown 340 ticks. Out-of-range targets are approached using normal navigation. Casts replace orders and may be interrupted; spent cooldown is retained. Fury replaces DPS with 30 and applies 150% versus source Wraith/Black Rider types. Immunity records poison/stun/blind/slow protection; no current demo weapon produces these statuses. HealVisual adapts original target-effect sprite layers; poison cleansing and other original particle/effect attachments remain unsupported. Exact legacy range origins, interruption and progression remain unverified.',
+            'Unsupported': 'Purchase economy, levels, regeneration, height bonuses, poison/status-effect producers and cleansing, other original spell particles/attachments, knockback, other ranged units and critical deaths.'}}
     target = output/'combat/rules.json'; target.parent.mkdir(parents=True,exist_ok=True)
     target.write_text(json.dumps(data,indent=2)+'\n')
     return data

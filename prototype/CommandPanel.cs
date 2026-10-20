@@ -12,6 +12,11 @@ public partial class CommandPanel : Control
     public event Action<Vector2>? MapChosen;
     public event Action? MenuChosen;
     public event Action? WalkRunChosen;
+    public event Action<int>? AbilityChosen;
+    private readonly Button[] _abilities = new Button[4];
+    private readonly Label[] _abilityLabels = new Label[4];
+    private readonly Label[] _abilityHotkeys = new Label[4];
+    private readonly ColorRect[] _abilityRecharge = new ColorRect[4];
     private readonly Dictionary<OrderKind,Button> _buttons = [];
     private readonly Dictionary<int,(Button Button,ColorRect Health)> _portraits = [];
     private readonly Dictionary<string,Texture2D> _art = [];
@@ -30,7 +35,7 @@ public partial class CommandPanel : Control
     private TextureButton _walkRun = null!;
     private BattleMinimap _map = null!;
     private string _rosterKey = "";
-    private OrderKind? _cursorKind;
+    public string? DisplayedCursorName { get; private set; }
     public double ScalePercent { get; private set; } = 100;
     public float EffectiveScale { get; private set; }
     public bool ManageCursor { get; set; } = true;
@@ -95,6 +100,19 @@ public partial class CommandPanel : Control
             Skin(button); button.Pressed += () => CommandChosen?.Invoke(command.Kind);
             var key = Text(command.Key,new(35,34),new(16,18),13); key.HorizontalAlignment = HorizontalAlignment.Right; button.AddChild(key);
             _buttons.Add(command.Kind,button); _content.AddChild(button);
+        }
+        for (int slot = 0; slot < 4; slot++)
+        {
+            int chosen = slot;
+            var button = new Button { Position = new(788+slot*56,34),Size = new(54,54),FocusMode = FocusModeEnum.None,
+                ExpandIcon = true,ToggleMode = true,Visible = false };
+            Skin(button); button.Pressed += () => AbilityChosen?.Invoke(chosen); _content.AddChild(button);
+            var recharge = new ColorRect { Color = new Color(0,0,0,.6f),Size = new(54,0),MouseFilter = MouseFilterEnum.Ignore };
+            button.AddChild(recharge);
+            var label = Text("",new(0,16),new(54,22),15); label.HorizontalAlignment = HorizontalAlignment.Center; button.AddChild(label);
+            var key = Text("",new(35,34),new(16,18),13); key.HorizontalAlignment = HorizontalAlignment.Right; button.AddChild(key);
+            _abilities[slot] = button; _abilityLabels[slot] = label; _abilityRecharge[slot] = recharge;
+            _abilityHotkeys[slot] = key;
         }
         _hint = Text("",new(260,-27),new(760,24),13); _content.AddChild(_hint);
         var config = new ConfigFile();
@@ -169,14 +187,15 @@ public partial class CommandPanel : Control
         _map.Configure(world);
     }
 
-    public static string OrderName(OrderKind kind) => kind switch { OrderKind.AttackMove => "Attack-move",OrderKind.HoldGround => "Hold Position",OrderKind.ForceAttack => "Force Attack",OrderKind.ToggleWalkRun => "Walk / Run",_ => kind.ToString() };
+    public static string OrderName(OrderKind kind) => kind switch { OrderKind.AttackMove => "Attack-move",OrderKind.HoldGround => "Hold Position",OrderKind.ForceAttack => "Force Attack",OrderKind.ToggleWalkRun => "Walk / Run",OrderKind.UseAbility => "Greater Kingsfoil",_ => kind.ToString() };
     private static string PortraitName(string name) => name switch { "Aragorn" => "Portrait_G_Aragorn","Elf Knight" or "Elven Knight" => "Portrait_G_Elven_Knight","Elven Archer" => "Portrait_G_Elven_Archer",_ => "Portrait_E_Uruk_Hai" };
 
-    public void Refresh(IReadOnlyList<SimUnit> units,Func<int,string> name,OrderKind? pending,bool paused,IReadOnlyList<int[]>? groups = null,int allies = 0,int enemies = 0,bool walking = false)
+    public void Refresh(IReadOnlyList<SimUnit> units,Func<int,string> name,OrderKind? pending,bool paused,IReadOnlyList<int[]>? groups = null,int allies = 0,int enemies = 0,bool walking = false,int tick = 0,int pendingAbilitySlot = -1)
     {
         bool available = units.Count > 0;
         bool controllable = available && units.All(u => u.Team == 0);
         bool single = units.Count == 1;
+        RefreshAbilities(units,pending,tick,pendingAbilitySlot);
         _single.Visible = single; _roster.Visible = !single;
         _title.Position = single ? new(335,59) : new(265,59); _title.Size = single ? new(435,22) : new(505,22);
         _title.Text = single ? name(units[0].Id) : available
@@ -237,16 +256,24 @@ public partial class CommandPanel : Control
             _groups[slot].SetPressedNoSignal(available && groups[slot].SequenceEqual(units.Select(u => u.Id)));
             _groups[slot].TooltipText = $"Group {number}: {groups[slot].Length} units\nCtrl+{number}: assign · Shift+{number}: add selection\n{number}: recall · double-tap: center camera";
         }
-        _hint.Text = pending == OrderKind.Attack ? "Attack: enemy / neutral / friendly / ground · Shift-click queues · Esc/right-click cancels"
+        _hint.Text = pending == OrderKind.UseAbility ? "Greater Kingsfoil: choose an injured friendly unit or Aragorn · Esc/right-click cancels"
+            : pending == OrderKind.Attack ? "Attack: enemy / neutral / friendly / ground · Shift-click queues · Esc/right-click cancels"
             : pending != null ? OrderName(pending.Value)+": choose a target · Shift-click queues · Esc/right-click cancels" : paused ? "Paused · orders will apply when play resumes" : "";
         _map.QueueRedraw();
-        if (ManageCursor && _cursorKind != pending)
-        {
-            _cursorKind = pending;
-            string? cursor = pending switch { OrderKind.Move => "cursor_g_move",OrderKind.Guard => "cursor_g_guard",OrderKind.Patrol => "cursor_g_patrol",OrderKind.AttackMove => "cursor_g_attack_move",OrderKind.Attack or OrderKind.ForceAttack => "cursor_g_force_attack",_ => null };
-            if (cursor != null && _art.TryGetValue(cursor,out var texture)) Input.SetCustomMouseCursor(texture,Input.CursorShape.Arrow,new Vector2(texture.GetWidth()/2f,texture.GetHeight()/2f));
-            else Input.SetCustomMouseCursor(null);
-        }
+        if (pending != OrderKind.UseAbility) UpdateCursor(pending);
+    }
+
+    public void UpdateCursor(OrderKind? pending,bool? validAbilityTarget = null,bool overInterface = false)
+    {
+        if (!ManageCursor) return;
+        string? cursor = overInterface ? null : pending switch {
+            OrderKind.UseAbility => validAbilityTarget == false ? "cursor_g_negative" : "cursor_g_greater_kingsfoil",
+            OrderKind.Move => "cursor_g_move",OrderKind.Guard => "cursor_g_guard",OrderKind.Patrol => "cursor_g_patrol",
+            OrderKind.AttackMove => "cursor_g_attack_move",OrderKind.Attack or OrderKind.ForceAttack => "cursor_g_force_attack",_ => null };
+        if (DisplayedCursorName == cursor) return;
+        DisplayedCursorName = cursor;
+        if (cursor != null && _art.TryGetValue(cursor,out var texture)) Input.SetCustomMouseCursor(texture,Input.CursorShape.Arrow,new Vector2(texture.GetWidth()/2f,texture.GetHeight()/2f));
+        else Input.SetCustomMouseCursor(null);
     }
 
     public override void _ExitTree()
@@ -255,6 +282,33 @@ public partial class CommandPanel : Control
         if (ManageCursor) Input.SetCustomMouseCursor(null);
     }
     public Button ButtonFor(OrderKind kind) => _buttons[kind];
+    public Button AbilityButton(int slot) => _abilities[slot];
+    public string AbilityLabel(int slot) => _abilityLabels[slot].Text;
+    public Label AbilityHotkey(int slot) => _abilityHotkeys[slot];
+
+    private void RefreshAbilities(IReadOnlyList<SimUnit> units,OrderKind? pending,int tick,int pendingSlot)
+    {
+        var hero = units.FirstOrDefault(u => u.Team == 0 && u.Definition.Abilities?.Length > 0);
+        for (int slot = 0; slot < 4; slot++)
+        {
+            var button = _abilities[slot]; var ability = hero?.Ability(slot);
+            button.Visible = ability != null;
+            if (ability == null) continue;
+            int remaining = Math.Max(0,hero!.AbilityReadyAt[slot]-tick);
+            string key = "QWER"[slot].ToString();
+            button.Icon = _art.GetValueOrDefault(ability.Icon);
+            button.Disabled = ability.Passive || remaining > 0 || hero.Casting;
+            button.SetPressedNoSignal(!ability.Passive && pending == OrderKind.UseAbility && pendingSlot == slot);
+            button.AddThemeColorOverride("icon_disabled_color",ability.Passive ? Colors.White : new Color(.6f,.6f,.6f,1));
+            _abilityLabels[slot].Text = remaining > 0 && !ability.Passive ? $"{remaining/20f:0.0}s" : "";
+            _abilityHotkeys[slot].Text = ability.Passive ? "" : key;
+            _abilityRecharge[slot].Size = new(54,ability.RechargeTicks > 0 ? 54*Math.Clamp(remaining/(float)ability.RechargeTicks,0,1) : 0);
+            button.TooltipText = ability.Kind switch {
+                AbilityKind.Heal => $"{ability.Name} [{key}]\nHeal a friendly unit or Aragorn for up to {ability.HealMilli/1000} HP.\n{ability.RangeMm/1000} m range · {ability.RechargeTicks/20}s cooldown. Target must be below 99% health.\nAragorn approaches distant targets. Moving or issuing another order interrupts the cast.",
+                AbilityKind.Fury => $"{ability.Name} · Passive\nWeapon Attack {ability.DpsMilli/1000}. {ability.BonusScale/10000}% damage against Wraiths and Black Riders.\nEquipped for this sandbox trial.",
+                _ => "Immunity · Passive\nProtection from poison, stun, blind and slow.\nCurrent demo enemies do not inflict these effects. Equipped for this sandbox trial." };
+        }
+    }
     private static OrderKind? PanelCommand(OrderKind? kind) => kind is OrderKind.Attack or OrderKind.AttackMove or OrderKind.ForceAttack ? OrderKind.Attack : kind;
     public Button GroupButton(int slot) => _groups[slot];
     public Button PortraitButton(int id) => _portraits[id].Button;
