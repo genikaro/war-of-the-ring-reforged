@@ -37,6 +37,7 @@ if (Array.IndexOf(args,"--worker-cache") is int workerCache && workerCache >= 0)
 {
     WorkerTrafficChecks.Run(Check);
     WorkerTrafficChecks.RunCached(Check,args[workerCache+1]);
+    RangedChecks.Cached(Check,args[workerCache+1]);
     if (JsonDocument.Parse(File.ReadAllText(Path.Combine(args[workerCache+1],"navigation.json"))).RootElement.TryGetProperty("footprint_collision",out _))
         Check(JsonSerializer.SerializeToElement(FootprintChecks.Gap(args[workerCache+1])).GetProperty("passed").GetBoolean(),"worker takes the direct route through the reported Citadel/Foundry gap");
     Console.WriteLine($"{passed} worker traffic checks passed"); return;

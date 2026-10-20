@@ -29,6 +29,26 @@ static class RangedChecks
         (target.X,target.Z) = world.Navigation.Center(node); target.Y = world.Navigation.NodeHeight(node);
     }
 
+    /// <summary>The skirmish cache's Dwarf Axethrower throws through its decoded source release only.</summary>
+    public static void Cached(Action<bool,string> check,string cache)
+    {
+        var rules = CombatRules.Parse(File.ReadAllText(Path.Combine(cache,"combat/rules.json")));
+        if (!rules.Units.TryGetValue("UNIT_G_DWARVEN_AXETHROWER",out var axe)) return;
+        var world = new SimWorld(new(40,10,1000,Enumerable.Repeat(true,400).ToArray(),new int[41*11]),rules);
+        world.Spawn(0,4*40+5,axe); world.Spawn(2,4*40+13,UnitDefinition.Probe with {BodyHeightMm = 2000});
+        world.Units[0].Facing = UnitFacing.FromDirection(8000,0);
+        world.Enqueue(2,[1],OrderKind.HoldGround); world.Units[1].Cooldown = 10000;
+        world.Enqueue(0,[0],OrderKind.Attack,target: 1);
+        CombatEvent? release = null; long health = world.Units[1].HealthMilli;
+        for (int i = 0; i < 200 && release == null; i++) { world.Step(); release = world.CombatEvents.FirstOrDefault(e => e.Kind == CombatEventKind.Release); }
+        var attack = release == null ? null : axe.Attacks[release.Attack];
+        check(release != null && attack is { Clip: "G_Dwarven_Axethrower_Attack_Missile_01",Melee: false } && release.Tick-release.StartTick == attack.Hits[0].Tick
+            && world.Projectiles.Count == 1,"the cached Axethrower releases an axe at its decoded source throw event");
+        Advance(world,40);
+        check(world.Units[1].HealthMilli < health && world.Projectiles.Count <= 1,"the thrown axe damages its target on arrival");
+        check(axe.Attacks.All(a => a.Clip != "G_Dwarven_Axethrower_Attack_Missile_02"),"the throw with an undecoded release event is not used");
+    }
+
     public static void Run(Action<bool,string> check)
     {
         var contact = Dual(2); contact.Step();

@@ -222,7 +222,10 @@ ticks. Its `missile_release` event 5 occurs at source fraction 0.5333330, so the
 arrow launches on tick 22. The projectile model comes from resource 1243 in
 `PROJECTILE_ELVEN_ARCHER_ARROW` (14), with the original LPO preserved in the
 rules cache. Model, LPO and database hashes are recorded. Refresh an existing
-cache with `python tools/prepare_prototype.py --units-only`.
+cache with `python tools/prepare_prototype.py --units-only`. Since build-15 each
+ranged unit's projectile model, launch sounds and trail are stored per unit
+under `Projectiles`; the skirmish Dwarf Axethrower uses the same path (see
+[skirmish notes](SKIRMISH.md#build-15-dwarf-hall-trains-the-dwarf-axethrower)).
 
 Archers keep their firing position when a target is in range and visible, and
 otherwise use the existing combat approach planner. Bow shots neither consume

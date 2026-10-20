@@ -102,7 +102,7 @@ def export_units(output, resolver, roster=None):
         model = resolver.db['Models'].get(unit['Model'])
         target = units_dir / (model.name + '.glb')
         info = convert_model(resolver, model.name, str(target))
-        locomotion = prototype_assets.adapt(target, center_pivot=unit_name == 'UNIT_G_ELVEN_ARCHER')
+        locomotion = prototype_assets.adapt(target, center_pivot=unit_name in combat_rules.RANGED_UNITS)
         clips = info['clips']
         def clip(*terms):
             return next((c for c in clips if all(t.lower() in c.lower() for t in terms)), '')

@@ -30,6 +30,19 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-15 (Oct 20):** a completed Dwarf Hall trains the Dwarf Axethrower
+(60 food, 10 ore, population 2, 340 ticks; 140 HP, 9 DPS, 0.5–10 m). The rules
+export uses an explicit ranged list instead of the Archer-only name check (the
+source Uruk-Hai missile weapon stays disabled), and projectile model, launch
+sounds and trail are exported and rendered per ranged unit. Helm's Deep rules are
+unchanged apart from that format. The Axethrower's right-hand throw uses an
+undecoded LMD event type 33 and is skipped for now.
+Validation: 680 synthetic / 747 cached simulation checks, 33 worker-cache checks
+(including the cached Axethrower throw), 167 Python tests, a 9-case Godot Dwarf Hall
+check and unchanged Helm's Deep arrow results; fresh and upgraded caches pass. See [skirmish notes](../prototype/SKIRMISH.md#build-15-dwarf-hall-trains-the-dwarf-axethrower).
+Next: Frodo at the Citadel (hero model, rules and abilities), decoding event
+type 33 for the second throw, and Watchtower defenses.
+
 **Build-14 (Oct 20):** the skirmish roster exports the Gondor Swordsman, so a
 completed Barracks trains it through the build-12 queue (50 food, population 2,
 280 ticks; 155 HP, Attack 10, Armor 0, matching `local-020`). Trained bodies
@@ -639,7 +652,7 @@ against continuous source-game evidence before claiming fidelity. Powers, econom
 and production remain later work.
 
 - [ ] Load unit, weapon, building, spell and technique stats from the JSON tables (`Units`, `Weapons`, `Buildings`, `Spells`, `Techniques`, `UnitToUnitModifiers`, `BattleGear`, `HeroExperiences`); three demo units' base melee definitions and pair-rule support are implemented.
-- [ ] Economy: resources, workers, building and training queues, places of power (builds 5-8 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds, independent structure selection and worker clearance fixes; build-12 adds Citadel worker training with population reservation, cancellation and rally points; build-13 places every Tier 1 building with source passability and proximity; build-14 trains the Gondor Swordsman at the Barracks; Axethrower and Frodo are next); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
+- [ ] Economy: resources, workers, building and training queues, places of power (builds 5-8 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds, independent structure selection and worker clearance fixes; build-12 adds Citadel worker training with population reservation, cancellation and rally points; build-13 places every Tier 1 building with source passability and proximity; build-14 trains the Gondor Swordsman at the Barracks; build-15 the Dwarf Axethrower at the Dwarf Hall; Frodo is next); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
 - [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them
 - [ ] Heroes, fate powers and spells (`SpellAndEventAndActions` chains events to actions)
 - [ ] Open `Rings.exe` in Ghidra to recover the formulas the tables only feed: damage, hit chance, experience, upgrade effects

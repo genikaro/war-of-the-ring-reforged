@@ -6,16 +6,16 @@ public partial class Main
 {
     private bool _placementSmoke;
     private readonly Dictionary<string,bool> _placementChecks = [];
-    private readonly int[] _placementCells = [-1,-1,-1];
+    private int[] _placementCells = [];
     private const string SmokeCamp = "BUILDING_G_WORKER_STRUCTURE",SmokeBarracks = "BUILDING_G_GONDORIAN_BARRACKS";
 
-    /// <summary>Three valid, visible, mutually distant cells near the player's Citadel: Camp, Barracks, second Camp.</summary>
-    private void ChoosePlacementCells()
+    /// <summary>Valid, visible, mutually distant cells near the player's Citadel, one per building.</summary>
+    private int[] VisiblePlacementCells(params string[] buildings)
     {
         var world = _world!; var citadel = world.StartStructures.First(s => s.Team == 0);
         var chosen = new List<int>();
-        foreach (string building in new[] {SmokeCamp,SmokeBarracks,SmokeCamp})
-            for (int step = 0; step < 64 && chosen.Count < _placementCells.Length && (chosen.Count == 0 || _placementCells[chosen.Count-1] >= 0); step++)
+        foreach (string building in buildings)
+            for (int step = 0; step < 64; step++)
             {
                 double angle = step*Math.PI/8; int distance = 13000+step/16*2000;
                 int cell = world.Navigation.Cell(citadel.X+(int)(Math.Cos(angle)*distance),citadel.Z+(int)(Math.Sin(angle)*distance));
@@ -23,9 +23,10 @@ public partial class Main
                 var (x,z) = world.Navigation.Center(cell); var point = _camera.UnprojectPosition(PositionOf(x,z));
                 if (_camera.IsPositionBehind(PositionOf(x,z)) || !GetViewport().GetVisibleRect().HasPoint(point) || _commands.GetGlobalRect().HasPoint(point)
                     || chosen.Any(c => { var p = world.Navigation.Center(c); return SimWorld.DistanceSquared(p.X,p.Z,x,z) < 12000L*12000; })) continue;
-                chosen.Add(cell); _placementCells[chosen.Count-1] = cell; break;
+                chosen.Add(cell); break;
             }
-        if (chosen.Count != _placementCells.Length) throw new InvalidOperationException("No visible placement cells near the Citadel");
+        if (chosen.Count != buildings.Length) throw new InvalidOperationException("No visible placement cells near the Citadel");
+        return chosen.ToArray();
     }
 
     private Vector2 PlacementPoint(int cell) { var (x,z) = _world!.Navigation.Center(cell); return _camera.UnprojectPosition(PositionOf(x,z)); }
@@ -39,7 +40,7 @@ public partial class Main
         {
             case 3: PushKey(Key.Key1); _focus = PositionOf(citadel.X,citadel.Z); UpdateCamera(); break;
             case 6:
-                ChoosePlacementCells();
+                _placementCells = VisiblePlacementCells(SmokeCamp,SmokeBarracks,SmokeCamp);
                 _placementChecks["seven_buildings_in_original_order"] = _constructionChoices.Length == 7 && _constructionChoices.All(c => _commands.ConstructionButton(c.Building) is { Visible: true,Icon: not null })
                     && _commands.CancelConstructionButton.Visible && _constructionChoices[3].Building == "BUILDING_G_TOWER";
                 _placementChecks["unaffordable_citadel_disabled"] = _commands.ConstructionButton("BUILDING_G_TOWN_CENTER_LEVEL_1") is { Disabled: true } citadelButton

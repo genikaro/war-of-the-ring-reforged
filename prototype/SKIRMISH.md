@@ -16,6 +16,7 @@ python tools/skirmish_production.py --cache converted/skirmish    # add only bui
 ./prototype/run.ps1 -StructureSmoke            # buildings, neutral interactables, palettes, counters and gap movement
 ./prototype/run.ps1 -ProductionSmoke           # Citadel worker training, queue cancellation, rally point and spawning
 ./prototype/run.ps1 -PlacementSmoke            # placement, Camp population, queued Barracks, Swordsman training, resume and cancel
+./prototype/run.ps1 -DwarfHallSmoke            # Dwarf Hall, Axethrower training and thrown axes (credits a test bank first)
 ```
 
 The cache is separate from `converted/prototype` (Helm's Deep), so both sandboxes
@@ -40,10 +41,10 @@ no behavior and no AI; nothing in build-4 changes unit rules.
 
 ## Known limits
 
-- All seven Tier 1 buildings can be built; gathering, selection, worker
-  training and Barracks Swordsman training work. Frodo and Dwarf Axethrower
-  training, Watchtower defenses and garrisons, building rotation, repair and
-  combat against buildings remain open.
+- All seven Tier 1 buildings can be built; gathering, selection and the
+  Worker, Gondor Swordsman and Dwarf Axethrower training work. Frodo, the
+  Axethrower's second (right-hand) throw, Watchtower defenses and garrisons,
+  building rotation, repair and combat against buildings remain open.
 - Worker build/gather animation and equipment, exact work ranges and controlled
   original-game timing comparisons remain open.
 - Start Citadel orientation is 0 degrees, not the original game's. Start-worker
@@ -477,3 +478,56 @@ the source stats. Structure (61), production (17), construction (23), gathering
 (23), command (49), orders (27) and ability (38) checks, plus the Helm's Deep
 gameplay and melee smokes, pass. Upgraded and fresh caches pass. Rendered
 captures at 1280x800 and 4K were inspected.
+
+## Build-15: Dwarf Hall trains the Dwarf Axethrower
+
+The skirmish roster now also exports `UNIT_G_DWARVEN_AXETHROWER`, so a completed
+Dwarf Hall trains it through the same queue. The Dwarf Shieldbreaker stays
+unavailable because it requires the Skills structure.
+
+| Source rule | Dwarf Axethrower |
+|---|---:|
+| `FoodCost / OreCost / PopulationCost` | 60 / 10 / 2 |
+| `UnitTrainingTime` (ticks) | 340 |
+| `MaxHealth / ArmorPoints` | 140 / 0 |
+| Missile weapon (DPS, range) | 9, 0.5–10 m, `PROJECTILE_DWARF_AXE_LEFT` |
+| Melee weapon (DPS, gap) | 9, 0.5 m |
+| Main collision body (radius / height) | 624 mm / 1,822 mm |
+
+Ranged units were previously hard-coded to the Elven Archer. The rules export
+now uses an explicit ranged list (Elven Archer, Dwarf Axethrower). The source
+Uruk-Hai also lists a missile weapon (77), but the accepted Helm's Deep demo
+keeps it melee. Each ranged unit carries its own projectile presentation: the
+weapon's source projectile model, its launch sounds and the trail of its first
+bound effect (the Archer's `EFFECT_TEST_ARROW_TRAIL`, the Axethrower's
+`EFFECT_DWARVEN_AXETHROWER_AXE_SWIPE`). Rendering picks the style of the
+shooting unit. A diff of the refreshed Helm's Deep rules shows every unit
+definition, unit pair, the Archer's trail and its six launch sounds unchanged.
+
+The Axethrower has two source throwing clips. `Attack_Missile_01` releases
+through the decoded `missile_release` event (left hand, tick 24 of 44).
+`Attack_Missile_02` uses an undecoded event type 33 whose payload is the
+right-hand joint (24, `J_ R Hand`), presumably with `PROJECTILE_DWARF_AXE_RIGHT`.
+Until that event type is decoded, the second throw is skipped and recorded under
+`Source.SkippedAttackClips`; the Axethrower throws only its left-hand axe.
+Axes fly along the same target-following path as arrows; spinning flight is not
+reproduced.
+
+Refresh existing caches: `python tools/prepare_prototype.py --skirmish
+--units-only` for the skirmish, and `python tools/prepare_prototype.py
+--rules-only` for Helm's Deep, whose rules move the arrow to the new per-unit
+projectile format. Both local caches are already updated. Restart to load
+build-15.
+
+Validation: 680 synthetic / 747 Helm's Deep simulation checks and 167 Python tests
+pass. Three new cached checks (33 worker-cache checks in total) run the exported
+Axethrower against a dummy: the axe releases at the decoded source event, it damages
+the target on arrival, and the skipped clip is never used. The new 9-case Godot
+Dwarf Hall check credits a test bank (300 food, 300 ore) and then uses only UI
+input. It places and completes the hall, trains the Axethrower, sets its rally
+point, selects it (140 HP, Attack 9) and force-attacks a friendly worker. Axes are
+released, rendered with the axe model and trail, play launch sounds and hit. On
+Helm's Deep, the gameplay, combat and melee smokes record the same arrow
+releases, visuals, hits and damage as build-14. All other skirmish and command
+checks pass, and fresh and upgraded caches pass. Rendered captures at 1280x800
+and 4K were inspected.

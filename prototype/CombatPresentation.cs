@@ -11,19 +11,26 @@ public partial class Main
     private readonly List<(AudioStreamWav Stream,float VolumeDb)> _impactSounds = [];
     private readonly List<CombatEvent> _combatTrace = [];
     private int _impactCursor, _impactSamples, _strikeStarts, _strikeHits, _strikeCancels, _attackSeekSamples;
-    private Node3D? _arrowTemplate;
+    /// <summary>A ranged unit's source projectile model, launch sounds and optional trail.</summary>
+    private sealed class ProjectileStyle(Node3D template)
+    {
+        public readonly Node3D Template = template;
+        public readonly List<(AudioStreamWav Stream,float VolumeDb)> LaunchSounds = [];
+        public bool Trail;
+        public double TrailLifetime;
+        public float TrailWidth,TrailEndWidth,TrailGray;
+        public Color TrailStart,TrailEnd;
+    }
+    private readonly Dictionary<string,ProjectileStyle> _projectileStyles = [];
     private readonly Dictionary<int,Node3D> _arrowViews = [];
     private int _arrowReleases, _arrowHits, _arrowVisuals, _archerMeleeClipSamples;
     private int _rangedFacingSamples;
     private bool _rangedFacingVerified = true;
     private readonly List<AudioStreamPlayer3D> _launchPlayers = [];
-    private readonly List<(AudioStreamWav Stream,float VolumeDb)> _launchSounds = [];
     private int _launchCursor,_launchSamples,_trailSamples,_trailCreated;
     private readonly Dictionary<int,ProjectileTrail> _arrowTrails = [];
     private ShaderMaterial? _trailMaterial;
-    private double _trailLifetime,_projectileTime;
-    private float _trailWidth,_trailEndWidth,_trailGray;
-    private Color _trailStart,_trailEnd;
+    private double _projectileTime;
 
     private (AudioStreamWav Stream,float VolumeDb) LoadCombatSound(JsonElement sound)
     {
@@ -38,31 +45,36 @@ public partial class Main
     {
         if (rules.TryGetProperty("HealVisual",out var healVisual))
             (_healingDuration,_healingLayers) = HealingEffect.Load(_cache,healVisual);
-        if (rules.TryGetProperty("ProjectileVisual",out var arrow)) _arrowTemplate = LoadGlb(arrow.GetString()!,_teamColors[0]);
         foreach (var sound in rules.GetProperty("Sounds").EnumerateArray())
             _impactSounds.Add(LoadCombatSound(sound));
         if (rules.TryGetProperty("AbilitySounds",out var abilitySounds))
             foreach (var sound in abilitySounds.EnumerateArray()) _abilitySounds.Add(LoadCombatSound(sound));
-        if (rules.TryGetProperty("LaunchSounds",out var launches))
+        if (rules.TryGetProperty("Projectiles",out var projectiles))
+        foreach (var item in projectiles.EnumerateObject())
         {
-            foreach (var sound in launches.EnumerateArray()) _launchSounds.Add(LoadCombatSound(sound));
+            var style = new ProjectileStyle(LoadGlb(item.Value.GetProperty("Visual").GetString()!,_teamColors[0]));
+            var launches = item.Value.GetProperty("LaunchSounds");
+            foreach (var sound in launches.EnumerateArray()) style.LaunchSounds.Add(LoadCombatSound(sound));
+            // One voice pool serves every ranged type, sized for the largest source voice cap.
             int voices = launches.GetArrayLength() > 0 ? Math.Clamp(launches[0].GetProperty("MaxSimultaneous").GetInt32(),1,16) : 0;
-            for (int i = 0; i < voices; i++)
+            while (_launchPlayers.Count < voices)
             {
                 var player = new AudioStreamPlayer3D {MaxDistance = 65,UnitSize = 15};
                 AddChild(player); _launchPlayers.Add(player);
             }
-        }
-        if (rules.TryGetProperty("ArrowTrail",out var trail))
-        {
-            _trailLifetime = trail.GetProperty("LifetimeMs").GetDouble()/1000;
-            _trailWidth = trail.GetProperty("WidthMm").GetSingle()/1000;
-            _trailEndWidth = trail.GetProperty("EndWidthMm").GetSingle()/1000;
-            _trailGray = trail.GetProperty("GrayTintPpm").GetSingle()/1000000;
-            Color Argb(uint value) => new((value>>16&255)/255f,(value>>8&255)/255f,(value&255)/255f,(value>>24)/255f);
-            _trailStart = Argb(trail.GetProperty("StartColorArgb").GetUInt32());
-            _trailEnd = Argb(trail.GetProperty("EndColorArgb").GetUInt32());
-            _trailMaterial = new() {Shader = new Shader {Code = "shader_type spatial; render_mode unshaded, cull_disabled, depth_draw_never, shadows_disabled; void fragment() { ALBEDO = COLOR.rgb; ALPHA = COLOR.a * smoothstep(0.0,0.35,UV.x) * smoothstep(0.0,0.35,1.0-UV.x); }"}};
+            if (item.Value.TryGetProperty("Trail",out var trail) && trail.ValueKind == JsonValueKind.Object)
+            {
+                style.Trail = true;
+                style.TrailLifetime = trail.GetProperty("LifetimeMs").GetDouble()/1000;
+                style.TrailWidth = trail.GetProperty("WidthMm").GetSingle()/1000;
+                style.TrailEndWidth = trail.GetProperty("EndWidthMm").GetSingle()/1000;
+                style.TrailGray = trail.GetProperty("GrayTintPpm").GetSingle()/1000000;
+                Color Argb(uint value) => new((value>>16&255)/255f,(value>>8&255)/255f,(value&255)/255f,(value>>24)/255f);
+                style.TrailStart = Argb(trail.GetProperty("StartColorArgb").GetUInt32());
+                style.TrailEnd = Argb(trail.GetProperty("EndColorArgb").GetUInt32());
+                _trailMaterial ??= new() {Shader = new Shader {Code = "shader_type spatial; render_mode unshaded, cull_disabled, depth_draw_never, shadows_disabled; void fragment() { ALBEDO = COLOR.rgb; ALPHA = COLOR.a * smoothstep(0.0,0.35,UV.x) * smoothstep(0.0,0.35,1.0-UV.x); }"}};
+            }
+            _projectileStyles.Add(item.Name,style);
         }
         for (int index = 0; index < 4; index++)
         {
@@ -81,10 +93,10 @@ public partial class Main
             if (combat.Kind == CombatEventKind.Release)
             {
                 _arrowReleases++;
-                if (_launchSounds.Count > 0)
+                if (_projectileStyles.TryGetValue(_world.Units[combat.Unit].Definition.Name,out var style) && style.LaunchSounds.Count > 0)
                 {
                     var launchPlayer = _launchPlayers[_launchCursor++%_launchPlayers.Count];
-                    var launchSound = _launchSounds[(combat.Unit+combat.StartTick)%_launchSounds.Count];
+                    var launchSound = style.LaunchSounds[(combat.Unit+combat.StartTick)%style.LaunchSounds.Count];
                     launchPlayer.Stream = launchSound.Stream; launchPlayer.VolumeDb = launchSound.VolumeDb;
                     launchPlayer.Position = new(-combat.X/1000f,combat.Y/1000f,combat.Z/1000f);
                     launchPlayer.StreamPaused = _paused; launchPlayer.Play(); _launchSamples++;
@@ -103,7 +115,7 @@ public partial class Main
 
     private void PresentProjectiles()
     {
-        if (_world == null || _arrowTemplate == null) return;
+        if (_world == null || _projectileStyles.Count == 0) return;
         var living = _world.Projectiles.Select(p => p.Id).ToHashSet();
         foreach (int id in _arrowViews.Keys.Where(id => !living.Contains(id)).ToArray())
         {
@@ -115,10 +127,11 @@ public partial class Main
         {
             if (!_arrowViews.TryGetValue(arrow.Id,out var view))
             {
-                view = (Node3D)_arrowTemplate.Duplicate(); AddChild(view); _arrowViews.Add(arrow.Id,view); _arrowVisuals++;
-                if (_trailMaterial != null)
+                var style = _projectileStyles[_world.Units[arrow.Unit].Definition.Name];
+                view = (Node3D)style.Template.Duplicate(); AddChild(view); _arrowViews.Add(arrow.Id,view); _arrowVisuals++;
+                if (style.Trail)
                 {
-                    var trail = new ProjectileTrail(arrow,_trailLifetime,_trailWidth,_trailEndWidth,_trailStart,_trailEnd,_trailGray,_trailMaterial);
+                    var trail = new ProjectileTrail(arrow,style.TrailLifetime,style.TrailWidth,style.TrailEndWidth,style.TrailStart,style.TrailEnd,style.TrailGray,_trailMaterial!);
                     AddChild(trail.Root); _arrowTrails.Add(arrow.Id,trail); _trailCreated++;
                 }
             }
@@ -158,13 +171,16 @@ public partial class Main
     private void StopCombatAudio()
     {
         foreach (var player in _impactPlayers.Concat(_launchPlayers)) { player.Stop(); player.Stream = null; }
-        foreach (var sound in _impactSounds.Concat(_launchSounds).Concat(_abilitySounds)) sound.Stream.Dispose();
-        _impactSounds.Clear(); _launchSounds.Clear(); _abilitySounds.Clear();
+        foreach (var sound in _impactSounds.Concat(_projectileStyles.Values.SelectMany(s => s.LaunchSounds)).Concat(_abilitySounds)) sound.Stream.Dispose();
+        _impactSounds.Clear(); _abilitySounds.Clear();
+        foreach (var style in _projectileStyles.Values) style.LaunchSounds.Clear();
     }
 
     public override void _ExitTree()
     {
-        StopCombatAudio(); _arrowTemplate?.Free();
+        StopCombatAudio();
+        foreach (var style in _projectileStyles.Values) style.Template.Free();
+        _projectileStyles.Clear();
         foreach (var effect in _healingEffects) effect.Free();
         _healingEffects.Clear();
         foreach (var trail in _arrowTrails.Values) trail.Free();

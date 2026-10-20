@@ -62,6 +62,10 @@ class ProductionImportTests(unittest.TestCase):
         self.assertEqual((barracks['units'], barracks['unavailable']), (['UNIT_G_GONDOR_SWORDSMAN'], {'UNIT_G_ROHAN_RIDER': 'requires BUILDING_G_TOWN_CENTER_LEVEL_2'}))
         self.assertEqual(data['units']['UNIT_G_GONDOR_SWORDSMAN'], {'display_name': 'Gondor Swordsman', 'food_cost': 50, 'ore_cost': 0,
                          'population': 2, 'duration_ticks': 280})
+        hall = data['producers']['BUILDING_G_DWARF_BARRACKS']
+        self.assertEqual((hall['units'], hall['unavailable']), (['UNIT_G_DWARVEN_AXETHROWER'], {'UNIT_G_DWARVEN_SHIELDBREAKER': 'requires BUILDING_G_SKILLS_STRUCTURE'}))
+        self.assertEqual(data['units']['UNIT_G_DWARVEN_AXETHROWER'], {'display_name': 'Dwarf Axethrower', 'food_cost': 60, 'ore_cost': 10,
+                         'population': 2, 'duration_ticks': 340})
         self.assertEqual(data['units']['UNIT_G_HUMAN_WORKER'], {'display_name': 'Human Worker', 'food_cost': 35, 'ore_cost': 0,
                          'population': 1, 'duration_ticks': 240})
         self.assertEqual(data['population_provided'][skirmish_map.CITADEL], 10)

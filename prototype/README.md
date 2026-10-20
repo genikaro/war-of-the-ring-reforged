@@ -4,6 +4,14 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
+**build-15:** a completed Dwarf Hall trains the Dwarf Axethrower (60 food,
+10 ore, population 2), which throws original axe projectiles with their own
+launch sounds and trail. Ranged presentation is now per unit; the Elven Archer
+is unchanged. Refresh the skirmish cache with
+`python tools/prepare_prototype.py --skirmish --units-only` and Helm's Deep with
+`python tools/prepare_prototype.py --rules-only`, then restart. Both local caches
+are already updated. See [skirmish notes](SKIRMISH.md#build-15-dwarf-hall-trains-the-dwarf-axethrower).
+
 **build-14:** a completed Barracks trains the Gondor Swordsman (50 food,
 population 2, 14 s), which shows the original 155 HP / Attack 10 / Armor 0.
 Refresh an existing skirmish cache with
@@ -322,6 +330,7 @@ a normal viewport capture with `-CapturePath`.
 ./prototype/run.ps1 -StructureSmoke
 ./prototype/run.ps1 -ProductionSmoke
 ./prototype/run.ps1 -PlacementSmoke
+./prototype/run.ps1 -DwarfHallSmoke
 ./prototype/run.ps1 -SurfaceSmoke
 ./prototype/run.ps1 -ObstacleSmoke
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --movement-benchmark converted/prototype/movement-after.json

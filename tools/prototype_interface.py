@@ -33,7 +33,7 @@ def export(output, resolver=None):
               ['BattleGear_Greater_Kingsfoil_Borderless','BattleGear_Andurils_Fury_Borderless','BattleGear_Immunity_Borderless']]
     paths += [source / ('Console/UnitPortraits/' + name) for name in [
         'Good/Portrait_G_Aragorn.uva', 'Good/Portrait_G_Elven_Knight.uva', 'Evil/Portrait_E_Uruk_Hai.uva', 'Good/Portrait_G_Elven_Archer.uva',
-        'Good/Portrait_G_Human_Worker.uva', 'Good/Portrait_G_Gondor_Swordsman.uva']]
+        'Good/Portrait_G_Human_Worker.uva', 'Good/Portrait_G_Gondor_Swordsman.uva', 'Good/Portrait_G_Dwarven_Axethrower.uva']]
     paths += [source / ('Console/BuildingPortraits/Good/Building_G_' + name + '.uva') for name in ['Mill','Foundry','Keep_1','Camp','Barracks','Dwarvish_Hall','Tower']]
     paths += list((source / 'Console/ObjectPortraits').glob('*.uva'))
     paths += [p for p in (source / 'Cursors/Good').glob('*.uva')

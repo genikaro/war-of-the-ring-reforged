@@ -22,6 +22,9 @@ from pcm_audio import decode_ms_adpcm
 
 ROOT = Path(__file__).resolve().parent.parent
 UNITS = ['UNIT_G_HERO_ARAGORN', 'UNIT_G_ELF_KNIGHT', 'UNIT_E_URUK_HAI', 'UNIT_G_ELVEN_ARCHER']
+# Units using their source missile weapon. The source Uruk-Hai also lists one;
+# the accepted Helm's Deep demo keeps it melee.
+RANGED_UNITS = ['UNIT_G_ELVEN_ARCHER', 'UNIT_G_DWARVEN_AXETHROWER']
 
 
 def type_matchups(damage_types):
@@ -154,6 +157,30 @@ def demo_body_tuning(name, radius, height):
             'ModelScalePpm': scale, 'FriendlyCompressionPpm': 500_000}
 
 
+def projectile_presentation(output, resolver, unit_name, trace):
+    """Source projectile model, launch sounds and trail of one ranged unit's missile weapon."""
+    from lms2gltf import convert_model
+    record = resolver.db['Projectiles'].get(resolver.db['Weapons'].get(
+        resolver.db['Units'].get(unit_name)['MissileWeapon'])['AssociatedProjectile'])
+    path = Path(resolver.index.find('Projectiles',record['Filename']))
+    projectile = lpo.parse(path.read_bytes())
+    launch_sounds = export_sounds(output,resolver,lpo.launch_sound_events(projectile),trace,slots=6)
+    effect_id = next(b['source'] for key in projectile['resource_keys'] for b in key['bindings'] if b['source'] >= 0)
+    effect_record = resolver.db['Effects'].get(effect_id)
+    effect_path = Path(resolver.index.find('Effects',effect_record['Filename']))
+    effect = lfx.parse(effect_path.read_bytes())
+    trail = trail_profile(effect['trail_tracks'][0])
+    trail['Source'] = {'Id': effect_id,'Name': effect_record.name,'File': str(effect_path.relative_to(ROOT)), 'Data': effect}
+    trace(effect_path); trace(resolver.db.files['effects'])
+    model_id = next(k['id'] for k in projectile['resource_keys'] if k['kind'] == 0 and k['id'] >= 0)
+    visual = 'combat/' + record.name.lower() + '.glb'
+    convert_model(resolver,str(model_id),str(output/visual),extras={'wotrProjectile':projectile})
+    trace(path); trace(resolver.db.files['projectiles'])
+    trace(ROOT/resolver.resolve(str(model_id),recurse=False)['file'])
+    return {'Visual': visual,'LaunchSounds': launch_sounds,'Trail': trail,
+            'Source': {'Id': record.id,'Name': record.name,'Data': projectile}}
+
+
 def export(output, resolver=None, roster=None):
     output = Path(output).resolve()
     if any(output.is_relative_to(ROOT/p) for p in ['extracted','TLOTR - War of the Ring']):
@@ -168,7 +195,7 @@ def export(output, resolver=None, roster=None):
     units = []
     for name in roster:
         unit = resolver.db['Units'].get(name)
-        ranged = name == 'UNIT_G_ELVEN_ARCHER'
+        ranged = name in RANGED_UNITS
         weapon = resolver.db['Weapons'].get(unit['MissileWeapon'] if ranged else unit['MeleeWeapon'])
         model = resolver.resolve(name,recurse=False)
         skeleton_path = ROOT/model['skeletons'][0]['file']
@@ -182,7 +209,12 @@ def export(output, resolver=None, roster=None):
         trace(ROOT/model['file']); trace(skeleton_path)
         state = next(s for s in model['animation_states'] if s['name'] == ('UNIT_ANIM_STATE_ATTACK_MISSILE_01' if ranged else 'UNIT_ANIM_STATE_ATTACK_MELEE_01'))
         durations = {clip.name: clip.duration for clip in skeleton.clips}
-        choices = [attack_choice(c,model['events'],durations[c['clip_name']], 'missile_release' if ranged else 'melee_hit') for c in state['choices'] if c['weight'] > 0]
+        # The Axethrower's second throw releases through an undecoded event type (33, right-hand joint);
+        # only clips with a decoded release are used, and the rest are recorded.
+        released = [c for c in state['choices'] if c['weight'] > 0
+                    and (not ranged or any(model['events'][i].get('name') == 'missile_release' for i in c['event_indices']))]
+        skipped = [c['clip_name'] for c in state['choices'] if c['weight'] > 0 and c not in released]
+        choices = [attack_choice(c,model['events'],durations[c['clip_name']], 'missile_release' if ranged else 'melee_hit') for c in released]
         melee_weapon = resolver.db['Weapons'].get(unit['MeleeWeapon'])
         melee_state = next(s for s in model['animation_states'] if s['name'] == 'UNIT_ANIM_STATE_ATTACK_MELEE_01')
         if ranged:
@@ -207,7 +239,7 @@ def export(output, resolver=None, roster=None):
             **demo_body_tuning(name, radius, body_height),
             'AttackGapMm': 0 if ranged else quantize(weapon['MaximumRange']),
             'Source': {'Unit': unit.name,'ModelId': model['id'],'ModelFile': model['file'],
-                       'StateId': state['id'],'Weapon': weapon.values,'Locomotion': motion,'Collision': body_source,
+                       'StateId': state['id'],'SkippedAttackClips': skipped,'Weapon': weapon.values,'Locomotion': motion,'Collision': body_source,
                        'MeleeWeaponId': melee_weapon.id,'MeleeWeaponName': melee_weapon.name,'MeleeWeapon': melee_weapon.values,'MeleeStateId': melee_state['id'],
                        'MaxTurnAngleDegrees': unit['MaxTurnAngle']}})
     ids = {u['Id'] for u in units}
@@ -228,24 +260,7 @@ def export(output, resolver=None, roster=None):
     for name in ['Units','Models','BBoxes','Weapons','DamageTypes','UnitToUnitModifiers','WeaponEffects','WeaponImpactTypes','SoundEvents','SoundEffects',
                  'BattleGear','Spells','SpellAndEvents','SpellAndEventAndActions','SpellValidTargets','SpellActions','SpellEvents','SpellUsageTypes','SpellRanges','ToolScriptCommands','UVAs']:
         trace(resolver.db.files[name.lower()])
-    from lms2gltf import convert_model
-    projectile_record = resolver.db['Projectiles'].get(resolver.db['Weapons'].get(
-        resolver.db['Units'].get('UNIT_G_ELVEN_ARCHER')['MissileWeapon'])['AssociatedProjectile'])
-    projectile_path = Path(resolver.index.find('Projectiles',projectile_record['Filename']))
-    projectile = lpo.parse(projectile_path.read_bytes())
-    launch_sounds = export_sounds(output,resolver,lpo.launch_sound_events(projectile),trace,slots=6)
-    effect_id = next(b['source'] for key in projectile['resource_keys'] for b in key['bindings'] if b['source'] >= 0)
-    effect_record = resolver.db['Effects'].get(effect_id)
-    effect_path = Path(resolver.index.find('Effects',effect_record['Filename']))
-    effect = lfx.parse(effect_path.read_bytes())
-    trail = trail_profile(effect['trail_tracks'][0])
-    trail['Source'] = {'Id': effect_id,'Name': effect_record.name,'File': str(effect_path.relative_to(ROOT)), 'Data': effect}
-    trace(effect_path); trace(resolver.db.files['effects'])
-    projectile_model = next(k['id'] for k in projectile['resource_keys'] if k['kind'] == 0 and k['id'] >= 0)
-    arrow_path = output/'combat/elven_archer_arrow.glb'
-    convert_model(resolver,str(projectile_model),str(arrow_path),extras={'wotrProjectile':projectile})
-    trace(projectile_path); trace(resolver.db.files['projectiles'])
-    trace(ROOT/resolver.resolve(str(projectile_model),recurse=False)['file'])
+    projectiles = {name: projectile_presentation(output,resolver,name,trace) for name in roster if name in RANGED_UNITS}
     heal_visual = healing_visual.export(output,resolver,trace)
     data = {'FormatVersion': 3,'TicksPerSecond': 20,'Units': units,'Pairs': pairs,'Sounds': sounds,
         'TypeMatchups': type_matchups(resolver.db['DamageTypes']),
@@ -253,9 +268,7 @@ def export(output, resolver=None, roster=None):
                             'Percentages': 'Owner request, 2026-10-19: advantage 125%, disadvantage 75%, heroes 100%.',
                             'NeutralPolicy': 'Same type and attacks against Hero: 100%.',
                             'Guide': 'https://gamefaqs.gamespot.com/pc/563555-the-lord-of-the-rings-war-of-the-ring/faqs/29079'},
-        'ProjectileVisual': 'combat/elven_archer_arrow.glb',
-        'LaunchSounds': launch_sounds,'ArrowTrail': trail,'AbilitySounds': ability_sounds,'HealVisual': heal_visual,
-        'ProjectileSource': {'Id': projectile_record.id,'Name': projectile_record.name,'Data': projectile},
+        'Projectiles': projectiles,'AbilitySounds': ability_sounds,'HealVisual': heal_visual,
         'Sources': sources,'Policy': {
             'Armor': 'Approximation: subtract armor points from DPS after type and explicit pair multipliers; clamp rate at zero.',
             'Damage': 'Distribute DPS * quantized cycle duration across hit events in proportion to source damage_scale.',
@@ -264,8 +277,8 @@ def export(output, resolver=None, roster=None):
             'Types': 'Apply TypeMatchups once, then explicit unit-pair multiplier once (absent pairs 1.0). Pair invincibility takes precedence. Stacking remains an adapter policy.',
             'Timing': 'ceil(source duration * event fraction * 20); cycle ceil(duration*20), final hit at most cycle-1.',
             'Movement': 'Retain accepted 3 m/s run speed. Walk speed uses the source J_Position XY displacement/duration ratio of first positive walk/run choices. Original world speed and stamina remain unverified.',
-            'Ranged': 'Elven Archer only. Source missile range in center meters; source release event. Target-following arrows use an approximate 25 m/s travel speed, snapshot damage at release and survive shooter death/order replacement. Conservative navigation line of fire at release; no flight collision. Switch to source melee weapon/animations at the same body-based reach as infantry; switch cancellation preserves cooldown. Exact switch threshold/timing and LPO motion semantics remain unverified.',
-            'ArrowPresentation': 'Launch sound event from LPO event 7/opcode 46; original PCM variants at release with source minimum volume and voice cap. Trail binding references Effects 12. Track duration interpreted as point lifetime, key word 3 as full width, word 5 as ARGB. Runtime uses a 70% gray tint, feathered ribbon and smooth age fade; exact legacy blending and trail semantics remain unverified. Presentation never drives hits.',
+            'Ranged': 'Elven Archer and Dwarf Axethrower (the source Uruk-Hai missile weapon stays disabled). Source missile range in center meters; source release event. Target-following arrows use an approximate 25 m/s travel speed, snapshot damage at release and survive shooter death/order replacement. Conservative navigation line of fire at release; no flight collision. Switch to source melee weapon/animations at the same body-based reach as infantry; switch cancellation preserves cooldown. Exact switch threshold/timing and LPO motion semantics remain unverified.',
+            'ArrowPresentation': 'Per ranged unit: the weapon projectile model, its launch sound event from LPO event 7/opcode 46; original PCM variants at release with source minimum volume and voice cap, and the trail of its first bound effect (Archer 12, Axethrower 362). Track duration interpreted as point lifetime, key word 3 as full width, word 5 as ARGB. Runtime uses a 70% gray tint, feathered ribbon and smooth age fade; exact legacy blending and trail semantics remain unverified. Presentation never drives hits.',
             'Abilities': 'Aragorn sandbox pre-equips three source abilities without purchase/level progression. Greater Kingsfoil heals 250 HP within 10 m at source toolscript tick 8 of its 21-tick clip, cooldown 340 ticks. Out-of-range targets are approached using normal navigation. Casts replace orders and may be interrupted; spent cooldown is retained. Fury replaces DPS with 30 and applies 150% versus source Wraith/Black Rider types. Immunity records poison/stun/blind/slow protection; no current demo weapon produces these statuses. HealVisual adapts original target-effect sprite layers; poison cleansing and other original particle/effect attachments remain unsupported. Exact legacy range origins, interruption and progression remain unverified.',
             'Unsupported': 'Purchase economy, levels, regeneration, height bonuses, poison/status-effect producers and cleansing, other original spell particles/attachments, knockback, other ranged units and critical deaths.'}}
     target = output/'combat/rules.json'; target.parent.mkdir(parents=True,exist_ok=True)
