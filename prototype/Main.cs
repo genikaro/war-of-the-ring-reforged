@@ -436,6 +436,7 @@ public partial class Main : Node3D
             UnitSelection.Click(_selected,_world!.Units,unit,append,sameType);
             return;
         }
+        int? previousStructure = _selectedStructure;
         _selectedStructure = null;
         if (!append || !_selected.All(LivingFriendly)) _selected.Clear();
         foreach (var unit in _world!.Units.Where(u => u.Team == 0 && u.Health > 0))
@@ -445,6 +446,11 @@ public partial class Main : Node3D
             var screen = _camera.UnprojectPosition(pos);
             if (rect.HasPoint(screen)) _selected.Add(unit.Id);
         }
+        // Units in the box (or retained by Shift) take priority. Structures
+        // remain a separate inspection selection when no units are selected.
+        if (_selected.Count > 0) return;
+        if (StructureInBox(rect) is int structureId) SelectStructure(structureId);
+        else if (append) _selectedStructure = previousStructure;
     }
 
     private void Order(Vector2 mouse, bool groundOnly = false,bool queued = false)

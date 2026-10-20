@@ -24,9 +24,9 @@ live FPS; build-1 introduces this numbering.
 
 Click a live enemy to inspect its portrait, health, type, Attack, Armor and
 Victories. Its ring and health bar are red; the action palette is empty while the global
-Walk/Run switch stays available. Enemy inspection replaces a friendly selection,
-while drag selection stays
-friendly-only. Picking intersects the nearest live body up to the terrain/deck
+Walk/Run switch stays available. Enemy inspection replaces a friendly selection.
+Drag selection prioritizes friendly units; when none are selected by the box,
+it can inspect a building or neutral structure. Picking intersects the nearest live body up to the terrain/deck
 hit, rather than a fixed screen-space foot marker. Selection rings match each
 unit's collision radius. Ctrl assignment while inspecting an enemy preserves
 stored friendly groups; recalling a friendly group restores command controls.
@@ -36,6 +36,12 @@ Buildings show only their own available actions (currently Cancel for an owned
 foundation), while neutral structures and inspected enemy/neutral units have
 empty palettes. Source-selectable food wells, ore piles and the Place of Power
 show original portraits; resources show remaining stock. See [skirmish selection](SKIRMISH.md#build-9-neutral-inspection-and-command-palettes).
+
+A structure-only drag opens one inspector, choosing the visible structure whose
+ground anchor is nearest the box center. The box can touch any visible part of
+its mesh; the anchor itself need not be inside. Depth checks reject hidden mesh
+surfaces. Shift-drag retains friendly units over structures and preserves a
+structure selection when the added box is empty. Units and structures never mix.
 
 The console scales uniformly with screen height, clamps to narrow windows and
 stays centered on ultrawide screens. **Menu/F4 → Interface size** adjusts it from 75% to

@@ -255,3 +255,23 @@ Godot checks pass, plus construction (23), orders (27) and abilities (38). Every
 clicked through the actual picker, including sites under completed resource
 buildings; selection remains exclusive and sends no unit orders. Rendered checks
 and visual inspection cover 1280x800 and 4K with upgraded and fresh caches.
+
+## Build-10: structure box selection with unit priority
+
+Dragging a selection box now inspects a structure when it selects no friendly
+units. Any friendly units inside the box take priority; Shift-drag also retains
+already selected friendly units instead of replacing them with a structure.
+Units and structures never share a selection. A structure-only box opens one
+inspector, preferring the visible structure whose ground anchor is nearest the
+box center, with stable object-ID ties.
+
+The box tests visible mesh triangles, so it can select part of a roof while the
+building's ground anchor is outside. Terrain and nearer structures occlude the
+same parts as ordinary clicks. Owned buildings, enemy buildings and neutral
+interactables share this path. Reverse drags work; an empty drag clears selection,
+while an empty Shift-drag preserves it. No cache refresh is needed after build-9.
+
+Validation: the structure Godot check expands to 61 cases, covering mixed
+unit/structure priority, partial mesh selection, owned/enemy/neutral structures,
+reverse dragging, Shift retention and empty boxes. The command check retains
+49 passing cases. Rendered selection checks pass at 1280x800 and 4K.

@@ -4,6 +4,13 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
+**build-10:** drag selection includes buildings and neutral interactables when
+the box contains no friendly units. Units take priority, including those retained
+by Shift-drag. Selection stays separate: a structure-only box opens one structure
+inspector, preferring the visible structure nearest the box center. Partial mesh
+overlap works, including a roof with its ground anchor outside the box. Restart;
+the build-9 cache works unchanged.
+
 **build-9:** food wells, ore piles and the Place of Power are selectable with
 their original portraits and neutral outlines. Resource inspection shows live
 stock; objects without health have no HP/armor display. Structure palettes show
@@ -219,7 +226,7 @@ checked before loading. Never distribute the local cache with the project.
 | Input | Action |
 |---|---|
 | Left-click | Select a unit, skirmish building or neutral interactable; inspect enemies |
-| Left-drag | Select friendly units |
+| Left-drag | Select friendly units first; otherwise inspect a structure in the box |
 | Shift + selection | Add to selection |
 | Shift + structure click | Select/toggle that structure separately from units |
 | Structure portrait | Center the camera on the selected structure |

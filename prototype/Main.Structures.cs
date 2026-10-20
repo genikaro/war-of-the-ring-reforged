@@ -98,6 +98,54 @@ public partial class Main
         return hit;
     }
 
+    private int? StructureInBox(Rect2 rect)
+    {
+        // Keep a single structure inspector. When several structures overlap
+        // the box, prefer the one whose ground anchor is nearest its center.
+        foreach (var entry in _structureViews.Values.Where(StructureVisible)
+            .Where(s => !_camera.IsPositionBehind(s.Root.GlobalPosition))
+            .OrderBy(s => _camera.UnprojectPosition(s.Root.GlobalPosition).DistanceSquaredTo(rect.GetCenter())).ThenBy(s => s.Id))
+        {
+            foreach (var (mesh,faces) in entry.Meshes)
+            {
+                if (!mesh.IsVisibleInTree()) continue;
+                for (int i = 0; i+2 < faces.Length; i += 3)
+                {
+                    var triangle = new[] {mesh.GlobalTransform*faces[i],mesh.GlobalTransform*faces[i+1],mesh.GlobalTransform*faces[i+2]};
+                    if (triangle.Any(_camera.IsPositionBehind)) continue;
+                    var polygon = ClipSelectionTriangle(rect,triangle.Select(_camera.UnprojectPosition).ToArray());
+                    if (polygon.Length < 3) continue;
+                    var point = polygon.Aggregate(Vector2.Zero,(sum,p) => sum+p)/polygon.Length;
+                    // Use the same depth-aware picker as a click: terrain and
+                    // nearer structures must not expose hidden geometry.
+                    if (StructureAt(point)?.Id == entry.Id) return entry.Id;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static Vector2[] ClipSelectionTriangle(Rect2 rect,Vector2[] triangle)
+    {
+        var polygon = triangle.ToList();
+        for (int edge = 0; edge < 4 && polygon.Count > 0; edge++)
+        {
+            int axis = edge/2;
+            float boundary = edge%2 == 0 ? rect.Position[axis] : rect.End[axis];
+            bool Inside(Vector2 p) => edge%2 == 0 ? p[axis] >= boundary : p[axis] <= boundary;
+            var clipped = new List<Vector2>(); var previous = polygon[^1];
+            foreach (var point in polygon)
+            {
+                if (Inside(previous) != Inside(point))
+                    clipped.Add(previous.Lerp(point,(boundary-previous[axis])/(point[axis]-previous[axis])));
+                if (Inside(point)) clipped.Add(point);
+                previous = point;
+            }
+            polygon = clipped;
+        }
+        return polygon.ToArray();
+    }
+
     private static bool RayHitsBounds(Aabb bounds,Vector3 origin,Vector3 direction)
     {
         float enter = 0,exit = float.PositiveInfinity;

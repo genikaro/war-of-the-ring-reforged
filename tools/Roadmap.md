@@ -30,6 +30,14 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-10 (Oct 20):** box selection includes buildings and neutral interactables
+when no friendly units are selected. Units take priority, including Shift-retained
+units; structure selection remains a single inspector. Visible triangle overlap
+supports partial roofs and uses click depth checks. Empty and reverse drags keep
+the expected selection behavior. Validation: 61 structure and 49 command Godot
+checks pass, including rendered 1280x800 and 4K selection. Build-9 caches work
+unchanged. See [skirmish notes](../prototype/SKIRMISH.md#build-10-structure-box-selection-with-unit-priority).
+
 **Build-9 (Oct 20):** all eight resource sites and the map's Place of Power are
 selectable as neutral objects with original portraits, outlines and live stock.
 Source selectability excludes scenery; objects without health omit HP/armor.

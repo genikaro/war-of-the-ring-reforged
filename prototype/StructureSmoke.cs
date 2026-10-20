@@ -11,6 +11,13 @@ public partial class Main
     private int _structureCommandsBefore;
     private int _structureGapDeviation;
 
+    private void StructureSmokeDrag(Vector2 start,Vector2 end,bool shift = false)
+    {
+        GetViewport().PushInput(new InputEventMouseButton {ButtonIndex = MouseButton.Left,Pressed = true,Position = start,ShiftPressed = shift},true);
+        GetViewport().PushInput(new InputEventMouseMotion {Position = end,ButtonMask = MouseButtonMask.Left},true);
+        GetViewport().PushInput(new InputEventMouseButton {ButtonIndex = MouseButton.Left,Pressed = false,Position = end,ShiftPressed = shift},true);
+    }
+
     private Vector2 StructureSmokePoint(int id)
     {
         var entry = _structureViews[id];
@@ -38,6 +45,11 @@ public partial class Main
         var world = _world!; int[] workers = world.Units.Where(u => u.Team == 0).Select(u => u.Id).ToArray();
         void Focus(int id) { _focus = _structureViews[id].Root.GlobalPosition; UpdateCamera(); }
         void Choose(int id,bool shift = false) { Focus(id); Click(StructureSmokePoint(id),shift: shift); }
+        void Box(int id,bool shift = false,bool reverse = false)
+        {
+            Focus(id); var point = StructureSmokePoint(id); var offset = new Vector2(reverse ? -12 : 12,12);
+            StructureSmokeDrag(point-offset,point+offset,shift);
+        }
         if (_frames >= 1700 && _frames <= 1900) _structureGapDeviation = Math.Max(_structureGapDeviation,Math.Abs(world.Units[0].Z-45500));
         switch (_frames)
         {
@@ -98,6 +110,7 @@ public partial class Main
                 _structureChecks["group_recovers_after_enemy_inspection"] = _selectedStructure == null && _selected.Count == 4;
                 Focus(10000); Choose(10000);
                 var a = new Vector2(0,0); var b = GetViewport().GetVisibleRect().Size-new Vector2(0,240);
+                _structureChecks["mixed_drag_contains_structure"] = StructureInBox(new Rect2(a,b-a)) != null;
                 Click(a); GetViewport().PushInput(new InputEventMouseButton {ButtonIndex = MouseButton.Left,Pressed = true,Position = a},true);
                 GetViewport().PushInput(new InputEventMouseMotion {Position = b},true);
                 GetViewport().PushInput(new InputEventMouseButton {ButtonIndex = MouseButton.Left,Pressed = false,Position = b},true); break;
@@ -169,8 +182,43 @@ public partial class Main
             case 1990: Choose(3); break;
             case 1993:
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-well.png"); break;
-            case 2050:
-                var report = new {build = BuildInfo.Label,checks = _structureChecks,passed = _structureChecks.Count == 51 && _structureChecks.Values.All(v => v),
+            case 2030:
+                Focus(10000); var at = StructureSmokePoint(10000);
+                _structureChecks["partial_mesh_box_excludes_ground_anchor"] = !new Rect2(at-new Vector2(12,12),new Vector2(24,24))
+                    .HasPoint(_camera.UnprojectPosition(_structureViews[10000].Root.GlobalPosition));
+                Box(10000); break;
+            case 2033:
+                _structureChecks["box_selects_owned_structure"] = _selectedStructure == 10000 && _selected.Count == 0
+                    && _commands.StructureDetailsVisible && _commands.CommandPaletteEmpty;
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-marquee.png");
+                break;
+            case 2035: PushKey(Key.Key1); break;
+            case 2036: Box(3,shift: true); break;
+            case 2039:
+                _structureChecks["shift_box_preserves_unit_priority"] = _selectedStructure == null && _selected.SetEquals(workers) && _commands.CommandsAvailable;
+                Box(3); break;
+            case 2042:
+                _structureChecks["box_selects_neutral_well"] = _selectedStructure == 3 && _selected.Count == 0
+                    && _commands.DisplayedName == "Food Well" && _commands.CommandPaletteEmpty;
+                Box(2,reverse: true); break;
+            case 2045:
+                _structureChecks["reverse_box_selects_ore"] = _selectedStructure == 2 && _selected.Count == 0;
+                Box(521); break;
+            case 2048:
+                _structureChecks["box_selects_other_interactable"] = _selectedStructure == 521 && _selected.Count == 0;
+                Box(10001); break;
+            case 2051:
+                _structureChecks["box_inspects_enemy_structure"] = _selectedStructure == 10001 && _selected.Count == 0 && _commands.CommandPaletteEmpty;
+                StructureSmokeDrag(new(4,4),new(24,24)); break;
+            case 2054:
+                _structureChecks["empty_box_clears_structure"] = _selectedStructure == null && _selected.Count == 0;
+                Box(3); break;
+            case 2057: StructureSmokeDrag(new(4,4),new(24,24),shift: true); break;
+            case 2060:
+                _structureChecks["shift_empty_box_preserves_structure"] = _selectedStructure == 3 && _selected.Count == 0;
+                break;
+            case 2070:
+                var report = new {build = BuildInfo.Label,checks = _structureChecks,passed = _structureChecks.Count == 61 && _structureChecks.Values.All(v => v),
                     selected = _selectedStructure,details = SelectedStructureDetails(),worker = new {world.Units[0].X,world.Units[0].Z},gap_deviation_mm = _structureGapDeviation};
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"structure-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("STRUCTURE_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
