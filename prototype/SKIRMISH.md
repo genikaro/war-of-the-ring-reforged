@@ -937,3 +937,41 @@ cover the cadence, damage, armour, nearest-target choice, range and team limits,
 retaliation, silence when unfinished or ruined, and replay. 737 simulation and
 34 worker-cache checks, the Python suite and 15 other skirmish and Helm's Deep
 smokes pass.
+
+## Build-26: the Razing win condition
+
+A skirmish can now be won and lost. The October 19 capture session played the
+stock skirmish with the "destruction" game type; decoding the localized menu text
+(`Menu.ltx`, a `LIQDTEXT` table of id plus length-prefixed UTF-16 strings) shows
+that this is **Разрушение, Razing** (text 4401, `MULTIPLAYER_GAME_MODE_RAZING`).
+The manual's rule: be the first to destroy all enemy buildings, regardless of how
+many enemy units remain.
+
+`prototype/Simulation/Outcome.cs` applies it. Each team that starts with a
+building is a contender. At the end of every tick, a contender that owns no
+standing building is defeated; foundations still under construction and claimed
+Mill or Foundry sites count as buildings, an unclaimed resource site belongs to
+nobody, and units never count. The last contender standing wins on that tick. If
+the final contenders fall together, nobody wins. A world with fewer than two
+contenders, such as the Helm's Deep sandbox, never decides a match.
+
+The match only ends: the simulation keeps running, and a defeated player's units
+stay on the field. When it ends, a centred panel over a dimmed battlefield shows
+the original result line in English ("You won!", Menu 4602; "You lost!", 4702),
+pauses the game and blocks battlefield input. Its two choices are the original
+Continue (4803), which resumes play on the decided match, and Restart (4806),
+which reloads the skirmish. The original end-of-game statistics screen
+(`Menu_Stats.lsr`) is not reproduced; a single panel is a modern convenience.
+
+Adapters: the result titles are translations of this Russian install's lines, not
+the retail English text; a defeated player's units are left on the field.
+
+Validation: `./prototype/run.ps1 -VictorySmoke` (9 cases) right-clicks a player
+squad onto the enemy Citadel, checks the victory panel, the pause and the blocked
+battlefield, presses Restart, then lets an enemy squad raze the player's Citadel,
+checks the defeat panel and presses Continue. 9 new synthetic checks cover the
+running match, the winning tick, units not counting, the decided match staying
+decided, foundations and unclaimed sites, a sandbox without contenders, razing
+one's own last building, and replay. 746 simulation and 34 worker-cache checks
+and 16 other skirmish and Helm's Deep smokes pass, including the siege smoke,
+whose final ruin of the enemy Citadel now also ends its match.

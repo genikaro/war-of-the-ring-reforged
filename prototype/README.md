@@ -353,6 +353,7 @@ a normal viewport capture with `-CapturePath`.
 ./prototype/run.ps1 -FrodoSmoke
 ./prototype/run.ps1 -SiegeSmoke
 ./prototype/run.ps1 -DefenseSmoke
+./prototype/run.ps1 -VictorySmoke
 ./prototype/run.ps1 -SurfaceSmoke
 ./prototype/run.ps1 -ObstacleSmoke
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --movement-benchmark converted/prototype/movement-after.json

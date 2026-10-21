@@ -30,6 +30,14 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-26 (Oct 21):** the skirmish can be won and lost. The captured stock
+skirmish's "destruction" game type decodes from the localized menu text as Razing
+(text 4401): a player who owns no standing building, foundations included, is
+defeated whatever units remain, and the last one standing wins. A centred panel
+with the original result lines ("You won!" / "You lost!", in English) pauses the
+game and offers the original Continue and Restart. Validation: a 9-case victory
+smoke, 9 new synthetic checks and all regressions. See [skirmish notes](../prototype/SKIRMISH.md#build-26-the-razing-win-condition).
+
 **Build-25 (Oct 21):** Watchtower defenses. A completed Watchtower shoots its
 source weapon, `BuildingDefenses` row `G_WATCHTOWER` with weapon 40 (14 cutting
 damage per second, 19 m), at the nearest enemy in range once a second, from the
@@ -102,9 +110,9 @@ visible ground on the minimap, and the original ore, well and place-of-power
 minimap markers. Validation: a 12-case minimap smoke plus all regressions. See
 [the prototype README](../prototype/README.md).
 
-Next (after build-25): Watchtower garrisons (up to four units raising the rate of
-fire to 1.75 per second), a skirmish win condition, hero experience and levels,
-and the Axethrower's second throw.
+Next (after build-26): Watchtower garrisons (up to four units raising the rate of
+fire to 1.75 per second), hero experience and levels, the Axethrower's second
+throw, and a skirmish AI so the enemy base is no longer passive.
 
 **Build-17 (Oct 21):** owner-defined Warcraft-style gathering. A raw ore pile
 gives one ore per pickaxe hit, five per trip. A completed Mill or Foundry admits
@@ -749,7 +757,7 @@ and production remain later work.
 
 - [ ] Load unit, weapon, building, spell and technique stats from the JSON tables (`Units`, `Weapons`, `Buildings`, `Spells`, `Techniques`, `UnitToUnitModifiers`, `BattleGear`, `HeroExperiences`); three demo units' base melee definitions and pair-rule support are implemented.
 - [ ] Economy: resources, workers, building and training queues, places of power (builds 5-8 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds, independent structure selection and worker clearance fixes; build-12 adds Citadel worker training with population reservation, cancellation and rally points; build-13 places every Tier 1 building with source passability and proximity; build-14 trains the Gondor Swordsman at the Barracks; build-15 the Dwarf Axethrower at the Dwarf Hall; build-17 replaces source gather rates with owner-defined Warcraft-style trips; build-19 trains Frodo, the last Tier 1 unit; build-20 narrows work ranges to the target's own footprint); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
-- [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them; build-21 adds damage to buildings, their destruction and worker repair, without damage types for buildings or a win condition; build-25 adds Watchtower defenses at the base rate of fire, without garrisons
+- [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them; build-21 adds damage to buildings, their destruction and worker repair, without damage types for buildings or a win condition; build-25 adds Watchtower defenses at the base rate of fire, without garrisons; build-26 adds the Razing win condition
 - [ ] Heroes, fate powers and spells (`SpellAndEventAndActions` chains events to actions)
 - [ ] Open `Rings.exe` in Ghidra to recover the formulas the tables only feed: damage, hit chance, experience, upgrade effects
 - [ ] Validate original command semantics against recorded inputs and expand hero abilities; build-2 connects Aragorn's source Q heal and W/E passive slots. F2 global Walk/Run and Hold Position labeling are implemented. Preserve documented prototype conveniences.

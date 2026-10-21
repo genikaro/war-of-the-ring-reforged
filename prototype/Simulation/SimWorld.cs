@@ -518,6 +518,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         CombatEvents.Clear();
         AbilityEvents.Clear();
         DestroyedSites.Clear();
+        NewlyDefeated.Clear();
         var actions = Commands.Where(c => c.Tick == Tick).Select(c => (c.Sequence, Action: (Action)(() => Apply(c))))
             .Concat(ObstacleCommands.Where(c => c.Tick == Tick)
                 .Select(c => (c.Sequence, Action: (Action)(() => ApplyObstacle(c)))));
@@ -707,6 +708,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         }
         FaceMovement();
         AdvanceProjectiles();
+        UpdateOutcome();
         Tick++;
     }
 
@@ -731,6 +733,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         text += PlacementDigest();
         text += SiegeDigest();
         text += DefenseDigest();
+        text += OutcomeDigest();
         text += ":"+_projectileSequence+":"+string.Join(';',Projectiles);
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
     }

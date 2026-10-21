@@ -112,6 +112,7 @@ public partial class Main
             var site = new ConstructionSite(obstacle,obstacle,SkirmishInteractionRadius(obstacle,x,z),name,x,z)
                 { Team = team,Health = rules.MaxHealth,Complete = true,Prebuilt = true };
             _world.ConstructionSites.Add(obstacle,site);
+            _world.Contenders.Add(team);
             var (barWidth,barHeight) = SiteBarSize(site);
             var bar = new Reforged.Rendering.HealthBar(barWidth,barHeight) { Position = new(0,.14f,0) };
             root.AddChild(bar);
