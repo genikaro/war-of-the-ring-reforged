@@ -30,6 +30,13 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-23 (Oct 21):** besiegers face the building. A melee attacker kept its
+approach heading and hit the wall sideways, since a unit's melee facing is chosen
+from its order in the presentation and no case covered an attack on a building. It
+now turns to the building's centre once it is in range and striking. Missile units
+were already correct. Validation: the siege smoke grows to 17 cases, sampling every
+besieger's rendered yaw, plus all regressions. See [skirmish notes](../prototype/SKIRMISH.md#build-23-besiegers-face-the-building).
+
 **Build-22 (Oct 21):** owner playtest fixes. The armed Attack command now forces
 its building target, of any team, so force-attack works on buildings instead of
 falling through to an attack-move at the ground under one's own; a plain

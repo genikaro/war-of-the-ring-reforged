@@ -17,6 +17,10 @@ public sealed partial class SimWorld
     public bool CanAttackSite(int team,int site) => ConstructionSites.TryGetValue(site,out var target)
         && target.Team >= 0 && target.Team != team && target.Health > 0;
 
+    /// <summary>Standing at a building and striking it, rather than still walking there.</summary>
+    public bool IsBesieging(SimUnit unit) => unit.Present && unit.Order == OrderKind.AttackStructure
+        && unit.Attacking && ConstructionSites.ContainsKey(unit.OrderTarget);
+
     public bool NeedsRepair(ConstructionSite site) => site.Team >= 0 && site.Complete
         && site.Health > 0 && site.Health < SiteRules(site).MaxHealth;
 

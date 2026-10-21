@@ -10,7 +10,8 @@ public partial class Main
 {
     private bool _siegeSmoke;
     private readonly Dictionary<string,bool> _siegeChecks = [];
-    private int _siegePhase,_siegeStep,_siegeDamaged = -1,_siegeCapacity,_siegeEnemyCapacity;
+    private int _siegePhase,_siegeStep,_siegeDamaged = -1,_siegeCapacity,_siegeEnemyCapacity,_siegeFacingSamples;
+    private bool _siegeFacingAligned = true,_siegeFacingCaptured;
     private const string SmokeSwordsman = "UNIT_G_GONDOR_SWORDSMAN";
     private const int SmokeOwnCitadel = SkirmishObstacleBase,SmokeEnemyCitadel = SkirmishObstacleBase+1;
 
@@ -118,7 +119,23 @@ public partial class Main
                         && _selected.All(id => world.Units[id].Order == OrderKind.AttackStructure && world.Units[id].OrderTarget == SmokeEnemyCitadel);
                     break;
                 }
-                if (world.ConstructionSites.ContainsKey(SmokeEnemyCitadel)) break;
+                if (world.ConstructionSites.TryGetValue(SmokeEnemyCitadel,out var besieged))
+                {
+                    // Once the Citadel is visibly losing health every attacker has had time to turn.
+                    if (besieged.Health > world.SiteRules(besieged).MaxHealth-60) break;
+                    var (siteX,siteZ) = world.SitePosition(besieged);
+                    foreach (int id in _selected.Where(id => world.IsBesieging(world.Units[id])))
+                    {
+                        var attacker = world.Units[id];
+                        float desired = Mathf.Atan2(-(siteX-attacker.X),siteZ-attacker.Z);
+                        _siegeFacingAligned &= Math.Abs(Mathf.AngleDifference(_views[id].Root.Rotation.Y,desired)) < .2f;
+                        _siegeFacingSamples++;
+                    }
+                    if (_siegeFacingSamples > 200 && _capture != "" && !_siegeFacingCaptured)
+                    { _siegeFacingCaptured = true; _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-siege.png"); }
+                    break;
+                }
+                _siegeChecks["besiegers_face_the_building"] = _siegeFacingSamples > 20 && _siegeFacingAligned;
                 _siegeChecks["enemy_citadel_is_destroyed"] = !world.Navigation.IsObstacleActive(SmokeEnemyCitadel)
                     && !world.Producers.ContainsKey(SmokeEnemyCitadel) && !world.DropOffs.Any(d => d.Obstacle == SmokeEnemyCitadel)
                     && !world.StartBuildings[1].Contains("BUILDING_G_TOWN_CENTER_LEVEL_1");
@@ -132,10 +149,10 @@ public partial class Main
             case 6:
                 if (_siegeStep++ < 3) break; // Let the ruin capture finish writing.
                 var report = new { build = BuildInfo.Label,checks = _siegeChecks,
-                    passed = _siegeChecks.Count == 16 && _siegeChecks.Values.All(v => v),
+                    passed = _siegeChecks.Count == 17 && _siegeChecks.Values.All(v => v),
                     fixture = "Both squads spawn beside their target; the first wave is removed before the repair pass",
                     citadel = own == null ? null : new { own.Id,own.Team,own.Health,max = ownMax,own.Prebuilt },
-                    damaged_to = _siegeDamaged,ticks = world.Tick,status = _status.Text,digest = world.StateDigest() };
+                    damaged_to = _siegeDamaged,facing_samples = _siegeFacingSamples,ticks = world.Tick,status = _status.Text,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"siege-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("SIEGE_SMOKE "+JsonSerializer.Serialize(report)); _siegePhase = 7;

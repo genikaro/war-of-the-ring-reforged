@@ -859,3 +859,24 @@ own Citadel and the armed Attack command on the enemy's; the minimap smoke grows
 to 15 with the move order, the untouched camera and the Ctrl march. 722
 simulation and 34 worker-cache checks, 170 Python tests and all other skirmish
 and Helm's Deep smokes pass.
+
+## Build-23: besiegers face the building
+
+A melee unit hitting a building kept whatever heading it arrived with, so a squad
+around a Citadel swung at it sideways. A missile unit was already fine: its
+facing lives in the simulation and the siege pass turns it toward the target.
+
+A melee unit's facing is presentation only, chosen each frame from its order. The
+existing cases cover a caster, a missile unit, a fighter with a unit target and a
+worker at a resource or foundation; none matched an attack on a building, because
+a besieger has no unit target. A besieger now turns to the centre of the building
+it is striking, through the same rotation the melee case uses, and its movement
+heading is reset so it does not drift back to its approach direction.
+
+The turn starts once the unit is in range and swinging, not while it walks in, so
+a squad still marches naturally and then wheels to face the wall.
+
+Validation: the siege smoke grows to 17 cases. It samples every besieger's
+rendered yaw against the direction to the building centre once the Citadel is
+visibly losing health, over about two thousand samples per run, and the check
+fails on build-22's presentation.

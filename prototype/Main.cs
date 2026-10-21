@@ -643,6 +643,13 @@ public partial class Main : Node3D
                 view.Heading.Reset();
                 view.DesiredYaw = Mathf.Atan2(-(target.X-unit.X),target.Z-unit.Z);
             }
+            else if (_world.IsBesieging(unit))
+            {
+                // Ranged besiegers already turn in the simulation; a melee one faces the building here.
+                var (siteX,siteZ) = _world.SitePosition(_world.ConstructionSites[unit.OrderTarget]);
+                view.Heading.Reset();
+                view.DesiredYaw = Mathf.Atan2(-(siteX-unit.X),siteZ-unit.Z);
+            }
             else if (WorkFacing(unit) is float facing) view.DesiredYaw = facing;
             else if (unit.Movement.Count >= 2)
             {
