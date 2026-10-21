@@ -61,7 +61,7 @@ public partial class CommandPanel : Control
             IgnoreTextureSize = true,StretchMode = TextureButton.StretchModeEnum.KeepAspectCentered,
             TooltipText = "Debug tools [F4] · pause, step, camera, interface and controls" };
         _menu.Pressed += () => MenuChosen?.Invoke(); _content.AddChild(_menu);
-        _map = new BattleMinimap { Position = new(14,28),Size = new(174,174),TooltipText = "Click the map to center the camera." };
+        _map = new BattleMinimap { Position = new(14,28),Size = new(174,174),TooltipText = "Click or drag on the map to move the camera." };
         _map.Chosen += p => MapChosen?.Invoke(p); _content.AddChild(_map);
         _walkRun = new TextureButton { Position = new(198,147),Size = new(34,27),FocusMode = FocusModeEnum.None,
             IgnoreTextureSize = true,StretchMode = TextureButton.StretchModeEnum.KeepAspectCentered,ToggleMode = true };
@@ -226,6 +226,13 @@ public partial class CommandPanel : Control
         foreach (var command in Commands) _buttons[command.Kind].Icon = _art[command.Icon];
         _map.Configure(world);
     }
+
+    /// <summary>Neutral objects on the minimap with their original marker art, positioned in map millimetres.</summary>
+    public void SetMinimapMarkers(IEnumerable<(string Type,float X,float Z)> markers)
+        => _map.SetMarkers(markers.Select(m => (Icon: BattleMinimap.MarkerIcon(m.Type) is { } icon ? _art.GetValueOrDefault(icon) : null,m.X,m.Z))
+            .Where(m => m.Icon != null).Select(m => (m.Icon!,m.X,m.Z)));
+    public void SetMinimapView(Vector2[] corners) => _map.View = corners;
+    public BattleMinimap Minimap => _map;
 
     public static string OrderName(OrderKind kind) => kind switch { OrderKind.AttackMove => "Attack-move",OrderKind.HoldGround => "Hold Position",OrderKind.ForceAttack => "Force Attack",OrderKind.ToggleWalkRun => "Walk / Run",OrderKind.UseAbility => "Greater Kingsfoil",_ => kind.ToString() };
     private static string PortraitName(string name) => name switch { "Aragorn" => "Portrait_G_Aragorn","Elf Knight" or "Elven Knight" => "Portrait_G_Elven_Knight","Elven Archer" => "Portrait_G_Elven_Archer","Human Worker" => "Portrait_G_Human_Worker","Gondor Swordsman" => "Portrait_G_Gondor_Swordsman","Dwarf Axethrower" => "Portrait_G_Dwarven_Axethrower",_ => "Portrait_E_Uruk_Hai" };

@@ -36,6 +36,7 @@ def export(output, resolver=None):
         'Good/Portrait_G_Human_Worker.uva', 'Good/Portrait_G_Gondor_Swordsman.uva', 'Good/Portrait_G_Dwarven_Axethrower.uva']]
     paths += [source / ('Console/BuildingPortraits/Good/Building_G_' + name + '.uva') for name in ['Mill','Foundry','Keep_1','Camp','Barracks','Dwarvish_Hall','Tower']]
     paths += list((source / 'Console/ObjectPortraits').glob('*.uva'))
+    paths += [source / ('Console/Minimap/console_minimap_' + name + '.uva') for name in ['ore', 'well', 'place_of_power']]
     paths += [p for p in (source / 'Cursors/Good').glob('*.uva')
               if any(word in p.stem for word in ['attack', 'move', 'guard', 'patrol', 'greater_kingsfoil', 'negative'])]
     target = output / 'interface'; target.mkdir(parents=True, exist_ok=True)

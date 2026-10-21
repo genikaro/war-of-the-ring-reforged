@@ -84,7 +84,7 @@ public partial class Main : Node3D
 
     public override void _Ready()
     {
-        CreateUi();
+        CreateUi(); WatchPointer();
         foreach (string arg in OS.GetCmdlineUserArgs())
         {
             if (arg.StartsWith("--cache=")) _cache = arg[8..];
@@ -112,6 +112,7 @@ public partial class Main : Node3D
             if (arg == "--production-smoke") _productionSmoke = true;
             if (arg == "--placement-smoke") _placementSmoke = true;
             if (arg == "--dwarf-hall-smoke") _dwarfHallSmoke = true;
+            if (arg == "--minimap-smoke") _minimapSmoke = true;
             if (arg == "--melee-smoke") { _meleeSmoke = _combatSmoke = _smoke = true; }
             if (arg == "--engagement-smoke") _engagementSmoke = true;
             if (arg == "--attack-move-engagement-smoke") _attackMoveEngagementSmoke=_engagementSmoke=true;
@@ -127,7 +128,7 @@ public partial class Main : Node3D
             RefreshDebugMenu();
             _status.Text = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             GD.PushError(error.ToString());
-            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _engagementSmoke || _capture != "") GetTree().Quit(1);
+            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _engagementSmoke || _capture != "") GetTree().Quit(1);
         }
     }
 
@@ -323,11 +324,7 @@ public partial class Main : Node3D
             _orders.Cancel();
             if (_world != null) UnitSelection.Click(_selected,_world.Units,LivingUnit(id) ? _world.Units[id] : null,append,sameType);
         };
-        _commands.MapChosen += point => {
-            if (_world == null) return;
-            _focus = new(-(1-point.X)*_world.Navigation.Width*_world.Navigation.CellSize/1000f,0,
-                point.Y*_world.Navigation.Height*_world.Navigation.CellSize/1000f); UpdateCamera();
-        };
+        _commands.MapChosen += point => { if (_world != null) CenterViewOn(point); };
     }
 
     public override void _UnhandledInput(InputEvent input)
@@ -424,9 +421,8 @@ public partial class Main : Node3D
 
     public override void _Input(InputEvent input)
     {
-        // Rendered automation must not consume live desktop input between its scripted events.
-        if ((_constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke) && !_injectingConstructionInput) { GetViewport().SetInputAsHandled(); return; }
-        if (input is InputEventMouseMotion motion) _pointerPosition = motion.Position;
+        if (BlocksDesktopInput) { GetViewport().SetInputAsHandled(); return; }
+        if (input is InputEventMouseMotion motion) { _pointerPosition = motion.Position; _pointerInWindow = true; }
         else if (input is InputEventMouseButton pointer) _pointerPosition = pointer.Position;
         // GUI controls consume their own releases. End any battlefield drag
         // here as well when the pointer is released over the panel.
@@ -720,11 +716,13 @@ public partial class Main : Node3D
         }
         PresentProjectiles();
         PresentHealingEffects();
-        float right = (Input.IsPhysicalKeyPressed(Key.Right) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Left) ? 1 : 0);
-        float forward = (Input.IsPhysicalKeyPressed(Key.Down) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Up) ? 1 : 0);
+        var edge = EdgePan();
+        float right = Math.Clamp((Input.IsPhysicalKeyPressed(Key.Right) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Left) ? 1 : 0) + edge.X,-1,1);
+        float forward = Math.Clamp((Input.IsPhysicalKeyPressed(Key.Down) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Up) ? 1 : 0) + edge.Y,-1,1);
         if (_constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke) right = forward = 0;
         Pan(right * dt * _distance * 0.6f, forward * dt * _distance * 0.6f);
         UpdateCamera();
+        _commands.SetMinimapView(ViewFootprint());
         _selected.RemoveWhere(id => !LivingUnit(id));
         var units = _world.Units.Where(u => _selected.Contains(u.Id)).ToList();
         if (units.Count == 0) _orders.Cancel();
@@ -750,10 +748,10 @@ public partial class Main : Node3D
         if (_ordersSmoke) OrdersSmokeInput();
         if (_abilitySmoke) AbilitySmokeInput();
         if (_skirmishSmoke) SkirmishSmokeInput();
-        if (_constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke)
+        if (_constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke)
         {
             _injectingConstructionInput = true;
-            try { if (_structureSmoke) StructureSmokeInput(); else if (_productionSmoke) ProductionSmokeInput(); else if (_placementSmoke) PlacementSmokeInput(); else if (_dwarfHallSmoke) DwarfHallSmokeInput(); else ConstructionSmokeInput(); }
+            try { if (_minimapSmoke) MinimapSmokeInput(); else if (_structureSmoke) StructureSmokeInput(); else if (_productionSmoke) ProductionSmokeInput(); else if (_placementSmoke) PlacementSmokeInput(); else if (_dwarfHallSmoke) DwarfHallSmokeInput(); else ConstructionSmokeInput(); }
             finally { _injectingConstructionInput = false; }
         }
         if (_engagementSmoke) { if (_formationSmoke) FormationSmokeInput(); else EngagementSmokeInput(); }
@@ -781,7 +779,7 @@ public partial class Main : Node3D
         if (_smoke) SmokeInput();
         if (_smoke && _capture != "" && _frames == (_combatSmoke ? 180 : 60)) _ = CaptureFrame(false);
         if (_smoke && _world.Tick >= 420) FinishSmoke();
-        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_productionSmoke && !_placementSmoke && !_dwarfHallSmoke && !_engagementSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
+        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_productionSmoke && !_placementSmoke && !_dwarfHallSmoke && !_minimapSmoke && !_engagementSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
     }
 
     private string UnitName(int id) => _world!.Units[id].Definition.DisplayName;
@@ -790,11 +788,14 @@ public partial class Main : Node3D
     {
         _focus += new Vector3(Mathf.Cos(_yaw) * right + Mathf.Sin(_yaw) * forward, 0,
             -Mathf.Sin(_yaw) * right + Mathf.Cos(_yaw) * forward);
-        if (_world != null)
-        {
-            _focus.X = Math.Clamp(_focus.X, -_world.Navigation.Width * _world.Navigation.CellSize / 1000f, 0);
-            _focus.Z = Math.Clamp(_focus.Z, 0, _world.Navigation.Height * _world.Navigation.CellSize / 1000f);
-        }
+        ClampFocus();
+    }
+
+    private void ClampFocus()
+    {
+        if (_world == null) return;
+        _focus.X = Math.Clamp(_focus.X, -_world.Navigation.Width * _world.Navigation.CellSize / 1000f, 0);
+        _focus.Z = Math.Clamp(_focus.Z, 0, _world.Navigation.Height * _world.Navigation.CellSize / 1000f);
     }
 
     private void UpdateCamera()

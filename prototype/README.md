@@ -293,7 +293,8 @@ checked before loading. Never distribute the local cache with the project.
 | G / T, then left-click | Guard / Patrol |
 | Shift + click / right-click | Queue orders and formation waypoints |
 | Alt + right-click a placed obstacle | Remove it; click the same space again to restore it |
-| Arrow keys / middle-drag | Pan the camera |
+| Arrow keys / screen edges / middle-drag | Pan the camera; rest the pointer on any window edge or corner |
+| Left-click or drag on the minimap | Move the camera there; the white outline shows the visible ground |
 | Menu: Rotate left / Rotate right | Rotate the camera |
 | Mouse wheel | Zoom |
 | Space | Pause/resume simulation and unit animation |
@@ -339,6 +340,7 @@ a normal viewport capture with `-CapturePath`.
 ./prototype/run.ps1 -ProductionSmoke
 ./prototype/run.ps1 -PlacementSmoke
 ./prototype/run.ps1 -DwarfHallSmoke
+./prototype/run.ps1 -MinimapSmoke
 ./prototype/run.ps1 -SurfaceSmoke
 ./prototype/run.ps1 -ObstacleSmoke
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --movement-benchmark converted/prototype/movement-after.json
@@ -436,6 +438,10 @@ run-icon button, original walk/run clip selection, unchanged camera/targeting,
 paused toggles and empty selection.
 Unit scenes share imported resources while each instance keeps its own skeleton
 and animation player.
+The minimap smoke test (build-18, skirmish cache) checks the original ore, well and
+place-of-power markers against the source objects, the view outline, minimap
+press-and-drag, release, edge and corner scrolling, and that scrolling stops when
+the pointer leaves the window. It writes `converted/skirmish/minimap-smoke-report.json`.
 The surface smoke test places six units on an elevated deck, dispatches a
 right-click order, then checks Ctrl + Alt + right-click terrain picking with the same
 screen position. The obstacle smoke test removes and restores an obstacle

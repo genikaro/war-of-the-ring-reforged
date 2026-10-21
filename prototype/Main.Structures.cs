@@ -29,7 +29,9 @@ public partial class Main
             var root = _obstacleViews.GetValueOrDefault(id) ?? Descendants(this).OfType<Node3D>()
                 .First(n => n.Name.ToString() == item.GetProperty("name").GetString());
             RegisterStructure(id,-1,item.GetProperty("type").GetString()!,root,_world!.Resources.ContainsKey(id) ? id : -1);
+            _minimapMarkers.Add((item.GetProperty("type").GetString()!,-root.GlobalPosition.X*1000,root.GlobalPosition.Z*1000));
         }
+        _commands.SetMinimapMarkers(_minimapMarkers);
     }
 
     private void RegisterStructure(int id,int team,string type,Node3D root,int resource = -1)
