@@ -272,6 +272,8 @@ checked before loading. Never distribute the local cache with the project.
 | Shift + selection | Add to selection |
 | Shift + structure click | Select/toggle that structure separately from units |
 | Structure portrait | Center the camera on the selected structure |
+| Hero portrait (right edge) | Select the hero; Shift-click adds or removes him; double-click also centers the camera |
+| Q with Frodo selected | Put the One Ring on or take it off |
 | Workers selected: Build [B], then a building | Place a Tier 1 building (Shift queues); Mill/Foundry choose a resource site; Back or Esc returns |
 | Workers selected: right-click a foundation | Resume or assist its construction |
 | Citadel selected: worker portrait | Train a Human Worker; click again to queue (five maximum) |

@@ -108,6 +108,8 @@ public sealed partial class SimWorld
 
     private bool MayAcquire(SimUnit unit,SimUnit enemy)
     {
+        // The Ring-bearer neither picks fights nor can be found by enemies.
+        if (unit.RingActive || enemy.RingActive) return false;
         if (IdleGuardEnabled(unit)) return IdleGuardMayAcquire(unit,enemy);
         if (unit.Order==OrderKind.AttackMove && unit.Definition.BodyRadiusMm>350)
         {

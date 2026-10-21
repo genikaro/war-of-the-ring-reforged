@@ -57,6 +57,18 @@ public static class ProductionChecks
             "queued reservations count against population capacity");
         capped.MaxPopulation = 2;
         check(capped.PopulationCapacity(0) == 2,"the world population cap limits building capacity");
+        var unique = Fixture(1000); unique.Rules.Units.Add("hero",UnitDefinition.Probe with { Name = "hero",Hero = true });
+        unique.ProductionRules.Add("hero",new("hero","Hero",150,100,0,10,Unique: true));
+        var old = unique.Producers[Producer]; unique.Producers[Producer] = new(Producer,0,old.X,old.Z,old.ExitAnchor,["probe","hero"]);
+        unique.Enqueue(0,[],OrderKind.Train,1,Producer); unique.Enqueue(0,[],OrderKind.Train,1,Producer); unique.Step();
+        check(unique.Producers[Producer].Queue.Count == 1 && unique.Economies[0].FoodMilli == 850_000,"a unique hero can be queued only once");
+        Step(unique,12); unique.Enqueue(0,[],OrderKind.Train,1,Producer); unique.Step();
+        var hero = unique.Units.Single(u => u.Definition.Name == "hero");
+        check(unique.Producers[Producer].Queue.Count == 0 && !unique.CanTrain(0,Producer,1,out string why) && why == "Hero is already in play",
+            "a living unique hero blocks training another");
+        hero.Health = 0; unique.Step();
+        check(unique.CanTrain(0,Producer,1,out _),"a fallen unique hero can be trained again");
+
         var poor = Fixture(34); Train(poor); poor.Step();
         check(poor.Producers[Producer].Queue.Count == 0 && poor.Economies[0].FoodMilli == 34_000,"insufficient food leaves queue and bank unchanged");
         var enemy = Fixture(); Train(enemy,team: 1); enemy.Step();

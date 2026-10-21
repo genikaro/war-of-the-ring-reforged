@@ -48,7 +48,10 @@ public partial class Main
         foreach (var sound in rules.GetProperty("Sounds").EnumerateArray())
             _impactSounds.Add(LoadCombatSound(sound));
         if (rules.TryGetProperty("AbilitySounds",out var abilitySounds))
-            foreach (var sound in abilitySounds.EnumerateArray()) _abilitySounds.Add(LoadCombatSound(sound));
+            foreach (var sound in abilitySounds.EnumerateArray())
+            {
+                var (stream,volume) = LoadCombatSound(sound); _abilitySounds.Add((sound.GetProperty("EventId").GetInt32(),stream,volume));
+            }
         if (rules.TryGetProperty("Projectiles",out var projectiles))
         foreach (var item in projectiles.EnumerateObject())
         {
@@ -171,7 +174,8 @@ public partial class Main
     private void StopCombatAudio()
     {
         foreach (var player in _impactPlayers.Concat(_launchPlayers)) { player.Stop(); player.Stream = null; }
-        foreach (var sound in _impactSounds.Concat(_projectileStyles.Values.SelectMany(s => s.LaunchSounds)).Concat(_abilitySounds)) sound.Stream.Dispose();
+        foreach (var sound in _impactSounds.Concat(_projectileStyles.Values.SelectMany(s => s.LaunchSounds))) sound.Stream.Dispose();
+        foreach (var sound in _abilitySounds) sound.Stream.Dispose();
         _impactSounds.Clear(); _abilitySounds.Clear();
         foreach (var style in _projectileStyles.Values) style.LaunchSounds.Clear();
     }

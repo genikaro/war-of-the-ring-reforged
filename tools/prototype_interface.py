@@ -30,10 +30,12 @@ def export(output, resolver=None):
     paths += [source / 'Console/Main/console_frameportrait.uva']
     paths += list((source / 'Console/Counter Markers').glob('*.uva'))
     paths += [source / ('Console/Unit Abilities/Borderless/' + name + '.uva') for name in
-              ['BattleGear_Greater_Kingsfoil_Borderless','BattleGear_Andurils_Fury_Borderless','BattleGear_Immunity_Borderless']]
+              ['BattleGear_Greater_Kingsfoil_Borderless','BattleGear_Andurils_Fury_Borderless','BattleGear_Immunity_Borderless',
+               'BattleGear_OneRing_Borderless','BattleGear_Frodo_Sting_Borderless','BattleGear_Heroic_Aura_Borderless']]
     paths += [source / ('Console/UnitPortraits/' + name) for name in [
         'Good/Portrait_G_Aragorn.uva', 'Good/Portrait_G_Elven_Knight.uva', 'Evil/Portrait_E_Uruk_Hai.uva', 'Good/Portrait_G_Elven_Archer.uva',
-        'Good/Portrait_G_Human_Worker.uva', 'Good/Portrait_G_Gondor_Swordsman.uva', 'Good/Portrait_G_Dwarven_Axethrower.uva']]
+        'Good/Portrait_G_Human_Worker.uva', 'Good/Portrait_G_Gondor_Swordsman.uva', 'Good/Portrait_G_Dwarven_Axethrower.uva',
+        'Good/Portrait_G_Frodo.uva']]
     paths += [source / ('Console/BuildingPortraits/Good/Building_G_' + name + '.uva') for name in ['Mill','Foundry','Keep_1','Camp','Barracks','Dwarvish_Hall','Tower']]
     paths += list((source / 'Console/ObjectPortraits').glob('*.uva'))
     paths += [source / ('Console/Minimap/console_minimap_' + name + '.uva') for name in ['ore', 'well', 'place_of_power']]

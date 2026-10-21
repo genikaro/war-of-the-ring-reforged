@@ -18,6 +18,7 @@ python tools/skirmish_economy.py --cache converted/skirmish       # build-17 gat
 ./prototype/run.ps1 -ProductionSmoke           # Citadel worker training, queue cancellation, rally point and spawning
 ./prototype/run.ps1 -PlacementSmoke            # placement, Camp population, queued Barracks, Swordsman training, resume and cancel
 ./prototype/run.ps1 -DwarfHallSmoke            # Dwarf Hall, Axethrower training and thrown axes (credits a test bank first)
+./prototype/run.ps1 -FrodoSmoke                # Frodo training, hero portraits and the One Ring (credits a test bank first)
 ```
 
 The cache is separate from `converted/prototype` (Helm's Deep), so both sandboxes
@@ -43,7 +44,8 @@ no behavior and no AI; nothing in build-4 changes unit rules.
 ## Known limits
 
 - All seven Tier 1 buildings can be built; gathering, selection and the
-  Worker, Gondor Swordsman and Dwarf Axethrower training work. Frodo, the
+  Worker, Gondor Swordsman, Dwarf Axethrower and Frodo training work. Hero
+  experience and levels, regeneration, Sting's glow and the aura effect, the
   Axethrower's second (right-hand) throw, Watchtower defenses and garrisons,
   building rotation, repair and combat against buildings remain open.
 - Worker gathering and hammering sounds, the ore-mining effect, repair, exact
@@ -661,3 +663,87 @@ workers outside. Structure (61), production (17), placement (23), Dwarf Hall
 (9), command (49), orders (27) and ability (38) checks, and the Helm's Deep
 gameplay and melee smokes, pass. Close-up 1280x800 renders of mining, pick-up,
 carrying, put-down and hammering were inspected.
+
+## Build-19: Frodo and the hero portraits
+
+Frodo, the last Good Tier 1 unit, trains at the Citadel. He is second in its
+source `UnitProduced` list, after the Worker. The skirmish roster now exports his
+model, clips, rules, portrait and ability icons.
+
+| Rule | Value | Source |
+|---|---:|---|
+| Cost | 150 food, 100 ore, population 0 | `Units` FoodCost, OreCost, PopulationCost |
+| Training | 720 ticks (36 s) | `UnitTrainingTime` 36000 ms |
+| Body | 305 HP, armor 1, Attack 15 (hero damage, 0.5 m) | `MaxHealth`, `ArmorPoints`, weapon 114 "Frodo's Sting" |
+| Unique | one per player, alive or queued | `IsUnique` |
+
+While Frodo lives or waits in a queue, his training button is disabled with
+"Frodo is already in play". After he dies he can be trained again; the source
+`HeroDeathRefreshTime` (15) is not applied.
+
+**Abilities.** Source BattleGear 7, 50 and 12; their `SpecificIndex` gives the
+Q, W and E slots.
+
+- **Q · The One Ring** (toggle). Press Q or click the icon to put it on, and again
+  to take it off. The icon stays pressed while the Ring is worn, and the original
+  on/off sounds play. The source OnActivate actions apply:
+  - `SET_VISIBLE` 0.5: Frodo is drawn at half opacity.
+  - `SET_PASSIVE`: he refuses attack orders and no longer picks fights. Move,
+    Stop and the other orders still work.
+  - `ENABLE_DETECTION` off: enemies cannot target him, and enemies already
+    fighting him lose him.
+  - `ENABLE_REGENERATION` off: regeneration is not simulated anywhere yet.
+
+  OnContinuous `UPDATE_HEALTH` drains 2 HP per second. Adapter: the drain stops
+  at 1 HP, because the source has no floor and a forgotten toggle would otherwise
+  kill him.
+- **W · Sting** (passive). Damage ×1.35 against Orc Slasher, Orc Bowman, Uruk-Hai
+  and Goblin Spearman (target type 68). The blade glow (attachment flag 31)
+  that appears near those units is not shown.
+- **E · Heroic Aura** (passive). Allies within 15 m, Frodo included, recharge
+  abilities 1.5× as fast (child spell 21, `SET_BATTLEGEAR_RECHARGE_MULTIPLIER`).
+  Overlapping auras do not stack (StackableType 3). Its ground effect (148) is
+  not shown. No other skirmish unit has a recharging ability yet.
+
+**Hero portraits.** As in the original, each living hero gets a framed portrait
+at the right edge of the screen. A green health bar and a blue experience bar
+sit beneath it. The layout comes from `Screens/GameConsole_Hero_Portraits.lsr`
+(`LIQDSCRN` records of normalized rectangles on a 1024 × 768 screen):
+
+- Five slots, `CONTROL_CONSOLE_HERO_PORTRAIT_0` to `_4`, at x 0.947. The first
+  is at y 0.248, then one every 0.091. Each portrait is 0.047 × 0.063, with the
+  health and experience bars just below it.
+- A separate `SPECIAL` slot above them (y 0.155) has no recovered use and stays
+  empty. In `campaign-004` Gimli also sits in slot 0.
+- The strip is anchored to the right edge and scales with the console.
+- The art is the unit portrait, `console_frameportrait`,
+  `console_g_doublebarbackgroundsmall`, `console_g_healthbarsmall` (tinted green)
+  and `console_g_staminabarsmall`.
+
+A click selects the hero, Shift-click adds or removes him, and a double click
+also centers the camera, as in `campaign-004` and `campaign-009`. Hero
+experience and levels are not simulated, so the blue bar stays empty. The Helm's
+Deep sandbox shows Aragorn in the strip.
+
+Refresh an existing skirmish cache with
+`python tools/prepare_prototype.py --units-only --out converted/skirmish`, and the
+Helm's Deep cache with `--rules-only` and `--ui-only`. The local caches are
+already updated.
+
+Validation: 722 synthetic / 789 cached simulation checks pass, including 14 new Frodo checks:
+
+- the Ring toggle, exact drain and its 1 HP floor;
+- enemies neither acquiring nor attacking the Ring-bearer;
+- refused attack orders on both sides, and fights ending when the Ring goes on;
+- Sting's target types, and the Heroic Aura's 1.5× recharge within 15 m only;
+- replay.
+
+Three unique-training checks are new too. 170 Python tests pass, including
+Frodo's source abilities and production rules from the owner install.
+
+The new `./prototype/run.ps1 -FrodoSmoke` (13 cases) uses a credited test bank. It
+covers training, the unique-hero refusal, the source portrait layout, click
+selection, double-click centering, the Q/W/E icons, and the Ring on, fading,
+draining on the HUD and off. The production smoke now expects Frodo beside the
+Worker. All other skirmish and Helm's Deep smokes pass. 1280 × 800 and 4K
+captures were inspected.

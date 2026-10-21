@@ -21,6 +21,9 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int KillCount { get; internal set; }
     public bool Walking { get; internal set; }
     public int[] AbilityReadyAt { get; } = new int[4];
+    /// <summary>Thousandths of a tick of extra recharge gained under a recharge aura.</summary>
+    public int[] AbilityRechargeCarry { get; } = new int[4];
+    public bool RingActive { get; internal set; }
     public int AbilitySlot { get; internal set; } = -1;
     public int CastStartTick { get; internal set; } = -1;
     public int CastSerial { get; internal set; }
@@ -31,7 +34,7 @@ public sealed class SimUnit(int id, int team, int x, int z)
         .Aggregate(StatusProtection.None,(flags,a) => flags | a.Immunities);
     public int MeleeDamageRate => Definition.Abilities?.FirstOrDefault(a => a.Passive && a.Kind == AbilityKind.Fury)?.DpsMilli
         ?? Definition.DpsMilli;
-    public int AbilityDamageScale(int targetType) => Definition.Abilities?.FirstOrDefault(a => a.Passive && a.Kind == AbilityKind.Fury
+    public int AbilityDamageScale(int targetType) => Definition.Abilities?.FirstOrDefault(a => a.Passive && a.Kind is AbilityKind.Fury or AbilityKind.Bane
         && a.BonusTargets?.Contains(targetType) == true)?.BonusScale ?? 1_000_000;
     public int Facing { get; internal set; }
     public int PreviousFacing { get; internal set; }
@@ -212,9 +215,12 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             // An invalid explicit attack cannot silently become a move or erase
             // a valid order (for example a friendly/dead target in a mixed selection).
             if (command.Kind == OrderKind.Attack && (command.Target < 0 || command.Target >= Units.Count
-                || Units[command.Target].Team == unit.Team || !Units[command.Target].Present)) continue;
+                || Units[command.Target].Team == unit.Team || !Units[command.Target].Present || Units[command.Target].RingActive)) continue;
             if (command.Kind == OrderKind.ForceAttack && command.Target >= 0 && (command.Target >= Units.Count
-                || command.Target == id || !Units[command.Target].Present)) continue;
+                || command.Target == id || !Units[command.Target].Present
+                || Units[command.Target].Team != unit.Team && Units[command.Target].RingActive)) continue;
+            // A Ring-bearer is passive: explicit attacks are refused rather than silently becoming moves.
+            if (unit.RingActive && command.Kind is OrderKind.Attack or OrderKind.ForceAttack) continue;
             if (command.Kind == OrderKind.Guard && command.Target >= 0 && (command.Target >= Units.Count
                 || command.Target == id || Units[command.Target].Team != unit.Team || !Units[command.Target].Present)) continue;
             if (!activating && command.Queued && command.Kind is not (OrderKind.Stop or OrderKind.HoldGround)
@@ -517,6 +523,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         ActivateQueuedOrders();
         UpdateConstruction();
         UpdateProduction();
+        UpdateHeroAbilities();
         if (_navigationRevision != Navigation.Revision)
         {
             // Rebuild routes at a tick boundary. Starting from the last reached
@@ -708,6 +715,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         text += ":"+string.Join(';',Units.Select(u => $"{u.Facing},{u.PreviousFacing}"));
         text += ":pace:"+string.Join(';',_walkingTeams.OrderBy(p => p.Key).Select(p => $"{p.Key},{p.Value}"));
         text += ":abilities:"+string.Join(';',Units.Select(u => $"{u.AbilitySlot},{u.CastStartTick},{u.CastSerial},{u.CastApplied}:{string.Join(',',u.AbilityReadyAt)}"));
+        text += ":ring:"+string.Join(';',Units.Select(u => $"{u.RingActive}:{string.Join(',',u.AbilityRechargeCarry)}"));
         text += EconomyDigest();
         text += ConstructionDigest();
         text += ProductionDigest();

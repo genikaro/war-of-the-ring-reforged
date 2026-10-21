@@ -233,9 +233,10 @@ public partial class CommandPanel : Control
             .Where(m => m.Icon != null).Select(m => (m.Icon!,m.X,m.Z)));
     public void SetMinimapView(Vector2[] corners) => _map.View = corners;
     public BattleMinimap Minimap => _map;
+    public Texture2D? Art(string name) => _art.GetValueOrDefault(name);
 
     public static string OrderName(OrderKind kind) => kind switch { OrderKind.AttackMove => "Attack-move",OrderKind.HoldGround => "Hold Position",OrderKind.ForceAttack => "Force Attack",OrderKind.ToggleWalkRun => "Walk / Run",OrderKind.UseAbility => "Greater Kingsfoil",_ => kind.ToString() };
-    private static string PortraitName(string name) => name switch { "Aragorn" => "Portrait_G_Aragorn","Elf Knight" or "Elven Knight" => "Portrait_G_Elven_Knight","Elven Archer" => "Portrait_G_Elven_Archer","Human Worker" => "Portrait_G_Human_Worker","Gondor Swordsman" => "Portrait_G_Gondor_Swordsman","Dwarf Axethrower" => "Portrait_G_Dwarven_Axethrower",_ => "Portrait_E_Uruk_Hai" };
+    public static string PortraitName(string name) => name switch { "Aragorn" => "Portrait_G_Aragorn","Frodo" => "Portrait_G_Frodo","Elf Knight" or "Elven Knight" => "Portrait_G_Elven_Knight","Elven Archer" => "Portrait_G_Elven_Archer","Human Worker" => "Portrait_G_Human_Worker","Gondor Swordsman" => "Portrait_G_Gondor_Swordsman","Dwarf Axethrower" => "Portrait_G_Dwarven_Axethrower",_ => "Portrait_E_Uruk_Hai" };
 
     public void Refresh(IReadOnlyList<SimUnit> units,Func<int,string> name,OrderKind? pending,bool paused,IReadOnlyList<int[]>? groups = null,int allies = 0,int enemies = 0,bool walking = false,int tick = 0,int pendingAbilitySlot = -1)
     {
@@ -349,12 +350,16 @@ public partial class CommandPanel : Control
             string key = "QWER"[slot].ToString();
             button.Icon = _art.GetValueOrDefault(ability.Icon);
             button.Disabled = ability.Passive || remaining > 0 || hero.Casting;
-            button.SetPressedNoSignal(!ability.Passive && pending == OrderKind.UseAbility && pendingSlot == slot);
+            button.SetPressedNoSignal(ability.Kind == AbilityKind.Ring ? hero.RingActive : !ability.Passive && pending == OrderKind.UseAbility && pendingSlot == slot);
             button.AddThemeColorOverride("icon_disabled_color",ability.Passive ? Colors.White : new Color(.6f,.6f,.6f,1));
             _abilityLabels[slot].Text = remaining > 0 && !ability.Passive ? $"{remaining/20f:0.0}s" : "";
             _abilityHotkeys[slot].Text = ability.Passive ? "" : key;
             _abilityRecharge[slot].Size = new(54,ability.RechargeTicks > 0 ? 54*Math.Clamp(remaining/(float)ability.RechargeTicks,0,1) : 0);
             button.TooltipText = ability.Kind switch {
+                AbilityKind.Ring => $"{ability.Name} [{key}] · {(hero.RingActive ? "Worn" : "Off")}\nToggle: Frodo turns invisible to enemies and will not fight.\n"
+                    + $"Costs {ability.DrainMilliPerTick*SimWorld.TicksPerSecond/1000m:0.#} HP per second while worn (stops at 1 HP).",
+                AbilityKind.Bane => $"{ability.Name} · Passive\n{ability.BonusScale/10000}% damage against orcs, Uruk-Hai and goblins.",
+                AbilityKind.Aura => $"{ability.Name} · Passive\nAllies within {ability.RangeMm/1000} m recharge abilities {ability.RechargeScalePpm/10000}% as fast.",
                 AbilityKind.Heal => $"{ability.Name} [{key}]\nHeal a friendly unit or Aragorn for up to {ability.HealMilli/1000} HP.\n{ability.RangeMm/1000} m range · {ability.RechargeTicks/20}s cooldown. Target must be below 99% health.\nAragorn approaches distant targets. Moving or issuing another order interrupts the cast.",
                 AbilityKind.Fury => $"{ability.Name} · Passive\nWeapon Attack {ability.DpsMilli/1000}. {ability.BonusScale/10000}% damage against Wraiths and Black Riders.\nEquipped for this sandbox trial.",
                 _ => "Immunity · Passive\nProtection from poison, stun, blind and slow.\nCurrent demo enemies do not inflict these effects. Equipped for this sandbox trial." };

@@ -80,6 +80,8 @@ public partial class Main : Node3D
         public int CastSerial = -1;
         public UnitAppearance? Appearance;
         public HeadingPlayback Heading = new();
+        public bool Translucent;
+        public (MeshInstance3D Mesh,int Surface,Material? Faded)[]? Ghost;
     }
 
     public override void _Ready()
@@ -113,6 +115,7 @@ public partial class Main : Node3D
             if (arg == "--placement-smoke") _placementSmoke = true;
             if (arg == "--dwarf-hall-smoke") _dwarfHallSmoke = true;
             if (arg == "--minimap-smoke") _minimapSmoke = true;
+            if (arg == "--frodo-smoke") _frodoSmoke = true;
             if (arg == "--melee-smoke") { _meleeSmoke = _combatSmoke = _smoke = true; }
             if (arg == "--engagement-smoke") _engagementSmoke = true;
             if (arg == "--attack-move-engagement-smoke") _attackMoveEngagementSmoke=_engagementSmoke=true;
@@ -128,7 +131,7 @@ public partial class Main : Node3D
             RefreshDebugMenu();
             _status.Text = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             GD.PushError(error.ToString());
-            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _engagementSmoke || _capture != "") GetTree().Quit(1);
+            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _engagementSmoke || _capture != "") GetTree().Quit(1);
         }
     }
 
@@ -219,6 +222,7 @@ public partial class Main : Node3D
         _friendlySquads.AddRange(_world.Units.Where(u => u.Team == 0).Select(u => u.Id).Chunk(6));
         for (int slot = 0; slot < _friendlySquads.Count; slot++) _controlGroups.Assign(slot,_friendlySquads[slot],LivingFriendly);
         _commands.LoadArtwork(_cache,_world);
+        _heroBar.LoadArtwork(_commands);
         _hudScale.Value = _commands.ScalePercent;
         if (_skirmish) LoadSkirmishScene(manifest);
         var framed = _skirmish ? _world.Units.Where(u => u.Team == 0).ToList() : _world.Units;
@@ -303,6 +307,8 @@ public partial class Main : Node3D
         _hud.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _hud.MouseFilter = Control.MouseFilterEnum.Ignore;
         _hud.AddChild(new BuildOverlay());
+        _heroBar = new HeroBar(); _hud.AddChild(_heroBar);
+        _heroBar.HeroChosen += ChooseHero;
         CreateDebugMenu();
         _commands = new CommandPanel(); _hud.AddChild(_commands);
         _commands.MenuChosen += ToggleDebugMenu;
@@ -428,8 +434,8 @@ public partial class Main : Node3D
         // here as well when the pointer is released over the panel.
         if (input is not InputEventMouseButton { Pressed: false } mouse) return;
         if (mouse.ButtonIndex == MouseButton.Middle) _panning = false;
-        if (mouse.ButtonIndex == MouseButton.Left && _dragging && _commands.IsVisibleInTree()
-            && _commands.GetGlobalRect().HasPoint(mouse.Position))
+        if (mouse.ButtonIndex == MouseButton.Left && _dragging && (_commands.IsVisibleInTree()
+            && _commands.GetGlobalRect().HasPoint(mouse.Position) || _heroBar.Contains(mouse.Position)))
         {
             _dragging = false; _hud.SelectionBox = null;
         }
@@ -701,6 +707,7 @@ public partial class Main : Node3D
         foreach (var unit in _world.Units)
         {
             var view = _views[unit.Id];
+            PresentRing(unit,view);
             view.Ring.Visible = unit.Health > 0 && _selected.Contains(unit.Id);
             if (!view.Ring.Visible || (view.RingPosition == view.Root.Position && view.RingYaw == view.Root.Rotation.Y)) continue;
             var transform = view.Root.GlobalTransform; var inverse = transform.AffineInverse();
@@ -731,6 +738,7 @@ public partial class Main : Node3D
             Enumerable.Range(0,10).Select(slot => _controlGroups.Recall(slot,LivingFriendly)).ToArray(),
             _world.Units.Count(u => u.Team == 0 && u.Health > 0),_world.Units.Count(u => u.Team != 0 && u.Health > 0),_world.IsWalking(0),_world.Tick,_pendingAbilitySlot);
         UpdateAbilityCursor();
+        _heroBar.Refresh(FriendlyHeroes(),_commands.Art,_commands.EffectiveScale);
         if (_skirmish)
         {
             if (!SelectedWorkers().Any()) ClearConstructionTargeting();
@@ -748,10 +756,10 @@ public partial class Main : Node3D
         if (_ordersSmoke) OrdersSmokeInput();
         if (_abilitySmoke) AbilitySmokeInput();
         if (_skirmishSmoke) SkirmishSmokeInput();
-        if (_constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke)
+        if (_constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke)
         {
             _injectingConstructionInput = true;
-            try { if (_minimapSmoke) MinimapSmokeInput(); else if (_structureSmoke) StructureSmokeInput(); else if (_productionSmoke) ProductionSmokeInput(); else if (_placementSmoke) PlacementSmokeInput(); else if (_dwarfHallSmoke) DwarfHallSmokeInput(); else ConstructionSmokeInput(); }
+            try { if (_minimapSmoke) MinimapSmokeInput(); else if (_frodoSmoke) FrodoSmokeInput(); else if (_structureSmoke) StructureSmokeInput(); else if (_productionSmoke) ProductionSmokeInput(); else if (_placementSmoke) PlacementSmokeInput(); else if (_dwarfHallSmoke) DwarfHallSmokeInput(); else ConstructionSmokeInput(); }
             finally { _injectingConstructionInput = false; }
         }
         if (_engagementSmoke) { if (_formationSmoke) FormationSmokeInput(); else EngagementSmokeInput(); }
@@ -779,7 +787,7 @@ public partial class Main : Node3D
         if (_smoke) SmokeInput();
         if (_smoke && _capture != "" && _frames == (_combatSmoke ? 180 : 60)) _ = CaptureFrame(false);
         if (_smoke && _world.Tick >= 420) FinishSmoke();
-        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_productionSmoke && !_placementSmoke && !_dwarfHallSmoke && !_minimapSmoke && !_engagementSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
+        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_productionSmoke && !_placementSmoke && !_dwarfHallSmoke && !_minimapSmoke && !_frodoSmoke && !_engagementSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
     }
 
     private string UnitName(int id) => _world!.Units[id].Definition.DisplayName;

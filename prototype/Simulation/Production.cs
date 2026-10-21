@@ -1,6 +1,6 @@
 namespace Reforged.Simulation;
 
-public sealed record ProductionDefinition(string Unit,string DisplayName,int FoodCost,int OreCost,int Population,int DurationTicks);
+public sealed record ProductionDefinition(string Unit,string DisplayName,int FoodCost,int OreCost,int Population,int DurationTicks,bool Unique = false);
 public sealed record QueuedUnit(string Unit,int Sequence);
 
 public sealed class ProductionBuilding(int id,int team,int x,int z,int exitAnchor,string[] units)
@@ -43,6 +43,9 @@ public sealed partial class SimWorld
         if (!Producers.TryGetValue(building,out var producer) || producer.Team != team || slot < 0 || slot >= producer.Units.Length
             || !ProductionRules.TryGetValue(producer.Units[slot],out var rules) || !Economies.TryGetValue(team,out var bank)) return false;
         if (producer.Queue.Count >= ProductionQueueLimit) { reason = "Training queue full"; return false; }
+        if (rules.Unique && (Units.Any(u => u.Team == team && u.Health > 0 && u.Definition.Name == rules.Unit)
+            || Producers.Values.Any(p => p.Team == team && p.Queue.Any(q => q.Unit == rules.Unit))))
+        { reason = rules.DisplayName+" is already in play"; return false; }
         if (bank.FoodMilli < rules.FoodCost*1000L || bank.OreMilli < rules.OreCost*1000L) { reason = "Insufficient resources"; return false; }
         if (PopulationUsed(team)+rules.Population > PopulationCapacity(team)) { reason = "Population limit reached"; return false; }
         reason = "Ready to train"; return true;

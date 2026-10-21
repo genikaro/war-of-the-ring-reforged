@@ -18,6 +18,8 @@ public partial class Main
         root.AddChild(new BuildOverlay { Visible = _hud.Visible });
         var hud = new CommandPanel { ManageCursor = false,BuildMenuOpen = _buildMenu }; root.AddChild(hud); hud.LoadArtwork(_cache,_world!);
         hud.Visible = _hud.Visible;
+        var heroes = new HeroBar { Visible = _hud.Visible }; root.AddChild(heroes); heroes.LoadArtwork(hud);
+        heroes.Refresh(FriendlyHeroes(),hud.Art,hud.EffectiveScale);
         hud.SetMinimapMarkers(_minimapMarkers);
         hud.SetMinimapView(ViewFootprint(camera,viewport.GetVisibleRect(),hud.Visible ? hud.GetGlobalRect().Position.Y : viewport.GetVisibleRect().End.Y));
         if (_skirmish) ApplySkirmishHud(hud);

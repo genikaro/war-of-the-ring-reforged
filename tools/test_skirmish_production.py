@@ -37,7 +37,7 @@ class ProductionImportTests(unittest.TestCase):
             db = {'Buildings': FakeTable(buildings),
                   'Units': FakeTable({1: ('UNIT_G_HERO', {**required, 'PowerCost': 0}),
                                       2: ('UNIT_G_WORKER', {**required, 'PowerCost': 0, 'Name': 'Worker', 'FoodCost': 30, 'OreCost': 5,
-                                          'PopulationCost': 2, 'UnitTrainingTime': 12001}),
+                                          'PopulationCost': 2, 'UnitTrainingTime': 12001, 'IsUnique': 0}),
                                       3: ('UNIT_G_CALLED', {**required, 'PowerCost': 3}),
                                       4: ('UNIT_G_LATER', {**required, 'BuildingRequired1': 99, 'PowerCost': 0})}),
                   'WorldVariables': FakeTable({0: ('world', {'DefaultInitialPopulationCapacity': 1, 'MaxPopulationCap': 90})})}
@@ -46,7 +46,7 @@ class ProductionImportTests(unittest.TestCase):
             'UNIT_G_HERO': 'model and rules not exported', 'UNIT_G_CALLED': 'requires fate points',
             'UNIT_G_LATER': 'requires BUILDING_G_TOWN_CENTER_LEVEL_2'}}})
         self.assertEqual(data['units']['UNIT_G_WORKER'], {'display_name': 'Worker', 'food_cost': 30, 'ore_cost': 5, 'population': 2,
-                                                          'duration_ticks': 241})
+                                                          'duration_ticks': 241, 'unique': False})
         self.assertEqual(data['population_provided'][skirmish_map.CITADEL], 7)
         self.assertEqual((data['initial_population_capacity'], data['max_population']), (1, 90))
 
@@ -55,19 +55,21 @@ class ProductionImportTests(unittest.TestCase):
         import prepare_prototype
         data = skirmish_production.production_data(Resolver(), prepare_prototype.SKIRMISH_ROSTER)
         citadel = data['producers'][skirmish_map.CITADEL]
-        self.assertEqual(citadel['units'], ['UNIT_G_HUMAN_WORKER'])
-        self.assertEqual(citadel['unavailable']['UNIT_G_HERO_FRODO'], 'model and rules not exported')
+        self.assertEqual(citadel['units'], ['UNIT_G_HUMAN_WORKER', 'UNIT_G_HERO_FRODO'])
+        self.assertNotIn('UNIT_G_HERO_FRODO', citadel['unavailable'])
+        self.assertEqual(data['units']['UNIT_G_HERO_FRODO'], {'display_name': 'Frodo', 'food_cost': 150, 'ore_cost': 100,
+                         'population': 0, 'duration_ticks': 720, 'unique': True})
         self.assertEqual(citadel['unavailable']['UNIT_G_HERO_ARAGORN'], 'requires BUILDING_G_TOWN_CENTER_LEVEL_2')
         barracks = data['producers']['BUILDING_G_GONDORIAN_BARRACKS']
         self.assertEqual((barracks['units'], barracks['unavailable']), (['UNIT_G_GONDOR_SWORDSMAN'], {'UNIT_G_ROHAN_RIDER': 'requires BUILDING_G_TOWN_CENTER_LEVEL_2'}))
         self.assertEqual(data['units']['UNIT_G_GONDOR_SWORDSMAN'], {'display_name': 'Gondor Swordsman', 'food_cost': 50, 'ore_cost': 0,
-                         'population': 2, 'duration_ticks': 280})
+                         'population': 2, 'duration_ticks': 280, 'unique': False})
         hall = data['producers']['BUILDING_G_DWARF_BARRACKS']
         self.assertEqual((hall['units'], hall['unavailable']), (['UNIT_G_DWARVEN_AXETHROWER'], {'UNIT_G_DWARVEN_SHIELDBREAKER': 'requires BUILDING_G_SKILLS_STRUCTURE'}))
         self.assertEqual(data['units']['UNIT_G_DWARVEN_AXETHROWER'], {'display_name': 'Dwarf Axethrower', 'food_cost': 60, 'ore_cost': 10,
-                         'population': 2, 'duration_ticks': 340})
+                         'population': 2, 'duration_ticks': 340, 'unique': False})
         self.assertEqual(data['units']['UNIT_G_HUMAN_WORKER'], {'display_name': 'Human Worker', 'food_cost': 35, 'ore_cost': 0,
-                         'population': 1, 'duration_ticks': 240})
+                         'population': 1, 'duration_ticks': 240, 'unique': False})
         self.assertEqual(data['population_provided'][skirmish_map.CITADEL], 10)
         self.assertEqual((data['initial_population_capacity'], data['max_population']), (0, 100))
 

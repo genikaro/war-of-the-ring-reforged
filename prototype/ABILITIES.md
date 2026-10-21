@@ -120,3 +120,12 @@ input checks. The latter include heal/invalid/default cursor transitions, clean
 skill labels, bottom-right hotkeys, visible source effect layers, target following,
 pause freezing and effect expiry. Healing captures were inspected at 1280x800
 and 4K.
+
+## Frodo — build-19
+
+Frodo trains at the skirmish Citadel with his three source abilities equipped:
+**Q · The One Ring** (toggle: half-transparent, passive and hidden from enemies,
+2 HP per second drain that stops at 1 HP), **W · Sting** (passive, ×1.35 against
+orcs, Uruk-Hai and goblins) and **E · Heroic Aura** (passive, allies within 15 m
+recharge abilities 1.5× as fast). Rules, adapters and validation are in
+[the skirmish notes](SKIRMISH.md#build-19-frodo-and-the-hero-portraits).

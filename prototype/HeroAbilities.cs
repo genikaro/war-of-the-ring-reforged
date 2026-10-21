@@ -6,7 +6,7 @@ public partial class Main
 {
     private int _pendingAbilityCaster = -1, _pendingAbilitySlot = -1;
     private readonly List<(Label3D Label,int EndTick)> _healLabels = [];
-    private readonly List<(AudioStreamWav Stream,float VolumeDb)> _abilitySounds = [];
+    private readonly List<(int EventId,AudioStreamWav Stream,float VolumeDb)> _abilitySounds = [];
     private HealingEffect.Layer[] _healingLayers = [];
     private double _healingDuration, _healingTime;
     private readonly List<HealingEffect> _healingEffects = [];
@@ -40,6 +40,11 @@ public partial class Main
         if (candidates.Length == 0) return;
         var caster = candidates[0]; var ability = caster.Ability(slot)!;
         if (ability.Passive) { _status.Text = ability.Name+" is passive"; return; }
+        if (ability.Kind == AbilityKind.Ring)
+        {
+            _world.EnqueueAbility(0,[caster.Id],slot,-1);
+            _status.Text = ability.Name+(caster.RingActive ? " removed" : " worn")+(_paused ? " (paused)" : ""); return;
+        }
         if (caster.Casting || caster.AbilityReadyAt[slot] > _world.Tick)
         { _status.Text = ability.Name+" is recharging"; return; }
         _pendingAbilityCaster = caster.Id; _pendingAbilitySlot = slot;
@@ -62,9 +67,21 @@ public partial class Main
         _status.Text = _paused ? "Greater Kingsfoil queued (paused)" : "Greater Kingsfoil";
     }
 
+    private void PlayAbilitySound(int[]? events,int index,Vector3 position)
+    {
+        var sounds = _abilitySounds.Where(s => events == null || events.Contains(s.EventId)).ToArray();
+        if (sounds.Length == 0 || _impactPlayers.Count == 0) return;
+        var player = _impactPlayers[_impactCursor++%_impactPlayers.Count]; var sound = sounds[index%sounds.Length];
+        player.Stream = sound.Stream; player.VolumeDb = sound.VolumeDb;
+        player.Position = position; player.StreamPaused = _paused; player.Play();
+    }
+
     private void PresentAbilityEvents()
     {
-        foreach (var effect in _world!.AbilityEvents.Where(e => e.Kind == AbilityEventKind.Heal))
+        foreach (var toggle in _world!.AbilityEvents.Where(e => e.Kind is AbilityEventKind.RingOn or AbilityEventKind.RingOff))
+            if (_world.Units[toggle.Unit].Ability(toggle.Slot)?.SoundEvents is [int on,int off])
+                PlayAbilitySound([toggle.Kind == AbilityEventKind.RingOn ? on : off],0,UnitPosition(_world.Units[toggle.Unit]));
+        foreach (var effect in _world.AbilityEvents.Where(e => e.Kind == AbilityEventKind.Heal))
         {
             var target = _world.Units[effect.Target];
             var label = new Label3D { Text = $"+{effect.HealthMilli/1000m:0.#}",FontSize = 44,PixelSize = .018f,
@@ -77,13 +94,7 @@ public partial class Main
                 var visual = new HealingEffect(effect.Target,effect.Tick/(double)SimWorld.TicksPerSecond,_healingDuration,_healingLayers);
                 AddChild(visual.Root); _healingEffects.Add(visual);
             }
-            if (_abilitySounds.Count > 0 && _impactPlayers.Count > 0)
-            {
-                var player = _impactPlayers[_impactCursor++%_impactPlayers.Count];
-                var sound = _abilitySounds[effect.Unit%_abilitySounds.Count];
-                player.Stream = sound.Stream; player.VolumeDb = sound.VolumeDb;
-                player.Position = UnitPosition(target); player.StreamPaused = _paused; player.Play();
-            }
+            PlayAbilitySound(_world.Units[effect.Unit].Ability(effect.Slot)?.SoundEvents,effect.Unit,UnitPosition(target));
         }
         foreach (var flash in _healLabels.Where(f => _world.Tick >= f.EndTick).ToArray())
         { flash.Label.QueueFree(); _healLabels.Remove(flash); }

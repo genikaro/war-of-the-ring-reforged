@@ -11,7 +11,7 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
     int WalkScale = 500_000,string WalkClip = "",string RunClip = "",int BodyRadiusMm = 350,int BodyHeightMm = 700,int SelectionRadiusMm = 650,int AttackGapMm = 0,
     int FriendlyCompressionPpm = 1_000_000,int ModelScalePpm = 1_000_000,
     int ProjectileSpeedMmPerSecond = 0,int MinimumRangeMm = 0,
-    int MeleeDpsMilli = 0,int MeleeReachMm = 2000,int MeleeGapMm = 0,AbilityDefinition[]? Abilities = null)
+    int MeleeDpsMilli = 0,int MeleeReachMm = 2000,int MeleeGapMm = 0,AbilityDefinition[]? Abilities = null,bool Hero = false)
 {
     public bool IsRanged => ProjectileSpeedMmPerSecond > 0;
     public bool HasMelee => IsRanged && Attacks.Any(a => a.Melee);

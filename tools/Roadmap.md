@@ -30,6 +30,25 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-19 (Oct 21):** Frodo trains at the Citadel (150 food, 100 ore,
+population 0, 36 s, one per player) with his source abilities: the One Ring
+toggle (Q: half opacity, passive, hidden from enemies, 2 HP/s drain floored at
+1 HP), Sting (×1.35 against orcs and goblins) and Heroic Aura (1.5× ability
+recharge within 15 m). Living heroes get the original right-edge portrait strip
+from `GameConsole_Hero_Portraits.lsr` with health and experience bars; a click
+selects the hero and a double click also centers the camera. Hero experience,
+levels and regeneration are not simulated. Validation: 722 synthetic / 789 cached simulation and 170
+Python checks, a 13-case Frodo smoke and all skirmish and Helm's Deep smokes. See [skirmish notes](../prototype/SKIRMISH.md#build-19-frodo-and-the-hero-portraits).
+
+**Build-18 (Oct 21):** map navigation. Edge scrolling (the original manual's
+"pushing" on screen edges), minimap press-and-drag, a white outline of the
+visible ground on the minimap, and the original ore, well and place-of-power
+minimap markers. Validation: a 12-case minimap smoke plus all regressions. See
+[the prototype README](../prototype/README.md).
+
+Next: Watchtower defenses and combat against buildings (a skirmish win
+condition), hero experience and levels, then the Axethrower's second throw.
+
 **Build-17 (Oct 21):** owner-defined Warcraft-style gathering. A raw ore pile
 gives one ore per pickaxe hit, five per trip. A completed Mill or Foundry admits
 one worker at a time for two seconds, who comes out with 10 food or 9 ore. Loads
@@ -672,7 +691,7 @@ against continuous source-game evidence before claiming fidelity. Powers, econom
 and production remain later work.
 
 - [ ] Load unit, weapon, building, spell and technique stats from the JSON tables (`Units`, `Weapons`, `Buildings`, `Spells`, `Techniques`, `UnitToUnitModifiers`, `BattleGear`, `HeroExperiences`); three demo units' base melee definitions and pair-rule support are implemented.
-- [ ] Economy: resources, workers, building and training queues, places of power (builds 5-8 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds, independent structure selection and worker clearance fixes; build-12 adds Citadel worker training with population reservation, cancellation and rally points; build-13 places every Tier 1 building with source passability and proximity; build-14 trains the Gondor Swordsman at the Barracks; build-15 the Dwarf Axethrower at the Dwarf Hall; build-17 replaces source gather rates with owner-defined Warcraft-style trips; Frodo is next); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
+- [ ] Economy: resources, workers, building and training queues, places of power (builds 5-8 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds, independent structure selection and worker clearance fixes; build-12 adds Citadel worker training with population reservation, cancellation and rally points; build-13 places every Tier 1 building with source passability and proximity; build-14 trains the Gondor Swordsman at the Barracks; build-15 the Dwarf Axethrower at the Dwarf Hall; build-17 replaces source gather rates with owner-defined Warcraft-style trips; build-19 trains Frodo, the last Tier 1 unit); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
 - [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them
 - [ ] Heroes, fate powers and spells (`SpellAndEventAndActions` chains events to actions)
 - [ ] Open `Rings.exe` in Ghidra to recover the formulas the tables only feed: damage, hit chance, experience, upgrade effects

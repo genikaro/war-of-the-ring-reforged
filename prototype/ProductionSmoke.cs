@@ -32,8 +32,10 @@ public partial class Main
         {
             case 3: Choose(10000); break;
             case 6:
+                // Build-19: Frodo follows the Worker in the source UnitProduced order; the start bank cannot afford him.
                 _productionChecks["citadel_offers_worker_training"] = _selectedStructure == 10000 && _commands.TrainButton(0) is { Visible: true,Disabled: false,Icon: not null }
-                    && !_commands.TrainButton(1).Visible && producer.Units.SequenceEqual(["UNIT_G_HUMAN_WORKER"]);
+                    && _commands.TrainButton(1) is { Visible: true,Disabled: true,Icon: not null } && !_commands.TrainButton(2).Visible
+                    && producer.Units.SequenceEqual(["UNIT_G_HUMAN_WORKER","UNIT_G_HERO_FRODO"]);
                 _productionChecks["start_population_from_rules"] = Hud(4,115) && world.PopulationCapacity(0) == 10 && !_commands.TrainingVisible;
                 Train(); break;
             case 8:

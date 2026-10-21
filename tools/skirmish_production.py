@@ -35,14 +35,16 @@ def production_data(resolver, roster):
                 continue
             producers[name]['units'].append(unit)
             rules[unit] = {'display_name': source['Name'], 'food_cost': source['FoodCost'], 'ore_cost': source['OreCost'],
-                           'population': source['PopulationCost'], 'duration_ticks': (source['UnitTrainingTime']+49)//50}
+                           'population': source['PopulationCost'], 'duration_ticks': (source['UnitTrainingTime']+49)//50,
+                           'unique': bool(source['IsUnique'])}
     return {'format_version': 1, 'ticks_per_second': 20, 'producers': producers, 'units': rules,
             'population_provided': {name: buildings.get(name)['AdditionalPopAdded'] for name in skirmish_map.TIER1_BUILDINGS},
             'initial_population_capacity': variables['DefaultInitialPopulationCapacity'],
             'max_population': variables['MaxPopulationCap'], 'rally_banner': RALLY_BANNER_FILE,
             'adapter': 'UnitTrainingTime milliseconds round up to 20 Hz ticks. Cost is paid and population reserved when a unit is queued. '
                        'Cancellation refunds the full cost; the queue holds five units; units appear on the nearest free cell to the '
-                       'building center. These three rules are not traced to source data.'}
+                       'building center. These three rules are not traced to source data. A unique unit (source IsUnique) cannot be queued '
+                       'while one is alive or queued; the source HeroDeathRefreshTime is not applied.'}
 
 
 def export(output, resolver, roster):

@@ -18,7 +18,8 @@ public partial class Main
         {
             var rules = unit.Value;
             world.ProductionRules.Add(unit.Name,new(unit.Name,rules.GetProperty("display_name").GetString()!,rules.GetProperty("food_cost").GetInt32(),
-                rules.GetProperty("ore_cost").GetInt32(),rules.GetProperty("population").GetInt32(),rules.GetProperty("duration_ticks").GetInt32()));
+                rules.GetProperty("ore_cost").GetInt32(),rules.GetProperty("population").GetInt32(),rules.GetProperty("duration_ticks").GetInt32(),
+                rules.TryGetProperty("unique",out var unique) && unique.GetBoolean()));
         }
         foreach (var building in production.GetProperty("population_provided").EnumerateObject()) world.PopulationProvided.Add(building.Name,building.Value.GetInt32());
         world.InitialPopulationCapacity = production.GetProperty("initial_population_capacity").GetInt32();
