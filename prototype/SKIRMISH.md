@@ -147,23 +147,6 @@ when paused. Equal thirds, additive build speed, linear health growth, fixed
 resource-site placement/orientation and interaction envelopes are adapter
 policies awaiting original-game measurement.
 
-### World health bars
-
-Build-20 replaced the floating `Name 42% 300/1200` label over a foundation with
-the world health bar the original draws: a billboarded black strip with a green
-fill at the foot of the unit or building, as in the October 21 campaign captures
-(`campaign-012`, where the selected Citadel carries one). Because construction
-health climbs from the imported 5% to full with the work done, the same bar reads
-as the build progress; the selection panel still prints `Construction NN%`.
-
-Two adapter policies: the bar shows only below full health, where the original
-also showed it for a selected unit at full health, and its width comes from the
-footprint's mean horizontal span (a unit's from its body radius) rather than a
-measured original size. Bars are drawn without depth testing, so they stay
-readable through the model they belong to, and they are added after a structure
-registers its pick geometry so the strip is never ray-picked as the building.
-Start and neutral structures take no damage yet, so they never carry one.
-
 A completed owned Mill enables food loads of ten; a completed owned Foundry
 doubles the raw ore rate and unlocks the remaining 45% of the pile. Workers
 still deliver carried resources to their own Citadel: neither source building
@@ -770,3 +753,76 @@ selection, double-click centering, the Q/W/E icons, and the Ring on, fading,
 draining on the HUD and off. The production smoke now expects Frodo beside the
 Worker. All other skirmish and Helm's Deep smokes pass. 1280 × 800 and 4K
 captures were inspected.
+
+## Build-20: footprint work ranges and world health bars
+
+A worker may stand at most one body radius plus one navigation cell beyond its
+target's footprint, measured against the footprint itself. The earlier envelope
+was a circle around the target's centre whose radius came from the footprint's
+farthest corner, so on a rotated square ore pile it reached 2.86 m past the flat
+sides and crews gathered from two rows out. The standing band on a flat side is
+now 1000 mm, a single row. The circle survives as the scan bound for candidate
+spots and as the fallback on maps without precise footprints.
+
+The floating `Name 42% 300/1200` label over a foundation is replaced by the world
+health bar the original draws: a billboarded black strip with a green fill at the
+foot of the unit or building, as in the October 21 campaign captures
+(`campaign-012`, where the selected Citadel carries one). Because construction
+health climbs from the imported 5% to full with the work done, the same bar reads
+as the build progress; the selection panel still prints `Construction NN%`.
+
+Two adapter policies: the bar shows only below full health, where the original
+also showed it for a selected unit at full health, and its width comes from the
+footprint's mean horizontal span (a unit's from its body radius) rather than a
+measured original size. Bars are drawn without depth testing, so they stay
+readable through the model they belong to, and they are added after a structure
+registers its pick geometry so the strip is never ray-picked as the building.
+
+## Build-21: combat against buildings and repair
+
+Every skirmish building now has health in the simulation, so the health bar above
+has something to show. Start buildings become completed **prebuilt** construction
+sites at load, which gives the Citadel the same health, selection detail and bar
+as anything a worker puts up; it is counted once for population, from its
+`StartBuildings` entry rather than twice. Maximum health and armour come from the
+source `Buildings` table: Citadel 750/4, Mill 570/3, Foundry 750/3, Barracks
+700/1, Dwarf Hall 750/2, Camp 400/1, Watchtower 400/1.
+
+Right-clicking an enemy building with armed units selected sends them to it. They
+walk to the standing band around its footprint, using the build-20 work-range
+code with their own weapon reach, then swing their ordinary attack clips at it;
+a missile unit shoots a projectile aimed a metre above the footprint's centre.
+
+Three adapter policies in the damage: a building carries no damage type in the
+source table and takes no part in `UnitToUnitModifiers`, so a strike keeps its
+full rate and loses only the building's `ArmorPoints`; there is no attacker limit
+around a footprint; and a building does not retaliate, since the Watchtower's own
+weapon is not implemented yet.
+
+A ruined building frees its navigation footprint, its producer, its delivery
+point and its model, and a ruined start building also stops supplying its
+population and its prerequisites. A Mill or Foundry reverts to an unclaimed
+resource site, exactly as a cancelled foundation does, so the pile can be claimed
+again. Its attackers go idle rather than wandering on.
+
+Workers repair. Right-clicking a damaged owned building with workers selected
+gives them the ordinary Build order, and they loop the same source repair
+(hammer) clip they use on a foundation. Repair restores a full health bar over
+the building's own `BuildTime`, with extra workers adding the same
+`AddlWorkerBuildFactor` as construction, and costs nothing: no repair cost
+appeared in the `Buildings` or `WorldVariables` rows read here, so both the rate
+and the free repair are adapters awaiting that check.
+
+Not in this build: the Watchtower's own defenses, which the source defines in
+`BuildingDefenses` as weapon 40 (Good Watchtower Arrow, 14 cutting damage per
+second, 19 m) fired at one shot per second, rising to 1.2/1.4/1.6/1.75 with one
+to four garrisoned units; the source fire and damage visual states; and a
+skirmish win condition.
+
+Validation: `./prototype/run.ps1 -SiegeSmoke` (14 cases) spawns a wave beside the
+player's Citadel, lets it bite, removes it, repairs the building to full with the
+start workers, then spawns a player squad beside the enemy Citadel and
+right-clicks it into rubble. 722 simulation and 34 worker-cache checks, 170
+Python tests and all other skirmish and Helm's Deep smokes pass. `-FormationSmoke`
+still reports `attack_move_arrived:false`; that failure predates build-20 and was
+reproduced on build-19 in a clean worktree.

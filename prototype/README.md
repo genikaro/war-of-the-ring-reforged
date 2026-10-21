@@ -279,6 +279,8 @@ checked before loading. Never distribute the local cache with the project.
 | Q with Frodo selected | Put the One Ring on or take it off |
 | Workers selected: Build [B], then a building | Place a Tier 1 building (Shift queues); Mill/Foundry choose a resource site; Back or Esc returns |
 | Workers selected: right-click a foundation | Resume or assist its construction |
+| Workers selected: right-click a damaged own building | Repair it with the source hammer clip |
+| Armed units selected: right-click an enemy building | Attack it until it falls |
 | Citadel selected: worker portrait | Train a Human Worker; click again to queue (five maximum) |
 | Citadel selected: training portrait / Backspace | Cancel that unit / the last queued unit, with a full refund |
 | Citadel selected: right-click terrain | Set the rally point for trained units |

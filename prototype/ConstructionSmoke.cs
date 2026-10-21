@@ -60,7 +60,9 @@ public partial class Main
             case 6:
                 _constructionChecks["worker_construction_icons"] = _commands.ConstructionButton(ResourceKind.Food).Visible
                     && _commands.ConstructionButton(ResourceKind.Food).Icon != null && _commands.ConstructionButton(ResourceKind.Ore).Icon != null;
-                _constructionChecks["unbuilt_footprints_inactive"] = world.ConstructionSites.Values.All(s => !world.Navigation.IsObstacleActive(s.Obstacle));
+                // Standing start buildings are prebuilt sites now, and their footprints do block the ground.
+                _constructionChecks["unbuilt_footprints_inactive"] = world.ConstructionSites.Values
+                    .Where(s => s.Team < 0).All(s => !world.Navigation.IsObstacleActive(s.Obstacle));
                 Click(_commands.ConstructionButton(ResourceKind.Food).GetGlobalRect().GetCenter()); Pointer(_smokeFoodSite); break;
             case 8:
                 _constructionChecks["valid_placement_preview"] = _constructionTargeting && _constructionPreview is {Visible: true} && _previewValid;

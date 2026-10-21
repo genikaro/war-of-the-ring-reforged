@@ -38,11 +38,14 @@ public partial class Main
         var world = _world!;
         foreach (var start in data.GetProperty("bases").EnumerateArray())
             world.StartBuildings.Add(start.GetProperty("team").GetInt32(),[start.GetProperty("building").GetString()!]);
+        int Armor(string name) => _structureDefinitions.TryGetValue(name,out var definition)
+            ? (int)Math.Round(definition.GetProperty("armor").GetDouble()*1000) : 0;
         ConstructionDefinition Rules(JsonElement rules,ResourceKind? kind) => new(rules.GetProperty("name").GetString()!,rules.GetProperty("display_name").GetString()!,kind,
             rules.GetProperty("food_cost").GetInt32(),rules.GetProperty("ore_cost").GetInt32(),rules.GetProperty("duration_ticks").GetInt32(),
             rules.GetProperty("max_health").GetInt32(),rules.GetProperty("food_refund_ppm").GetInt32(),rules.GetProperty("ore_refund_ppm").GetInt32(),
             rules.GetProperty("extra_worker_ppm").GetInt32(),rules.GetProperty("initial_health_ppm").GetInt32(),
-            rules.GetProperty("prerequisites").EnumerateArray().Select(p => p.GetString()!).ToArray());
+            rules.GetProperty("prerequisites").EnumerateArray().Select(p => p.GetString()!).ToArray(),
+            Armor(rules.GetProperty("name").GetString()!));
         foreach (var property in construction.GetProperty("definitions").EnumerateObject())
         {
             ResourceKind kind = property.Name == "food" ? ResourceKind.Food : ResourceKind.Ore;
@@ -218,9 +221,11 @@ public partial class Main
     {
         foreach (int id in _constructionViews.Keys.Where(id => !_world!.ConstructionSites.TryGetValue(id,out var s) || s.Team < 0).ToArray())
         {
-            _constructionViews.Remove(id,out var old); old!.Root.QueueFree();
-            int obstacle = _structureViews.Values.First(v => v.Root == old.Root).Id;
+            _constructionViews.Remove(id,out var old);
+            int obstacle = _structureViews.Values.First(v => v.Root == old!.Root).Id;
             _structureViews.Remove(obstacle); if (_selectedStructure == obstacle) _selectedStructure = null;
+            _obstacleViews.Remove(obstacle); _buildingViews.Remove(old.Root);
+            old.Root.QueueFree();
         }
         foreach (var site in _world!.ConstructionSites.Values.Where(s => s.Team >= 0))
         {

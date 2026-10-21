@@ -8,6 +8,7 @@ public partial class Main
     private bool _skirmish;
     private const int SkirmishObstacleBase = 10000;
     private readonly List<Node3D> _buildingViews = [];
+    private readonly List<(int Obstacle,int Team,string Name,int X,int Z,Node3D Root,Node3D Model,JsonElement Appearance)> _startBuildings = [];
     private int _skirmishResourceCount;
     private (int Population,int Capacity,int Food,int Ore) _startState;
 
@@ -41,8 +42,11 @@ public partial class Main
             var appearance = Reforged.Rendering.UnitAppearance.Read(System.IO.Path.Combine(_cache,file));
             new Reforged.Rendering.UnitAppearance(model,appearance).Apply(BuildingStateClips(appearance)[3],0);
             AddChild(root); _buildingViews.Add(root);
-            RegisterStructure(start.GetProperty("footprint_object").GetInt32(),team,start.GetProperty("building").GetString()!,root);
-            _obstacleViews[start.GetProperty("footprint_object").GetInt32()] = root;
+            int obstacle = start.GetProperty("footprint_object").GetInt32();
+            RegisterStructure(obstacle,team,start.GetProperty("building").GetString()!,root);
+            _obstacleViews[obstacle] = root;
+            _startBuildings.Add((obstacle,team,start.GetProperty("building").GetString()!,
+                (int)Math.Round(at[0].GetDouble()*1000),(int)Math.Round(at[1].GetDouble()*1000),root,model,appearance));
         }
         _skirmishResourceCount = data.GetProperty("resources").GetArrayLength();
         var state = data.GetProperty("start_state");
@@ -50,6 +54,7 @@ public partial class Main
             state.GetProperty("food").GetInt32(),state.GetProperty("ore").GetInt32());
         LoadSkirmishEconomy(data);
         LoadSkirmishConstruction(data);
+        RegisterStartBuildings();
         LoadNeutralStructures(data);
         LoadSkirmishProduction(data);
         ApplySkirmishHud(_commands);
@@ -96,6 +101,25 @@ public partial class Main
         }
     }
 
+    /// <summary>A start building becomes a completed construction site, so it carries health, can be attacked
+    /// and repaired, and shows the same world health bar as anything a worker puts up. Its view is bound here
+    /// rather than created by the construction pass, which would load a second model over it.</summary>
+    private void RegisterStartBuildings()
+    {
+        foreach (var (obstacle,team,name,x,z,root,model,appearance) in _startBuildings)
+        {
+            var rules = _world!.BuildingRules[name];
+            var site = new ConstructionSite(obstacle,obstacle,SkirmishInteractionRadius(obstacle,x,z),name,x,z)
+                { Team = team,Health = rules.MaxHealth,Complete = true,Prebuilt = true };
+            _world.ConstructionSites.Add(obstacle,site);
+            var (barWidth,barHeight) = SiteBarSize(site);
+            var bar = new Reforged.Rendering.HealthBar(barWidth,barHeight) { Position = new(0,.14f,0) };
+            root.AddChild(bar);
+            _constructionViews.Add(obstacle,new BuildingVisual(root,new Reforged.Rendering.UnitAppearance(model,appearance),
+                Descendants(model).OfType<AnimationPlayer>().FirstOrDefault(),BuildingStateClips(appearance),bar) { Stage = 3 });
+        }
+    }
+
     private int SkirmishInteractionRadius(int objectId,int x,int z)
     {
         var layer = _obstacleLayers.EnumerateArray().First(o => o.GetProperty("id").GetInt32() == objectId);
@@ -111,15 +135,32 @@ public partial class Main
         return (int)Math.Ceiling(extent)+body+_world.Navigation.CellSize;
     }
 
+    /// <summary>Right-clicking an enemy building sends every armed unit in the selection to break it down.</summary>
+    private bool TrySiege(Vector2 mouse,bool queued)
+    {
+        if (!_skirmish || _orders.Pending is not (null or OrderKind.Attack or OrderKind.ForceAttack)) return false;
+        if (StructureAt(mouse) is not { } structure) return false;
+        var site = _world!.ConstructionSites.Values.FirstOrDefault(s => s.Obstacle == structure.Id);
+        if (site == null || !_world.CanAttackSite(0,site.Id)) return false;
+        var attackers = _world.Units.Where(u => u.Team == 0 && u.Present && _selected.Contains(u.Id)
+            && u.Definition.DpsMilli > 0 && !u.RingActive).Select(u => u.Id).ToArray();
+        _orders.Cancel();
+        if (attackers.Length == 0) { _status.Text = "Nothing in the selection can attack a building"; return true; }
+        _world.Enqueue(0,attackers,OrderKind.AttackStructure,target: site.Id,queued: queued);
+        _status.Text = "Attack "+_world.SiteRules(site).DisplayName+(_paused ? " queued (paused)" : " order issued");
+        return true;
+    }
+
     private bool TryGather(Vector2 mouse,bool queued)
     {
         if (!_skirmish || _orders.Pending != null || !_world!.Units.Any(u => u.Team == 0 && u.Health > 0
             && _selected.Contains(u.Id) && _world.Workers.ContainsKey(u.Definition.Name))) return false;
-        if (StructureAt(mouse) is { } structure && _world.ConstructionSites.Values.FirstOrDefault(s => s.Obstacle == structure.Id && s.Building != null)
-            is { Team: 0,Complete: false } placed)
+        if (StructureAt(mouse) is { } structure && _world.ConstructionSites.Values.FirstOrDefault(s => s.Obstacle == structure.Id)
+            is { Team: 0 } owned && (!owned.Complete || _world.NeedsRepair(owned)))
         {
-            _world.Enqueue(0,SelectedWorkers(),OrderKind.Build,target: placed.Id,queued: queued);
-            _status.Text = "Resume construction"; return true;
+            _world.Enqueue(0,SelectedWorkers(),OrderKind.Build,target: owned.Id,queued: queued);
+            _status.Text = owned.Complete ? "Repair "+_world.SiteRules(owned).DisplayName : "Resume construction";
+            return true;
         }
         var source = ResourceAt(mouse);
         if (source == null) return false;

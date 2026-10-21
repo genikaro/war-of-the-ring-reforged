@@ -1,7 +1,8 @@
 namespace Reforged.Simulation;
 
 public sealed record ConstructionDefinition(string Name,string DisplayName,ResourceKind? Kind,int FoodCost,int OreCost,
-    int DurationTicks,int MaxHealth,int FoodRefundPpm,int OreRefundPpm,int ExtraWorkerPpm,int InitialHealthPpm,string[] Prerequisites);
+    int DurationTicks,int MaxHealth,int FoodRefundPpm,int OreRefundPpm,int ExtraWorkerPpm,int InitialHealthPpm,string[] Prerequisites,
+    int ArmorMilli = 0);
 
 public sealed class ConstructionSite(int id,int obstacle,int radiusMm,string? building = null,int x = 0,int z = 0)
 {
@@ -12,9 +13,13 @@ public sealed class ConstructionSite(int id,int obstacle,int radiusMm,string? bu
     public int X { get; } = x;
     public int Z { get; } = z;
     public int Obstacle { get; } = obstacle;
+    /// <summary>A building the map starts with, already standing when the skirmish loads.</summary>
+    public bool Prebuilt { get; init; }
     public int RadiusMm { get; } = radiusMm;
     public int Team { get; internal set; } = -1;
     public long ProgressMicroTicks { get; internal set; }
+    /// <summary>Repair work carried between the whole health points it restores.</summary>
+    public long RepairMicroTicks { get; internal set; }
     public int Health { get; internal set; }
     public bool Complete { get; internal set; }
 }
@@ -75,7 +80,7 @@ public sealed partial class SimWorld
         if (!ConstructionSites.TryGetValue(command.Target,out var site)) return;
         var workers = command.Units.Where(id => id >= 0 && id < Units.Count).Select(id => Units[id])
             .Where(u => u.Team == command.Team && u.Present && Workers.ContainsKey(u.Definition.Name)).ToArray();
-        if (workers.Length == 0 || site.Team >= 0 && (site.Team != command.Team || site.Complete)) return;
+        if (workers.Length == 0 || site.Team >= 0 && (site.Team != command.Team || site.Complete && !NeedsRepair(site))) return;
         // A queued foundation reserves neither money nor space until its worker activates the order.
         var ready = new List<SimUnit>();
         foreach (var unit in workers)
@@ -119,13 +124,14 @@ public sealed partial class SimWorld
 
     /// <summary>A builder at work: assigned to an unfinished owned site and standing within its work envelope.</summary>
     public bool IsBuilding(SimUnit unit) => unit.Present && unit.Order == OrderKind.Build
-        && ConstructionSites.TryGetValue(unit.OrderTarget,out var site) && site.Team == unit.Team && !site.Complete
+        && ConstructionSites.TryGetValue(unit.OrderTarget,out var site) && site.Team == unit.Team
+        && (!site.Complete || NeedsRepair(site))
         && unit.Goal < 0 && unit.TransitNode < 0 && unit.YieldFor < 0 && Reaches(SiteArea(site),unit.X,unit.Z);
 
     private void ApproachConstruction(SimUnit unit)
     {
         if (unit.Order != OrderKind.Build || !ConstructionSites.TryGetValue(unit.OrderTarget,out var site)) return;
-        if (site.Team != unit.Team || site.Complete) { unit.Order = OrderKind.Idle; return; }
+        if (site.Team != unit.Team || (site.Complete && !NeedsRepair(site))) { unit.Order = OrderKind.Idle; return; }
         unit.Target = -1; unit.AutoEngage = false;
         var area = SiteArea(site);
         if (unit.Goal < 0 && unit.TransitNode < 0 && unit.YieldFor < 0 && !Reaches(area,unit.X,unit.Z)

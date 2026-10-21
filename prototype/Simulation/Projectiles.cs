@@ -1,7 +1,7 @@
 namespace Reforged.Simulation;
 
 public sealed record SimProjectile(int Id,int Unit,int Target,int Attack,int Hit,long DamageMilli,
-    int StartTick,int ReleaseTick,int ImpactTick,int X,int Y,int Z,int TargetX,int TargetY,int TargetZ);
+    int StartTick,int ReleaseTick,int ImpactTick,int X,int Y,int Z,int TargetX,int TargetY,int TargetZ,int Site = -1);
 
 public sealed partial class SimWorld
 {
@@ -24,11 +24,15 @@ public sealed partial class SimWorld
     {
         foreach (var arrow in Projectiles.Where(p => p.ImpactTick <= Tick).ToArray())
         {
-            var target = Units[arrow.Target];
             // Released arrows survive replacement orders and the shooter's death.
             // Target following is a prototype policy; dead targets consume arrows.
-            if (target.Present)
-                ApplyHit(Units[arrow.Unit],target,arrow.Attack,arrow.Hit,arrow.DamageMilli,arrow.StartTick);
+            if (arrow.Site >= 0)
+            {
+                if (ConstructionSites.TryGetValue(arrow.Site,out var site) && site.Team >= 0 && site.Health > 0)
+                    DamageSite(Units[arrow.Unit],site,arrow.Attack,arrow.Hit,arrow.DamageMilli,arrow.StartTick);
+            }
+            else if (Units[arrow.Target].Present)
+                ApplyHit(Units[arrow.Unit],Units[arrow.Target],arrow.Attack,arrow.Hit,arrow.DamageMilli,arrow.StartTick);
             Projectiles.Remove(arrow);
         }
     }

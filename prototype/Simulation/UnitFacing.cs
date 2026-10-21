@@ -28,6 +28,22 @@ public sealed partial class SimWorld
         return FacingAligned(unit,target);
     }
 
+    /// <summary>Turn toward a building, which has a position but no body to aim at.</summary>
+    private static bool FaceForPoint(SimUnit unit,int x,int z)
+    {
+        if (!unit.Definition.IsRanged) return true;
+        unit.Facing = UnitFacing.Turn(unit.Facing,UnitFacing.FromDirection(x-unit.X,z-unit.Z));
+        return FacingAlignedWith(unit,x,z);
+    }
+
+    private static bool FacingAlignedWith(SimUnit unit,int x,int z)
+    {
+        if (!unit.Definition.IsRanged) return true;
+        int desired = UnitFacing.FromDirection(x-unit.X,z-unit.Z);
+        return Math.Abs(UnitFacing.Delta(unit.PreviousFacing,desired)) <= UnitFacing.AttackTolerance
+            && Math.Abs(UnitFacing.Delta(unit.Facing,desired)) <= UnitFacing.AttackTolerance;
+    }
+
     private static bool FacingAligned(SimUnit unit,SimUnit target)
     {
         if (!unit.Definition.IsRanged) return true;

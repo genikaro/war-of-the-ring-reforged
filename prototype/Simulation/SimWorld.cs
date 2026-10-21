@@ -88,6 +88,8 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int PatrolEnd { get; internal set; } = -1;
     public bool PatrolForward { get; internal set; }
     public int GuardPlanTick { get; internal set; } = -1;
+    /// <summary>Throttles approach planning while besieging a building.</summary>
+    public int SiegePlanTick { get; internal set; } = -1;
     public int GuardOrigin { get; internal set; } = -1;
     public long CargoMilli { get; internal set; }
     public ResourceKind CargoKind { get; internal set; }
@@ -178,6 +180,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         if (command.Kind == OrderKind.CancelTraining) { CancelTraining(command); return; }
         if (command.Kind == OrderKind.SetRallyPoint) { SetRallyPoint(command); return; }
         if (command.Kind == OrderKind.Gather) { BeginGather(command,activating); return; }
+        if (command.Kind == OrderKind.AttackStructure) { BeginSiege(command,activating); return; }
         if (command.Kind == OrderKind.UseAbility) { BeginAbility(command); return; }
         if (command.Kind == OrderKind.ToggleWalkRun)
         {
@@ -512,6 +515,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     {
         CombatEvents.Clear();
         AbilityEvents.Clear();
+        DestroyedSites.Clear();
         var actions = Commands.Where(c => c.Tick == Tick).Select(c => (c.Sequence, Action: (Action)(() => Apply(c))))
             .Concat(ObstacleCommands.Where(c => c.Tick == Tick)
                 .Select(c => (c.Sequence, Action: (Action)(() => ApplyObstacle(c)))));
@@ -522,6 +526,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         }
         ActivateQueuedOrders();
         UpdateConstruction();
+        UpdateRepairs();
         UpdateProduction();
         UpdateHeroAbilities();
         if (_navigationRevision != Navigation.Revision)
@@ -588,6 +593,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             UpdateGather(unit);
             ApproachConstruction(unit);
             UpdatePersistentOrder(unit);
+            if (UpdateSiege(unit)) continue;
             if (UpdateCombat(unit)) continue;
             if (unit.Target < 0 && unit.FreeMovement && unit.Definition.BodyRadiusMm > 350 && Tick%10 == 0)
                 AdvanceWideFormation(unit);
@@ -720,6 +726,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         text += ConstructionDigest();
         text += ProductionDigest();
         text += PlacementDigest();
+        text += SiegeDigest();
         text += ":"+_projectileSequence+":"+string.Join(';',Projectiles);
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
     }

@@ -30,6 +30,19 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-21 (Oct 21):** combat against buildings. Every skirmish building has
+health and armour from the source `Buildings` table, start buildings included,
+which become completed prebuilt construction sites at load. Right-clicking an
+enemy building with armed units sends them to its footprint to swing their
+ordinary attack clips at it, missile units shooting it; a ruin frees its ground,
+producer, delivery point, model and, for a start building, its population and
+prerequisites, while a Mill or Foundry reverts to an unclaimed resource site.
+Workers repair a damaged owned building with the source hammer clip, restoring a
+full bar over its own BuildTime. Adapters: no damage type, attacker limit or
+retaliation for buildings, and repair is free. Validation: a 14-case siege smoke
+plus 722 simulation, 34 worker-cache and 170 Python checks and all other
+regressions. See [skirmish notes](../prototype/SKIRMISH.md#build-21-combat-against-buildings-and-repair).
+
 **Build-20 (Oct 21):** work ranges and world health bars. A worker may now stand
 at most one body radius plus one navigation cell beyond a target's footprint,
 measured against the footprint itself; the earlier circle took its radius from
@@ -42,7 +55,7 @@ climbs with the work done, so the bar doubles as the progress bar, and it shows
 only below full health. Start and neutral structures take no damage yet, so they
 never carry one. Validation: 722 synthetic simulation and 34 worker-cache checks,
 a new real-map check that every miner stands within a body and a cell of the ore
-pile's footprint, and all skirmish and Helm's Deep smokes. See [skirmish notes](../prototype/SKIRMISH.md#world-health-bars).
+pile's footprint, and all skirmish and Helm's Deep smokes. See [skirmish notes](../prototype/SKIRMISH.md#build-20-footprint-work-ranges-and-world-health-bars).
 
 **Build-19 (Oct 21):** Frodo trains at the Citadel (150 food, 100 ore,
 population 0, 36 s, one per player) with his source abilities: the One Ring
@@ -60,10 +73,10 @@ visible ground on the minimap, and the original ore, well and place-of-power
 minimap markers. Validation: a 12-case minimap smoke plus all regressions. See
 [the prototype README](../prototype/README.md).
 
-Next: combat against buildings and Watchtower defenses (a skirmish win
-condition), which also gives the build-20 health bar something to show on a
-finished structure; then hero experience and levels, then the Axethrower's
-second throw.
+Next: Watchtower defenses, which the source defines in `BuildingDefenses` as
+weapon 40 fired once a second and faster with one to four garrisoned units; then
+a skirmish win condition, hero experience and levels, and the Axethrower's second
+throw.
 
 **Build-17 (Oct 21):** owner-defined Warcraft-style gathering. A raw ore pile
 gives one ore per pickaxe hit, five per trip. A completed Mill or Foundry admits
@@ -708,7 +721,7 @@ and production remain later work.
 
 - [ ] Load unit, weapon, building, spell and technique stats from the JSON tables (`Units`, `Weapons`, `Buildings`, `Spells`, `Techniques`, `UnitToUnitModifiers`, `BattleGear`, `HeroExperiences`); three demo units' base melee definitions and pair-rule support are implemented.
 - [ ] Economy: resources, workers, building and training queues, places of power (builds 5-8 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds, independent structure selection and worker clearance fixes; build-12 adds Citadel worker training with population reservation, cancellation and rally points; build-13 places every Tier 1 building with source passability and proximity; build-14 trains the Gondor Swordsman at the Barracks; build-15 the Dwarf Axethrower at the Dwarf Hall; build-17 replaces source gather rates with owner-defined Warcraft-style trips; build-19 trains Frodo, the last Tier 1 unit; build-20 narrows work ranges to the target's own footprint); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
-- [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them
+- [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them; build-21 adds damage to buildings, their destruction and worker repair, without building defenses, damage types for buildings or a win condition
 - [ ] Heroes, fate powers and spells (`SpellAndEventAndActions` chains events to actions)
 - [ ] Open `Rings.exe` in Ghidra to recover the formulas the tables only feed: damage, hit chance, experience, upgrade effects
 - [ ] Validate original command semantics against recorded inputs and expand hero abilities; build-2 connects Aragorn's source Q heal and W/E passive slots. F2 global Walk/Run and Hold Position labeling are implemented. Preserve documented prototype conveniences.

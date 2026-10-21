@@ -28,7 +28,7 @@ public sealed record ResourceDropOff(int Team,int X,int Z,int RadiusMm,int Obsta
 /// <summary>Where a worker may stand to work on a target. Precise footprints are measured directly, so the
 /// standing band hugs the building or pile; the circular envelope around the center is the fallback for maps
 /// without them, and bounds the candidate scan either way. A resource under a Mill or Foundry carries both.</summary>
-public readonly record struct WorkArea(int X,int Z,int RadiusMm,int Obstacle,int Second = -1);
+public readonly record struct WorkArea(int X,int Z,int RadiusMm,int Obstacle,int Second = -1,int ReachMm = 0);
 
 public sealed class TeamEconomy(int food,int ore,int foodCapacity = 99999,int oreCapacity = 99999)
 {
@@ -79,9 +79,12 @@ public sealed partial class SimWorld
     private static WorkArea DepotArea(ResourceDropOff depot) => new(depot.X,depot.Z,depot.RadiusMm,depot.Obstacle);
 
     private bool Reaches(WorkArea area,int x,int z)
-        => Navigation.HasFootprints(area.Obstacle) || Navigation.HasFootprints(area.Second)
-            ? Navigation.WithinFootprintReach(area.Obstacle,x,z,WorkReachMm) || Navigation.WithinFootprintReach(area.Second,x,z,WorkReachMm)
+    {
+        int reach = area.ReachMm > 0 ? area.ReachMm : WorkReachMm;
+        return Navigation.HasFootprints(area.Obstacle) || Navigation.HasFootprints(area.Second)
+            ? Navigation.WithinFootprintReach(area.Obstacle,x,z,reach) || Navigation.WithinFootprintReach(area.Second,x,z,reach)
             : DistanceSquared(x,z,area.X,area.Z) <= (long)area.RadiusMm*area.RadiusMm;
+    }
 
     private void BeginGather(SimCommand command,bool activating)
     {
