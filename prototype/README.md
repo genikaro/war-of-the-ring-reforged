@@ -162,6 +162,9 @@ are prototype policies; [ranged details and limits](COMBAT.md#elven-archer).
 Click an enemy to inspect the same stats with a red ring and health bar.
 Unit commands disable while inspecting it; the global Walk/Run switch remains
 available. Drag selection remains friendly-only.
+A unit or building below full health also carries the original's world health
+bar, a black strip with a green fill at its foot. A foundation's health climbs
+with the work done, so the same bar is its construction progress bar.
 Selection rings show the full body envelope: Aragorn **0.800 m**, Elven Knight
 **0.927 m**, Uruk-hai **0.693 m** radius. Aragorn's demo model is enlarged 12%,
 with a wider hitbox; raw source bounds remain recorded. Friendly personal space

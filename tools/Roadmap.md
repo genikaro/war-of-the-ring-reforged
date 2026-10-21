@@ -30,6 +30,20 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-20 (Oct 21):** work ranges and world health bars. A worker may now stand
+at most one body radius plus one navigation cell beyond a target's footprint,
+measured against the footprint itself; the earlier circle took its radius from
+the footprint's farthest corner, so crews mined and unloaded from two rows out
+on a pile's flat sides. The standing band on a flat side drops from 2196 mm to
+1000 mm, a single row. The floating `Mill 42% / 300/1200` label over a
+foundation is replaced by the original's world health bar, a billboarded black
+strip with a green fill at the foot of a unit or building; construction health
+climbs with the work done, so the bar doubles as the progress bar, and it shows
+only below full health. Start and neutral structures take no damage yet, so they
+never carry one. Validation: 722 synthetic simulation and 34 worker-cache checks,
+a new real-map check that every miner stands within a body and a cell of the ore
+pile's footprint, and all skirmish and Helm's Deep smokes. See [skirmish notes](../prototype/SKIRMISH.md#world-health-bars).
+
 **Build-19 (Oct 21):** Frodo trains at the Citadel (150 food, 100 ore,
 population 0, 36 s, one per player) with his source abilities: the One Ring
 toggle (Q: half opacity, passive, hidden from enemies, 2 HP/s drain floored at
@@ -46,8 +60,10 @@ visible ground on the minimap, and the original ore, well and place-of-power
 minimap markers. Validation: a 12-case minimap smoke plus all regressions. See
 [the prototype README](../prototype/README.md).
 
-Next: Watchtower defenses and combat against buildings (a skirmish win
-condition), hero experience and levels, then the Axethrower's second throw.
+Next: combat against buildings and Watchtower defenses (a skirmish win
+condition), which also gives the build-20 health bar something to show on a
+finished structure; then hero experience and levels, then the Axethrower's
+second throw.
 
 **Build-17 (Oct 21):** owner-defined Warcraft-style gathering. A raw ore pile
 gives one ore per pickaxe hit, five per trip. A completed Mill or Foundry admits
@@ -691,7 +707,7 @@ against continuous source-game evidence before claiming fidelity. Powers, econom
 and production remain later work.
 
 - [ ] Load unit, weapon, building, spell and technique stats from the JSON tables (`Units`, `Weapons`, `Buildings`, `Spells`, `Techniques`, `UnitToUnitModifiers`, `BattleGear`, `HeroExperiences`); three demo units' base melee definitions and pair-rule support are implemented.
-- [ ] Economy: resources, workers, building and training queues, places of power (builds 5-8 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds, independent structure selection and worker clearance fixes; build-12 adds Citadel worker training with population reservation, cancellation and rally points; build-13 places every Tier 1 building with source passability and proximity; build-14 trains the Gondor Swordsman at the Barracks; build-15 the Dwarf Axethrower at the Dwarf Hall; build-17 replaces source gather rates with owner-defined Warcraft-style trips; build-19 trains Frodo, the last Tier 1 unit); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
+- [ ] Economy: resources, workers, building and training queues, places of power (builds 5-8 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds, independent structure selection and worker clearance fixes; build-12 adds Citadel worker training with population reservation, cancellation and rally points; build-13 places every Tier 1 building with source passability and proximity; build-14 trains the Gondor Swordsman at the Barracks; build-15 the Dwarf Axethrower at the Dwarf Hall; build-17 replaces source gather rates with owner-defined Warcraft-style trips; build-19 trains Frodo, the last Tier 1 unit; build-20 narrows work ranges to the target's own footprint); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
 - [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them
 - [ ] Heroes, fate powers and spells (`SpellAndEventAndActions` chains events to actions)
 - [ ] Open `Rings.exe` in Ghidra to recover the formulas the tables only feed: damage, hit chance, experience, upgrade effects
