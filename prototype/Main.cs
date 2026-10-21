@@ -92,6 +92,9 @@ public partial class Main : Node3D
         {
             if (arg.StartsWith("--cache=")) _cache = arg[8..];
             if (arg.StartsWith("--capture=")) _capture = arg[10..];
+            if (arg == "--no-ai") _noAi = true;
+            if (arg.StartsWith("--ai-personality=")) _aiPersonality = arg[17..];
+            if (arg == "--ai-smoke") _aiSmoke = true;
             if (arg.StartsWith("--capture-resolution="))
             {
                 var size = arg[21..].Split('x'); _captureResolution = new(int.Parse(size[0]),int.Parse(size[1]));
@@ -135,7 +138,7 @@ public partial class Main : Node3D
             RefreshDebugMenu();
             _status.Text = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             GD.PushError(error.ToString());
-            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _engagementSmoke || _capture != "") GetTree().Quit(1);
+            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke || _engagementSmoke || _capture != "") GetTree().Quit(1);
         }
     }
 
@@ -792,10 +795,10 @@ public partial class Main : Node3D
         if (_ordersSmoke) OrdersSmokeInput();
         if (_abilitySmoke) AbilitySmokeInput();
         if (_skirmishSmoke) SkirmishSmokeInput();
-        if (_constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke)
+        if (_constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke)
         {
             _injectingConstructionInput = true;
-            try { if (_minimapSmoke) MinimapSmokeInput(); else if (_siegeSmoke) SiegeSmokeInput(); else if (_defenseSmoke) DefenseSmokeInput(); else if (_victorySmoke) VictorySmokeInput(); else if (_frodoSmoke) FrodoSmokeInput(); else if (_structureSmoke) StructureSmokeInput(); else if (_productionSmoke) ProductionSmokeInput(); else if (_placementSmoke) PlacementSmokeInput(); else if (_dwarfHallSmoke) DwarfHallSmokeInput(); else ConstructionSmokeInput(); }
+            try { if (_minimapSmoke) MinimapSmokeInput(); else if (_siegeSmoke) SiegeSmokeInput(); else if (_defenseSmoke) DefenseSmokeInput(); else if (_victorySmoke) VictorySmokeInput(); else if (_aiSmoke) AiSmokeInput(); else if (_frodoSmoke) FrodoSmokeInput(); else if (_structureSmoke) StructureSmokeInput(); else if (_productionSmoke) ProductionSmokeInput(); else if (_placementSmoke) PlacementSmokeInput(); else if (_dwarfHallSmoke) DwarfHallSmokeInput(); else ConstructionSmokeInput(); }
             finally { _injectingConstructionInput = false; }
         }
         if (_engagementSmoke) { if (_formationSmoke) FormationSmokeInput(); else EngagementSmokeInput(); }
@@ -823,7 +826,7 @@ public partial class Main : Node3D
         if (_smoke) SmokeInput();
         if (_smoke && _capture != "" && _frames == (_combatSmoke ? 180 : 60)) _ = CaptureFrame(false);
         if (_smoke && _world.Tick >= 420) FinishSmoke();
-        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_productionSmoke && !_placementSmoke && !_dwarfHallSmoke && !_minimapSmoke && !_frodoSmoke && !_siegeSmoke && !_defenseSmoke && !_victorySmoke && !_engagementSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
+        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_productionSmoke && !_placementSmoke && !_dwarfHallSmoke && !_minimapSmoke && !_frodoSmoke && !_siegeSmoke && !_defenseSmoke && !_victorySmoke && !_aiSmoke && !_engagementSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
     }
 
     private string UnitName(int id) => _world!.Units[id].Definition.DisplayName;

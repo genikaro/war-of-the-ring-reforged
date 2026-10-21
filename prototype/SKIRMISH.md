@@ -975,3 +975,68 @@ decided, foundations and unclaimed sites, a sandbox without contenders, razing
 one's own last building, and replay. 746 simulation and 34 worker-cache checks
 and 16 other skirmish and Helm's Deep smokes pass, including the siege smoke,
 whose final ruin of the enemy Citadel now also ends its match.
+
+## Build-27: the skirmish AI
+
+The enemy base is no longer passive. Owner scope: the core loop (economy,
+building, training, assault, base defence), no scouting, raids, flanking or
+heroes yet, and a medium default personality.
+
+**Source data.** `TLOTR - War of the Ring/AIPlayers/*.rai` are INI text with
+cp1251 names: `Difficulty` 0-2 and 0-100 `Aggressiveness`, `Tactics`,
+`Scouting`, `Harassment`, plus `UsesSpecialAbilities` and `UsesHeroes`. Rings.exe
+turns the knobs into 0-1 profile alphas (`BattleScriptInterface::AIProfileSet*Alpha`).
+The tables supply the rest: `Buildings` AI columns (class, `AIMustHaveFirstPass`,
+`AIMaxDefault`, `AILowerPriorityIfExists`; Barracks and Dwarf Hall are military
+with a cap of 3, the Watchtower defensive, Mill/Foundry/Camp economy),
+`Units.AIAssaultEffectiveness` (Swordsman 70, Axethrower 60) and `AINeverAddUnit`
+(the worker), and `AIWARPARTY_ASSAULT` (5 to 12 units, 80% "Assault Melee" and
+20% "Assault Missile" member classes). `tools/skirmish_ai.py` exports all of it
+as `skirmish.ai`, with the twelve shipped personalities plus a `Default`.
+
+**What is an adapter.** The code that turns these numbers into decisions is in
+Rings.exe and is not recovered, and the October 19 session's "Default medium AI"
+has no file: its values are in the exe too. `Default` is therefore Difficulty 1
+with every knob at 50, approved by the owner. The decision logic in
+`prototype/Simulation/SkirmishAi.cs` is new, built on the source numbers:
+
+- It thinks once a second and acts only through the commands a player issues,
+  so it obeys every placement, cost, population and pathing rule.
+- Economy: workers up to 8 + 2 x difficulty; four gatherers per completed Mill
+  (one worker fits inside at a time), the rest on ore.
+- Building: one project at a time with two builders. Economy buildings come
+  first (all first-pass), then one of each military building, then the
+  Watchtower (before the military for aggressiveness below 40), then more
+  military buildings up to `AIMaxDefault` once the bank can pay twice over
+  (`AILowerPriorityIfExists`), plus a Camp whenever population is within three
+  of the cap and a Mill on any further well within 80 m. Placement tries rings
+  around home toward the enemy, 10 m clear of resources; a project that makes no
+  progress for 30 s is cancelled for the source refund and its spot refused.
+- Training: the next building's cost is reserved first; producers train toward
+  the Assault shares, best Assault effectiveness first.
+- Assault: once the idle army reaches the party size (12 at aggressiveness 0
+  down to 5 at 100; 8 for `Default`), it attack-moves on the nearest enemy
+  building, turns on defenders within 12 m (a unit razing a building ignores the
+  units hitting it), razes the building and moves to the next. Survivors fight
+  on; the next party forms at home.
+- Defence: enemies within 30 m of any AI building draw every home soldier.
+
+`./prototype/run.ps1` now plays against the AI. `-AiPersonality Gimli` (any `.rai`
+file stem) picks a shipped personality and `-NoAi` keeps the enemy passive; the
+smokes written for a passive enemy keep it passive. The F4 debug menu shows the
+AI's personality and what it is doing.
+
+The cache must be refreshed once: `python tools/skirmish_ai.py --cache converted/skirmish`.
+
+**Timeline** of the default personality against a player who does nothing
+(`-AiSmoke`, game time): first worker 0:13, Mill 0:24, Foundry 1:04, Camp 1:36,
+Barracks 2:08, first Swordsman 2:23, Dwarf Hall 2:43, Watchtower 3:25, an
+assault of eight leaves at 4:26, reaches the player's Citadel at 5:32 and razes
+it at 5:48.
+
+Validation: `-AiSmoke` (9 cases) records that timeline. 11 synthetic checks on a
+two-base fixture cover the party sizes, worker training and assignment, the
+build order, the assault razing the enemy keep, base defence, that the AI never
+commands another team, and replay of a whole AI match. Python tests cover the
+`.rai` parser, the 13 personalities and the source AI columns. 757 simulation, 34
+worker-cache and 174 Python checks and 17 other skirmish and Helm's Deep smokes pass.

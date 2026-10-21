@@ -30,6 +30,17 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-27 (Oct 21):** the skirmish AI. The enemy trains workers, builds its
+base, trains Swordsmen and Axethrowers, and sends assaults that raze the player's
+buildings, defending its own base when attacked. Source data: the shipped `.rai`
+personalities and the `Buildings`, `Units` and `AIWarParties` AI columns (the
+Assault party is 5 to 12 units, 80% melee). The decision logic is in Rings.exe
+and not recovered, so it is an adapter on those numbers; the default personality
+is a medium adapter (Difficulty 1, knobs at 50) and `-AiPersonality` picks any
+`.rai`. Against a passive player it razes the Citadel at 5:48 of game time. No
+scouting, raids, flanking or heroes yet. Validation: a 9-case AI smoke on Bilbo's
+Bluffs, 11 synthetic checks and all regressions. See [skirmish notes](../prototype/SKIRMISH.md#build-27-the-skirmish-ai).
+
 **Build-26 (Oct 21):** the skirmish can be won and lost. The captured stock
 skirmish's "destruction" game type decodes from the localized menu text as Razing
 (text 4401): a player who owns no standing building, foundations included, is
@@ -110,9 +121,9 @@ visible ground on the minimap, and the original ore, well and place-of-power
 minimap markers. Validation: a 12-case minimap smoke plus all regressions. See
 [the prototype README](../prototype/README.md).
 
-Next (after build-26): Watchtower garrisons (up to four units raising the rate of
-fire to 1.75 per second), hero experience and levels, the Axethrower's second
-throw, and a skirmish AI so the enemy base is no longer passive.
+Next (after build-27): owner playtest against the AI, then scouting, raids and
+flanking war parties from the remaining `.rai` knobs, Watchtower garrisons, hero
+experience and levels, and the Axethrower's second throw.
 
 **Build-17 (Oct 21):** owner-defined Warcraft-style gathering. A raw ore pile
 gives one ore per pickaxe hit, five per trip. A completed Mill or Foundry admits
@@ -768,7 +779,7 @@ and production remain later work.
 
 **Gate:** the first campaign mission (Light Side tutorial 1) plays start to finish, with objectives, dialogue and cinematics.
 
-- [ ] Skirmish AI from the `.rai` personalities and the AI tables (`AIWarParties`, `AIUnitDescriptors`, `AIBuildingClasses`)
+- [ ] Skirmish AI from the `.rai` personalities and the AI tables (`AIWarParties`, `AIUnitDescriptors`, `AIBuildingClasses`); build-27 adds the core loop (economy, build plan, training, Assault parties, base defence) as an adapter on those numbers, without scouting, raids, flanking, heroes or abilities
 - [ ] List every `BattleScriptInterface` function the 26 mission DLLs import, with its signature, as the scripting API spec
 - [ ] Implement that API in the new engine: objectives, triggers, camera paths, cinematics, dialogue, war parties
 - [ ] Rewrite the missions one by one, starting with the three Light Side tutorials (disassembly of each DLL as the reference)

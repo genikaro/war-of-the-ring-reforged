@@ -130,7 +130,7 @@ public partial class Main
         if (!ready) { _debugSummary.Text = "Encounter unavailable"; _debugSelection.Text = ""; return; }
         var world = _world!;
         _debugInstant.SetPressedNoSignal(world.InstantBuildTeams.Contains(0));
-        _debugSummary.Text = $"{(_paused ? "Paused" : "Running")} · Tick {world.Tick} · 20 ticks/s";
+        _debugSummary.Text = $"{(_paused ? "Paused" : "Running")} · Tick {world.Tick} · 20 ticks/s"+(_skirmish ? "\n"+AiSummary() : "");
         var units = world.Units.Where(u => u.Health > 0 && _selected.Contains(u.Id)).ToArray();
         _debugSelection.Text = units.Length == 0 ? "No units selected" :
             $"{units.Length} selected · {units.Count(u => u.StrikeActive)} attacking · {units.Count(u => u.Walking)} walking · {units.Sum(u => u.OrderQueue.Count)} queued orders\n"+

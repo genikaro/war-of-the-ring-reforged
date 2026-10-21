@@ -528,6 +528,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             action.Action();
         }
         ActivateQueuedOrders();
+        UpdateAi();
         UpdateConstruction();
         UpdateRepairs();
         UpdateDefenses();
@@ -734,6 +735,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         text += SiegeDigest();
         text += DefenseDigest();
         text += OutcomeDigest();
+        text += AiDigest();
         text += ":"+_projectileSequence+":"+string.Join(';',Projectiles);
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
     }
