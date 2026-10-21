@@ -92,6 +92,7 @@ static class ExtendedOrderChecks
         attacker.Health = 10000; ally.Cooldown = 10000;
         forced.Enqueue(0,[0],OrderKind.ForceAttack,ally.Node,ally.Id); Advance(forced,120);
         check(ally.Health < 100,"force attack can damage an explicitly targeted friendly unit");
+        check(ally.Target < 0 && ally.Order == OrderKind.Idle,"a force-attacked friendly unit does not turn on its attacker");
         forced.Enqueue(0,[0],OrderKind.Stop); Advance(forced,1);
         check(attacker.Target < 0 && attacker.Order == OrderKind.Idle,"stop cancels a friendly force attack and returns to idle");
         forced.Enqueue(0,[0],OrderKind.ForceAttack,420); Advance(forced,150);

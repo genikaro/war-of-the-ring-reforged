@@ -168,6 +168,8 @@ public sealed partial class SimWorld
     {
         // A force move keeps its destination even when struck. A stationary
         // order can return blows within reach, but can never start a pursuit.
+        // A force attack never provokes its victim: only the owner's own order turns friendly units on each other.
+        if (attacker.Order == OrderKind.ForceAttack || attacker.Team == victim.Team) return;
         if (!victim.Present || victim.Order is OrderKind.Move or OrderKind.UseAbility or OrderKind.Gather or OrderKind.Build or OrderKind.AttackStructure
             || victim.AttackMoveReturning) return;
         if (HoldsPosition(victim) && !AttackReach(victim,victim.Node,victim.X,victim.Y,victim.Z,attacker)) return;

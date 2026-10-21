@@ -139,8 +139,7 @@ public partial class Main
                 }
             }
             var origin = new Vector3(-arrow.X/1000f,arrow.Y/1000f,arrow.Z/1000f);
-            var victim = _world.Units[arrow.Target];
-            var target = _views[victim.Id].Root.Position+Vector3.Up*(victim.Definition.BodyHeightMm/2000f);
+            var target = ProjectileAim(arrow);
             float t = (float)Math.Clamp((_world.Tick-1-arrow.ReleaseTick+fraction)/(arrow.ImpactTick-arrow.ReleaseTick),0,1);
             view.Position = origin.Lerp(target,t);
             if (_arrowTrails.TryGetValue(arrow.Id,out var ribbon)) ribbon.Record(_projectileTime,view.Position);
@@ -150,15 +149,19 @@ public partial class Main
         }
         foreach (var (id,trail) in _arrowTrails.ToArray())
         {
-            if (!living.Contains(id))
-            {
-                var victim = _world.Units[trail.Arrow.Target];
-                trail.End(_views[victim.Id].Root.Position+Vector3.Up*(victim.Definition.BodyHeightMm/2000f));
-            }
+            if (!living.Contains(id)) trail.End(ProjectileAim(trail.Arrow));
             int points = trail.Draw(_projectileTime,_camera);
             if (points > 1) _trailSamples++;
             if (trail.Ended && points == 0) { trail.Free(); _arrowTrails.Remove(id); }
         }
+    }
+
+    /// <summary>A unit's chest as drawn, or the fixed point a missile at a building was released toward.</summary>
+    private Vector3 ProjectileAim(SimProjectile arrow)
+    {
+        if (arrow.Target < 0) return new(-arrow.TargetX/1000f,arrow.TargetY/1000f,arrow.TargetZ/1000f);
+        var victim = _world!.Units[arrow.Target];
+        return _views[victim.Id].Root.Position+Vector3.Up*(victim.Definition.BodyHeightMm/2000f);
     }
 
     private void SeekAttack(SimUnit unit,UnitView view,double fraction)

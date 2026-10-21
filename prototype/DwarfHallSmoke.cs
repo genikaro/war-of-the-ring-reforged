@@ -8,6 +8,8 @@ public partial class Main
     private readonly Dictionary<string,bool> _dwarfChecks = [];
     private int _dwarfCell = -1,_dwarfTrained = -1,_dwarfVictim = -1;
     private long _dwarfVictimHealth;
+    private int _dwarfCitadelHealth = -1,_dwarfSiegeAimSamples;
+    private bool _dwarfSiegeAimed = true;
     private const string SmokeDwarfHall = "BUILDING_G_DWARF_BARRACKS",SmokeAxethrower = "UNIT_G_DWARVEN_AXETHROWER";
 
     private void DwarfHallSmokeInput()
@@ -15,6 +17,7 @@ public partial class Main
         var world = _world!; var citadel = world.StartStructures.First(s => s.Team == 0);
         ConstructionSite? Hall() => world.ConstructionSites.Values.FirstOrDefault(s => s.Building == SmokeDwarfHall);
         if (_dwarfTrained >= 0 && !_dwarfCaptured && _capture != "" && world.Projectiles.Count > 0) { _dwarfCaptured = true; _ = CaptureFrame(false); }
+        if (_dwarfCitadelHealth >= 0) SampleSiegeAxes(world);
         switch (_frames)
         {
             case 2:
@@ -62,16 +65,40 @@ public partial class Main
                 _dwarfChecks["axes_thrown_with_source_presentation"] = _arrowReleases > 0 && _arrowVisuals > 0 && _launchSamples > 0 && _trailCreated > 0
                     && _projectileStyles.ContainsKey(SmokeAxethrower);
                 _dwarfChecks["thrown_axes_damage_target"] = world.Units[_dwarfVictim].HealthMilli < _dwarfVictimHealth && _arrowHits > 0;
+                _dwarfChecks["force_attacked_worker_does_not_retaliate"] = world.Units[_dwarfVictim].Target != _dwarfTrained;
                 PushKey(Key.S); break;
-            case 1504:
-                var report = new { build = BuildInfo.Label,checks = _dwarfChecks,passed = _dwarfChecks.Count == 9 && _dwarfChecks.Values.All(v => v),
+            case 1502:
+                // Force-attack our own Citadel so axes fly at a building rather than a unit.
+                _dwarfCitadelHealth = world.ConstructionSites[SmokeOwnCitadel].Health;
+                FocusStructure(SmokeOwnCitadel); PushKey(Key.A); Click(StructureSmokePoint(SmokeOwnCitadel)); break;
+            case 2100:
+                _dwarfChecks["axes_thrown_at_a_building_damage_it"] = world.Units[_dwarfTrained] is { Order: OrderKind.AttackStructure,SiegeForced: true }
+                    && world.ConstructionSites[SmokeOwnCitadel].Health < _dwarfCitadelHealth;
+                _dwarfChecks["axes_at_a_building_fly_toward_it"] = _dwarfSiegeAimSamples > 0 && _dwarfSiegeAimed;
+                PushKey(Key.S); break;
+            case 2104:
+                var report = new { build = BuildInfo.Label,checks = _dwarfChecks,passed = _dwarfChecks.Count == 12 && _dwarfChecks.Values.All(v => v),
                     fixture = "Start bank credited 300 food and 300 ore at frame 2",cell = _dwarfCell,
                     axethrower = world.Units[_dwarfTrained] is var a ? new { a.Id,a.X,a.Z,a.Order,a.Health } : null,
                     victim = _dwarfVictim < 0 ? null : new { world.Units[_dwarfVictim].Id,world.Units[_dwarfVictim].Health },
+                    citadel = new { before = _dwarfCitadelHealth,after = world.ConstructionSites[SmokeOwnCitadel].Health,aimSamples = _dwarfSiegeAimSamples },
                     releases = _arrowReleases,visuals = _arrowVisuals,launches = _launchSamples,trails = _trailCreated,hits = _arrowHits,
                     bank = new { world.Economies[0].FoodMilli,world.Economies[0].OreMilli },status = _status.Text,commands = world.Commands,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"dwarf-hall-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("DWARF_HALL_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
+        }
+    }
+
+    /// <summary>An axe in flight at a building is drawn on the line from its release point to the building.</summary>
+    private void SampleSiegeAxes(SimWorld world)
+    {
+        foreach (var axe in world.Projectiles.Where(p => p.Site >= 0 && _arrowViews.ContainsKey(p.Id)))
+        {
+            var from = new Vector3(-axe.X/1000f,axe.Y/1000f,axe.Z/1000f);
+            var to = new Vector3(-axe.TargetX/1000f,axe.TargetY/1000f,axe.TargetZ/1000f);
+            var at = _arrowViews[axe.Id].Position;
+            var closest = from+(to-from)*Math.Clamp((at-from).Dot(to-from)/Math.Max((to-from).LengthSquared(),.0001f),0,1);
+            _dwarfSiegeAimSamples++; _dwarfSiegeAimed &= at.DistanceTo(closest) < .05f;
         }
     }
 }
