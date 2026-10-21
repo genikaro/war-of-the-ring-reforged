@@ -43,7 +43,7 @@ public sealed partial class SimWorld
     }
 
     private bool RoomToFight(SimUnit unit) => !Units.Any(other => other.Id != unit.Id && other.Team == unit.Team
-        && other.Health > 0 && VerticalOverlap(unit.Y,unit.Definition.BodyHeightMm,other.Y,other.Definition.BodyHeightMm)
+        && other.Present && VerticalOverlap(unit.Y,unit.Definition.BodyHeightMm,other.Y,other.Definition.BodyHeightMm)
         && DistanceSquared(unit.X,unit.Z,other.X,other.Z) < (long)StrikeSpacing(unit,other)*StrikeSpacing(unit,other));
 
     // Imported bodies use physical clearance for approach slots and strikes;
@@ -56,7 +56,7 @@ public sealed partial class SimWorld
         var (x,z) = Navigation.Center(node); int y = Navigation.NodeHeight(node);
         if (unit.Order==OrderKind.AttackMove && unit.Definition.BodyRadiusMm>350 && unit.AttackMoveOrigin>=0
             && !InAttackMoveArea(unit,x,z,AttackRange(unit,target),target.Id)) return false;
-        foreach (var other in Units.Where(u => u.Id != unit.Id && u.Health > 0))
+        foreach (var other in Units.Where(u => u.Id != unit.Id && u.Present))
         {
             int spacing = other.Team == unit.Team ? StrikeSpacing(unit,other) : BodySeparation(unit,other);
             if (VerticalOverlap(y,unit.Definition.BodyHeightMm,other.Y,other.Definition.BodyHeightMm)
@@ -125,7 +125,7 @@ public sealed partial class SimWorld
         int approachMargin=unit.Target>=0 ? AttackRange(unit,Units[unit.Target]) : 0;
         if (unit.Order==OrderKind.AttackMove && (unit.Target>=0 || unit.AttackMoveReturning) && unit.Definition.BodyRadiusMm>350 && unit.AttackMoveOrigin>=0
             && !InAttackMoveArea(unit,x,z,approachMargin) && InAttackMoveArea(unit,unit.X,unit.Z,approachMargin)) return false;
-        foreach (var other in Units.Where(u => u.Id != unit.Id && u.Team == unit.Team && u.Health > 0
+        foreach (var other in Units.Where(u => u.Id != unit.Id && u.Team == unit.Team && u.Present
             && (unit.Target >= 0 || u.Target >= 0)))
         {
             if (!VerticalOverlap(y,unit.Definition.BodyHeightMm,other.Y,other.Definition.BodyHeightMm)) continue;
@@ -167,22 +167,22 @@ public sealed partial class SimWorld
             return false;
         }
         if (unit.Order == OrderKind.ForceAttack && unit.OrderTarget < 0 && unit.Goal >= 0) return false;
-        if (unit.Order == OrderKind.Attack && unit.OrderQueue.Count > 0 && unit.OrderTarget >= 0 && Units[unit.OrderTarget].Health <= 0)
+        if (unit.Order == OrderKind.Attack && unit.OrderQueue.Count > 0 && unit.OrderTarget >= 0 && !Units[unit.OrderTarget].Present)
         {
             ReleaseCombat(unit); unit.Order=OrderKind.Idle; unit.OrderTarget=-1; unit.AutoEngage=false; return false;
         }
         bool released = false;
-        if (unit.Target >= 0 && (Units[unit.Target].Health <= 0 || (HoldsPosition(unit)
+        if (unit.Target >= 0 && (!Units[unit.Target].Present || (HoldsPosition(unit)
             && !AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,Units[unit.Target]))))
         {
             bool explicitForce = unit.Order == OrderKind.ForceAttack && unit.OrderTarget >= 0;
             if (unit.OrderTarget == unit.Target) unit.OrderTarget = -1;
             ReleaseCombat(unit); released = true;
             if (explicitForce || (unit.Order == OrderKind.Attack && unit.OrderQueue.Count > 0
-                && (unit.OrderTarget < 0 || Units[unit.OrderTarget].Health <= 0)))
+                && (unit.OrderTarget < 0 || !Units[unit.OrderTarget].Present)))
             { unit.Order = OrderKind.Idle; unit.AutoEngage = false; return false; }
         }
-        if (released && unit.Order == OrderKind.Attack && unit.OrderTarget >= 0 && Units[unit.OrderTarget].Health > 0)
+        if (released && unit.Order == OrderKind.Attack && unit.OrderTarget >= 0 && Units[unit.OrderTarget].Present)
             unit.Target=unit.OrderTarget;
         if (unit.Target < 0 && (unit.Order is OrderKind.Attack or OrderKind.AttackMove or OrderKind.HoldGround or OrderKind.Patrol or OrderKind.Guard
             || (unit.Order == OrderKind.ForceAttack && unit.OrderTarget < 0 && unit.Goal < 0)

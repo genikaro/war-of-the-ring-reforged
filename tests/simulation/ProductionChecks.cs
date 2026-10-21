@@ -26,6 +26,10 @@ public static class ProductionChecks
         void Step(SimWorld world,int ticks) { for (int i = 0; i < ticks; i++) world.Step(); }
         void Train(SimWorld world,int count = 1,int team = 0) { for (int i = 0; i < count; i++) world.Enqueue(team,[],OrderKind.Train,0,Producer); }
 
+        var instant = Fixture(); instant.InstantBuildTeams.Add(0); Train(instant); instant.Step();
+        check(instant.Units.Count == 2 && instant.Producers[Producer].Queue.Count == 0 && instant.Economies[0].FoodMilli == 80_000,
+            "the instant-train cheat finishes a paid unit on its request tick");
+
         var single = Fixture(); Train(single); single.Step();
         var producer = single.Producers[Producer];
         check(single.Economies[0].FoodMilli == 80_000 && producer.Queue.Count == 1 && single.PopulationUsed(0) == 2 && producer.ProgressTicks == 1,

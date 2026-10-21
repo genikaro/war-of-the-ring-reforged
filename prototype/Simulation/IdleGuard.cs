@@ -15,7 +15,7 @@ public sealed partial class SimWorld
         long distance=DistanceSquared(anchor.X,anchor.Z,enemy.X,enemy.Z);
         if (distance<= (long)IdleAwarenessMm*IdleAwarenessMm) return true;
         if (distance> (long)IdleLeashMm*IdleLeashMm) return false;
-        return Units.Any(ally=>ally.Id!=unit.Id && ally.Team==unit.Team && ally.Health>0
+        return Units.Any(ally=>ally.Id!=unit.Id && ally.Team==unit.Team && ally.Present
             && SeparationSquared(unit,ally)<=(long)IdleAwarenessMm*IdleAwarenessMm
             && ((ally.Target==enemy.Id && (ally.Attacking || ally.StrikeActive))
                 || (enemy.Target==ally.Id && (enemy.Attacking || enemy.StrikeActive))));
@@ -35,7 +35,7 @@ public sealed partial class SimWorld
         if (unit.Target>=0)
         {
             var target=Units[unit.Target];
-            if (target.Health>0 && !AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,target)
+            if (target.Present && !AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,target)
                 && (DistanceSquared(anchor.X,anchor.Z,target.X,target.Z)>(long)IdleLeashMm*IdleLeashMm
                     || DistanceSquared(anchor.X,anchor.Z,unit.X,unit.Z)>(long)IdleLeashMm*IdleLeashMm))
             { ReleaseCombat(unit); unit.IdleGuardReturning=true; }

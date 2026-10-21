@@ -11,7 +11,7 @@ public static class UnitPicker
         if (direction.LengthSquared() < 1e-12f) return null;
         direction = Vector3.Normalize(direction);
         SimUnit? best = null; double nearest = maxDistance;
-        foreach (var unit in units.Where(u => u.Health > 0).OrderBy(u => u.Id))
+        foreach (var unit in units.Where(u => u.Present).OrderBy(u => u.Id))
         {
             double x = origin.X-unit.X/1000d,z = origin.Z-unit.Z/1000d,radius = unit.Definition.BodyRadiusMm/1000d;
             double a = direction.X*direction.X+direction.Z*direction.Z,b = 2*(x*direction.X+z*direction.Z),c = x*x+z*z-radius*radius;

@@ -9,6 +9,9 @@ public partial class Main
     private int _structureFood,_structureOre;
     private long _structureRefundBank;
     private int _structureCommandsBefore;
+    // Workers inside the completed Mill stay in group 1 but are not selected by recalling it.
+    private bool _structureRecallExact = true;
+    private int[] _structureRecalled = [];
     private int _structureGapDeviation;
 
     private void StructureSmokeDrag(Vector2 start,Vector2 end,bool shift = false)
@@ -43,6 +46,14 @@ public partial class Main
     private void StructureSmokeInput()
     {
         var world = _world!; int[] workers = world.Units.Where(u => u.Team == 0).Select(u => u.Id).ToArray();
+        void RecallWorkers()
+        {
+            PushKey(Key.Key1); _structureRecalled = [.. _selected];
+            _structureRecallExact &= _selected.SetEquals(workers.Where(id => world.Units[id].Present)) && _controlGroups.Recall(0,LivingFriendly).Length == 4;
+        }
+        // Entering the Mill since the recall drops a worker from the selection; coming out does not re-add it.
+        bool RecalledSelection() => _structureRecallExact && _structureRecalled.Length > 0
+            && _selected.SetEquals(_structureRecalled.Where(id => world.Units[id].Present));
         void Focus(int id) { _focus = _structureViews[id].Root.GlobalPosition; UpdateCamera(); }
         void Choose(int id,bool shift = false) { Focus(id); Click(StructureSmokePoint(id),shift: shift); }
         void Box(int id,bool shift = false,bool reverse = false)
@@ -108,9 +119,9 @@ public partial class Main
                 _structureChecks["enemy_structure_palette_empty"] = _commands.CommandPaletteEmpty;
                 _structureChecks["enemy_structure_inspection"] = _selectedStructure == 10001 && _selected.Count == 0 && !_commands.CommandsAvailable
                     && !_commands.CancelConstructionButton.Visible && _commands.DisplayedHealth == "750/750";
-                PushKey(Key.Key1); break;
+                RecallWorkers(); break;
             case 630:
-                _structureChecks["group_recovers_after_enemy_inspection"] = _selectedStructure == null && _selected.Count == 4;
+                _structureChecks["group_recovers_after_enemy_inspection"] = _selectedStructure == null && RecalledSelection();
                 Focus(10000); Choose(10000);
                 var a = new Vector2(0,0); var b = GetViewport().GetVisibleRect().Size-new Vector2(0,240);
                 _structureChecks["mixed_drag_contains_structure"] = StructureInBox(new Rect2(a,b-a)) != null;
@@ -176,9 +187,9 @@ public partial class Main
                     && SelectedStructureDetails() is {Name: "Random Place of Power",HasHealth: false} && _commands.StructurePortraitButton.Icon != null
                     && _commands.CommandPaletteEmpty;
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-power.png"); break;
-            case 1980: PushKey(Key.Key1); break;
+            case 1980: RecallWorkers(); break;
             case 1983:
-                _structureChecks["unit_group_restores_after_neutral"] = _selected.Count == 4 && _selectedStructure == null && _commands.CommandsAvailable;
+                _structureChecks["unit_group_restores_after_neutral"] = RecalledSelection() && _selectedStructure == null && _commands.CommandsAvailable;
                 // Exercise every selectable neutral placement through actual picking,
                 // including resource sites beneath completed resource buildings.
                 break;
@@ -195,10 +206,10 @@ public partial class Main
                     && _commands.StructureDetailsVisible && _commands.PaletteOnlyTraining;
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-marquee.png");
                 break;
-            case 2035: PushKey(Key.Key1); break;
+            case 2035: RecallWorkers(); break;
             case 2036: Box(3,shift: true); break;
             case 2039:
-                _structureChecks["shift_box_preserves_unit_priority"] = _selectedStructure == null && _selected.SetEquals(workers) && _commands.CommandsAvailable;
+                _structureChecks["shift_box_preserves_unit_priority"] = _selectedStructure == null && RecalledSelection() && _commands.CommandsAvailable;
                 Box(3); break;
             case 2042:
                 _structureChecks["box_selects_neutral_well"] = _selectedStructure == 3 && _selected.Count == 0

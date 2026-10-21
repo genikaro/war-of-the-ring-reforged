@@ -15,16 +15,16 @@ public sealed partial class SimWorld
     }
 
     private int AssignedAttackers(SimUnit unit,SimUnit target,bool earlierOnly = false)
-        => Units.Count(u => u.Id != unit.Id && u.Team == unit.Team && u.Health > 0 && u.Target == target.Id
+        => Units.Count(u => u.Id != unit.Id && u.Team == unit.Team && u.Present && u.Target == target.Id
             && (UsesMissile(unit,target) || !UsesMissile(u,target))
             && (!earlierOnly || u.Id < unit.Id));
 
     private IEnumerable<SimUnit> Opponents(SimUnit unit,int exclude = -1,bool requireSpace = false)
     {
         int shareRadius=IdleGuardEnabled(unit) ? IdleAwarenessMm : 6000;
-        var shared=Units.Where(u => u.Id != unit.Id && u.Team==unit.Team && u.Health > 0 && u.Target >= 0
+        var shared=Units.Where(u => u.Id != unit.Id && u.Team==unit.Team && u.Present && u.Target >= 0
             && SeparationSquared(unit,u)<=(long)shareRadius*shareRadius).Select(u=>u.Target).ToHashSet();
-        return Units.Where(u => u.Id != exclude && u.Team != unit.Team && u.Health > 0
+        return Units.Where(u => u.Id != exclude && u.Team != unit.Team && u.Present
                 && (SeparationSquared(unit,u) <= (long)Math.Max(10000,unit.Definition.ReachMm)*Math.Max(10000,unit.Definition.ReachMm) || shared.Contains(u.Id)) && MayAcquire(unit,u)
                 && ((unit.Definition.IsRanged && AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u)) || Nav(unit).IsConnected(unit.Node,u.Node))
                 && (!HoldsPosition(unit) || AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u)))
@@ -36,25 +36,25 @@ public sealed partial class SimWorld
     }
 
     private SimUnit? ChooseOpponent(SimUnit unit) => unit.Definition.BodyRadiusMm > 350 || unit.Definition.IsRanged ? Opponents(unit).FirstOrDefault()
-        : Units.Where(u => u.Team != unit.Team && u.Health > 0 && SeparationSquared(unit,u)<=10_000L*10_000
+        : Units.Where(u => u.Team != unit.Team && u.Present && SeparationSquared(unit,u)<=10_000L*10_000
             && Nav(unit).IsConnected(unit.Node,u.Node) && MayAcquire(unit,u)
             && (!HoldsPosition(unit) || AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u)))
             .OrderBy(u=>SeparationSquared(unit,u)).ThenBy(u=>u.Id).FirstOrDefault();
 
-    private SimUnit? ImmediateOpponent(SimUnit unit) => Units.Where(u => u.Team != unit.Team && u.Health > 0
+    private SimUnit? ImmediateOpponent(SimUnit unit) => Units.Where(u => u.Team != unit.Team && u.Present
         && AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u) && MayAcquire(unit,u) && AttackerSlotForCandidate(unit,u))
         .OrderBy(u => SeparationSquared(unit,u)).ThenBy(u => u.Id).FirstOrDefault();
 
     // A candidate is not yet assigned; count only fighters already in reach.
     private bool AttackerSlotForCandidate(SimUnit unit,SimUnit target) => UsesMissile(unit,target) || target.Definition.MaxAttackers == 0
-        || Units.Count(u => u.Id != unit.Id && u.Health > 0 && u.Target == target.Id && !UsesMissile(u,target)
+        || Units.Count(u => u.Id != unit.Id && u.Present && u.Target == target.Id && !UsesMissile(u,target)
             && (u.StrikeActive || u.Attacking) && AttackReach(u,u.Node,u.X,u.Y,u.Z,target)) < target.Definition.MaxAttackers;
 
     private void EngageMeleeThreat(SimUnit unit)
     {
         if (!unit.Definition.HasMelee || unit.Order is OrderKind.Move or OrderKind.ForceAttack) return;
-        if (unit.Target >= 0 && Units[unit.Target].Health > 0 && !UsesMissile(unit,Units[unit.Target])) return;
-        var threat = Units.Where(u => u.Team != unit.Team && u.Health > 0
+        if (unit.Target >= 0 && Units[unit.Target].Present && !UsesMissile(unit,Units[unit.Target])) return;
+        var threat = Units.Where(u => u.Team != unit.Team && u.Present
             && !UsesMissile(unit,u) && MayAcquire(unit,u))
             .OrderBy(u => SeparationSquared(unit,u)).ThenBy(u => u.Id).FirstOrDefault();
         if (threat == null) return;

@@ -27,7 +27,7 @@ public sealed partial class SimWorld
             var target = Units[arrow.Target];
             // Released arrows survive replacement orders and the shooter's death.
             // Target following is a prototype policy; dead targets consume arrows.
-            if (target.Health > 0)
+            if (target.Present)
                 ApplyHit(Units[arrow.Unit],target,arrow.Attack,arrow.Hit,arrow.DamageMilli,arrow.StartTick);
             Projectiles.Remove(arrow);
         }
@@ -43,6 +43,6 @@ public sealed partial class SimWorld
             if (damage > 0 && target.Team != unit.Team) unit.KillCount++;
             CancelStrike(target);
         }
-        if (unit.Health > 0) Retaliate(target,unit);
+        if (unit.Present) Retaliate(target,unit);
     }
 }

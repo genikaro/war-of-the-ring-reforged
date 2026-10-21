@@ -313,9 +313,11 @@ Aragorn's Q heal, W/E passives and global Walk/Run are implemented. See
 
 The debug menu has live pause/tick and selected-order information, Pause/Resume,
 Step one tick (50 ms while paused), Restart encounter, camera view/rotation
-buttons, Focus selection and the saved 75–150% interface size. The current
-shortcut guide is collapsible; the last action is labeled separately from live
-state. The menu scrolls to fit above the console. Opening it does not pause play.
+buttons, Focus selection and the saved 75–150% interface size. In a skirmish its
+Cheats section adds 1000 food and ore or makes your building and training
+instant. The current shortcut guide is collapsible; the last action is labeled
+separately from live state. The menu scrolls to fit above the console. Opening
+it does not pause play.
 Use `./prototype/run.ps1 -DebugMenu` to start with it open, including when saving
 a normal viewport capture with `-CapturePath`.
 

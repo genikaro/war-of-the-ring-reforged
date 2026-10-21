@@ -41,7 +41,7 @@ public sealed partial class SimWorld
         if (source.RemainingMilli <= 0) { reason = "Resource exhausted"; return false; }
         if (rules.Prerequisites.Any(name => !HasBuilding(team,name))) { reason = "Required building missing"; return false; }
         if (bank.FoodMilli < rules.FoodCost*1000L || bank.OreMilli < rules.OreCost*1000L) { reason = "Insufficient resources"; return false; }
-        foreach (var unit in Units.Where(u => u.Health > 0))
+        foreach (var unit in Units.Where(u => u.Present))
         {
             var nav = Nav(unit);
             if ((unit.Node < nav.GroundCount ? nav.ObstacleCoversGroundBody(site.Obstacle,unit.X,unit.Z) : nav.ObstacleCovers(site.Obstacle,unit.Node))
@@ -65,7 +65,7 @@ public sealed partial class SimWorld
     {
         if (!ConstructionSites.TryGetValue(command.Target,out var site)) return;
         var workers = command.Units.Where(id => id >= 0 && id < Units.Count).Select(id => Units[id])
-            .Where(u => u.Team == command.Team && u.Health > 0 && Workers.ContainsKey(u.Definition.Name)).ToArray();
+            .Where(u => u.Team == command.Team && u.Present && Workers.ContainsKey(u.Definition.Name)).ToArray();
         if (workers.Length == 0 || site.Team >= 0 && (site.Team != command.Team || site.Complete)) return;
         var (x,z) = SitePosition(site);
         // A queued foundation reserves neither money nor space until its worker activates the order.
@@ -109,6 +109,12 @@ public sealed partial class SimWorld
         Navigation.SetObstacle(site.Obstacle,false);
     }
 
+    /// <summary>A builder at work: assigned to an unfinished owned site and standing within its work envelope.</summary>
+    public bool IsBuilding(SimUnit unit) => unit.Present && unit.Order == OrderKind.Build
+        && ConstructionSites.TryGetValue(unit.OrderTarget,out var site) && site.Team == unit.Team && !site.Complete
+        && unit.Goal < 0 && unit.TransitNode < 0 && unit.YieldFor < 0
+        && DistanceSquared(unit.X,unit.Z,SitePosition(site).X,SitePosition(site).Z) <= (long)site.RadiusMm*site.RadiusMm;
+
     private void ApproachConstruction(SimUnit unit)
     {
         if (unit.Order != OrderKind.Build || !ConstructionSites.TryGetValue(unit.OrderTarget,out var site)) return;
@@ -125,18 +131,18 @@ public sealed partial class SimWorld
     {
         foreach (var site in ConstructionSites.Values.Where(s => s.Team >= 0 && !s.Complete))
         {
-            var rules = SiteRules(site); var (x,z) = SitePosition(site);
-            var builders = Units.Where(u => u.Team == site.Team && u.Health > 0 && u.Order == OrderKind.Build && u.OrderTarget == site.Id).ToArray();
-            var working = builders.Where(u => u.Goal < 0 && u.TransitNode < 0 && u.YieldFor < 0
-                && DistanceSquared(u.X,u.Z,x,z) <= (long)site.RadiusMm*site.RadiusMm).ToArray();
-            if (working.Length == 0) continue;
+            var rules = SiteRules(site);
+            var builders = Units.Where(u => u.Team == site.Team && u.Present && u.Order == OrderKind.Build && u.OrderTarget == site.Id).ToArray();
+            var working = builders.Where(IsBuilding).ToArray();
+            bool instant = InstantBuildTeams.Contains(site.Team) && builders.Length > 0;
+            if (working.Length == 0 && !instant) continue;
             long duration = rules.DurationTicks*1_000_000L;
-            site.ProgressMicroTicks = Math.Min(duration,site.ProgressMicroTicks+1_000_000L+(working.Length-1L)*rules.ExtraWorkerPpm);
+            site.ProgressMicroTicks = instant ? duration : Math.Min(duration,site.ProgressMicroTicks+1_000_000L+(working.Length-1L)*rules.ExtraWorkerPpm);
             long initial = Math.Max(1,(long)rules.MaxHealth*rules.InitialHealthPpm/1_000_000);
             site.Health = (int)(initial+(rules.MaxHealth-initial)*site.ProgressMicroTicks/duration);
             if (site.ProgressMicroTicks < duration) continue;
             site.Complete = true;
-            if (site.Building != null) CompleteBuilding(site,working[0]);
+            if (site.Building != null) CompleteBuilding(site,working.FirstOrDefault() ?? builders[0]);
             foreach (var unit in builders)
             {
                 Apply(new(Tick,unit.OrderSequence,unit.Team,[unit.Id],-1,Kind: OrderKind.Stop),activating: true);

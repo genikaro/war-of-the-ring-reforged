@@ -10,6 +10,7 @@ tracks what exists; planning lives in `tools/Roadmap.md` (Phase 4 economy).
 python tools/prepare_prototype.py --skirmish   # one-time, builds converted/skirmish
 python tools/skirmish_construction.py --cache converted/skirmish  # upgrade any earlier skirmish cache (required for build-13)
 python tools/skirmish_production.py --cache converted/skirmish    # add only build-12 training data to a build-8 through build-11 cache
+python tools/skirmish_economy.py --cache converted/skirmish       # build-17 gathering rules and worker clips (economy format 2)
 ./prototype/run.ps1 -Skirmish
 ./prototype/run.ps1 -SkirmishSmoke             # headless checks
 ./prototype/run.ps1 -ConstructionSmoke         # construction, cancellation and both resources
@@ -45,8 +46,9 @@ no behavior and no AI; nothing in build-4 changes unit rules.
   Worker, Gondor Swordsman and Dwarf Axethrower training work. Frodo, the
   Axethrower's second (right-hand) throw, Watchtower defenses and garrisons,
   building rotation, repair and combat against buildings remain open.
-- Worker build/gather animation and equipment, exact work ranges and controlled
-  original-game timing comparisons remain open.
+- Worker gathering and hammering sounds, the ore-mining effect, repair, exact
+  work ranges and controlled original-game timing comparisons remain open.
+  Gathering amounts and times are owner-defined (build-17), not the source rates.
 - Start Citadel orientation is 0 degrees, not the original game's. Start-worker
   placement is an approximation of the original layout.
 - Fog of war, animated weather and original-game lighting reproduction remain open.
@@ -573,3 +575,89 @@ Hall (9), gathering (23), command (49), orders (27) and ability (38) checks, the
 Helm's Deep gameplay and melee smokes, 680 synthetic / 747 cached simulation
 checks, 33 worker-cache checks and 167 Python tests pass. Captures of both cards
 at 1280x800 and 4K were inspected. No cache refresh is needed after build-15.
+
+## Build-17: Warcraft-style gathering, building animation and debug cheats
+
+The owner redefined gathering after the build-16 playtest. Source rates no
+longer set the amounts; the trips below do. Every phase uses the worker's own
+source resource states, so the pickaxe, sacks and put-down come from the model.
+
+- **Raw ore pile** (like a Warcraft III tree). The worker swings its pickaxe
+  (`UNIT_ANIM_STATE_RESOURCE_ORE_GATHER`, 28 ticks). Each swing mines one ore
+  on tick 16, the clip's supply-gather sound event (fraction 0.569). After five
+  hits the fifth swing finishes. Then the ore pick-up clip plays (51 ticks; the
+  sack appears at 0.293), and the worker carries the sack home. Several workers
+  can mine one pile. The raw 55% extraction limit still applies.
+- **Mill / Foundry** (like a Warcraft III gold mine). A worker walks to the
+  completed owned building and disappears inside it. Only one worker can be inside
+  at a time; the others wait at the door. After two seconds (40 ticks) it comes
+  out on its entry cell carrying a full sack: 10 food (Mill) or 9 ore (Foundry),
+  the source `MaxCarriedFood` / `MaxCarriedOre`. If someone stands on that cell,
+  it uses the nearest free connected cell. A worker carrying anything delivers it
+  before entering. A Foundry completed while a worker mines its pile ends raw
+  mining after the current swing.
+- **Delivery.** Near its Citadel the worker plays the source put-down clip (33
+  ticks; the sack disappears at 0.56). The bank is credited when the clip ends.
+  Carried loads use the resource walk and idle states with the right sack. A
+  running worker plays the walk clip faster, in proportion to the run/walk speed,
+  so its steps keep pace.
+- **Building.** A worker at work on a foundation faces it and loops the source
+  `UNIT_ANIM_STATE_REPAIR` clip (`G_Human_Worker_Repair`), which shows the hammer.
+  Construction rules are unchanged.
+- **Work spots.** The interaction envelopes stay conservative. Within one, a
+  worker now picks the cell that minimises its walking distance plus twice its
+  distance to the target. It therefore mines at the rocks, puts sacks down at the
+  Citadel door and enters or hammers at the building rather than at the edge
+  of the envelope. A shorter walk still wins when the near side is taken.
+
+A worker inside a building has no body: it does not collide, block placement or
+spawning, or count as a target, and it cannot be clicked or selected. Entering
+removes it from the current selection, as in Warcraft III. It stays in its control
+group, and recalling the group selects only the members that are outside. Orders
+sent while it is inside do not reach it. Population still counts it. A worker
+interrupted while mining (made to give way, for example) restarts the swing and
+keeps its partial load.
+
+| Rule | Value | Source |
+|---|---:|---|
+| Raw ore per trip | 5 (one per hit) | Owner |
+| Time inside Mill / Foundry | 40 ticks (2 s) | Owner |
+| Buildings occupied at once | one worker | Owner (Warcraft III gold mine) |
+| Mill / Foundry load | 10 food / 9 ore | `Units.MaxCarriedFood / MaxCarriedOre` |
+| Swing / hit tick | 28 / 16 | `G_Human_Worker_Resource_Gather` and its sound event |
+| Pick-up, put-down | 51, 33 ticks | `Resource_Pick_Up`, `Resource_Put_Down` (rounded up like attack clips) |
+
+On the real map a 500-second run gives about 35 raw trips (175 ore) per worker.
+With a Mill and a Foundry, four workers make about 240 trips. A Mill or Foundry
+can take at most 10 food / 9 ore every two seconds. This economy is much faster
+than the source gather rates (0.2 ore/s raw, 0.4/s with a building).
+
+`UnitAppearance` now selects the choice by state when states share a clip (food
+and ore sacks), and applies clip `show_attachment` / `hide_attachment` events.
+Only the worker uses them among the exported units. The economy cache also
+carries the worker's repair state for the building animation.
+
+**Cheats** (F4 debug menu, skirmish only): **+1000 food and ore** credits your
+bank up to its storage limit. **Build and train instantly** completes your
+foundations as soon as a worker is assigned, and your training finishes on the
+next tick. Cheats change state directly, so a replay of the recorded commands
+alone will differ.
+
+Refresh an existing cache with `python tools/skirmish_economy.py --cache
+converted/skirmish` (economy format 2 adds the worker clips). Fresh and upgraded
+preparation include it. The local cache is already updated. Restart to load
+build-17.
+
+Validation: 704 simulation checks (24 new: exact hit, pick-up and put-down ticks,
+five-ore loads, interrupted swings, one-at-a-time Mill/Foundry visits, hidden-worker
+rules, exits beside a blocker, Foundry completion during mining, replay and both
+cheats), 33 worker-cache checks on the real map and 168 Python tests pass. The
+gathering smoke grows to 27 cases and samples the gather clip, the ore sack
+appearing in the pick-up, carried home and disappearing in the put-down. The
+construction smoke grows to 28. Its new cases cover the hammer clip while
+building, workers hidden and unselectable inside, one worker inside at a time,
+and 10 food / 9 ore per visit. Its group-recall checks now expect only the
+workers outside. Structure (61), production (17), placement (23), Dwarf Hall
+(9), command (49), orders (27) and ability (38) checks, and the Helm's Deep
+gameplay and melee smokes, pass. Close-up 1280x800 renders of mining, pick-up,
+carrying, put-down and hammering were inspected.

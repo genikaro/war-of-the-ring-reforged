@@ -80,6 +80,7 @@ public sealed partial class SimWorld
         foreach (var producer in Producers.Values.Where(p => p.Queue.Count > 0))
         {
             var rules = ProductionRules[producer.Queue[0].Unit];
+            if (InstantBuildTeams.Contains(producer.Team)) producer.ProgressTicks = rules.DurationTicks;
             if (producer.ProgressTicks < rules.DurationTicks) producer.ProgressTicks++;
             if (producer.ProgressTicks < rules.DurationTicks) continue;
             var definition = Rules.Units[rules.Unit];
@@ -92,21 +93,24 @@ public sealed partial class SimWorld
         }
     }
 
+    // ponytail: the nearest free standing cell to the building center, not a recovered door position.
     private int ProductionExit(ProductionBuilding producer,UnitDefinition definition)
+        => ExitCell(producer.Team,definition,Navigation.Cell(producer.X,producer.Z),producer.ExitAnchor);
+
+    /// <summary>The free standing cell nearest to <paramref name="center"/> in the anchor's connected region, or -1.</summary>
+    private int ExitCell(int team,UnitDefinition definition,int center,int anchor)
     {
         var body = Navigation.ForBody(definition.BodyRadiusMm,definition.BodyHeightMm);
         var taken = OccupiedNodes(-1);
-        int center = Navigation.Cell(producer.X,producer.Z);
         // The anchor was recorded for another body; a larger trained unit needs a cell it can stand on.
-        int anchor = body.CanStand(producer.ExitAnchor) ? producer.ExitAnchor : body.Nearest(producer.ExitAnchor);
+        if (!body.CanStand(anchor)) anchor = body.Nearest(anchor);
         if (anchor < 0) return -1;
-        // ponytail: the nearest free standing cell to the building center, not a recovered door position.
         // Sixteen candidates bound the per-tick cost while a crowd blocks the exit.
         for (int attempt = 0; attempt < 16; attempt++)
         {
             int cell = body.Nearest(center,taken,connectedTo: anchor);
             if (cell < 0) return -1;
-            if (CanPlace(SpawnCandidate(producer.Team,cell,definition))) return cell;
+            if (CanPlace(SpawnCandidate(team,cell,definition))) return cell;
             taken.Add(cell);
         }
         return -1;
@@ -114,5 +118,6 @@ public sealed partial class SimWorld
 
     private string ProductionDigest() => ":production-rules:"+string.Join(';',ProductionRules.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => p.Value))
         + ":producers:"+string.Join(';',Producers.Values.Select(p => $"{p.Id},{p.Team},{p.X},{p.Z},{p.ExitAnchor},{string.Join('/',p.Units)},{p.ProgressTicks},{p.RallyCell},{string.Join('/',p.Queue.Select(q => q.Unit+"#"+q.Sequence))}"))
-        + ":population:"+MaxPopulation+","+InitialPopulationCapacity+","+string.Join(';',PopulationProvided.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => p.Key+"="+p.Value));
+        + ":population:"+MaxPopulation+","+InitialPopulationCapacity+","+string.Join(';',PopulationProvided.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => p.Key+"="+p.Value))
+        + ":instant:"+string.Join(',',InstantBuildTeams.Order());
 }

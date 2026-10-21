@@ -34,7 +34,7 @@ public sealed partial class SimWorld
     }
 
     public bool ValidAbilityTarget(SimUnit caster,AbilityDefinition ability,SimUnit target)
-        => target.Health > 0 && target.Team == caster.Team && target.Team >= 0
+        => target.Present && target.Team == caster.Team && target.Team >= 0
             && target.HealthMilli*1_000_000 < (long)target.MaxHealth*1000*ability.MaxTargetHealthPpm;
 
     private void BeginAbility(SimCommand command)
@@ -44,7 +44,7 @@ public sealed partial class SimWorld
         {
             if (id < 0 || id >= Units.Count) continue;
             var unit = Units[id]; var ability = unit.Ability(command.AbilitySlot); var target = Units[command.Target];
-            if (unit.Team != command.Team || unit.Health <= 0 || ability == null || ability.Passive
+            if (unit.Team != command.Team || !unit.Present || ability == null || ability.Passive
                 || unit.AbilityReadyAt[ability.Slot] > Tick || !ValidAbilityTarget(unit,ability,target)
                 || !Nav(unit).IsConnected(unit.Node,target.Node)) continue;
             // Casts replace the previous order, using the same cancellation and
@@ -74,7 +74,7 @@ public sealed partial class SimWorld
             unit.Order = OrderKind.Idle; unit.OrderTarget = unit.OrderDestination = -1;
             unit.IdleGuardOrigin = unit.Node; unit.Goal = -1; unit.Path.Clear();
         }
-        if (ability == null || target == null || target.Health <= 0 || target.Team != unit.Team)
+        if (ability == null || target == null || !target.Present || target.Team != unit.Team)
         { Finish(true); return true; }
         long range = SeparationSquared(unit,target);
         if (unit.Casting)

@@ -11,6 +11,8 @@ public partial class Main
     private double _smokePausedBuildingAnimation;
     private readonly Dictionary<string,bool> _constructionChecks = [];
     private readonly HashSet<int> _smokeBuildingStages = [];
+    private readonly Dictionary<int,int> _smokeInside = [];
+    private int _smokeMostInside;
 
     private void ConstructionSmokeInput()
     {
@@ -23,6 +25,29 @@ public partial class Main
         {
             _smokeBuildingStages.Add(foodView.Stage);
             if (foodView.Stage == 2 && !_constructionCaptured && _capture != "") { _constructionCaptured = true; _ = CaptureFrame(false); }
+        }
+        if (_frames > 27)
+        {
+            if (_frames > 1210) CaptureGatherPoses();
+            // Workers visit a completed Mill or Foundry one at a time, hidden and unselectable, and leave with a full load.
+            foreach (var site in world.ConstructionSites.Keys)
+                _smokeMostInside = Math.Max(_smokeMostInside,world.Units.Count(u => u.InsideSite == site));
+            foreach (var worker in world.Units.Where(u => u.Team == 0))
+            {
+                if (world.IsBuilding(worker))
+                    _constructionChecks["builders_hammer_with_source_repair_clip"] = _constructionChecks.GetValueOrDefault("builders_hammer_with_source_repair_clip",true)
+                        && _views[worker.Id].Clip == _workerClips["UNIT_G_HUMAN_WORKER"]["build"].Clip && AttachmentShown(_views[worker.Id],"MODEL_G_HUMAN_WORKER_HAMMER");
+                if (worker.InsideSite >= 0)
+                    _constructionChecks["worker_hidden_inside_building"] = _constructionChecks.GetValueOrDefault("worker_hidden_inside_building",true)
+                        && !_views[worker.Id].Root.Visible && !_selected.Contains(worker.Id);
+                else if (_smokeInside.GetValueOrDefault(worker.Id,-1) is int left and >= 0)
+                {
+                    string check = left == _smokeFoodSite ? "mill_visit_yields_ten_food" : "foundry_visit_yields_nine_ore";
+                    _constructionChecks[check] = _constructionChecks.GetValueOrDefault(check,true) && _views[worker.Id].Root.Visible
+                        && worker.CargoMilli == (left == _smokeFoodSite ? 10000 : 9000) && worker.CargoKind == world.Resources[left].Kind;
+                }
+                _smokeInside[worker.Id] = worker.InsideSite;
+            }
         }
         switch (_frames)
         {
@@ -77,6 +102,7 @@ public partial class Main
                     && world.ConstructionSites[_smokeFoodSite].ProgressMicroTicks == _smokePausedProgress
                     && (_constructionViews[_smokeFoodSite].Player?.CurrentAnimationPosition ?? 0) == _smokePausedBuildingAnimation;
                 PushKey(Key.Space); break;
+            case 1199: PushKey(Key.Key1); break; // Recall the workers that are outside the Mill.
             case 1200:
                 _constructionChecks["mill_complete_with_source_health"] = world.ConstructionSites[_smokeFoodSite] is { Complete: true,Health: 570 };
                 _constructionChecks["all_source_construction_stages"] = new[] {0,1,2,3}.All(_smokeBuildingStages.Contains);
@@ -101,7 +127,8 @@ public partial class Main
                     == world.Economies[0].OreMilli-325000+142500+world.Units.Where(u => u.CargoKind == ResourceKind.Ore).Sum(u => u.CargoMilli);
                 _constructionChecks["food_conserved"] = world.Resources.Values.Where(r => r.Kind == ResourceKind.Food).Sum(r => 4500000-r.RemainingMilli)
                     == world.Economies[0].FoodMilli-115000+world.Units.Where(u => u.CargoKind == ResourceKind.Food).Sum(u => u.CargoMilli);
-                var report = new { build = BuildInfo.Label,checks = _constructionChecks,passed = _constructionChecks.Count == 23 && _constructionChecks.Values.All(v => v),
+                _constructionChecks["one_worker_inside_each_building"] = _smokeMostInside == 1;
+                var report = new { build = BuildInfo.Label,checks = _constructionChecks,passed = _constructionChecks.Count == 28 && _constructionChecks.Values.All(v => v),
                     mill,foundry,bank = new {world.Economies[0].FoodMilli,world.Economies[0].OreMilli},
                     workers = world.Units.Where(u => u.Team == 0).Select(u => new {u.Id,u.Order,u.Goal,u.X,u.Z,u.CargoMilli,u.ReturningCargo}),
                     selected = _selected,status = _status.Text,commands = world.Commands,digest = world.StateDigest() };

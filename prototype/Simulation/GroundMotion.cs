@@ -38,7 +38,7 @@ public sealed partial class SimWorld
     private bool ClearGroundStep(SimUnit unit, int x, int y, int z)
     {
         if (!ClearCombatStep(unit,x,y,z)) return false;
-        foreach (var other in Units.Where(u => u.Id != unit.Id && u.Health > 0))
+        foreach (var other in Units.Where(u => u.Id != unit.Id && u.Present))
         {
             bool Near(int ax,int ay,int az,int bx,int by,int bz)
                 => Math.Min(unit.Y,y) < Math.Max(ay,by)+other.Definition.BodyHeightMm && Math.Min(ay,by) < Math.Max(unit.Y,y)+unit.Definition.BodyHeightMm

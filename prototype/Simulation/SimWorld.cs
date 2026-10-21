@@ -90,6 +90,11 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public ResourceKind CargoKind { get; internal set; }
     public bool ReturningCargo { get; internal set; }
     public int GatherPlanTick { get; internal set; } = -1;
+    public GatherPhase GatherPhase { get; internal set; }
+    public int GatherPhaseTick { get; internal set; } = -1;
+    /// <summary>The Mill or Foundry site a worker is inside, or -1. Inside, the body neither collides nor can be targeted.</summary>
+    public int InsideSite { get; internal set; } = -1;
+    public bool Present => Health > 0 && InsideSite < 0;
 }
 
 public sealed record SimCommand(int Tick, int Sequence, int Team, int[] Units, int Cell, int Target = -1,
@@ -129,7 +134,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     }
 
     private bool CanPlace(SimUnit candidate) => CanReserveMovement(candidate,candidate.Node) && !OccupiedNodes(-1).Contains(candidate.Node)
-        && !Units.Any(u => u.Health > 0 && BodiesOverlap(candidate,u));
+        && !Units.Any(u => u.Present && BodiesOverlap(candidate,u));
 
     public void Enqueue(int team, IEnumerable<int> units, int cell, int target = -1)
         => Enqueue(team, units, target >= 0 ? OrderKind.Attack : OrderKind.Move, cell, target);
@@ -150,7 +155,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     {
         if (command.Active)
         {
-            foreach (var unit in Units.Where(u => u.Health > 0))
+            foreach (var unit in Units.Where(u => u.Present))
             {
                 if (Navigation.ObstacleCovers(command.Obstacle, unit.Node)) return;
                 if (unit.Node < Navigation.GroundCount && Nav(unit).ObstacleCoversGroundBody(command.Obstacle,unit.X,unit.Z)) return;
@@ -182,12 +187,12 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         bool travels = command.Kind is OrderKind.Move or OrderKind.AttackMove or OrderKind.Patrol or OrderKind.Guard
             || (command.Kind == OrderKind.ForceAttack && command.Target < 0);
         var members = command.Units.Where(id => id >= 0 && id < Units.Count).Select(id => Units[id])
-            .Where(u => u.Team == command.Team && u.Health > 0).ToArray();
+            .Where(u => u.Team == command.Team && u.Present).ToArray();
         var formationNav = members.Length > 0 ? Nav(members.MaxBy(u => u.Definition.BodyRadiusMm)!) : Navigation;
         int anchor = travels ? formationNav.Nearest(command.Cell) : -1;
         if (command.Kind == OrderKind.Guard && command.Target >= 0 && command.Target < Units.Count) reserved.Add(Units[command.Target].Node);
         var ordered = command.Units.Where(id => id >= 0 && id < Units.Count).Select(id => Units[id])
-            .Where(u => u.Team == command.Team && u.Health > 0 && anchor >= 0 && CanReachDestination(u,anchor)).ToArray();
+            .Where(u => u.Team == command.Team && u.Present && anchor >= 0 && CanReachDestination(u,anchor)).ToArray();
         bool free = travels && ordered.All(u => PathFromCurrentPosition(u,anchor).All(FreeGround));
         var slots = new List<int>();
         foreach (var unit in ordered)
@@ -203,15 +208,15 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         {
             if (id < 0 || id >= Units.Count) continue;
             var unit = Units[id];
-            if (unit.Team != command.Team || unit.Health <= 0) continue;
+            if (unit.Team != command.Team || !unit.Present) continue;
             // An invalid explicit attack cannot silently become a move or erase
             // a valid order (for example a friendly/dead target in a mixed selection).
             if (command.Kind == OrderKind.Attack && (command.Target < 0 || command.Target >= Units.Count
-                || Units[command.Target].Team == unit.Team || Units[command.Target].Health <= 0)) continue;
+                || Units[command.Target].Team == unit.Team || !Units[command.Target].Present)) continue;
             if (command.Kind == OrderKind.ForceAttack && command.Target >= 0 && (command.Target >= Units.Count
-                || command.Target == id || Units[command.Target].Health <= 0)) continue;
+                || command.Target == id || !Units[command.Target].Present)) continue;
             if (command.Kind == OrderKind.Guard && command.Target >= 0 && (command.Target >= Units.Count
-                || command.Target == id || Units[command.Target].Team != unit.Team || Units[command.Target].Health <= 0)) continue;
+                || command.Target == id || Units[command.Target].Team != unit.Team || !Units[command.Target].Present)) continue;
             if (!activating && command.Queued && command.Kind is not (OrderKind.Stop or OrderKind.HoldGround)
                 && unit.Order is not (OrderKind.Idle or OrderKind.Stop or OrderKind.HoldGround))
             {
@@ -220,6 +225,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 continue;
             }
             if (!activating) unit.OrderQueue.Clear();
+            unit.GatherPhase = GatherPhase.None;
             CancelAbility(unit);
             CancelStrike(unit);
             if (free && unit.TransitNode >= 0 && unit.TransitNode < Navigation.GroundCount
@@ -279,7 +285,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         // A squad's early arrivals can seal its remaining formation slots.
         // Exchange slots only within the same explicit order, and only when
         // the parked unit has a clear route to the unfinished slot.
-        foreach (var parked in Units.Where(u => waiting.YieldFor < 0 && u.Id != waiting.Id && u.Team == waiting.Team && u.Health > 0
+        foreach (var parked in Units.Where(u => waiting.YieldFor < 0 && u.Id != waiting.Id && u.Team == waiting.Team && u.Present
             && u.Goal < 0 && u.Target < 0 && u.YieldFor < 0 && u.OrderSequence == waiting.OrderSequence
             && u.OrderSequence >= 0 && route.Contains(u.Node) && !Units.Any(o => o.Goal == u.Node)))
         {
@@ -306,9 +312,9 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         }
         bool Eligible(SimUnit u) => u.Id != waiting.Id && u.Team == waiting.Team && !priorities.Contains(u.Id)
             && u.Order is not (OrderKind.Stop or OrderKind.HoldGround)
-            && u.Health > 0 && u.Target < 0 && (u.YieldFor < 0 || u.YieldFor == waiting.Id);
+            && u.Present && u.Target < 0 && (u.YieldFor < 0 || u.YieldFor == waiting.Id);
         var occupants = new Dictionary<int, SimUnit>();
-        foreach (var u in Units.Where(u => u.Health > 0))
+        foreach (var u in Units.Where(u => u.Present))
         {
             occupants.TryAdd(u.Node, u);
             if (u.TransitNode >= 0 && !u.GroundSegment) occupants.TryAdd(u.TransitNode, u);
@@ -401,7 +407,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         if (waiting.Order is not (OrderKind.Move or OrderKind.AttackMove) || waiting.Target >= 0 || waiting.AttackMoveReturning || waiting.Goal < 0 || waiting.YieldFor >= 0) return false;
         var (gx,gz) = Navigation.Center(waiting.Goal);
         long remaining = DistanceSquared(waiting.X,waiting.Z,gx,gz);
-        foreach (var other in Units.Where(u => u.Id != waiting.Id && u.Team == waiting.Team && u.Health > 0
+        foreach (var other in Units.Where(u => u.Id != waiting.Id && u.Team == waiting.Team && u.Present
             && u.Goal >= 0 && u.Target < 0 && !u.AttackMoveReturning && u.Order == waiting.Order && u.FreeMovement && u.YieldFor < 0
             && u.OrderSequence == waiting.OrderSequence).OrderBy(u => u.Id))
         {
@@ -417,7 +423,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             }
             return true;
         }
-        foreach (var parked in Units.Where(u => u.Id != waiting.Id && u.Team == waiting.Team && u.Health > 0
+        foreach (var parked in Units.Where(u => u.Id != waiting.Id && u.Team == waiting.Team && u.Present
             && u.Goal < 0 && u.Target < 0 && !u.AttackMoveReturning && u.OrderSequence == waiting.OrderSequence
             && u.OrderSequence >= 0 && u.TransitNode < 0).OrderBy(u => DistanceSquared(waiting.X,waiting.Z,u.X,u.Z)).ThenBy(u => u.Id))
         {
@@ -445,10 +451,10 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         int radius = except >= 0 && except < Units.Count ? Units[except].Definition.BodyRadiusMm : 350;
         int height = except >= 0 && except < Units.Count ? Units[except].Definition.BodyHeightMm : 700;
         if (radius == 350 && Units.All(u => u.Definition.BodyRadiusMm == 350))
-            return Units.Where(u => u.Id != except && u.Health > 0)
+            return Units.Where(u => u.Id != except && u.Present)
                 .SelectMany(u => u.TransitNode >= 0 && !u.GroundSegment ? new[] {u.Node,u.TransitNode} : new[] {u.Node}).ToHashSet();
         var nodes = new HashSet<int>();
-        foreach (var other in Units.Where(u => u.Id != except && u.Health > 0))
+        foreach (var other in Units.Where(u => u.Id != except && u.Present))
         {
             nodes.Add(other.Node);
             if (other.TransitNode >= 0 && !other.GroundSegment) nodes.Add(other.TransitNode);
@@ -467,7 +473,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     {
         var (ax,az) = Navigation.Center(unit.Node); var (bx,bz) = Navigation.Center(to);
         var heights = Navigation.MovementHeights(unit.Node,to);
-        foreach (var other in Units.Where(u => u.Id != unit.Id && u.Health > 0))
+        foreach (var other in Units.Where(u => u.Id != unit.Id && u.Present))
         {
             var (cx,cz) = other.TransitNode >= 0 && !other.GroundSegment ? Navigation.Center(other.Node) : (other.X,other.Z);
             var (dx,dz) = other.TransitNode >= 0 && !other.GroundSegment ? Navigation.Center(other.TransitNode) : (other.X,other.Z);
@@ -515,7 +521,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         {
             // Rebuild routes at a tick boundary. Starting from the last reached
             // node also safely brings an in-flight unit back to its cell center.
-            foreach (var unit in Units.Where(u => u.Health > 0 && u.Goal >= 0))
+            foreach (var unit in Units.Where(u => u.Present && u.Goal >= 0))
             {
                 RebaseGround(unit);
                 unit.YieldFor = unit.YieldGoal = -1;
@@ -538,6 +544,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             if (unit.Health <= 0)
             {
                 unit.CargoMilli = 0; unit.ReturningCargo = false;
+                unit.GatherPhase = GatherPhase.None; unit.InsideSite = -1;
                 CancelAbility(unit);
                 CancelStrike(unit);
                 unit.Order = OrderKind.Idle; unit.OrderDestination = unit.OrderTarget = -1;
@@ -545,10 +552,11 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 unit.Target = unit.Goal = unit.AttackNode = unit.CombatTarget = -1;
                 unit.AutoEngage = false; unit.Path.Clear(); continue;
             }
+            if (unit.InsideSite >= 0) { UpdateGather(unit); continue; }
             if (unit.YieldFor >= 0)
             {
                 var priority = Units[unit.YieldFor];
-                if (priority.Health <= 0 || priority.Goal < 0 || priority.Target >= 0 || unit.Target >= 0 || Passed(unit, priority))
+                if (!priority.Present || priority.Goal < 0 || priority.Target >= 0 || unit.Target >= 0 || Passed(unit, priority))
                 {
                     unit.YieldFor = unit.YieldGoal = -1;
                     unit.Path = Nav(unit).FindPath(unit.Node, unit.Goal);
@@ -556,13 +564,13 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 }
             }
             if (unit.ReturningToRest && unit.YieldFor < 0 && unit.Goal >= 0 && unit.Target < 0
-                && (!Nav(unit).CanStand(unit.Goal) || Units.Any(u => u.Id != unit.Id && u.Health > 0
+                && (!Nav(unit).CanStand(unit.Goal) || Units.Any(u => u.Id != unit.Id && u.Present
                     && (u.Goal == unit.Goal || (u.Goal < 0 && u.Node == unit.Goal)))))
             {
                 // An idle blocker has no explicit destination to defend. If a
                 // convoy parks in its old spot, settle in nearby free space.
                 var reserved = OccupiedNodes(unit.Id);
-                reserved.UnionWith(Units.Where(u => u.Id != unit.Id && u.Health > 0 && u.Goal >= 0).Select(u => u.Goal));
+                reserved.UnionWith(Units.Where(u => u.Id != unit.Id && u.Present && u.Goal >= 0).Select(u => u.Goal));
                 int rest = unit.TransitNode < 0 && !reserved.Contains(unit.Node) ? unit.Node
                     : Nav(unit).Nearest(unit.Goal,reserved,connectedTo: unit.Node);
                 unit.Goal = rest >= 0 ? rest : unit.Node;
@@ -654,7 +662,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 if (unit.Node < Navigation.GroundCount && transit < Navigation.GroundCount)
                     ny = Navigation.GroundHeight(nx, nz);
                 if (!ClearCombatStep(unit,nx,ny,nz)) break;
-                if (Units.Any(other => other.Id != unit.Id && other.Health > 0
+                if (Units.Any(other => other.Id != unit.Id && other.Present
                     && BodyOverlapAt(unit,nx,ny,nz,other))) break;
                 unit.TransitNode = transit; unit.TravelProgress = progress;
                 unit.X = nx; unit.Z = nz; unit.Y = ny; unit.Moving = true; budget -= movement;

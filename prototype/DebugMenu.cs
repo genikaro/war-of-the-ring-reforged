@@ -6,7 +6,9 @@ public partial class Main
     private readonly Dictionary<string,Button> _cameraButtons = [];
     private HSlider _hudScale = null!;
     private Label _debugSummary = null!, _debugSelection = null!, _help = null!;
-    private Button _debugPause = null!, _debugStep = null!, _debugFocus = null!;
+    private Button _debugPause = null!, _debugStep = null!, _debugFocus = null!, _debugGrant = null!;
+    private CheckButton _debugInstant = null!;
+    private const int CheatGrant = 1000;
     private bool _openDebugMenu, _singleStepRequested, _presentStep;
 
     private static Button DebugButton(string text, Action action)
@@ -66,6 +68,21 @@ public partial class Main
             var button = DebugButton(label,() => { _yaw += step; UpdateCamera(); });
             _cameraButtons[name] = button; rotation.AddChild(button);
         }
+        body.AddChild(new HSeparator()); body.AddChild(DebugText("Cheats"));
+        var cheats = new HBoxContainer(); body.AddChild(cheats);
+        _debugGrant = DebugButton($"+{CheatGrant} food and ore",() => {
+            _world!.GrantResources(0,CheatGrant);
+            if (_skirmish) ApplySkirmishHud(_commands);
+            _status.Text = $"Cheat: +{CheatGrant} food and +{CheatGrant} ore";
+        });
+        _debugGrant.TooltipText = "Credit your bank immediately, up to its storage limit."; cheats.AddChild(_debugGrant);
+        _debugInstant = new CheckButton { Text = "Build and train instantly", FocusMode = Control.FocusModeEnum.None,
+            TooltipText = "Your foundations complete as soon as a worker is assigned, and training finishes on the next tick." };
+        _debugInstant.Toggled += on => {
+            if (on) _world!.InstantBuildTeams.Add(0); else _world!.InstantBuildTeams.Remove(0);
+            _status.Text = on ? "Cheat: instant building and training on" : "Cheat: instant building and training off";
+        };
+        cheats.AddChild(_debugInstant);
         body.AddChild(new HSeparator()); body.AddChild(DebugText("Interface size"));
         var sizing = new HBoxContainer(); body.AddChild(sizing);
         _hudScale = new HSlider { MinValue = 75,MaxValue = 150,Step = 5,Value = 100,
@@ -108,8 +125,11 @@ public partial class Main
         _debugPause.Disabled = !ready;
         _debugStep.Disabled = !ready || !_paused;
         _debugFocus.Disabled = !ready;
+        bool economy = ready && _world!.Economies.ContainsKey(0);
+        _debugGrant.Disabled = _debugInstant.Disabled = !economy;
         if (!ready) { _debugSummary.Text = "Encounter unavailable"; _debugSelection.Text = ""; return; }
         var world = _world!;
+        _debugInstant.SetPressedNoSignal(world.InstantBuildTeams.Contains(0));
         _debugSummary.Text = $"{(_paused ? "Paused" : "Running")} · Tick {world.Tick} · 20 ticks/s";
         var units = world.Units.Where(u => u.Health > 0 && _selected.Contains(u.Id)).ToArray();
         _debugSelection.Text = units.Length == 0 ? "No units selected" :

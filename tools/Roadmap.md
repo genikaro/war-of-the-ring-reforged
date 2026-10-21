@@ -30,6 +30,17 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-17 (Oct 21):** owner-defined Warcraft-style gathering. A raw ore pile
+gives one ore per pickaxe hit, five per trip. A completed Mill or Foundry admits
+one worker at a time for two seconds, who comes out with 10 food or 9 ore. Loads
+are credited after the source put-down clip at the Citadel. Mining, pick-up,
+carrying and put-down use the worker's source resource states and sacks;
+builders loop the source repair (hammer) clip. Workers choose work spots beside
+the target. The F4 debug menu gains +1000 food/ore and instant build/train
+cheats. Validation: 704 simulation, 33 worker-cache and 168 Python checks; 27-case
+gathering and 28-case construction smokes plus all skirmish and Helm's Deep
+regressions. See [skirmish notes](../prototype/SKIRMISH.md#build-17-warcraft-style-gathering-building-animation-and-debug-cheats).
+
 **Build-16 (Oct 21):** owner playtest found construction icons unclickable. The
 panel hid and re-showed them every frame, cancelling real clicks that span
 frames; each control now has a single visibility owner, and the smokes press and
@@ -661,7 +672,7 @@ against continuous source-game evidence before claiming fidelity. Powers, econom
 and production remain later work.
 
 - [ ] Load unit, weapon, building, spell and technique stats from the JSON tables (`Units`, `Weapons`, `Buildings`, `Spells`, `Techniques`, `UnitToUnitModifiers`, `BattleGear`, `HeroExperiences`); three demo units' base melee definitions and pair-rule support are implemented.
-- [ ] Economy: resources, workers, building and training queues, places of power (builds 5-8 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds, independent structure selection and worker clearance fixes; build-12 adds Citadel worker training with population reservation, cancellation and rally points; build-13 places every Tier 1 building with source passability and proximity; build-14 trains the Gondor Swordsman at the Barracks; build-15 the Dwarf Axethrower at the Dwarf Hall; Frodo is next); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
+- [ ] Economy: resources, workers, building and training queues, places of power (builds 5-8 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds, independent structure selection and worker clearance fixes; build-12 adds Citadel worker training with population reservation, cancellation and rally points; build-13 places every Tier 1 building with source passability and proximity; build-14 trains the Gondor Swordsman at the Barracks; build-15 the Dwarf Axethrower at the Dwarf Hall; build-17 replaces source gather rates with owner-defined Warcraft-style trips; Frodo is next); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
 - [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them
 - [ ] Heroes, fate powers and spells (`SpellAndEventAndActions` chains events to actions)
 - [ ] Open `Rings.exe` in Ghidra to recover the formulas the tables only feed: damage, hit chance, experience, upgrade effects

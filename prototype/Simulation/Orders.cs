@@ -46,7 +46,7 @@ public sealed partial class SimWorld
 
     private void ActivateQueuedOrders()
     {
-        foreach (var unit in Units.Where(u => u.Health > 0 && u.Order == OrderKind.Idle))
+        foreach (var unit in Units.Where(u => u.Present && u.Order == OrderKind.Idle))
             while (unit.Order == OrderKind.Idle && unit.OrderQueue.Count > 0)
             {
                 var next = unit.OrderQueue[0]; unit.OrderQueue.RemoveAt(0);
@@ -101,7 +101,7 @@ public sealed partial class SimWorld
         unit.GuardPlanTick = Tick;
         if (DistanceSquared(unit.X,unit.Z,anchor.X,anchor.Z) <= 3000L*3000) return;
         var reserved = OccupiedNodes(unit.Id);
-        reserved.UnionWith(Units.Where(u => u.Id != unit.Id && u.Health > 0 && u.Goal >= 0).Select(u => u.Goal));
+        reserved.UnionWith(Units.Where(u => u.Id != unit.Id && u.Present && u.Goal >= 0).Select(u => u.Goal));
         int goal = Nav(unit).FormationSlot(anchor.Node,reserved);
         if (goal >= 0 && (goal != unit.Goal || unit.Path.Count == 0)) { unit.OrderDestination = goal; PlanOrderRoute(unit,goal); }
     }
@@ -152,7 +152,7 @@ public sealed partial class SimWorld
     }
 
     private bool FightingAlly(SimUnit unit,SimUnit enemy) => enemy.Attacking && enemy.Target>=0
-        && Units[enemy.Target].Health>0 && Units[enemy.Target].Team==unit.Team;
+        && Units[enemy.Target].Present && Units[enemy.Target].Team==unit.Team;
 
     private static int MarchForward(SimUnit unit) => unit.FreeMovement ? unit.OrderDestination
         : unit.Path.Skip(unit.Waypoint).Take(6).LastOrDefault(unit.OrderDestination);
@@ -166,7 +166,7 @@ public sealed partial class SimWorld
     {
         // A force move keeps its destination even when struck. A stationary
         // order can return blows within reach, but can never start a pursuit.
-        if (victim.Health <= 0 || victim.Order is OrderKind.Move or OrderKind.UseAbility or OrderKind.Gather or OrderKind.Build || victim.AttackMoveReturning) return;
+        if (!victim.Present || victim.Order is OrderKind.Move or OrderKind.UseAbility or OrderKind.Gather or OrderKind.Build || victim.AttackMoveReturning) return;
         if (HoldsPosition(victim) && !AttackReach(victim,victim.Node,victim.X,victim.Y,victim.Z,attacker)) return;
         victim.AutoEngage = !HoldsPosition(victim);
         if (victim.Target < 0) { BeginAttackMoveEncounter(victim); victim.Target = attacker.Id; }

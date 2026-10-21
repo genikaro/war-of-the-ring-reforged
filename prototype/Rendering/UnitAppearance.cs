@@ -39,14 +39,17 @@ public sealed class UnitAppearance
                     throw new InvalidOperationException("Imported appearance cloth missing: "+node.GetInt32());
     }
 
-    private static JsonElement Choice(JsonElement model,string? clip)
+    /// <summary>The first positive choice playing <paramref name="clip"/>, within <paramref name="stateName"/> when
+    /// several states share the clip (the worker's food and ore sacks); otherwise the default state.</summary>
+    private static JsonElement Choice(JsonElement model,string? clip,string? stateName)
     {
         JsonElement fallback = default;
         foreach (var state in model.GetProperty("states").EnumerateArray())
         foreach (var choice in state.GetProperty("choices").EnumerateArray())
         {
             if (choice.GetProperty("weight").GetInt32() <= 0) continue;
-            if (clip != null && choice.GetProperty("clip").GetString() == clip) return choice;
+            if (clip != null && choice.GetProperty("clip").GetString() == clip
+                && (stateName == null || state.GetProperty("name").GetString() == stateName)) return choice;
             if (state.GetProperty("id").GetInt32() == model.GetProperty("defaultState").GetInt32() && fallback.ValueKind == JsonValueKind.Undefined)
                 fallback = choice;
         }
@@ -60,7 +63,7 @@ public sealed class UnitAppearance
         return initial;
     }
 
-    public void Apply(string clip,double time)
+    public void Apply(string clip,double time,string? state = null)
     {
         var flags = _data.GetProperty("flags");
         long blood = flags.GetProperty("blood").GetInt64(),levels = 0,level = flags.GetProperty("levels")[0].GetInt64();
@@ -71,7 +74,7 @@ public sealed class UnitAppearance
         {
             var parent = model.GetProperty("parent");
             bool enabled = parent.ValueKind == JsonValueKind.Null || gates[parent.GetInt32()][model.GetProperty("attachment").GetInt32()];
-            var choice = Choice(model,modelIndex == 0 ? clip : null);
+            var choice = Choice(model,modelIndex == 0 ? clip : null,modelIndex == 0 ? state : null);
             bool hasChoice = choice.ValueKind != JsonValueKind.Undefined; double t = modelIndex == 0 ? time : 0;
             int slot = 0;
             foreach (var node in model.GetProperty("parts").EnumerateArray())
@@ -102,8 +105,17 @@ public sealed class UnitAppearance
             {
                 bool visible = hasChoice ? At(choice.GetProperty("modelTracks"),slot,
                     choice.GetProperty("models").EnumerateArray().Any(v => v.GetInt32() == slot),t) : attachment.GetProperty("shown").GetBoolean();
-                attachments.Add(enabled && visible && Configured(attachment.GetProperty("flags").GetInt64())); slot++;
+                attachments.Add(visible); slot++;
             }
+            // Clip events show or hide attachments part-way through, e.g. the sack a worker picks up or puts down.
+            if (hasChoice)
+                foreach (var e in choice.GetProperty("eventIndices").EnumerateArray().Select(i => model.GetProperty("events")[i.GetInt32()])
+                    .Where(e => e.GetProperty("time").GetDouble() <= t).OrderBy(e => e.GetProperty("time").GetDouble()))
+                    if (e.GetProperty("name").GetString() is "show_attachment" or "hide_attachment" && e.GetProperty("attachment").GetInt32() is int index
+                        && index < attachments.Count) attachments[index] = e.GetProperty("name").GetString() == "show_attachment";
+            slot = 0;
+            foreach (var attachment in model.GetProperty("attachments").EnumerateArray())
+            { attachments[slot] = enabled && attachments[slot] && Configured(attachment.GetProperty("flags").GetInt64()); slot++; }
             gates.Add(attachments.ToArray()); modelIndex++;
         }
     }

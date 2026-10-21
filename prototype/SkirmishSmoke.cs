@@ -29,6 +29,21 @@ public partial class Main
                 || world.Units.Any(u => u.Team == 0 && u.CargoMilli > 0 && u.CargoMilli <= 9000);
             _skirmishChecks["ore_delivered_to_live_hud"] = _skirmishChecks.GetValueOrDefault("ore_delivered_to_live_hud")
                 || (world.Economies[0].Ore > 325 && _commands.ResourceReadout == $"4/10 115 {world.Economies[0].Ore}");
+            if (_frames > 1250) CaptureGatherPoses();
+            // The source resource clips and the sack they show or hide, sampled as the sim seeks them.
+            var clips = _workerClips["UNIT_G_HUMAN_WORKER"];
+            foreach (var worker in world.Units.Where(u => u.Team == 0 && u.Present))
+            {
+                var view = _views[worker.Id]; int elapsed = world.Tick-1-worker.GatherPhaseTick;
+                void Seen(string check,bool value) { if (value) _skirmishChecks[check] = true; else _skirmishChecks.TryAdd(check,false); }
+                if (worker.GatherPhase == GatherPhase.Mining) Seen("mining_plays_source_gather_clip",view.Clip == clips["mine"].Clip && view.Player?.SpeedScale == 0);
+                if (worker.GatherPhase == GatherPhase.PickingUp && elapsed is <= 5 or >= 20)
+                    Seen("pick_up_shows_ore_sack",AttachmentShown(view,"MODEL_G_WORKER_ORE_SACK") == elapsed >= 20);
+                if (worker.GatherPhase == GatherPhase.None && worker.Moving && worker.CargoMilli > 0)
+                    Seen("ore_sack_carried_home",view.Clip == clips["ore_walk"].Clip && AttachmentShown(view,"MODEL_G_WORKER_ORE_SACK") && !AttachmentShown(view,"MODEL_G_WORKER_FOOD_SACK"));
+                if (worker.GatherPhase == GatherPhase.PuttingDown && elapsed is <= 5 or >= 25)
+                    Seen("put_down_hides_ore_sack",view.Clip == clips["ore_put_down"].Clip && AttachmentShown(view,"MODEL_G_WORKER_ORE_SACK") == elapsed <= 5);
+            }
         }
         switch (_frames)
         {
@@ -101,12 +116,40 @@ public partial class Main
                 _skirmishChecks["shared_ore_conserved"] = world.Resources.Values.Sum(r => r.Kind == ResourceKind.Ore ? 4500000-r.RemainingMilli : 0)
                     == world.Economies.Values.Sum(b => b.OreMilli-325000)+world.Units.Sum(u => u.CargoMilli);
                 _skirmishChecks["enemy_economy_inert"] = world.Economies[1].Ore == 325 && world.Economies[1].Food == 115;
-                var report = new { build = BuildInfo.Label,checks = _skirmishChecks,passed = _skirmishChecks.Count == 23 && _skirmishChecks.Values.All(v => v),
+                var report = new { build = BuildInfo.Label,checks = _skirmishChecks,passed = _skirmishChecks.Count == 27 && _skirmishChecks.Values.All(v => v),
                     start_state = new { _startState.Population,_startState.Capacity,_startState.Food,_startState.Ore },
                     workers = world.Units.Where(u => u.Team == 0).Select(u => new { u.Id,u.Order,u.X,u.Z,u.Goal,u.OrderTarget,u.CargoMilli,u.ReturningCargo }),
                     source = world.Resources.GetValueOrDefault(_smokeOreId),deliveries = _smokeDeliveries,max_still_ticks = _smokeMaxStillTicks,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"skirmish-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("SKIRMISH_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
         }
+    }
+
+    private readonly HashSet<string> _gatherCaptured = [];
+
+    /// <summary>Rendered smokes: one close-up per gathering pose, from the first worker seen in it, for visual review.</summary>
+    private void CaptureGatherPoses()
+    {
+        if (_capture == "") return;
+        foreach (var worker in _world!.Units.Where(u => u.Team == 0 && u.Present))
+        {
+            int elapsed = _world.Tick-1-worker.GatherPhaseTick;
+            string? pose = _world.IsBuilding(worker) ? "build" : worker.GatherPhase switch {
+                GatherPhase.Mining when elapsed == _world.Workers[worker.Definition.Name].MineHitTick-1 => "mining",
+                GatherPhase.PickingUp when elapsed == 30 => "pick-up",
+                GatherPhase.PuttingDown when elapsed == 12 => worker.CargoKind == ResourceKind.Ore ? "ore-put-down" : "food-put-down",
+                GatherPhase.None when worker.Moving && worker.CargoMilli > 0 => worker.CargoKind == ResourceKind.Ore ? "ore-carry" : "food-carry",
+                _ => null };
+            if (pose == null || !_gatherCaptured.Add(pose)) continue;
+            _focus = UnitPosition(worker); _distance = 12; UpdateCamera();
+            _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-"+pose+".png"); return;
+        }
+    }
+
+    private bool AttachmentShown(UnitView view,string model)
+    {
+        var data = _appearanceData[view.Model.GetProperty("file").GetString()!];
+        int node = data.GetProperty("models").EnumerateArray().First(m => m.GetProperty("model").GetString() == model).GetProperty("parts")[0].GetInt32();
+        return view.Appearance!.VisibleNodes.Contains(node);
     }
 }

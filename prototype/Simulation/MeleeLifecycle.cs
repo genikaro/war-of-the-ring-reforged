@@ -22,7 +22,7 @@ public sealed partial class SimWorld
         if (UsesMissile(unit,target)) return true;
         int limit = target.Definition.MaxAttackers;
         if (limit == 0) return true;
-        return Units.Where(u => u.Health > 0 && u.Target == target.Id && !UsesMissile(u,target)
+        return Units.Where(u => u.Present && u.Target == target.Id && !UsesMissile(u,target)
             && (HoldsPosition(u) || RoomToFight(u))
             && AttackReach(u,u.Node,u.X,u.Y,u.Z,target)).OrderBy(u => u.Id).Take(limit).Any(u => u.Id == unit.Id);
     }
@@ -58,7 +58,7 @@ public sealed partial class SimWorld
         while (unit.NextHit < attack.Hits.Length && attack.Hits[unit.NextHit].Tick <= elapsed)
         {
             int index = unit.NextHit++;
-            if (target.Health <= 0 || unit.Target != target.Id || !AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,target)) continue;
+            if (!target.Present || unit.Target != target.Id || !AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,target)) continue;
             var pair = Rules.Pair(unit.Definition.Id,target.Definition.Id);
             int typeScale = Rules.TypeScale(unit.Definition.DamageType,target.Definition.DamageType);
             int dps = melee ? unit.Definition.MeleeDpsMilli : unit.MeleeDamageRate;

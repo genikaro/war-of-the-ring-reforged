@@ -72,7 +72,7 @@ public sealed partial class SimWorld
             if (!Navigation.CanStand(covered) || ConstructionSites.Values.Any(s => s.Building == null && Navigation.ObstacleCovers(s.Obstacle,covered)))
             { reason = "Too close to another structure or resource"; return false; }
         }
-        foreach (var unit in Units.Where(u => u.Health > 0))
+        foreach (var unit in Units.Where(u => u.Present))
         {
             var (tx,tz) = unit.TransitNode >= 0 ? Navigation.Center(unit.TransitNode) : (unit.X,unit.Z);
             if (GridNavigation.FootprintBlocks(footprint,unit.X,unit.Z,tx,tz,unit.Definition.BodyRadiusMm)) { reason = "Placement blocked by a unit"; return false; }
@@ -86,7 +86,7 @@ public sealed partial class SimWorld
         string building = PlaceableBuildings[command.Target];
         var ready = new List<SimUnit>();
         foreach (var unit in command.Units.Where(id => id >= 0 && id < Units.Count).Select(id => Units[id])
-            .Where(u => u.Team == command.Team && u.Health > 0 && Workers.ContainsKey(u.Definition.Name)))
+            .Where(u => u.Team == command.Team && u.Present && Workers.ContainsKey(u.Definition.Name)))
         {
             if (!activating && command.Queued && unit.Order is not (OrderKind.Idle or OrderKind.Stop or OrderKind.HoldGround))
                 unit.OrderQueue.Add(new(OrderKind.PlaceBuilding,command.Cell,command.Target,command.Sequence));

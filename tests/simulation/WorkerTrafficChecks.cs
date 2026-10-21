@@ -94,7 +94,7 @@ public static class WorkerTrafficChecks
         }
         var economy = data.GetProperty("economy"); var state = data.GetProperty("start_state");
         foreach (var worker in economy.GetProperty("workers").EnumerateObject())
-            world.Workers.Add(worker.Name,new(worker.Value.GetProperty("food_capacity").GetInt32(),worker.Value.GetProperty("ore_capacity").GetInt32()));
+            world.Workers.Add(worker.Name,WorkerEconomy.Parse(worker.Value));
         int Radius(int id,int x,int z)
         {
             var layer = layers.First(o => o.GetProperty("id").GetInt32() == id);
@@ -164,7 +164,8 @@ public static class WorkerTrafficChecks
                     var body = world.Navigation.ForBody(u.Definition.BodyRadiusMm,u.Definition.BodyHeightMm);
                     foreach (var segment in u.Movement.Zip(u.Movement.Skip(1)))
                         safe &= body.CanTraverseGroundPoints(segment.First.X,segment.First.Z,segment.Second.X,segment.Second.Z);
-                    safe &= !world.Units.Any(other => other.Id != id && other.Health > 0 && SimWorld.BodiesOverlap(u,other));
+                    // Workers inside a Mill or Foundry have no body.
+                    safe &= !u.Present || !world.Units.Any(other => other.Id != id && other.Present && SimWorld.BodiesOverlap(u,other));
                     if (before[id].CargoMilli > 0 && u.CargoMilli == 0) deliveries[id]++;
                     still[id] = u.Goal >= 0 && before[id] == (u.X,u.Z,u.CargoMilli) ? still[id]+1 : 0;
                     maximum[id] = Math.Max(maximum[id],still[id]);

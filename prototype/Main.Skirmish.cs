@@ -66,10 +66,15 @@ public partial class Main
     {
         if (!data.TryGetProperty("economy",out var economy))
             throw new InvalidOperationException("Refresh skirmish economy: python tools/skirmish_economy.py --cache converted/skirmish");
-        if (economy.GetProperty("format_version").GetInt32() != 1 || economy.GetProperty("ticks_per_second").GetInt32() != SimWorld.TicksPerSecond)
-            throw new InvalidOperationException("Unsupported economy cache");
+        // Format 2 (build-17) adds the worker's gathering clips and owner trip rules.
+        if (economy.GetProperty("format_version").GetInt32() != 2 || economy.GetProperty("ticks_per_second").GetInt32() != SimWorld.TicksPerSecond)
+            throw new InvalidOperationException("Refresh skirmish economy: python tools/skirmish_economy.py --cache converted/skirmish");
         foreach (var worker in economy.GetProperty("workers").EnumerateObject())
-            _world!.Workers.Add(worker.Name,new(worker.Value.GetProperty("food_capacity").GetInt32(),worker.Value.GetProperty("ore_capacity").GetInt32()));
+        {
+            _world!.Workers.Add(worker.Name,WorkerEconomy.Parse(worker.Value));
+            _workerClips[worker.Name] = worker.Value.GetProperty("animations").EnumerateObject()
+                .ToDictionary(c => c.Name,c => (c.Value.GetProperty("state").GetString()!,c.Value.GetProperty("clip").GetString()!));
+        }
         foreach (var start in data.GetProperty("bases").EnumerateArray())
         {
             int team = start.GetProperty("team").GetInt32(); var at = start.GetProperty("position");

@@ -71,6 +71,7 @@ public partial class Main : Node3D
         public AnimationPlayer? Player = player;
         public JsonElement Model = model;
         public string Clip = "";
+        public string? State;
         public bool Died;
         public float DesiredYaw;
         public Vector3 RingPosition = new(float.PositiveInfinity, 0, 0);
@@ -391,7 +392,7 @@ public partial class Main : Node3D
     }
 
     private bool LivingFriendly(int id) => _world != null && id >= 0 && id < _world.Units.Count && _world.Units[id].Team == 0 && _world.Units[id].Health > 0;
-    private bool LivingUnit(int id) => _world != null && id >= 0 && id < _world.Units.Count && _world.Units[id].Health > 0;
+    private bool LivingUnit(int id) => _world != null && id >= 0 && id < _world.Units.Count && _world.Units[id].Present;
 
     private void UseGroup(int slot,bool assign,bool append)
     {
@@ -406,7 +407,8 @@ public partial class Main : Node3D
             _lastGroup = -1;
             _status.Text = $"Group {(slot == 9 ? 0 : slot+1)} updated"; return;
         }
-        var ids = _controlGroups.Recall(slot,LivingFriendly);
+        // Workers inside a Mill or Foundry stay in their group but cannot be selected until they come out.
+        var ids = _controlGroups.Recall(slot,LivingFriendly).Where(id => _world.Units[id].Present).ToArray();
         if (ids.Length == 0) { _lastGroup = -1; return; }
         _selectedStructure = null;
         _selected.Clear(); _selected.UnionWith(ids);
@@ -454,7 +456,7 @@ public partial class Main : Node3D
         int? previousStructure = _selectedStructure;
         _selectedStructure = null;
         if (!append || !_selected.All(LivingFriendly)) _selected.Clear();
-        foreach (var unit in _world!.Units.Where(u => u.Team == 0 && u.Health > 0))
+        foreach (var unit in _world!.Units.Where(u => u.Team == 0 && u.Present))
         {
             var pos = UnitPosition(unit) + Vector3.Up;
             if (_camera.IsPositionBehind(pos)) continue;
@@ -615,6 +617,7 @@ public partial class Main : Node3D
                 view.Heading.Reset();
                 view.DesiredYaw = Mathf.Atan2(-(target.X-unit.X),target.Z-unit.Z);
             }
+            else if (WorkFacing(unit) is float facing) view.DesiredYaw = facing;
             else if (unit.Movement.Count >= 2)
             {
                 var previous = unit.Movement[0]; var next = unit.Movement[^1];
@@ -632,6 +635,9 @@ public partial class Main : Node3D
                 : state is "walk" or "run" ? (unit.Walking ? unit.Definition.WalkClip : unit.Definition.RunClip)
                 : state == "ready" ? unit.Definition.ReadyClip : view.Model.GetProperty(state).GetString() ?? "";
             if ((state is "walk" or "run") && clip == "") clip = view.Model.GetProperty("walk").GetString() ?? "";
+            var gather = WorkerAnimation(unit);
+            if (gather != null) clip = gather.Value.Clip;
+            bool timed = gather is { Ticks: > 0 };
             bool restartAttack = unit.StrikeActive && view.AttackSerial != unit.AttackSerial;
             bool restartCast = unit.Casting && view.CastSerial != unit.CastSerial;
             if (view.Player != null && clip != "" && (clip != view.Clip || restartAttack || restartCast))
@@ -640,15 +646,19 @@ public partial class Main : Node3D
                 if (animation != null)
                 {
                     var resource = view.Player.GetAnimation(animation);
-                    resource.LoopMode = state is "death" or "attack" or "cast" ? Animation.LoopModeEnum.None : Animation.LoopModeEnum.Linear;
+                    resource.LoopMode = state is "death" or "attack" or "cast" || timed ? Animation.LoopModeEnum.None : Animation.LoopModeEnum.Linear;
                     if (restartAttack || restartCast) view.Player.Stop();
-                    view.Player.Play(animation,state is "attack" or "cast" ? 0 : 0.12); view.Clip = clip;
+                    view.Player.Play(animation,state is "attack" or "cast" || timed ? 0 : 0.12); view.Clip = clip;
                 }
             }
-            if (view.Player != null) view.Player.SpeedScale = _paused || unit.StrikeActive || unit.Casting ? 0 : 1;
+            // The carrying clip is a walk; a running worker plays it faster so its steps keep pace.
+            if (view.Player != null) view.Player.SpeedScale = _paused || unit.StrikeActive || unit.Casting || timed ? 0
+                : gather != null && unit.Moving && !unit.Walking ? 1_000_000f/unit.Definition.WalkScale : 1;
             view.AttackSerial = unit.AttackSerial;
             view.CastSerial = unit.CastSerial;
-            if (!unit.StrikeActive && !unit.Casting) view.Appearance?.Apply(clip,0);
+            view.State = gather?.State;
+            view.Root.Visible = unit.InsideSite < 0;
+            if (!unit.StrikeActive && !unit.Casting) view.Appearance?.Apply(clip,0,view.State);
             if (unit.Health <= 0) view.Died = true;
         }
         if (_combatSmoke)
@@ -689,8 +699,8 @@ public partial class Main : Node3D
                 }
                 SeekAttack(unit,view,fraction);
                 SeekAbility(unit,view,fraction);
-                if (!unit.StrikeActive && !unit.Casting && view.Player != null && view.Player.CurrentAnimation.ToString().Length > 0 && view.Player.CurrentAnimationLength > 0)
-                    view.Appearance?.Apply(view.Clip,view.Player.CurrentAnimationPosition/view.Player.CurrentAnimationLength);
+                if (!SeekGather(unit,view,fraction) && !unit.StrikeActive && !unit.Casting && view.Player != null && view.Player.CurrentAnimation.ToString().Length > 0 && view.Player.CurrentAnimationLength > 0)
+                    view.Appearance?.Apply(view.Clip,view.Player.CurrentAnimationPosition/view.Player.CurrentAnimationLength,view.State);
             }
         foreach (var unit in _world.Units)
         {

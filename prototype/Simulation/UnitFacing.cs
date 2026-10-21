@@ -38,7 +38,7 @@ public sealed partial class SimWorld
 
     private void FaceMovement()
     {
-        foreach (var unit in Units.Where(u => u.Health > 0 && u.Definition.IsRanged && !u.Attacking && u.Movement.Count >= 2))
+        foreach (var unit in Units.Where(u => u.Present && u.Definition.IsRanged && !u.Attacking && u.Movement.Count >= 2))
         {
             var from = unit.Movement[0]; var to = unit.Movement[^1];
             long threshold = Math.Max(2,unit.MovementBudget/5000);
