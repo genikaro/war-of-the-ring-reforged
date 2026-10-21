@@ -4,6 +4,8 @@ using Reforged.Simulation;
 public partial class BattleMinimap : Control
 {
     public event Action<Vector2>? Chosen;
+    /// <summary>A right-click on the map: the normalized point, whether the order is queued, and whether it marches.</summary>
+    public event Action<Vector2,bool,bool>? Ordered;
     private SimWorld? _world;
     private ImageTexture? _terrain;
     private (Texture2D Icon,float X,float Z)[] _markers = [];
@@ -65,6 +67,13 @@ public partial class BattleMinimap : Control
             AcceptEvent();
         }
         else if (input is InputEventMouseMotion motion && Dragging) { Choose(motion.Position); AcceptEvent(); }
+        // The original manual's minimap order: a right-click sends the selection, it does not move the camera.
+        else if (input is InputEventMouseButton { ButtonIndex: MouseButton.Right,Pressed: true } order)
+        {
+            Ordered?.Invoke(new(Math.Clamp(order.Position.X/Size.X,0,1),Math.Clamp(order.Position.Y/Size.Y,0,1)),
+                order.ShiftPressed,order.CtrlPressed);
+            AcceptEvent();
+        }
     }
 
     private void Choose(Vector2 position) => Chosen?.Invoke(new(Math.Clamp(position.X/Size.X,0,1),Math.Clamp(position.Y/Size.Y,0,1)));

@@ -90,6 +90,8 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int GuardPlanTick { get; internal set; } = -1;
     /// <summary>Throttles approach planning while besieging a building.</summary>
     public int SiegePlanTick { get; internal set; } = -1;
+    /// <summary>The player aimed this siege deliberately, so it may hit a building of any team.</summary>
+    public bool SiegeForced { get; internal set; }
     public int GuardOrigin { get; internal set; } = -1;
     public long CargoMilli { get; internal set; }
     public ResourceKind CargoKind { get; internal set; }

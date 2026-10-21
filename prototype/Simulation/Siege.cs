@@ -10,6 +10,10 @@ public sealed partial class SimWorld
     /// <summary>Sites destroyed on this tick, for the presentation to free their models.</summary>
     public List<int> DestroyedSites { get; } = [];
 
+    /// <summary>SimCommand.Cell on an AttackStructure order: the player aimed it deliberately rather than
+    /// contextually, which is what lets a siege begin against one's own building.</summary>
+    public const int ForcedSiege = 1;
+
     public bool CanAttackSite(int team,int site) => ConstructionSites.TryGetValue(site,out var target)
         && target.Team >= 0 && target.Team != team && target.Health > 0;
 
@@ -29,17 +33,19 @@ public sealed partial class SimWorld
 
     private void BeginSiege(SimCommand command,bool activating)
     {
-        if (!CanAttackSite(command.Team,command.Target)) return;
+        bool forced = command.Cell == ForcedSiege;
+        if (!ConstructionSites.TryGetValue(command.Target,out var target) || target.Team < 0 || target.Health <= 0) return;
+        if (!forced && target.Team == command.Team) return;
         foreach (int id in command.Units)
         {
             if (id < 0 || id >= Units.Count) continue;
             var unit = Units[id];
             if (unit.Team != command.Team || !unit.Present || unit.RingActive || unit.Definition.DpsMilli <= 0) continue;
             if (!activating && command.Queued && unit.Order is not (OrderKind.Idle or OrderKind.Stop or OrderKind.HoldGround))
-            { unit.OrderQueue.Add(new(OrderKind.AttackStructure,-1,command.Target,command.Sequence)); continue; }
+            { unit.OrderQueue.Add(new(OrderKind.AttackStructure,command.Cell,command.Target,command.Sequence)); continue; }
             Apply(command with { Units = [id],Kind = OrderKind.Stop,Queued = false },activating);
             unit.Order = OrderKind.AttackStructure; unit.OrderTarget = command.Target;
-            unit.SiegePlanTick = -1;
+            unit.SiegeForced = forced; unit.SiegePlanTick = -1;
         }
     }
 
@@ -47,9 +53,10 @@ public sealed partial class SimWorld
     private bool UpdateSiege(SimUnit unit)
     {
         if (unit.Order != OrderKind.AttackStructure) return false;
-        if (!ConstructionSites.TryGetValue(unit.OrderTarget,out var site) || site.Team < 0 || site.Team == unit.Team || site.Health <= 0)
+        if (!ConstructionSites.TryGetValue(unit.OrderTarget,out var site) || site.Team < 0 || site.Health <= 0
+            || (site.Team == unit.Team && !unit.SiegeForced))
         {
-            CancelStrike(unit); unit.Order = OrderKind.Idle; unit.OrderTarget = -1; unit.SiegePlanTick = -1;
+            CancelStrike(unit); unit.Order = OrderKind.Idle; unit.OrderTarget = -1; unit.SiegePlanTick = -1; unit.SiegeForced = false;
             unit.Goal = -1; unit.Path.Clear(); unit.Waypoint = 0; return false;
         }
         unit.Target = -1; unit.AutoEngage = false;
@@ -129,7 +136,7 @@ public sealed partial class SimWorld
     private void DestroySite(ConstructionSite site,SimUnit? killer)
     {
         foreach (var unit in Units.Where(u => u.Order == OrderKind.AttackStructure && u.OrderTarget == site.Id))
-        { CancelStrike(unit); unit.Order = OrderKind.Idle; unit.OrderTarget = -1; unit.SiegePlanTick = -1; unit.AutoEngage = true; }
+        { CancelStrike(unit); unit.Order = OrderKind.Idle; unit.OrderTarget = -1; unit.SiegePlanTick = -1; unit.SiegeForced = false; unit.AutoEngage = true; }
         foreach (var unit in Units.Where(u => u.Order == OrderKind.Build && u.OrderTarget == site.Id))
         { unit.Order = OrderKind.Idle; unit.OrderTarget = -1; unit.GatherPlanTick = -1; }
         foreach (var unit in Units.Where(u => u.InsideSite == site.Id)) { LeaveBuilding(unit); FinishGather(unit); }
@@ -184,5 +191,5 @@ public sealed partial class SimWorld
     }
 
     private string SiegeDigest() => ":repairs:"+string.Join(';',ConstructionSites.Values.Select(s => s.RepairMicroTicks))
-        + ":siege:"+string.Join(';',Units.Select(u => u.SiegePlanTick));
+        + ":siege:"+string.Join(';',Units.Select(u => $"{u.SiegePlanTick},{u.SiegeForced}"));
 }

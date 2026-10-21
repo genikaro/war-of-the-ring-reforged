@@ -335,6 +335,7 @@ public partial class Main : Node3D
             if (_world != null) UnitSelection.Click(_selected,_world.Units,LivingUnit(id) ? _world.Units[id] : null,append,sameType);
         };
         _commands.MapChosen += point => { if (_world != null) CenterViewOn(point); };
+        _commands.MapOrdered += OrderFromMinimap;
     }
 
     public override void _UnhandledInput(InputEvent input)
@@ -541,6 +542,24 @@ public partial class Main : Node3D
         if (living.Length == 0) return;
         _world.Enqueue(0,living,order.Kind,order.Cell,order.Target,queued);
         _status.Text = CommandPanel.OrderName(order.Kind)+(_paused ? " queued (paused)" : " order issued");
+    }
+
+    /// <summary>A right-click on the minimap orders the selection to that point, as the original manual
+    /// describes. Ctrl marches there instead, and Shift queues, matching a right-click on the battlefield.</summary>
+    private void OrderFromMinimap(Vector2 point,bool queued,bool march)
+    {
+        if (_world == null || _loadFailed) return;
+        ClearConstructionTargeting();
+        if (!_world.Units.Any(u => u.Team == 0 && u.Health > 0 && _selected.Contains(u.Id)))
+        { _status.Text = "Select your forces first"; return; }
+        var nav = _world.Navigation;
+        int x = Math.Clamp((int)((1-point.X)*nav.Width*nav.CellSize),0,nav.Width*nav.CellSize-1);
+        int z = Math.Clamp((int)(point.Y*nav.Height*nav.CellSize),0,nav.Height*nav.CellSize-1);
+        int goal = nav.Nearest(nav.Cell(x,z));
+        if (goal < 0) { _status.Text = "No walkable space at this point"; return; }
+        if (march) _orders.Begin(OrderKind.AttackMove);
+        if (!_orders.Resolve(goal,-1,out var order,keepTargeting: queued)) { _status.Text = "Attack requires an enemy target"; return; }
+        SendOrder(order,queued);
     }
 
     private void ToggleObstacle(Vector2 mouse)

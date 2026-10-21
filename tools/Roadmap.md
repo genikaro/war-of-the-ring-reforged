@@ -30,6 +30,15 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-22 (Oct 21):** owner playtest fixes. The armed Attack command now forces
+its building target, of any team, so force-attack works on buildings instead of
+falling through to an attack-move at the ground under one's own; a plain
+right-click stays contextual, leaving friendly buildings to the repair order.
+Right-clicking the minimap orders the selection to that point, as the original
+manual describes, with Ctrl to march and Shift to queue, and without moving the
+camera. Validation: the siege smoke grows to 16 cases and the minimap smoke to
+15, plus all regressions. See [skirmish notes](../prototype/SKIRMISH.md#build-22-force-attack-on-buildings-and-minimap-orders).
+
 **Build-21 (Oct 21):** combat against buildings. Every skirmish building has
 health and armour from the source `Buildings` table, start buildings included,
 which become completed prebuilt construction sites at load. Right-clicking an

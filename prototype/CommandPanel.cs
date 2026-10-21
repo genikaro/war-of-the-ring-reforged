@@ -10,6 +10,7 @@ public partial class CommandPanel : Control
     public event Action<int>? GroupChosen;
     public event Action<int,bool,bool>? UnitChosen;
     public event Action<Vector2>? MapChosen;
+    public event Action<Vector2,bool,bool>? MapOrdered;
     public event Action? MenuChosen;
     public event Action? WalkRunChosen;
     public event Action<int>? AbilityChosen;
@@ -62,7 +63,8 @@ public partial class CommandPanel : Control
             TooltipText = "Debug tools [F4] · pause, step, camera, interface and controls" };
         _menu.Pressed += () => MenuChosen?.Invoke(); _content.AddChild(_menu);
         _map = new BattleMinimap { Position = new(14,28),Size = new(174,174),TooltipText = "Click or drag on the map to move the camera." };
-        _map.Chosen += p => MapChosen?.Invoke(p); _content.AddChild(_map);
+        _map.Chosen += p => MapChosen?.Invoke(p);
+        _map.Ordered += (p,queued,march) => MapOrdered?.Invoke(p,queued,march); _content.AddChild(_map);
         _walkRun = new TextureButton { Position = new(198,147),Size = new(34,27),FocusMode = FocusModeEnum.None,
             IgnoreTextureSize = true,StretchMode = TextureButton.StretchModeEnum.KeepAspectCentered,ToggleMode = true };
         _walkRun.Pressed += () => WalkRunChosen?.Invoke(); _content.AddChild(_walkRun);

@@ -69,13 +69,22 @@ public partial class Main
                 foreach (var attacker in world.Units.Where(u => u.Team == 1 && u.Order == OrderKind.AttackStructure)) attacker.HealthMilli = 0;
                 _siegePhase = 2; _siegeStep = 0; break;
             case 2:
+                // The armed Attack command forces its target, so it takes a building of the player's own team too.
                 if (_siegeStep++ < 4) break;
-                _selected.Clear(); _selectedStructure = null;
-                foreach (var worker in world.Units.Where(u => u.Team == 0 && u.Present && world.Workers.ContainsKey(u.Definition.Name))) _selected.Add(worker.Id);
-                RightClickStructure(SmokeOwnCitadel);
+                if (_siegeStep == 5)
+                {
+                    _selected.Clear(); _selectedStructure = null;
+                    foreach (var worker in world.Units.Where(u => u.Team == 0 && u.Present && world.Workers.ContainsKey(u.Definition.Name))) _selected.Add(worker.Id);
+                    break;
+                }
+                if (_siegeStep == 6) { PushKey(Key.A); Click(StructureSmokePoint(SmokeOwnCitadel)); break; }
+                _siegeChecks["force_attack_takes_an_own_building"] = _status.Text.StartsWith("Force-attack")
+                    && _selected.All(id => world.Units[id] is { Order: OrderKind.AttackStructure,SiegeForced: true,OrderTarget: SmokeOwnCitadel });
+                world.Enqueue(0,_selected,OrderKind.Stop);
                 _siegePhase = 3; _siegeStep = 0; break;
             case 3:
-                if (_siegeStep++ == 0)
+                if (_siegeStep++ == 0) { RightClickStructure(SmokeOwnCitadel); break; }
+                if (_siegeStep == 2)
                     _siegeChecks["right_click_orders_a_repair"] = _status.Text.StartsWith("Repair")
                         && world.Units.Count(u => u.Order == OrderKind.Build && u.OrderTarget == SmokeOwnCitadel) >= 1;
                 if (!world.Units.Any(world.IsBuilding)) break;
@@ -95,8 +104,15 @@ public partial class Main
                 _siegePhase = 5; _siegeStep = 0; break;
             case 5:
                 if (_siegeStep++ < 2) break;
-                if (_siegeStep == 3) { RightClickStructure(SmokeEnemyCitadel); break; }
+                if (_siegeStep == 3) { PushKey(Key.A); Click(StructureSmokePoint(SmokeEnemyCitadel)); break; }
                 if (_siegeStep == 4)
+                {
+                    _siegeChecks["attack_command_targets_an_enemy_building"] = _status.Text.StartsWith("Attack ")
+                        && _selected.All(id => world.Units[id] is { Order: OrderKind.AttackStructure,OrderTarget: SmokeEnemyCitadel });
+                    world.Enqueue(0,_selected,OrderKind.Stop); break;
+                }
+                if (_siegeStep == 5) { RightClickStructure(SmokeEnemyCitadel); break; }
+                if (_siegeStep == 6)
                 {
                     _siegeChecks["right_click_orders_a_siege"] = _status.Text.StartsWith("Attack ")
                         && _selected.All(id => world.Units[id].Order == OrderKind.AttackStructure && world.Units[id].OrderTarget == SmokeEnemyCitadel);
@@ -116,7 +132,7 @@ public partial class Main
             case 6:
                 if (_siegeStep++ < 3) break; // Let the ruin capture finish writing.
                 var report = new { build = BuildInfo.Label,checks = _siegeChecks,
-                    passed = _siegeChecks.Count == 14 && _siegeChecks.Values.All(v => v),
+                    passed = _siegeChecks.Count == 16 && _siegeChecks.Values.All(v => v),
                     fixture = "Both squads spawn beside their target; the first wave is removed before the repair pass",
                     citadel = own == null ? null : new { own.Id,own.Team,own.Health,max = ownMax,own.Prebuilt },
                     damaged_to = _siegeDamaged,ticks = world.Tick,status = _status.Text,digest = world.StateDigest() };

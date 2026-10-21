@@ -281,6 +281,8 @@ checked before loading. Never distribute the local cache with the project.
 | Workers selected: right-click a foundation | Resume or assist its construction |
 | Workers selected: right-click a damaged own building | Repair it with the source hammer clip |
 | Armed units selected: right-click an enemy building | Attack it until it falls |
+| Attack [A], then click any building | Force-attack it, including your own |
+| Right-click the minimap | Order the selection there; Ctrl marches, Shift queues |
 | Citadel selected: worker portrait | Train a Human Worker; click again to queue (five maximum) |
 | Citadel selected: training portrait / Backspace | Cancel that unit / the last queued unit, with a full refund |
 | Citadel selected: right-click terrain | Set the rally point for trained units |

@@ -7,6 +7,7 @@ public partial class Main
     private bool _minimapSmoke;
     private readonly Dictionary<string,bool> _minimapChecks = [];
     private Vector3 _minimapSmokeFocus;
+    private (int X,int Z) _minimapOrderTarget;
 
     private Vector2 MinimapSmokePoint(float u,float v)
     {
@@ -29,6 +30,10 @@ public partial class Main
                 && point.X < (polygon[j].X-polygon[i].X)*(point.Y-polygon[i].Y)/(polygon[j].Y-polygon[i].Y)+polygon[i].X) inside = !inside;
         return inside;
     }
+
+    private void MinimapRightClick(Vector2 point,bool ctrl = false,bool shift = false)
+        => GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right,Pressed = true,
+            Position = point,GlobalPosition = point,CtrlPressed = ctrl,ShiftPressed = shift },true);
 
     private void Move(Vector2 point,bool leftHeld = false) => GetViewport().PushInput(new InputEventMouseMotion { Position = point,GlobalPosition = point,
         ButtonMask = leftHeld ? MouseButtonMask.Left : 0 },true);
@@ -85,9 +90,27 @@ public partial class Main
             case 28:
                 // The outline refreshes in the frame after a jump made from smoke input.
                 if (_capture != "") _ = CaptureFrame(false);
+                _selected.Clear();
+                foreach (var unit in world.Units.Where(u => u.Team == 0 && u.Present)) _selected.Add(unit.Id);
                 break;
+            case 29:
+                _minimapSmokeFocus = _focus;
+                _minimapOrderTarget = (world.ConstructionSites[SkirmishObstacleBase].X+12000,world.ConstructionSites[SkirmishObstacleBase].Z+12000);
+                MinimapRightClick(MinimapSmokePoint(_commands.Minimap.MapPoint(_minimapOrderTarget.X,_minimapOrderTarget.Z).X/_commands.Minimap.Size.X,
+                    _commands.Minimap.MapPoint(_minimapOrderTarget.X,_minimapOrderTarget.Z).Y/_commands.Minimap.Size.Y)); break;
             case 30:
-                var report = new { build = BuildInfo.Label,checks = _minimapChecks,passed = _minimapChecks.Count == 12 && _minimapChecks.Values.All(v => v),
+                var sent = world.Commands.Last(); var landed = world.Navigation.Center(sent.Cell);
+                _minimapChecks["minimap_right_click_moves_the_selection"] = sent.Kind == OrderKind.Move
+                    && sent.Units.Length == _selected.Count
+                    && SimWorld.DistanceSquared(landed.X,landed.Z,_minimapOrderTarget.X,_minimapOrderTarget.Z) < 4000L*4000;
+                _minimapChecks["minimap_right_click_keeps_the_camera"] = _focus == _minimapSmokeFocus;
+                MinimapRightClick(MinimapSmokePoint(_commands.Minimap.MapPoint(_minimapOrderTarget.X,_minimapOrderTarget.Z).X/_commands.Minimap.Size.X,
+                    _commands.Minimap.MapPoint(_minimapOrderTarget.X,_minimapOrderTarget.Z).Y/_commands.Minimap.Size.Y),ctrl: true); break;
+            case 31:
+                _minimapChecks["ctrl_minimap_right_click_marches"] = world.Commands.Last().Kind == OrderKind.AttackMove;
+                break;
+            case 34:
+                var report = new { build = BuildInfo.Label,checks = _minimapChecks,passed = _minimapChecks.Count == 15 && _minimapChecks.Values.All(v => v),
                     markers = _minimapMarkers.Select(m => new { m.Type,m.X,m.Z }),view = _commands.Minimap.View.Select(p => new[] { p.X,p.Y }),
                     focus = new[] { _focus.X,_focus.Y,_focus.Z },yaw = _yaw,distance = _distance };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"minimap-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));

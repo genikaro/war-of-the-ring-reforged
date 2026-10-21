@@ -135,19 +135,24 @@ public partial class Main
         return (int)Math.Ceiling(extent)+body+_world.Navigation.CellSize;
     }
 
-    /// <summary>Right-clicking an enemy building sends every armed unit in the selection to break it down.</summary>
+    /// <summary>Right-clicking an enemy building sends every armed unit in the selection to break it down. An
+    /// armed Attack command forces the target, so it also takes one's own buildings, as force-attack does
+    /// elsewhere; a plain right-click stays contextual and leaves friendly buildings to the repair order.</summary>
     private bool TrySiege(Vector2 mouse,bool queued)
     {
-        if (!_skirmish || _orders.Pending is not (null or OrderKind.Attack or OrderKind.ForceAttack)) return false;
+        bool forced = _orders.Pending is OrderKind.Attack or OrderKind.ForceAttack;
+        if (!_skirmish || !forced && _orders.Pending != null) return false;
         if (StructureAt(mouse) is not { } structure) return false;
         var site = _world!.ConstructionSites.Values.FirstOrDefault(s => s.Obstacle == structure.Id);
-        if (site == null || !_world.CanAttackSite(0,site.Id)) return false;
+        if (site == null || site.Team < 0 || site.Health <= 0) return false;
+        if (!forced && !_world.CanAttackSite(0,site.Id)) return false;
         var attackers = _world.Units.Where(u => u.Team == 0 && u.Present && _selected.Contains(u.Id)
             && u.Definition.DpsMilli > 0 && !u.RingActive).Select(u => u.Id).ToArray();
         _orders.Cancel();
         if (attackers.Length == 0) { _status.Text = "Nothing in the selection can attack a building"; return true; }
-        _world.Enqueue(0,attackers,OrderKind.AttackStructure,target: site.Id,queued: queued);
-        _status.Text = "Attack "+_world.SiteRules(site).DisplayName+(_paused ? " queued (paused)" : " order issued");
+        _world.Enqueue(0,attackers,OrderKind.AttackStructure,cell: forced ? SimWorld.ForcedSiege : -1,target: site.Id,queued: queued);
+        _status.Text = (site.Team == 0 ? "Force-attack " : "Attack ")+_world.SiteRules(site).DisplayName
+            +(_paused ? " queued (paused)" : " order issued");
         return true;
     }
 

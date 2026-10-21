@@ -826,3 +826,36 @@ right-clicks it into rubble. 722 simulation and 34 worker-cache checks, 170
 Python tests and all other skirmish and Helm's Deep smokes pass. `-FormationSmoke`
 still reports `attack_move_arrived:false`; that failure predates build-20 and was
 reproduced on build-19 in a clean worktree.
+
+## Build-22: force-attack on buildings and minimap orders
+
+Owner playtest of build-21: force-attack did not work on buildings, and the
+minimap took no orders.
+
+The armed Attack command (A, or the panel button) already reached an *enemy*
+building, because a contextual right-click and an armed click share the same
+path. What it could not do was force a target the contextual rules refuse, so
+clicking one's own building fell through to an attack-move at the ground under
+it and looked like nothing happening. An armed Attack now forces the building it
+clicks, of any team, which is what force-attack means everywhere else; the status
+line says `Force-attack <name>` when the target is the player's own. A plain
+right-click stays contextual, so a friendly building is still a repair order and
+never a demolition by accident. The order carries the forcing in
+`SimCommand.Cell`, and the besieging unit remembers it, so a queued forced siege
+stays forced.
+
+Neutral selectable objects — ore piles, food wells and the place of power — still
+cannot be attacked. They are not construction sites and have no health.
+
+Right-clicking the minimap orders the selection to that point, as the original
+manual describes and the October 21 capture session observed; left-click and drag
+still move the camera and nothing else. Ctrl marches instead of moving and Shift
+queues, matching a right-click on the battlefield, and the camera does not jump
+to the point. An order to unwalkable ground snaps to the nearest standable cell,
+and with nothing selected the status line asks for a selection.
+
+Validation: the siege smoke grows to 16 cases with force-attack on the player's
+own Citadel and the armed Attack command on the enemy's; the minimap smoke grows
+to 15 with the move order, the untouched camera and the Ctrl march. 722
+simulation and 34 worker-cache checks, 170 Python tests and all other skirmish
+and Helm's Deep smokes pass.
