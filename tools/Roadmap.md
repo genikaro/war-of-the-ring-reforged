@@ -30,6 +30,15 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-29 (Oct 22):** pathfinding performance, first pass, after an owner report
+of frame drops in large matches. `-Profile` prints where simulation and frame time
+go. A building laid or razed no longer wipes the pathfinder's edge caches across
+every body graph, only around itself, and A* runs on flat cached arrays. Every
+route is unchanged (the observer match reproduces build-28's final digest), and
+mid-game ticks cost about a third: 1.7-2 ms instead of 5-6 ms, with 16x running at
+17-26 fps instead of 5-11. Stuck-unit replanning and combat targeting are next.
+See [skirmish notes](../prototype/SKIRMISH.md#build-29-pathfinding-performance-first-pass).
+
 **Build-28 (Oct 22):** observer mode and game speed. `-Observe -Bots Gimli,Aragorn`
 runs a bot on every side and nobody plays: any unit can be inspected but not
 commanded, and a panel shows each player's economy, buildings and bot status.
@@ -643,6 +652,48 @@ those alongside gameplay research; this does not block evidence-backed command
 corrections. Keep the 26 web references, provisional local captures and future
 approved baselines distinct. Continuous timing evidence and matched scenes are
 still required for the relevant fidelity claims.
+
+## Performance backlog
+
+Owner request (Oct 22): keep the optimization ideas here. Measure with
+`./prototype/run.ps1 -ObserverSmoke -Profile` (Gimli against Aragorn, 16x,
+headless): it prints the unit count and per-section time every two game minutes,
+and its final digest must not change unless a change is meant to alter play.
+Build-29 measured: mid-game ticks 1.7-2 ms (5-6 ms before), worst two-minute
+window 4.2 ms per tick, 16x at 17-26 fps.
+
+- [ ] Remove dead bodies. The original fades a corpse after
+  `WorldVariables.UnitCorpsePersistSeconds` (10 s), beginning within
+  `ObjectFadeProximity` (15 m) of the camera; the owner suggested 60 s. Dead units
+  keep skinned, animated models in the scene for the whole match today. Free the
+  view, its animation player and health bar; keep the simulation entry (unit ids
+  are list indices).
+- [ ] Stuck-unit replanning: blocked units re-plan with other units' cells as
+  obstacles, and when bodies wall off a reachable goal the search floods the whole
+  region (most remaining spikes: 2-5 s of pathfinding per two-minute window).
+  Options: remember that a goal was unreachable for a few ticks, bound a blocked
+  replan by distance or visited nodes and fall back to waiting, or search to the
+  nearest free cell beside the goal.
+- [ ] Combat targeting (`UpdateCombat`, 0.5-0.9 ms per tick mid-game): candidate
+  enemies are scanned across all units; a coarse spatial grid rebuilt once per tick
+  would limit each scan to nearby cells.
+- [ ] Occupancy: `OccupiedNodes` and `CanReserveMovement` scan every unit, several
+  times per unit per tick (about 0.2 ms per tick now, quadratic in unit count). Keep
+  an occupancy count per node updated as units move, or a per-tick spatial grid.
+- [ ] Route rebase after a map change re-plans every moving unit at once
+  (0.1-0.15 ms per tick averaged); re-plan only units whose path crosses the
+  changed area.
+- [ ] Bot think spikes: the placement ring search calls `CanPlaceBuilding` up to
+  176 times in one think, and repeats it each second while nothing fits; cache
+  refusals per building until the map changes, and stagger heavy bot work.
+- [ ] Presentation at high speed: impact and launch sounds and per-event work run
+  for every fast-forwarded tick; thin them above 4x. Animation and health-bar
+  updates for off-screen units could be skipped or rate-limited.
+- [ ] Measure the GPU side on a real display at 16x with large armies (the profile
+  above is headless), including skinned-mesh and shadow cost.
+- [ ] Allocation pressure: many per-tick LINQ queries and fresh `HashSet`s in the
+  simulation; replace the hottest with reusable buffers once profiling points at
+  them.
 
 ## Deferred navigation and engine work
 

@@ -45,6 +45,11 @@ public sealed partial class GridNavigation
     private readonly HashSet<(int,int)> _bodyEdges = [];
     private readonly Dictionary<int,bool> _terrainFits = [];
     private readonly Dictionary<(int,int),bool> _groundEdges = [];
+    // Flat caches of CanStand and of the eight ground edges per cell (0 unknown, 1 open, 2 closed), forgotten
+    // around an obstacle when it toggles, plus reusable search buffers stamped per search.
+    private sbyte[]? _standCache,_edgeCache;
+    private int[] _searchCost = [],_searchPrevious = [],_searchSeen = [],_searchClosed = [];
+    private int _searchStamp;
     public int BodyRadiusMm { get; }
     public int BodyHeightMm { get; }
     private bool TypedBody => BodyRadiusMm != 350 || BodyHeightMm != 700;
@@ -99,7 +104,10 @@ public sealed partial class GridNavigation
             throw new ArgumentException("Invalid obstacle layer");
         _obstacles.Add(obstacle.Id, new(obstacle.Id, obstacle.Nodes.Distinct().Order().ToArray(),
             obstacle.Edges.Select(e => e.A < e.B ? e : new(e.B, e.A)).Distinct().ToArray(),obstacle.Footprints));
+        bool precise = UsesPreciseFootprints;
         IndexFootprints(obstacle);
+        // The first exact footprint switches every ground edge to swept-body clearance, so nothing cached survives.
+        if (!precise && UsesPreciseFootprints) { _edgeCache = null; _groundEdges.Clear(); }
         foreach (var edge in obstacle.Edges)
         {
             int a=Math.Min(edge.A,edge.B),b=Math.Max(edge.A,edge.B);
@@ -194,8 +202,8 @@ public sealed partial class GridNavigation
         }
         if (active) _activeObstacles.Add(id); else _activeObstacles.Remove(id);
         _components = null;
+        InvalidateNear(obstacle);
         _bottlenecks.Clear();
-        _groundEdges.Clear();
         Revision++;
         foreach (var graph in _bodyGraphs.Values) graph.SetObstacle(id,active);
     }
@@ -342,15 +350,96 @@ public sealed partial class GridNavigation
         if (_components[node] < 0)
         {
             var queue = new Queue<int>(); queue.Enqueue(node); _components[node] = node;
+            var neighbors = new List<int>(8);
             while (queue.TryDequeue(out int current))
-                foreach (int next in Neighbors(current))
-                    if (CanStand(next) && _components[next] < 0)
+            {
+                OpenNeighbors(current,neighbors);
+                foreach (int next in neighbors)
+                    if (StandCached(next) && _components[next] < 0)
                     { _components[next] = node; queue.Enqueue(next); }
+            }
         }
     }
 
     public IEnumerable<int> Neighbors(int id)
-        => TopologyNeighbors(id).Where(n => EdgeOpen(id,n));
+    {
+        var open = new List<int>(8); OpenNeighbors(id,open); return open;
+    }
+
+    private bool StandCached(int node)
+    {
+        if (node < 0 || node >= NodeCount) return false;
+        var cache = _standCache ??= new sbyte[NodeCount];
+        if (cache[node] == 0) cache[node] = CanStand(node) ? (sbyte)1 : (sbyte)2;
+        return cache[node] == 1;
+    }
+
+    /// <summary>The open neighbours of a node, in TopologyNeighbors order, with ground edges cached.</summary>
+    private void OpenNeighbors(int id,List<int> open)
+    {
+        open.Clear();
+        if (id >= GroundCount)
+        {
+            foreach (int link in _surfaces[id-GroundCount].Links) if (EdgeOpen(id,link)) open.Add(link);
+            return;
+        }
+        var edges = _edgeCache ??= new sbyte[GroundCount*8];
+        int x = id % Width, z = id / Width;
+        void Ground(int direction,bool inside,int next)
+        {
+            if (!inside) return;
+            ref sbyte state = ref edges[id*8+direction];
+            if (state == 0) state = EdgeOpen(id,next) ? (sbyte)1 : (sbyte)2;
+            if (state == 1) open.Add(next);
+        }
+        Ground(0,x > 0,id-1); Ground(1,z > 0,id-Width); Ground(2,x+1 < Width,id+1); Ground(3,z+1 < Height,id+Width);
+        Ground(4,x > 0 && z > 0,id-Width-1); Ground(5,x+1 < Width && z > 0,id-Width+1);
+        Ground(6,x > 0 && z+1 < Height,id+Width-1); Ground(7,x+1 < Width && z+1 < Height,id+Width+1);
+        if (_groundLinks.TryGetValue(id,out var links)) foreach (int link in links) if (EdgeOpen(id,link)) open.Add(link);
+    }
+
+    /// <summary>Forgets cached standing, edge and swept-clearance answers around one obstacle. A toggled obstacle
+    /// can only change edges whose swept body meets its footprint or its rasterized nodes and edges, and both ends
+    /// of such an edge lie within a body radius and a diagonal of them; the margin covers that.</summary>
+    private void InvalidateNear(NavigationObstacle obstacle)
+    {
+        int x0 = int.MaxValue,z0 = int.MaxValue,x1 = int.MinValue,z1 = int.MinValue;
+        void Include(int x,int z) { x0 = Math.Min(x0,x); z0 = Math.Min(z0,z); x1 = Math.Max(x1,x); z1 = Math.Max(z1,z); }
+        foreach (int node in obstacle.Nodes.Concat(obstacle.Edges.SelectMany(e => new[] {e.A,e.B}))) Include(Column(node)%Width,Column(node)/Width);
+        foreach (var footprint in obstacle.Footprints ?? [])
+            foreach (var point in footprint.Polygon) Include(Math.Clamp(point.X/CellSize,0,Width-1),Math.Clamp(point.Z/CellSize,0,Height-1));
+        if (x0 > x1) return;
+        int margin = 3+(BodyRadiusMm+CellSize-1)/CellSize;
+        for (int z = Math.Max(0,z0-margin); z <= Math.Min(Height-1,z1+margin); z++)
+        for (int x = Math.Max(0,x0-margin); x <= Math.Min(Width-1,x1+margin); x++)
+        {
+            int cell = z*Width+x;
+            if (_standCache != null)
+            {
+                _standCache[cell] = 0;
+                if (_surfaceColumns.TryGetValue(cell,out var layers)) foreach (int node in layers) _standCache[node] = 0;
+            }
+            if (_edgeCache != null) Array.Clear(_edgeCache,cell*8,8);
+            foreach (int next in TopologyNeighbors(cell)) if (next < GroundCount) _groundEdges.Remove((Math.Min(cell,next),Math.Max(cell,next)));
+        }
+    }
+
+    private void BeginSearch()
+    {
+        if (_searchSeen.Length != NodeCount)
+        {
+            _searchCost = new int[NodeCount]; _searchPrevious = new int[NodeCount];
+            _searchSeen = new int[NodeCount]; _searchClosed = new int[NodeCount]; _searchStamp = 0;
+        }
+        if (++_searchStamp == int.MaxValue) { Array.Clear(_searchSeen); Array.Clear(_searchClosed); _searchStamp = 1; }
+    }
+
+    private List<int> SearchPath(int node)
+    {
+        var path = new List<int> { node };
+        while (_searchPrevious[node] >= 0) { node = _searchPrevious[node]; path.Add(node); }
+        path.Reverse(); return path;
+    }
 
     private bool ClearEdge(int a, int b) => !_blockedEdges.ContainsKey((Math.Min(a,b), Math.Max(a,b)))
         && !_bodyEdges.Contains((Math.Min(a,b),Math.Max(a,b)));
@@ -500,32 +589,31 @@ public sealed partial class GridNavigation
 
     public List<int> FindPath(int start, int goal, IReadOnlySet<int>? blocked = null)
     {
+        using var time = SimProfiler.Time("FindPath");
         if (!IsConnected(start,goal) || blocked?.Contains(goal) == true) return [];
-        var open = new PriorityQueue<int, (int Cost, int Id)>();
-        var cost = new Dictionary<int, int> { [start] = 0 };
-        var previous = new Dictionary<int, int>();
+        // Array-backed A*: same priorities, neighbour order and tie rules as the dictionary version it replaced.
+        BeginSearch();
+        int stamp = _searchStamp, goalColumn = Column(goal);
+        var open = new PriorityQueue<int, (int Cost, int Id)>(); var neighbors = new List<int>(8);
         int Heuristic(int id)
         {
-            int dx = Math.Abs(Column(id)%Width-Column(goal)%Width), dz = Math.Abs(Column(id)/Width-Column(goal)/Width);
+            int column = Column(id), dx = Math.Abs(column%Width-goalColumn%Width), dz = Math.Abs(column/Width-goalColumn/Width);
             return 1000*Math.Max(dx,dz)+414*Math.Min(dx,dz);
         }
+        _searchSeen[start] = stamp; _searchCost[start] = 0; _searchPrevious[start] = -1;
         open.Enqueue(start, (Heuristic(start), start));
-        var closed = new HashSet<int>();
         while (open.TryDequeue(out int cell, out _))
         {
-            if (!closed.Add(cell)) continue;
-            if (cell == goal)
+            if (_searchClosed[cell] == stamp) continue;
+            _searchClosed[cell] = stamp;
+            if (cell == goal) return SearchPath(cell);
+            OpenNeighbors(cell,neighbors);
+            foreach (int next in neighbors)
             {
-                var path = new List<int> { cell };
-                while (previous.TryGetValue(cell, out cell)) path.Add(cell);
-                path.Reverse(); return path;
-            }
-            foreach (int next in Neighbors(cell))
-            {
-                if (!CanStand(next) || blocked?.Contains(next) == true || closed.Contains(next)) continue;
-                int candidate = cost[cell] + EdgeCost(cell,next);
-                if (cost.TryGetValue(next, out int old) && old <= candidate) continue;
-                cost[next] = candidate; previous[next] = cell;
+                if (!StandCached(next) || blocked?.Contains(next) == true || _searchClosed[next] == stamp) continue;
+                int candidate = _searchCost[cell] + EdgeCost(cell,next);
+                if (_searchSeen[next] == stamp && _searchCost[next] <= candidate) continue;
+                _searchSeen[next] = stamp; _searchCost[next] = candidate; _searchPrevious[next] = cell;
                 open.Enqueue(next, (candidate + Heuristic(next), next));
             }
         }
@@ -566,24 +654,25 @@ public sealed partial class GridNavigation
     // One bounded search for an entire ring of acceptable combat positions.
     public List<int> FindPathToAny(int start,IEnumerable<int> destinations,IReadOnlySet<int>? blocked,int maxVisited = 2048,Func<int,bool>? allowed = null)
     {
+        using var time = SimProfiler.Time("FindPathToAny");
         var goals=destinations.Where(n => CanStand(n) && blocked?.Contains(n) != true && IsConnected(start,n)).ToHashSet();
         if (goals.Count == 0) return [];
+        BeginSearch();
+        int stamp=_searchStamp,closedCount=0; var neighbors=new List<int>(8);
         var open=new PriorityQueue<int,(int Cost,int Id)>(); open.Enqueue(start,(0,start));
-        var cost=new Dictionary<int,int> {[start]=0}; var previous=new Dictionary<int,int>(); var closed=new HashSet<int>();
-        while (open.TryDequeue(out int node,out _) && closed.Count < maxVisited)
+        _searchSeen[start]=stamp; _searchCost[start]=0; _searchPrevious[start]=-1;
+        while (open.TryDequeue(out int node,out _) && closedCount < maxVisited)
         {
-            if (!closed.Add(node)) continue;
-            if (goals.Contains(node))
+            if (_searchClosed[node] == stamp) continue;
+            _searchClosed[node]=stamp; closedCount++;
+            if (goals.Contains(node)) return SearchPath(node);
+            OpenNeighbors(node,neighbors);
+            foreach (int next in neighbors)
             {
-                var path=new List<int> {node}; while (previous.TryGetValue(node,out node)) path.Add(node);
-                path.Reverse(); return path;
-            }
-            foreach (int next in Neighbors(node))
-            {
-                if (!CanStand(next) || blocked?.Contains(next) == true || closed.Contains(next) || allowed?.Invoke(next) == false) continue;
-                int score=cost[node]+EdgeCost(node,next);
-                if (cost.TryGetValue(next,out int old) && old <= score) continue;
-                cost[next]=score; previous[next]=node; open.Enqueue(next,(score,next));
+                if (!StandCached(next) || blocked?.Contains(next) == true || _searchClosed[next] == stamp || allowed?.Invoke(next) == false) continue;
+                int score=_searchCost[node]+EdgeCost(node,next);
+                if (_searchSeen[next] == stamp && _searchCost[next] <= score) continue;
+                _searchSeen[next]=stamp; _searchCost[next]=score; _searchPrevious[next]=node; open.Enqueue(next,(score,next));
             }
         }
         return [];

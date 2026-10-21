@@ -1095,3 +1095,40 @@ and replays identically, and a broken assault falls back so the next one forms. 
 simulation and 34 worker-cache checks, the Python suite and the 18 other smokes pass.
 The economy fix moves the `-AiSmoke` timeline earlier: the default bot's assault
 leaves at 3:53 and razes a passive player at 5:12 (5:48 in build-27).
+
+## Build-29: pathfinding performance, first pass
+
+Owner report: large skirmishes dropped frames, worst in bot matches at high
+speed. A new profiler (`./prototype/run.ps1 -Profile`, any mode) prints, every
+two game minutes, the living unit count and the time spent per simulation section
+and hot helper, and Godot's own frame time. On the Gimli against Aragorn observer
+match it put the cost almost entirely in pathfinding: presentation (headless)
+was about 0.1 ms per tick and the occupancy scans about 0.2 ms.
+
+Two fixes, both leaving every route exactly as it was:
+
+- **Map changes no longer wipe the route caches.** Laying, cancelling or razing a
+  building toggled its obstacle, which cleared every cached edge test, including
+  the expensive swept-body clearance checks, in the base graph and in every
+  body-size graph; the next searches recomputed them across the whole map. Only
+  the area a toggled obstacle can affect is forgotten now: its footprint, its
+  rasterized nodes and edges, and a margin of a body radius plus three cells. The
+  one global switch, a graph's first exact footprint, still drops everything.
+- **Searches use flat arrays.** "Can a body stand here" and "is this edge open"
+  are cached per cell, and A* runs on reusable stamped arrays with the same
+  priorities, neighbour order and tie rules instead of dictionaries, hash sets and
+  an allocating neighbour iterator. A search that fails, when units wall off a
+  reachable goal, still floods its region, but at a fraction of the cost.
+
+Measured on the same match, headless at 16x: a typical mid-game tick fell from
+5-6 ms to 1.7-2 ms, the worst two-minute window from 16.8 to 4.2 ms per tick, and
+the frame rate at 16x from 5-11 to 17-26 fps. The match is unchanged: the same
+winner on the same tick and the same final state digest.
+
+Still open: stuck units re-plan routes that flood the map, which causes most of
+the remaining spikes, and unit combat targeting is the next largest cost. Frame
+cost on a real display at 16x is not measured yet. The ideas, measured costs and
+the corpse rule are kept in the roadmap's [performance backlog](../tools/Roadmap.md#performance-backlog).
+
+Validation: 760 simulation and 34 worker-cache checks and all skirmish and Helm's
+Deep smokes pass; the observer smoke's final digest matches build-28's.

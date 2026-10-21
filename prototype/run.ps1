@@ -24,6 +24,7 @@ param(
     [switch]$Observe,
     [string]$Bots,
     [int]$Speed,
+    [switch]$Profile,
     [switch]$NoAi,
     [string]$AiPersonality,
     [switch]$MeleeSmoke,
@@ -92,6 +93,7 @@ if ($ObserverSmoke) { $arguments += @('--observer-smoke','--observe','--bots=Gim
 if ($Observe) { $arguments += '--observe' }
 if ($Bots) { $arguments += "--bots=$Bots" }
 if ($Speed) { $arguments += "--speed=$Speed" }
+if ($Profile) { $arguments += '--profile' }
 if ($NoAi) { $arguments += '--no-ai' }
 if ($AiPersonality) { $arguments += "--ai-personality=$AiPersonality" }
 if ($MeleeSmoke) { $arguments += '--melee-smoke' }

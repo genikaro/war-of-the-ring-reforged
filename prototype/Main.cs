@@ -94,6 +94,7 @@ public partial class Main : Node3D
             if (arg.StartsWith("--capture=")) _capture = arg[10..];
             if (arg == "--no-ai") _noAi = true;
             if (arg == "--observe") _observing = true;
+            if (arg == "--profile") SimProfiler.Enabled = true;
             if (arg.StartsWith("--bots=")) _bots = arg[7..].Split(',');
             if (arg.StartsWith("--speed=")) _speed = int.Parse(arg[8..]);
             if (arg.StartsWith("--ai-personality=")) _aiPersonality = arg[17..];
@@ -630,6 +631,7 @@ public partial class Main : Node3D
         _singleStepRequested = false;
         // Game speed: several fixed ticks per physics frame. A single step while paused stays a single step,
         // and the result panel pausing the game ends the burst.
+        using var physicsTime = SimProfiler.Time("godot physics frame");
         for (int burst = _presentStep ? 1 : _speed, step = 0; step < burst && (step == 0 || !_paused); step++)
         {
             long stepStart=_engagementSmoke?System.Diagnostics.Stopwatch.GetTimestamp():0;
@@ -724,6 +726,8 @@ public partial class Main : Node3D
     public override void _Process(double delta)
     {
         if (_world is null || _loadFailed) return;
+        using var processTime = SimProfiler.Time("godot process frame");
+        ReportProfile();
         RefreshObserverPanel();
         float dt = (float)Math.Min(delta, 0.1);
         if (!_paused || _presentStep)

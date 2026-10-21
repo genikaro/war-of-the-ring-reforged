@@ -459,6 +459,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
 
     private HashSet<int> OccupiedNodes(int except)
     {
+        using var time = SimProfiler.Time("OccupiedNodes");
         int radius = except >= 0 && except < Units.Count ? Units[except].Definition.BodyRadiusMm : 350;
         int height = except >= 0 && except < Units.Count ? Units[except].Definition.BodyHeightMm : 700;
         if (radius == 350 && Units.All(u => u.Definition.BodyRadiusMm == 350))
@@ -482,6 +483,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
 
     private bool CanReserveMovement(SimUnit unit, int to)
     {
+        using var time = SimProfiler.Time("CanReserveMovement");
         var (ax,az) = Navigation.Center(unit.Node); var (bx,bz) = Navigation.Center(to);
         var heights = Navigation.MovementHeights(unit.Node,to);
         foreach (var other in Units.Where(u => u.Id != unit.Id && u.Present))
@@ -515,6 +517,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
 
     public void Step()
     {
+        using var stepTime = SimProfiler.Time("step");
         CombatEvents.Clear();
         AbilityEvents.Clear();
         DestroyedSites.Clear();
@@ -527,15 +530,15 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             _sequence = Math.Max(_sequence,action.Sequence+1);
             action.Action();
         }
-        ActivateQueuedOrders();
-        UpdateAi();
-        UpdateConstruction();
-        UpdateRepairs();
-        UpdateDefenses();
-        UpdateProduction();
+        using (SimProfiler.Time("queued orders")) ActivateQueuedOrders();
+        using (SimProfiler.Time("ai")) UpdateAi();
+        using (SimProfiler.Time("construction")) { UpdateConstruction(); UpdateRepairs(); }
+        using (SimProfiler.Time("defenses")) UpdateDefenses();
+        using (SimProfiler.Time("production")) UpdateProduction();
         UpdateHeroAbilities();
-        if (_navigationRevision != Navigation.Revision)
+        using (SimProfiler.Time("route rebase")) if (_navigationRevision != Navigation.Revision)
         {
+            using var hit = SimProfiler.Time("route rebase hit");
             // Rebuild routes at a tick boundary. Starting from the last reached
             // node also safely brings an in-flight unit back to its cell center.
             foreach (var unit in Units.Where(u => u.Present && u.Goal >= 0))
@@ -595,11 +598,15 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             }
             if (unit.Cooldown > 0) unit.Cooldown--;
             if (UpdateAbility(unit)) continue;
-            UpdateGather(unit);
-            ApproachConstruction(unit);
-            UpdatePersistentOrder(unit);
-            if (UpdateSiege(unit)) continue;
-            if (UpdateCombat(unit)) continue;
+            using (SimProfiler.Time("unit gather")) UpdateGather(unit);
+            using (SimProfiler.Time("unit construction")) ApproachConstruction(unit);
+            using (SimProfiler.Time("unit orders")) UpdatePersistentOrder(unit);
+            bool spent;
+            using (SimProfiler.Time("unit siege")) spent = UpdateSiege(unit);
+            if (spent) continue;
+            using (SimProfiler.Time("unit combat")) spent = UpdateCombat(unit);
+            if (spent) continue;
+            using var movementTime = SimProfiler.Time("unit movement");
             if (unit.Target < 0 && unit.FreeMovement && unit.Definition.BodyRadiusMm > 350 && Tick%10 == 0)
                 AdvanceWideFormation(unit);
             // Retry on a fixed cadence. Occupied cells are temporary obstacles;
@@ -707,9 +714,9 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 else unit.BlockedTicks = unit.Moving ? 0 : unit.BlockedTicks + 1;
             }
         }
-        FaceMovement();
-        AdvanceProjectiles();
-        UpdateOutcome();
+        using (SimProfiler.Time("facing")) FaceMovement();
+        using (SimProfiler.Time("projectiles")) AdvanceProjectiles();
+        using (SimProfiler.Time("outcome")) UpdateOutcome();
         Tick++;
     }
 

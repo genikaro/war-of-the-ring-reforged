@@ -274,6 +274,9 @@ commanded, and a panel shows both players.
 Game speed works in every mode: `-` and `+` step through 1x, 2x, 4x, 8x and 16x,
 Space pauses, and the observer panel has the same buttons.
 
+`-Profile` (any mode) prints, every two game minutes, the unit count and where
+simulation and frame time went, for chasing slow matches.
+
 All generated game data stays in ignored `converted/prototype/` and `converted/skirmish/`. The source
 project contains no game assets. At launch the manifest's content hashes are
 checked before loading. Never distribute the local cache with the project.
