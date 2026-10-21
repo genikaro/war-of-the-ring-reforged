@@ -26,7 +26,7 @@ public partial class Main
         public int Stage = -1;
     }
 
-    private IEnumerable<int> SelectedWorkers() => _world!.Units.Where(u => u.Team == 0 && u.Health > 0
+    private IEnumerable<int> SelectedWorkers() => _world!.Units.Where(u => u.Team == PlayerTeam && u.Health > 0
         && _selected.Contains(u.Id) && _world.Workers.ContainsKey(u.Definition.Name)).Select(u => u.Id);
 
     private ResourceKind? ResourceBuildingKind(string building) => _world!.ConstructionRules.Values.FirstOrDefault(r => r.Name == building)?.Kind;
@@ -147,8 +147,8 @@ public partial class Main
     {
         if (building == null)
         {
-            if (SelectedStructureDetails() is { Team: 0,UnderConstruction: true,SiteId: >= 0 } selected)
-            { _world!.Enqueue(0,[],OrderKind.CancelConstruction,target: selected.SiteId); _status.Text = "Construction cancellation queued"; }
+            if (SelectedStructureDetails() is { UnderConstruction: true,SiteId: >= 0 } selected && selected.Team == PlayerTeam)
+            { _world!.Enqueue(PlayerTeam,[],OrderKind.CancelConstruction,target: selected.SiteId); _status.Text = "Construction cancellation queued"; }
             return;
         }
         if (!_skirmish || !SelectedWorkers().Any()) return;
@@ -184,8 +184,8 @@ public partial class Main
         if (_constructionBuilding is { } building && ResourceBuildingKind(building) == null)
         {
             int cell = PlacementCellAt(mouse);
-            if (!_world!.CanPlaceBuilding(0,building,cell,out string blocked)) { _status.Text = blocked; return; }
-            _world.Enqueue(0,SelectedWorkers(),OrderKind.PlaceBuilding,cell,_world.PlaceableBuildings.IndexOf(building),queued);
+            if (!_world!.CanPlaceBuilding(PlayerTeam,building,cell,out string blocked)) { _status.Text = blocked; return; }
+            _world.Enqueue(PlayerTeam,SelectedWorkers(),OrderKind.PlaceBuilding,cell,_world.PlaceableBuildings.IndexOf(building),queued);
             _status.Text = "Build "+_world.BuildingRules[building].DisplayName+(_paused ? " queued (paused)" : " order issued");
             ClearConstructionTargeting(); _buildMenu = false; return;
         }
@@ -193,8 +193,8 @@ public partial class Main
         if (source == null || _constructionBuilding is not { } resourceBuilding) { _status.Text = "Choose a resource site"; return; }
         var kind = ResourceBuildingKind(resourceBuilding)!.Value;
         if (source.Kind != kind) { _status.Text = kind == ResourceKind.Food ? "A Mill requires a food well" : "A Foundry requires an ore pile"; return; }
-        if (!_world!.CanStartConstruction(0,source.Id,out string reason)) { _status.Text = reason; return; }
-        _world.Enqueue(0,SelectedWorkers(),OrderKind.Build,target: source.Id,queued: queued);
+        if (!_world!.CanStartConstruction(PlayerTeam,source.Id,out string reason)) { _status.Text = reason; return; }
+        _world.Enqueue(PlayerTeam,SelectedWorkers(),OrderKind.Build,target: source.Id,queued: queued);
         _status.Text = "Build "+_world.ConstructionRules[kind].DisplayName+(_paused ? " queued (paused)" : " order issued");
         ClearConstructionTargeting(); _buildMenu = false;
     }
@@ -208,14 +208,14 @@ public partial class Main
         if (ResourceBuildingKind(building) is not { } kind)
         {
             int cell = PlacementCellAt(_pointerPosition);
-            _previewValid = _world!.CanPlaceBuilding(0,building,cell,out _);
+            _previewValid = _world!.CanPlaceBuilding(PlayerTeam,building,cell,out _);
             if (cell >= 0) { var (x,z) = _world.Navigation.Center(cell); _constructionPreview.Position = PositionOf(x,z); }
             else _constructionPreview.Visible = false;
         }
         else
         {
             var source = ResourceAt(_pointerPosition);
-            _previewValid = source != null && source.Kind == kind && _world!.CanStartConstruction(0,source.Id,out _);
+            _previewValid = source != null && source.Kind == kind && _world!.CanStartConstruction(PlayerTeam,source.Id,out _);
             if (source != null) _constructionPreview.Position = PositionOf(source.X,source.Z);
             else
             {

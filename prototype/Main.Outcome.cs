@@ -41,10 +41,22 @@ public partial class Main
         if (_outcomeShown || _world is not { MatchOver: true } world) return;
         _outcomeShown = true;
         bool won = world.Winner == 0;
-        _outcomeTitle.Text = won ? "You won!" : "You lost!";
-        _outcomeTitle.Modulate = won ? new Color("d8b574") : new Color("d06a5a");
-        _outcomeDetail.Text = won ? "Every enemy building lies in ruins." : "All of your buildings have been destroyed.";
-        _status.Text = won ? "Victory: all enemy buildings destroyed" : "Defeat: all your buildings destroyed";
+        if (_observing)
+        {
+            // An observer has no side: name the winner in its colour.
+            string bot = world.AiPlayers.GetValueOrDefault(world.Winner)?.Personality.Id ?? "";
+            _outcomeTitle.Text = world.Winner < 0 ? "No one won" : $"Player {world.Winner+1} wins!";
+            _outcomeTitle.Modulate = world.Winner < 0 ? new Color("d8b574") : TeamColor(world.Winner).Lightened(.3f);
+            _outcomeDetail.Text = world.Winner < 0 ? "The last buildings fell together." : $"{bot} razed every enemy building.";
+            _status.Text = world.Winner < 0 ? "Match over: no buildings left" : $"Match over: Player {world.Winner+1} ({bot}) wins";
+        }
+        else
+        {
+            _outcomeTitle.Text = won ? "You won!" : "You lost!";
+            _outcomeTitle.Modulate = won ? new Color("d8b574") : new Color("d06a5a");
+            _outcomeDetail.Text = won ? "Every enemy building lies in ruins." : "All of your buildings have been destroyed.";
+            _status.Text = won ? "Victory: all enemy buildings destroyed" : "Defeat: all your buildings destroyed";
+        }
         _outcome.Visible = true; SetPaused(true);
     }
 

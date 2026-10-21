@@ -6,6 +6,8 @@ using Reforged.Presentation;
 /// <summary>The original Good console atlas at its native 1024x212 proportions.</summary>
 public partial class CommandPanel : Control
 {
+    /// <summary>The side the person at the keyboard commands; -1 while observing, which leaves every unit read-only.</summary>
+    public int PlayerTeam { get; set; }
     public event Action<OrderKind>? CommandChosen;
     public event Action<int>? GroupChosen;
     public event Action<int,bool,bool>? UnitChosen;
@@ -158,7 +160,7 @@ public partial class CommandPanel : Control
     }
 
     /// <summary>Skirmish resource strip: population, food and ore, in the original icon order.</summary>
-    public void ShowResources(bool visible) { _resources.Visible = visible; _armies.Visible = !visible; }
+    public void ShowResources(bool visible,bool armies = true) { _resources.Visible = visible; _armies.Visible = !visible && armies; }
     public void SetResources(int population,int capacity,int food,int ore)
     {
         _populationText.Text = $"{population}/{capacity}"; _foodText.Text = food.ToString(); _oreText.Text = ore.ToString();
@@ -245,7 +247,7 @@ public partial class CommandPanel : Control
         bool available = units.Count > 0;
         // Each control's visibility has one owner and is assigned once per frame: hiding a
         // button between a press and its release (separate frames) would drop the click.
-        bool controllable = available && units.All(u => u.Team == 0);
+        bool controllable = available && units.All(u => u.Team == PlayerTeam);
         bool single = units.Count == 1;
         RefreshAbilities(units,pending,tick,pendingAbilitySlot);
         _single.Visible = single; _roster.Visible = !single;
@@ -259,7 +261,8 @@ public partial class CommandPanel : Control
         string pace = walking ? "Walking" : "Running";
         _walkRun.TooltipText = $"Global Walk / Run [F2] · {pace}\nSwitch movement pace for your entire army, including future units.\nWorks with any selection. Current orders and queued waypoints continue.";
         if (available) _order.Text += " · "+pace;
-        if (available && !controllable) _order.Text = (units.All(u => u.Team < 0) ? "Neutral unit" : "Enemy unit")+" · Inspecting";
+        if (available && !controllable) _order.Text = (units.All(u => u.Team < 0) ? "Neutral unit" : PlayerTeam < 0 && units.All(u => u.Team == units[0].Team)
+            ? $"Player {units[0].Team+1} unit" : PlayerTeam < 0 ? "Mixed sides" : "Enemy unit")+" · Inspecting";
         string key = string.Join(',',units.Select(u => u.Id));
         if (_rosterKey != key)
         {
@@ -281,7 +284,7 @@ public partial class CommandPanel : Control
         {
             var stats = UnitHudStats.From(unit,_rules);
             var portrait = _portraits[unit.Id]; portrait.Health.Size = new(46*Math.Clamp(unit.Health/(float)unit.MaxHealth,0,1),4);
-            portrait.Health.Color = new Color(unit.Team == 0 ? "69ae63" : "d05b4c");
+            portrait.Health.Color = new Color(unit.Team == PlayerTeam ? "69ae63" : "d05b4c");
             portrait.Button.TooltipText = $"{name(unit.Id)} #{unit.Id+1} · {unit.Health}/{unit.MaxHealth}\n{OrderName(unit.Order)}"
                 + (unit.Walking ? " · Walking" : " · Running")
                 + $"\nAttack {stats.Attack} · Armor {stats.Armor} · Victories {stats.Victories}\n{stats.Type}\n{stats.Matchups}"
@@ -294,7 +297,7 @@ public partial class CommandPanel : Control
                 _typeIcon.Texture = _art.GetValueOrDefault(stats.Icon); _typeIcon.TooltipText = stats.Type+" damage\n"+stats.Matchups;
                 _attackValue.Text = stats.Attack; _armorValue.Text = stats.Armor; _victoriesValue.Text = stats.Victories;
                 _singleHealthText.Text = stats.Health;
-                _singleHealth.Color = new Color(unit.Team == 0 ? "48972e" : "b84c3c");
+                _singleHealth.Color = new Color(unit.Team == PlayerTeam ? "48972e" : "b84c3c");
                 _singleHealth.Size = new(244*Math.Clamp(unit.HealthMilli/(float)(unit.MaxHealth*1000L),0,1),12);
             }
         }
@@ -342,7 +345,7 @@ public partial class CommandPanel : Control
 
     private void RefreshAbilities(IReadOnlyList<SimUnit> units,OrderKind? pending,int tick,int pendingSlot)
     {
-        var hero = units.All(u => u.Team == 0) ? units.FirstOrDefault(u => u.Definition.Abilities?.Length > 0) : null;
+        var hero = units.All(u => u.Team == PlayerTeam) ? units.FirstOrDefault(u => u.Definition.Abilities?.Length > 0) : null;
         for (int slot = 0; slot < 4; slot++)
         {
             var button = _abilities[slot]; var ability = hero?.Ability(slot);
@@ -381,5 +384,6 @@ public partial class CommandPanel : Control
     public bool SingleUnitDetailsVisible => _single.Visible;
     public string DisplayedVictories => _victoriesValue.Text;
     public string DisplayedName => _title.Text;
+    public string DisplayedOrder => _order.Text;
     public string DisplayedHealth => _structureDetails.Visible ? _structureHealthText.Text : _singleHealthText.Text;
 }

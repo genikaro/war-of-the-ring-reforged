@@ -63,9 +63,10 @@ public partial class Main
 
     private void ApplySkirmishHud(CommandPanel panel)
     {
-        panel.ShowResources(true);
-        var bank = _world!.Economies.GetValueOrDefault(0);
-        panel.SetResources(_world.PopulationUsed(0),_world.PopulationCapacity(0),bank?.Food ?? _startState.Food,bank?.Ore ?? _startState.Ore);
+        panel.ShowResources(!_observing,armies: !_observing);
+        if (_observing) return;
+        var bank = _world!.Economies.GetValueOrDefault(PlayerTeam);
+        panel.SetResources(_world.PopulationUsed(PlayerTeam),_world.PopulationCapacity(PlayerTeam),bank?.Food ?? _startState.Food,bank?.Ore ?? _startState.Ore);
     }
 
     private void LoadSkirmishEconomy(JsonElement data)
@@ -147,40 +148,40 @@ public partial class Main
         if (StructureAt(mouse) is not { } structure) return false;
         var site = _world!.ConstructionSites.Values.FirstOrDefault(s => s.Obstacle == structure.Id);
         if (site == null || site.Team < 0 || site.Health <= 0) return false;
-        if (!forced && !_world.CanAttackSite(0,site.Id)) return false;
-        var attackers = _world.Units.Where(u => u.Team == 0 && u.Present && _selected.Contains(u.Id)
+        if (!forced && !_world.CanAttackSite(PlayerTeam,site.Id)) return false;
+        var attackers = _world.Units.Where(u => u.Team == PlayerTeam && u.Present && _selected.Contains(u.Id)
             && u.Definition.DpsMilli > 0 && !u.RingActive).Select(u => u.Id).ToArray();
         _orders.Cancel();
         if (attackers.Length == 0) { _status.Text = "Nothing in the selection can attack a building"; return true; }
-        _world.Enqueue(0,attackers,OrderKind.AttackStructure,cell: forced ? SimWorld.ForcedSiege : -1,target: site.Id,queued: queued);
-        _status.Text = (site.Team == 0 ? "Force-attack " : "Attack ")+_world.SiteRules(site).DisplayName
+        _world.Enqueue(PlayerTeam,attackers,OrderKind.AttackStructure,cell: forced ? SimWorld.ForcedSiege : -1,target: site.Id,queued: queued);
+        _status.Text = (site.Team == PlayerTeam ? "Force-attack " : "Attack ")+_world.SiteRules(site).DisplayName
             +(_paused ? " queued (paused)" : " order issued");
         return true;
     }
 
     private bool TryGather(Vector2 mouse,bool queued)
     {
-        if (!_skirmish || _orders.Pending != null || !_world!.Units.Any(u => u.Team == 0 && u.Health > 0
+        if (!_skirmish || _orders.Pending != null || !_world!.Units.Any(u => u.Team == PlayerTeam && u.Health > 0
             && _selected.Contains(u.Id) && _world.Workers.ContainsKey(u.Definition.Name))) return false;
         if (StructureAt(mouse) is { } structure && _world.ConstructionSites.Values.FirstOrDefault(s => s.Obstacle == structure.Id)
             is { Team: 0 } owned && (!owned.Complete || _world.NeedsRepair(owned)))
         {
-            _world.Enqueue(0,SelectedWorkers(),OrderKind.Build,target: owned.Id,queued: queued);
+            _world.Enqueue(PlayerTeam,SelectedWorkers(),OrderKind.Build,target: owned.Id,queued: queued);
             _status.Text = owned.Complete ? "Repair "+_world.SiteRules(owned).DisplayName : "Resume construction";
             return true;
         }
         var source = ResourceAt(mouse);
         if (source == null) return false;
-        if (_world.ConstructionSites.TryGetValue(source.Id,out var site) && site.Team == 0 && !site.Complete)
+        if (_world.ConstructionSites.TryGetValue(source.Id,out var site) && site.Team == PlayerTeam && !site.Complete)
         {
-            _world.Enqueue(0,SelectedWorkers(),OrderKind.Build,target: source.Id,queued: queued);
+            _world.Enqueue(PlayerTeam,SelectedWorkers(),OrderKind.Build,target: source.Id,queued: queued);
             _status.Text = "Resume construction"; return true;
         }
-        if (!_world.CanGather(0,source.Id) && !_world.Units.Any(u => u.Team == 0 && _selected.Contains(u.Id) && u.Health > 0 && u.CargoMilli > 0))
+        if (!_world.CanGather(PlayerTeam,source.Id) && !_world.Units.Any(u => u.Team == PlayerTeam && _selected.Contains(u.Id) && u.Health > 0 && u.CargoMilli > 0))
         { _status.Text = site is { Team: > 0 } ? "Enemy resource building" : source.Kind == ResourceKind.Food ? "Food gathering requires a Mill" : "No raw ore remains; a Foundry is required"; return true; }
-        var workers = _world.Units.Where(u => u.Team == 0 && u.Health > 0 && _selected.Contains(u.Id)
+        var workers = _world.Units.Where(u => u.Team == PlayerTeam && u.Health > 0 && _selected.Contains(u.Id)
             && _world.Workers.ContainsKey(u.Definition.Name)).Select(u => u.Id);
-        _world.Enqueue(0,workers,OrderKind.Gather,target: source.Id,queued: queued);
+        _world.Enqueue(PlayerTeam,workers,OrderKind.Gather,target: source.Id,queued: queued);
         _status.Text = "Gather "+source.Kind.ToString().ToLowerInvariant()+(_paused ? " queued (paused)" : " order issued");
         return true;
     }

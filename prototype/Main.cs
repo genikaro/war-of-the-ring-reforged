@@ -93,8 +93,12 @@ public partial class Main : Node3D
             if (arg.StartsWith("--cache=")) _cache = arg[8..];
             if (arg.StartsWith("--capture=")) _capture = arg[10..];
             if (arg == "--no-ai") _noAi = true;
+            if (arg == "--observe") _observing = true;
+            if (arg.StartsWith("--bots=")) _bots = arg[7..].Split(',');
+            if (arg.StartsWith("--speed=")) _speed = int.Parse(arg[8..]);
             if (arg.StartsWith("--ai-personality=")) _aiPersonality = arg[17..];
             if (arg == "--ai-smoke") _aiSmoke = true;
+            if (arg == "--observer-smoke") _observerSmoke = true;
             if (arg.StartsWith("--capture-resolution="))
             {
                 var size = arg[21..].Split('x'); _captureResolution = new(int.Parse(size[0]),int.Parse(size[1]));
@@ -129,6 +133,8 @@ public partial class Main : Node3D
             if (arg == "--formation-smoke") _formationSmoke=_engagementSmoke=true;
         }
         _hud.Visible = !_hideHud;
+        _commands.PlayerTeam = PlayerTeam;
+        if (!Speeds.Contains(_speed)) throw new ArgumentOutOfRangeException(nameof(_speed),"Game speed is 1, 2, 4, 8 or 16");
         if (_cache == "") _cache = System.IO.Path.GetFullPath(ProjectSettings.GlobalizePath("res://../converted/prototype"));
         try { LoadSandbox(); if (_openDebugMenu) { _hud.Show(); _toolsPanel.Show(); RefreshDebugMenu(); } }
         catch (Exception error)
@@ -138,7 +144,7 @@ public partial class Main : Node3D
             RefreshDebugMenu();
             _status.Text = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             GD.PushError(error.ToString());
-            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke || _engagementSmoke || _capture != "") GetTree().Quit(1);
+            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke || _observerSmoke || _engagementSmoke || _capture != "") GetTree().Quit(1);
         }
     }
 
@@ -226,13 +232,13 @@ public partial class Main : Node3D
             AddUnitView(unit);
         }
         _spawnCount = _world.Units.Count;
-        _friendlySquads.AddRange(_world.Units.Where(u => u.Team == 0).Select(u => u.Id).Chunk(6));
+        _friendlySquads.AddRange(_world.Units.Where(u => u.Team == PlayerTeam).Select(u => u.Id).Chunk(6));
         for (int slot = 0; slot < _friendlySquads.Count; slot++) _controlGroups.Assign(slot,_friendlySquads[slot],LivingFriendly);
         _commands.LoadArtwork(_cache,_world);
         _heroBar.LoadArtwork(_commands);
         _hudScale.Value = _commands.ScalePercent;
         if (_skirmish) LoadSkirmishScene(manifest);
-        var framed = _skirmish ? _world.Units.Where(u => u.Team == 0).ToList() : _world.Units;
+        var framed = _skirmish && !_observing ? _world.Units.Where(u => u.Team == PlayerTeam).ToList() : _world.Units;
         float spanX = (framed.Max(u => u.X)-framed.Min(u => u.X))/1000f;
         float spanZ = (framed.Max(u => u.Z)-framed.Min(u => u.Z))/1000f;
         _squadDistance = Math.Max(48,Math.Max(spanX,spanZ)*1.9f);
@@ -267,7 +273,7 @@ public partial class Main : Node3D
         root.AddChild(modelSize); modelSize.AddChild(visual);
         var ring = new MeshInstance3D { Mesh = ScenePresentation.SelectionRing(), Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             MaterialOverride = new StandardMaterial3D {
-                AlbedoColor = new Color(team == 0 ? "e9c22d" : "e65045"), CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+                AlbedoColor = _observing ? TeamColor(team).Lightened(.25f) : new Color(team == 0 ? "e9c22d" : "e65045"), CullMode = BaseMaterial3D.CullModeEnum.Disabled,
                 ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
         root.AddChild(ring);
         var health = new HealthBar(Math.Max(1.1f,2.2f*unit.Definition.BodyRadiusMm/1000f),.16f) { Position = new(0,.12f,0) };
@@ -321,6 +327,7 @@ public partial class Main : Node3D
         CreateDebugMenu();
         _commands = new CommandPanel(); _hud.AddChild(_commands);
         CreateOutcomePanel();
+        CreateObserverPanel();
         _commands.MenuChosen += ToggleDebugMenu;
         _commands.CommandChosen += ChooseCommand;
         _commands.WalkRunChosen += ToggleWalkRun;
@@ -381,6 +388,8 @@ public partial class Main : Node3D
             {
                 SetPaused(!_paused);
             }
+            if (key.Keycode is Key.Minus or Key.KpSubtract) StepSpeed(-1);
+            if (key.Keycode is Key.Equal or Key.Plus or Key.KpAdd) StepSpeed(1);
             if (key.Keycode == Key.Escape)
             {
                 if (_orders.Pending != null || _constructionTargeting) CancelTargeting();
@@ -405,7 +414,7 @@ public partial class Main : Node3D
         }
     }
 
-    private bool LivingFriendly(int id) => _world != null && id >= 0 && id < _world.Units.Count && _world.Units[id].Team == 0 && _world.Units[id].Health > 0;
+    private bool LivingFriendly(int id) => _world != null && id >= 0 && id < _world.Units.Count && _world.Units[id].Team == PlayerTeam && _world.Units[id].Health > 0;
     private bool LivingUnit(int id) => _world != null && id >= 0 && id < _world.Units.Count && _world.Units[id].Present;
 
     private void UseGroup(int slot,bool assign,bool append)
@@ -469,7 +478,7 @@ public partial class Main : Node3D
         int? previousStructure = _selectedStructure;
         _selectedStructure = null;
         if (!append || !_selected.All(LivingFriendly)) _selected.Clear();
-        foreach (var unit in _world!.Units.Where(u => u.Team == 0 && u.Present))
+        foreach (var unit in _world!.Units.Where(u => (u.Team == PlayerTeam || _observing) && u.Present))
         {
             var pos = UnitPosition(unit) + Vector3.Up;
             if (_camera.IsPositionBehind(pos)) continue;
@@ -486,7 +495,7 @@ public partial class Main : Node3D
     private void Order(Vector2 mouse, bool groundOnly = false,bool queued = false)
     {
         if (_orders.Pending == OrderKind.UseAbility) { TargetAbility(mouse); return; }
-        if (!_world!.Units.Any(u => u.Team == 0 && u.Health > 0 && _selected.Contains(u.Id))) return;
+        if (!_world!.Units.Any(u => u.Team == PlayerTeam && u.Health > 0 && _selected.Contains(u.Id))) return;
         var unit = groundOnly ? null : UnitAt(mouse);
         if (!groundOnly && unit == null && TrySiege(mouse,queued)) return;
         if (!groundOnly && unit == null && TryGather(mouse,queued)) return;
@@ -513,7 +522,7 @@ public partial class Main : Node3D
 
     private void ChooseCommand(OrderKind kind)
     {
-        if (_world == null || !_world.Units.Any(u => u.Team == 0 && u.Health > 0 && _selected.Contains(u.Id))) return;
+        if (_world == null || !_world.Units.Any(u => u.Team == PlayerTeam && u.Health > 0 && _selected.Contains(u.Id))) return;
         _dragging = false; _hud.SelectionBox = null;
         ClearConstructionTargeting(); _buildMenu = false;
         if (_orders.Begin(kind)) _status.Text = CommandPanel.OrderName(kind)+": choose a target";
@@ -537,16 +546,16 @@ public partial class Main : Node3D
 
     private void ToggleWalkRun()
     {
-        if (_world == null) return;
-        _world.Enqueue(0,[],OrderKind.ToggleWalkRun);
+        if (_world == null || _observing) return;
+        _world.Enqueue(PlayerTeam,[],OrderKind.ToggleWalkRun);
         _status.Text = _paused ? "Global Walk / Run queued (paused)" : "Global Walk / Run changed";
     }
 
     private void SendOrder(PlayerOrder order,bool queued = false)
     {
-        var living = _world!.Units.Where(u => u.Team == 0 && u.Health > 0 && _selected.Contains(u.Id)).Select(u => u.Id).ToArray();
+        var living = _world!.Units.Where(u => u.Team == PlayerTeam && u.Health > 0 && _selected.Contains(u.Id)).Select(u => u.Id).ToArray();
         if (living.Length == 0) return;
-        _world.Enqueue(0,living,order.Kind,order.Cell,order.Target,queued);
+        _world.Enqueue(PlayerTeam,living,order.Kind,order.Cell,order.Target,queued);
         _status.Text = CommandPanel.OrderName(order.Kind)+(_paused ? " queued (paused)" : " order issued");
     }
 
@@ -556,7 +565,7 @@ public partial class Main : Node3D
     {
         if (_world == null || _loadFailed) return;
         ClearConstructionTargeting();
-        if (!_world.Units.Any(u => u.Team == 0 && u.Health > 0 && _selected.Contains(u.Id)))
+        if (!_world.Units.Any(u => u.Team == PlayerTeam && u.Health > 0 && _selected.Contains(u.Id)))
         { _status.Text = "Select your forces first"; return; }
         var nav = _world.Navigation;
         int x = Math.Clamp((int)((1-point.X)*nav.Width*nav.CellSize),0,nav.Width*nav.CellSize-1);
@@ -619,14 +628,19 @@ public partial class Main : Node3D
         if (_world is null || _loadFailed || (_paused && !_singleStepRequested)) return;
         _presentStep = _paused;
         _singleStepRequested = false;
-        long stepStart=_engagementSmoke?System.Diagnostics.Stopwatch.GetTimestamp():0;
-        _world.Step();
-        while (_views.Count < _world.Units.Count) AddUnitView(_world.Units[_views.Count]);
-        if (_skirmish) ApplySkirmishHud(_commands);
-        if (_engagementSmoke) RecordEngagementStep(System.Diagnostics.Stopwatch.GetElapsedTime(stepStart).TotalMilliseconds);
-        PresentCombatEvents();
-        PresentAbilityEvents();
-        PresentOutcome();
+        // Game speed: several fixed ticks per physics frame. A single step while paused stays a single step,
+        // and the result panel pausing the game ends the burst.
+        for (int burst = _presentStep ? 1 : _speed, step = 0; step < burst && (step == 0 || !_paused); step++)
+        {
+            long stepStart=_engagementSmoke?System.Diagnostics.Stopwatch.GetTimestamp():0;
+            _world.Step();
+            while (_views.Count < _world.Units.Count) AddUnitView(_world.Units[_views.Count]);
+            if (_skirmish) ApplySkirmishHud(_commands);
+            if (_engagementSmoke) RecordEngagementStep(System.Diagnostics.Stopwatch.GetElapsedTime(stepStart).TotalMilliseconds);
+            PresentCombatEvents();
+            PresentAbilityEvents();
+            PresentOutcome();
+        }
         if (_pendingObstacle >= 0)
         {
             bool applied = _world.Navigation.IsObstacleActive(_pendingObstacle) == _pendingObstacleActive;
@@ -668,7 +682,7 @@ public partial class Main : Node3D
             if (unit.Moving) _movingSeen++;
             if (unit.Moving && unit.FreeMovement) _freeMovementSeen++;
             if (unit.Attacking) _attackingSeen++;
-            if (unit.Attacking && unit.Team == 0)
+            if (unit.Attacking && unit.Team == PlayerTeam)
                 for (int squad = 0; squad < _friendlySquads.Count; squad++)
                     if (_friendlySquads[squad].Contains(unit.Id)) _squadsFought.Add(squad);
             string clip = state == "cast" ? unit.Ability(unit.AbilitySlot)!.CastClip : state == "attack" ? unit.Definition.Attacks[unit.AttackVariant].Clip
@@ -710,6 +724,7 @@ public partial class Main : Node3D
     public override void _Process(double delta)
     {
         if (_world is null || _loadFailed) return;
+        RefreshObserverPanel();
         float dt = (float)Math.Min(delta, 0.1);
         if (!_paused || _presentStep)
             foreach (var unit in _world.Units)
@@ -775,7 +790,7 @@ public partial class Main : Node3D
         if (_skirmish) SyncBuildMenu();
         _commands.Refresh(units,UnitName,_orders.Pending,_paused,
             Enumerable.Range(0,10).Select(slot => _controlGroups.Recall(slot,LivingFriendly)).ToArray(),
-            _world.Units.Count(u => u.Team == 0 && u.Health > 0),_world.Units.Count(u => u.Team != 0 && u.Health > 0),_world.IsWalking(0),_world.Tick,_pendingAbilitySlot);
+            _world.Units.Count(u => u.Team == PlayerTeam && u.Health > 0),_world.Units.Count(u => u.Team != PlayerTeam && u.Health > 0),_world.IsWalking(PlayerTeam),_world.Tick,_pendingAbilitySlot);
         UpdateAbilityCursor();
         _heroBar.Refresh(FriendlyHeroes(),_commands.Art,_commands.EffectiveScale);
         if (_skirmish)
@@ -795,10 +810,10 @@ public partial class Main : Node3D
         if (_ordersSmoke) OrdersSmokeInput();
         if (_abilitySmoke) AbilitySmokeInput();
         if (_skirmishSmoke) SkirmishSmokeInput();
-        if (_constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke)
+        if (_constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke || _observerSmoke)
         {
             _injectingConstructionInput = true;
-            try { if (_minimapSmoke) MinimapSmokeInput(); else if (_siegeSmoke) SiegeSmokeInput(); else if (_defenseSmoke) DefenseSmokeInput(); else if (_victorySmoke) VictorySmokeInput(); else if (_aiSmoke) AiSmokeInput(); else if (_frodoSmoke) FrodoSmokeInput(); else if (_structureSmoke) StructureSmokeInput(); else if (_productionSmoke) ProductionSmokeInput(); else if (_placementSmoke) PlacementSmokeInput(); else if (_dwarfHallSmoke) DwarfHallSmokeInput(); else ConstructionSmokeInput(); }
+            try { if (_minimapSmoke) MinimapSmokeInput(); else if (_siegeSmoke) SiegeSmokeInput(); else if (_defenseSmoke) DefenseSmokeInput(); else if (_victorySmoke) VictorySmokeInput(); else if (_aiSmoke) AiSmokeInput(); else if (_observerSmoke) ObserverSmokeInput(); else if (_frodoSmoke) FrodoSmokeInput(); else if (_structureSmoke) StructureSmokeInput(); else if (_productionSmoke) ProductionSmokeInput(); else if (_placementSmoke) PlacementSmokeInput(); else if (_dwarfHallSmoke) DwarfHallSmokeInput(); else ConstructionSmokeInput(); }
             finally { _injectingConstructionInput = false; }
         }
         if (_engagementSmoke) { if (_formationSmoke) FormationSmokeInput(); else EngagementSmokeInput(); }
@@ -826,7 +841,7 @@ public partial class Main : Node3D
         if (_smoke) SmokeInput();
         if (_smoke && _capture != "" && _frames == (_combatSmoke ? 180 : 60)) _ = CaptureFrame(false);
         if (_smoke && _world.Tick >= 420) FinishSmoke();
-        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_productionSmoke && !_placementSmoke && !_dwarfHallSmoke && !_minimapSmoke && !_frodoSmoke && !_siegeSmoke && !_defenseSmoke && !_victorySmoke && !_aiSmoke && !_engagementSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
+        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_productionSmoke && !_placementSmoke && !_dwarfHallSmoke && !_minimapSmoke && !_frodoSmoke && !_siegeSmoke && !_defenseSmoke && !_victorySmoke && !_aiSmoke && !_observerSmoke && !_engagementSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
     }
 
     private string UnitName(int id) => _world!.Units[id].Definition.DisplayName;

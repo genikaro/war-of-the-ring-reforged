@@ -52,8 +52,8 @@ public partial class CommandPanel
         (string Building,string Portrait)[] choices,StructureDetails? structure)
     {
         _constructionNames = choices.Select(c => c.Building).ToArray();
-        bool workers = world.ConstructionRules.Count > 0 && units.Any(u => u.Team == 0 && world.Workers.ContainsKey(u.Definition.Name))
-            && units.All(u => u.Team == 0 && u.Definition.Abilities?.Length is not > 0);
+        bool workers = world.ConstructionRules.Count > 0 && units.Any(u => u.Team == PlayerTeam && world.Workers.ContainsKey(u.Definition.Name))
+            && units.All(u => u.Team == PlayerTeam && u.Definition.Abilities?.Length is not > 0);
         bool page = workers && BuildMenuOpen;
         _buildButton.Visible = workers && !BuildMenuOpen;
         _buildButton.Icon ??= _art.GetValueOrDefault("console_g_action_build");
@@ -71,13 +71,13 @@ public partial class CommandPanel
             var resource = world.ConstructionRules.Values.FirstOrDefault(r => r.Name == building);
             if (resource?.Kind is { } kind)
             {
-                _resourceSlots[kind] = index; var bank = world.Economies[0];
+                _resourceSlots[kind] = index; var bank = world.Economies[PlayerTeam];
                 button.Disabled = bank.FoodMilli < resource.FoodCost*1000L || bank.OreMilli < resource.OreCost*1000L;
                 button.TooltipText = $"Build {resource.DisplayName}\n{resource.FoodCost} food · {resource.OreCost} ore · {resource.DurationTicks/20}s with one worker\nChoose a {(kind == ResourceKind.Food ? "food well" : "ore pile")}. Additional workers add {resource.ExtraWorkerPpm/10000}% build speed each.\nRight-click an unfinished foundation to resume or assist.";
                 continue;
             }
             var rules = world.BuildingRules[building];
-            button.Disabled = !world.CanStartBuilding(0,building,out string reason);
+            button.Disabled = !world.CanStartBuilding(PlayerTeam,building,out string reason);
             button.TooltipText = $"Build {rules.DisplayName}\n{rules.FoodCost} food · {rules.OreCost} ore · {rules.DurationTicks/20}s with one worker"
                 + (world.Placements[building].MustBeNear ? "\nChoose open ground near your buildings." : "\nChoose open ground.")
                 + (world.PopulationProvided.GetValueOrDefault(building) is > 0 and var population ? $" Adds {population} population." : "")

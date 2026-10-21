@@ -12,12 +12,12 @@ public static class AiChecks
         var worker = UnitDefinition.Probe with { Name = "worker",DpsMilli = 2000 };
         var soldier = UnitDefinition.Probe with { Name = "soldier" };
         AiPersonality Personality(int aggressiveness,int difficulty = 1) => new("test","Test",difficulty,aggressiveness,50,50,50,true,true);
-        SimWorld Fixture(int aggressiveness = 50)
+        SimWorld Fixture(int aggressiveness = 50,bool mirror = false)
         {
             var nav = new GridNavigation(W,H,1000,Enumerable.Repeat(true,W*H).ToArray(),new int[(W+1)*(H+1)],
                 obstacles: [new NavigationObstacle(Keep0,Box(6,12,6),[]),new NavigationObstacle(Keep1,Box(58,12,6),[]),
-                    new NavigationObstacle(20007,Box(50,2,3),[])]);
-            nav.SetObstacle(20007,false);
+                    new NavigationObstacle(20007,Box(50,2,3),[]),new NavigationObstacle(20017,Box(17,2,3),[])]);
+            nav.SetObstacle(20007,false); nav.SetObstacle(20017,false);
             var rules = new CombatRules(); rules.Units.Add("probe",UnitDefinition.Probe); rules.Units.Add("worker",worker); rules.Units.Add("soldier",soldier);
             var world = new SimWorld(nav,rules);
             world.Workers.Add("worker",new(10,9));
@@ -34,6 +34,7 @@ public static class AiChecks
                 world.Contenders.Add(team);
             }
             world.Producers.Add(Keep1,new(Keep1,1,61000,15000,Cell(56,15),["worker"]));
+            if (mirror) world.Producers.Add(Keep0,new(Keep0,0,9000,15000,Cell(14,15),["worker"]));
             world.BuildingGround = Enumerable.Repeat(true,W*H).ToArray();
             void Building(string name,int food,int ore,int half,string cls,bool first,int max,bool lower)
             {
@@ -57,6 +58,16 @@ public static class AiChecks
             world.Spawn(1,Cell(55,10),worker); world.Spawn(1,Cell(55,20),worker);
             world.Spawn(0,Cell(16,15),worker).Order = OrderKind.HoldGround;
             world.AiPlayers.Add(1,new(1,Personality(aggressiveness)));
+            if (mirror)
+            {
+                // Bot against bot: a mirror base with its own ore and well, and an aggressive bot against the default one.
+                world.Spawn(0,Cell(16,10),worker); world.Units[2].Order = OrderKind.Idle;
+                world.Resources.Add(Well+10,new(Well+10,ResourceKind.Food,18500,3500,4500,0,0,2000,20,1_000_000));
+                world.Resources.Add(Pile+10,new(Pile+10,ResourceKind.Ore,17500,26500,4500,20,1_000_000,2000));
+                world.ConstructionSites.Add(Well+10,new(Well+10,20017,2500));
+                world.Economies[0] = new(300,300);
+                world.AiPlayers.Add(0,new(0,Personality(80)));
+            }
             return world;
         }
         void Step(SimWorld world,int ticks) { for (int i = 0; i < ticks; i++) world.Step(); }
@@ -93,6 +104,20 @@ public static class AiChecks
         check(war.MatchOver && war.Winner == 1 && war.DefeatedTeams.SetEquals([0]),"the assault razes the enemy keep and wins: "+war.AiPlayers[1].Status);
         var replay = Fixture(); Step(replay,war.Tick);
         check(replay.StateDigest() == war.StateDigest(),"an AI match replays identically");
+
+        var duel = Fixture(mirror: true);
+        for (int i = 0; i < 30000 && !duel.MatchOver; i++) duel.Step();
+        check(duel.MatchOver && duel.Winner >= 0 && duel.AiPlayers[duel.Winner].PartiesSent > 0,
+            "bots on both sides build, attack and decide the match: "+string.Join(" | ",duel.AiPlayers.Values.Select(a => a.Status)));
+        var duelReplay = Fixture(mirror: true); Step(duelReplay,duel.Tick);
+        check(duelReplay.StateDigest() == duel.StateDigest(),"a bot-against-bot match replays identically");
+
+        var regroup = Fixture();
+        var straggler = regroup.Spawn(1,Cell(30,15),soldier); regroup.AiPlayers[1].Party.Add(straggler.Id); regroup.AiPlayers[1].PartyTarget = Keep0;
+        var fresh = Enumerable.Range(0,8).Select(i => regroup.Spawn(1,Cell(48+(i%4)*2,8+(i/4)*14),soldier).Id).ToArray();
+        Step(regroup,25);
+        check(straggler.Order == OrderKind.Move && regroup.AiPlayers[1].Party.Order().SequenceEqual(fresh) && regroup.AiPlayers[1].PartiesSent == 1,
+            "a broken assault falls back home and the idle army forms the next one");
 
         var defence = Fixture();
         var guards = Enumerable.Range(0,3).Select(i => defence.Spawn(1,Cell(52,13+2*i),soldier).Id).ToArray();

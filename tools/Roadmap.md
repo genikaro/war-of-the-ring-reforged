@@ -30,6 +30,17 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-28 (Oct 22):** observer mode and game speed. `-Observe -Bots Gimli,Aragorn`
+runs a bot on every side and nobody plays: any unit can be inspected but not
+commanded, and a panel shows each player's economy, buildings and bot status.
+Speed runs from pause to 16x (`-`/`+`, panel buttons, `-Speed`) by stepping the
+fixed-tick simulation several times per frame, so fast-forwarding never changes
+the match. Watching bot against bot exposed four bot bugs, now fixed: stragglers
+blocking new assaults, workers leading squads in circles, unreachable units
+stalling an army forever, and food starvation. Gimli beats Aragorn at 30:51.
+Validation: a 9-case observer smoke, 3 new synthetic checks and all regressions.
+See [skirmish notes](../prototype/SKIRMISH.md#build-28-observer-mode-bot-against-bot-and-game-speed).
+
 **Build-27 (Oct 21):** the skirmish AI. The enemy trains workers, builds its
 base, trains Swordsmen and Axethrowers, and sends assaults that raze the player's
 buildings, defending its own base when attacked. Source data: the shipped `.rai`
@@ -121,9 +132,10 @@ visible ground on the minimap, and the original ore, well and place-of-power
 minimap markers. Validation: a 12-case minimap smoke plus all regressions. See
 [the prototype README](../prototype/README.md).
 
-Next (after build-27): owner playtest against the AI, then scouting, raids and
-flanking war parties from the remaining `.rai` knobs, Watchtower garrisons, hero
-experience and levels, and the Axethrower's second throw.
+Next (after build-28): step 2 of the skirmish setup plan (any number of player
+slots), owner playtest against the AI, then scouting, raids and flanking war
+parties, Watchtower garrisons, hero experience and levels, and the Axethrower's
+second throw.
 
 **Build-17 (Oct 21):** owner-defined Warcraft-style gathering. A raw ore pile
 gives one ore per pickaxe hit, five per trip. A completed Mill or Foundry admits
@@ -782,7 +794,7 @@ and production remain later work.
 - [ ] Skirmish AI from the `.rai` personalities and the AI tables (`AIWarParties`, `AIUnitDescriptors`, `AIBuildingClasses`); build-27 adds the core loop (economy, build plan, training, Assault parties, base defence) as an adapter on those numbers, without scouting, raids, flanking, heroes or abilities
 - [ ] Customizable bots (owner request, Oct 21): choose a difficulty (Easy / Normal / Hard), then combine style traits. Difficulty sets how *well* a bot plays (think rate, worker target, reaction to attacks, retreating the wounded, target choice), ideally without resource bonuses; traits set *what* it plays by adjusting one shared strategy profile. Trait ideas: Expansionist (claims contested wells and ore early, second Citadel, more workers), Defender (Watchtower ring, attacks only with a full 12-unit party), Rusher (thin economy, two or three Barracks, smallest waves), Raider (small parties against workers and Mills; source `AIWARPARTY_RAIDING`), Tactician (assault with flank and fix groups; source war-party combos), Tower killer (Axethrower-led parties; source `AIWARPARTY_TOWERKILLER`), Hero lover (early Frodo). Some traits exclude each other (Rusher and Defender), others stack; the twelve shipped `.rai` personalities become presets; traits as data files would serve the modding item. Groundwork, in order: gather `SkirmishAi.cs` tunables into one profile record; raids, flanking and Watchtower garrisons; expansion with multiple Citadels; a skirmish setup screen for difficulty and traits (today only launch switches)
 - [ ] Skirmish setup, bot free-for-alls and an observer mode (owner request, Oct 21): create a skirmish with map selection, player slots (human, bot with difficulty and traits, observer, closed), teams and colours, so large free-for-alls between different bots can be watched. Facts: `extracted/Levels/Multiplayer` holds 32 maps whose `MPnn` prefix gives the player count, up to six 8-player maps; the skirmish importer is hard-wired to MP02 Bilbo's Bluffs and two start points, the cache carries two team colours, about 84 places in `prototype/` assume the human is team 0 and the AI team 1, and only the Good faction is exported. The simulation already handles any number of teams as separate sides, which is exactly a free-for-all, and its Razing outcome takes any number of contenders. Steps, in order:
-  1. Observer and speed: a bot on every side, a player-less observer HUD (every player's resources, population, army and AI status; read-only selection; camera free), and game speed control (pause, 1x to 16x by stepping the fixed-tick simulation several times per frame, so it stays deterministic) to skip the opening and jump into the fighting.
+  1. (Done in build-28.) Observer and speed: a bot on every side, a player-less observer HUD (every player's resources, population, army and AI status; read-only selection; camera free), and game speed control (pause, 1x to 16x by stepping the fixed-tick simulation several times per frame, so it stays deterministic) to skip the opening and jump into the fighting.
   2. N players: replace the team-0/team-1 assumptions with player slots; per-slot colours from the source team-colour table; an AI per bot slot.
   3. Map pipeline: `prepare_prototype.py --skirmish --map <name>` for any multiplayer map and its start points, one cache per map, and a batch for all 32; verify navigation, resources and start bases on each.
   4. Setup screen: map list with player count and minimap, slots, difficulty and traits, start.

@@ -40,11 +40,12 @@ public partial class CommandPanel
         _structureHealthDetails.Visible = _structureArmorText.Visible = details.HasHealth;
         _structureHealthText.Text = details.HasHealth ? $"{details.Health}/{details.MaxHealth}" : "";
         _structureHealthBar.Size = new(details.HasHealth ? 244*Math.Clamp(details.Health/(float)details.MaxHealth,0,1) : 0,12);
-        _structureHealthBar.Color = new Color(details.Team < 0 ? "b0a375" : details.Team == 0 ? "48972e" : "b84c3c");
+        _structureHealthBar.Color = new Color(details.Team < 0 ? "b0a375" : details.Team == PlayerTeam ? "48972e" : "b84c3c");
         _structureArmorText.Text = "Armor  "+details.Armor;
         _structureProgressText.Text = (details.UnderConstruction ? $"Construction {details.ProgressPercent}%\n" : "")+details.Resource;
-        _order.Text = details.Team < 0 ? "Neutral structure · Inspecting" : details.Team == 0
-            ? details.UnderConstruction ? "Under construction · select workers to resume or assist" : "Your structure" : "Enemy structure · Inspecting";
+        _order.Text = details.Team < 0 ? "Neutral structure · Inspecting" : details.Team == PlayerTeam
+            ? details.UnderConstruction ? "Under construction · select workers to resume or assist" : "Your structure"
+            : PlayerTeam < 0 ? $"Player {details.Team+1} structure · Inspecting" : "Enemy structure · Inspecting";
     }
 
     public bool StructureHealthVisible => _structureHealthDetails.IsVisibleInTree();

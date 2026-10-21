@@ -53,7 +53,7 @@ public partial class CommandPanel
             button.Visible = producer != null && slot < producer.Units.Length;
             if (!button.Visible) continue;
             var rules = world.ProductionRules[producer!.Units[slot]];
-            button.Disabled = !world.CanTrain(0,producer.Id,slot,out string reason);
+            button.Disabled = !world.CanTrain(PlayerTeam,producer.Id,slot,out string reason);
             button.Icon = _art.GetValueOrDefault(PortraitName(rules.DisplayName));
             button.TooltipText = $"Train {rules.DisplayName}\n{rules.FoodCost} food · {rules.OreCost} ore · population {rules.Population} · {rules.DurationTicks/20}s"
                 + $"\nClick again to queue up to {SimWorld.ProductionQueueLimit}. Click a portrait in training or press Backspace to cancel for a full refund."

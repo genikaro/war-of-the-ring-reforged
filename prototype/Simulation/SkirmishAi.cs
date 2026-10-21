@@ -24,32 +24,41 @@ public sealed class AiPlayer(int team,AiPersonality personality)
     public int Project { get; internal set; } = -1;
     public long ProjectProgress { get; internal set; }
     public int ProjectMovedTick { get; internal set; }
+    /// <summary>The defender the assault is chasing, since when, and defenders it gave up on as unreachable.</summary>
+    public int Chase { get; internal set; } = -1;
+    public int ChaseSince { get; internal set; }
+    public HashSet<int> Unreachable { get; } = [];
+    /// <summary>The intruder the home army is answering, and since when.</summary>
+    public int Intruder { get; internal set; } = -1;
+    public int IntruderSince { get; internal set; }
     /// <summary>What the last think decided, for the debug menu and the smoke report.</summary>
     public string Status { get; internal set; } = "";
 }
 
 /// <summary>The skirmish AI. The source gives the knobs and tables; the decision code is in Rings.exe and not
-/// recovered, so everything below is an adapter built on them, thinking once a second through the same commands
-/// a player issues. Economy: train workers to 8 + 2 x difficulty, keep four on each completed Mill (moving ore
-/// gatherers over one a second) and the rest on ore. Building: one project at a time with two builders, placed
-/// on rings around home toward the enemy and 10 m clear of resources, abandoned for the source refund if it makes
-/// no progress for 30 s, in the order the source columns allow: economy
-/// buildings first (all AIMustHaveFirstPass), then one of each military building, then the remaining first-pass
-/// buildings (the Watchtower; a defensive personality, aggressiveness below 40, builds it before the military),
-/// then more military buildings up to AIMaxDefault while the bank can pay twice over (AILowerPriorityIfExists),
-/// and a Camp whenever the population is within three of the cap. The next building's cost is reserved before
-/// anything is trained. Army: producers train toward the Assault party's melee/missile shares, best Assault
-/// effectiveness first. Attack: once the idle army reaches the party size, from MaxSize at aggressiveness 0 down
-/// to MinSize at 100, it attack-moves on the nearest enemy building, fights off defenders near it, razes it and
-/// moves to the next; survivors fight on. Defence: enemies within 30 m of a building draw every home soldier.
-/// Not simulated: scouting, raids, flanking, harassment, heroes and special abilities.</summary>
+/// recovered, so everything below is an adapter built on them, thinking once a second through the same commands a
+/// player issues. Economy: train workers to 8 + 2 x difficulty + 2 per Mill, and split them by what the bank lacks
+/// (75% on food while ore piles up, 25% while food does, else half; at most six per Mill), moving one gatherer a
+/// second. Building: one project at a time with two builders, placed on
+/// rings around home toward the enemy and 10 m clear of resources, abandoned for the source refund if it makes no
+/// progress for 30 s, in the order the source columns allow: economy buildings first (all AIMustHaveFirstPass), then
+/// one of each military building, then the remaining first-pass buildings (the Watchtower; a defensive personality,
+/// aggressiveness below 40, builds it before the military), then more military buildings up to AIMaxDefault while the
+/// bank can pay twice over (AILowerPriorityIfExists), and a Camp whenever the population is within three of the cap.
+/// The next building's cost is reserved before anything is trained. Army: producers train toward the Assault party's
+/// melee/missile shares, best Assault effectiveness first. Attack: once the idle army reaches the party size, from
+/// MaxSize at aggressiveness 0 down to MinSize at 100, it attack-moves on the nearest enemy building, fights off
+/// defenders near it, razes it and moves to the next; below a third of the party size the survivors fall back home
+/// and the next party may form. Defence: the nearest enemy within 30 m of a building draws every home soldier.
+/// Defenders and intruders get explicit attack orders, which pursue, rather than attack-moves. Not simulated:
+/// scouting, raids, flanking, harassment, heroes and special abilities.</summary>
 public sealed partial class SimWorld
 {
     public SortedDictionary<int,AiPlayer> AiPlayers { get; } = [];
     public Dictionary<string,AiBuildingRule> AiBuildings { get; } = [];
     public Dictionary<string,AiUnitRule> AiUnits { get; } = [];
     public AiWarParty AiAssaultParty { get; set; } = new(5,12,800_000);
-    public const int AiDefenseRadiusMm = 30000,AiEngageRadiusMm = 12000,AiStallTicks = 30*TicksPerSecond,AiFoodPerMill = 4,
+    public const int AiDefenseRadiusMm = 30000,AiEngageRadiusMm = 12000,AiStallTicks = 30*TicksPerSecond,AiFoodPerMill = 6,
         AiResourceClearanceMm = 10000;
 
     private void UpdateAi()
@@ -94,15 +103,20 @@ public sealed partial class SimWorld
         ai.Status = $"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)} · {plan} · parties {ai.PartiesSent}";
     }
 
-    /// <summary>Every home soldier answers enemies near the base.</summary>
+    /// <summary>Every home soldier answers enemies near the base, except one it could not kill in 30 s.</summary>
     private bool AiDefend(AiPlayer ai,SimUnit[] home)
     {
+        // Soldiers still locked on an intruder given up as unreachable stand down.
+        AiOrder(ai,home.Where(u => ai.Unreachable.Contains(u.Target) || u.Order == OrderKind.Attack && ai.Unreachable.Contains(u.OrderTarget)).Select(u => u.Id),OrderKind.Stop);
         var buildings = ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Health > 0).Select(SitePosition).ToArray();
-        var intruder = Units.Where(u => u.Present && u.Team != ai.Team && !u.RingActive
+        var intruder = Units.Where(u => u.Present && u.Team != ai.Team && !u.RingActive && !ai.Unreachable.Contains(u.Id)
                 && buildings.Any(b => DistanceSquared(b.X,b.Z,u.X,u.Z) <= (long)AiDefenseRadiusMm*AiDefenseRadiusMm))
             .OrderBy(u => buildings.Min(b => DistanceSquared(b.X,b.Z,u.X,u.Z))).ThenBy(u => u.Id).FirstOrDefault();
-        if (intruder == null) return false;
-        AiOrder(ai,home.Where(u => u.Target < 0 && u.Order != OrderKind.AttackMove).Select(u => u.Id),OrderKind.AttackMove,intruder.Node);
+        if (intruder == null) { ai.Intruder = -1; return false; }
+        if (intruder.Id != ai.Intruder) { ai.Intruder = intruder.Id; ai.IntruderSince = Tick; }
+        else if (Tick-ai.IntruderSince >= AiStallTicks) { ai.Unreachable.Add(intruder.Id); ai.Intruder = -1; return false; }
+        // An explicit attack: attack-move's pursuit rules let a moving worker lead a squad in circles.
+        AiOrder(ai,home.Where(u => u.Target < 0).Select(u => u.Id),OrderKind.Attack,intruder.Node,intruder.Id);
         return true;
     }
 
@@ -116,7 +130,8 @@ public sealed partial class SimWorld
         if (worker != null) AiOrder(ai,[worker.Id],OrderKind.Build,target: damaged.Id);
     }
 
-    private int AiWorkerTarget(AiPlayer ai) => 8+2*ai.Personality.Difficulty;
+    private int AiWorkerTarget(AiPlayer ai) => 8+2*ai.Personality.Difficulty
+        +2*ConstructionSites.Values.Count(s => s.Team == ai.Team && s.Complete && s.Building == null && Resources[s.Resource].Kind == ResourceKind.Food);
 
     /// <summary>From MaxSize for the most defensive personality down to MinSize for the most aggressive.</summary>
     public int AiPartySize(AiPlayer ai) => AiAssaultParty.MaxSize-((AiAssaultParty.MaxSize-AiAssaultParty.MinSize)*ai.Personality.Aggressiveness+50)/100;
@@ -237,22 +252,35 @@ public sealed partial class SimWorld
     private void AiAssignWorkers(AiPlayer ai,SimUnit[] workers)
     {
         var idle = workers.Where(w => w.Order is OrderKind.Idle or OrderKind.Stop && w.OrderQueue.Count == 0).ToList();
-        int mills = ConstructionSites.Values.Count(s => s.Team == ai.Team && s.Complete && s.Building == null && Resources[s.Resource].Kind == ResourceKind.Food);
+        int want = AiFoodTarget(ai,workers.Length+workers.Count(w => w.InsideSite >= 0));
         foreach (var worker in idle)
         {
-            var kind = FoodGatherers(ai) < AiFoodPerMill*mills ? ResourceKind.Food : ResourceKind.Ore;
+            var kind = FoodGatherers(ai) < want ? ResourceKind.Food : ResourceKind.Ore;
             var source = Resources.Values.Where(r => CanGather(ai.Team,r.Id) && (r.Kind == kind || !Resources.Values.Any(o => o.Kind == kind && CanGather(ai.Team,o.Id))))
                 .OrderBy(r => r.Kind == kind ? 0 : 1)
                 .ThenBy(r => ConstructionSites.TryGetValue(r.Id,out var s) && s.Team == ai.Team && s.Complete ? 0 : 1)
                 .ThenBy(r => DistanceSquared(r.X,r.Z,worker.X,worker.Z)).ThenBy(r => r.Id).FirstOrDefault();
             if (source != null) AiOrder(ai,[worker.Id],OrderKind.Gather,target: source.Id);
         }
-        // Food buys the army: move one empty-handed ore gatherer a second until every Mill has its crew.
-        var mover = workers.Where(w => w.Order == OrderKind.Gather && w.CargoMilli == 0 && Resources.TryGetValue(w.OrderTarget,out var r) && r.Kind == ResourceKind.Ore)
+        // Rebalance one empty-handed gatherer a second toward the food target.
+        int food = FoodGatherers(ai);
+        var from = food < want ? ResourceKind.Ore : food > want+1 ? ResourceKind.Food : (ResourceKind?)null;
+        if (from is not { } kindFrom) return;
+        var mover = workers.Where(w => w.Order == OrderKind.Gather && w.CargoMilli == 0 && Resources.TryGetValue(w.OrderTarget,out var r) && r.Kind == kindFrom)
             .OrderBy(w => w.Id).FirstOrDefault();
-        var mill = ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Complete && s.Building == null && Resources[s.Resource].Kind == ResourceKind.Food)
-            .Select(s => s.Resource).OrderBy(id => id).FirstOrDefault(-1);
-        if (mover != null && mill >= 0 && FoodGatherers(ai) < AiFoodPerMill*mills) AiOrder(ai,[mover.Id],OrderKind.Gather,target: mill);
+        var to = mover == null ? null : Resources.Values.Where(r => r.Kind != kindFrom && CanGather(ai.Team,r.Id))
+            .OrderBy(r => ConstructionSites.TryGetValue(r.Id,out var s) && s.Team == ai.Team && s.Complete ? 0 : 1)
+            .ThenBy(r => DistanceSquared(r.X,r.Z,mover.X,mover.Z)).ThenBy(r => r.Id).FirstOrDefault();
+        if (mover != null && to != null) AiOrder(ai,[mover.Id],OrderKind.Gather,target: to.Id);
+    }
+
+    /// <summary>Food buys the army: gatherers split by what the bank lacks, at most AiFoodPerMill per completed Mill.</summary>
+    private int AiFoodTarget(AiPlayer ai,int workers)
+    {
+        int mills = ConstructionSites.Values.Count(s => s.Team == ai.Team && s.Complete && s.Building == null && Resources[s.Resource].Kind == ResourceKind.Food);
+        var bank = Economies[ai.Team];
+        int percent = bank.OreMilli > 2*bank.FoodMilli+100_000 ? 75 : bank.FoodMilli > 2*bank.OreMilli+100_000 ? 25 : 50;
+        return Math.Min(AiFoodPerMill*mills,(workers*percent+50)/100);
     }
 
     private int FoodGatherers(AiPlayer ai) => Units.Count(w => w.Team == ai.Team && w.Health > 0 && w.Order == OrderKind.Gather
@@ -298,6 +326,12 @@ public sealed partial class SimWorld
     private void AiAssault(AiPlayer ai,SimUnit[] home,int bx,int bz,bool threatened)
     {
         var enemyBuildings = ConstructionSites.Values.Where(s => s.Team >= 0 && s.Team != ai.Team && s.Health > 0).ToArray();
+        // A broken assault (below a third of the party size) falls back home, freeing the army for the next one.
+        if (ai.Party.Count > 0 && ai.Party.Count*3 < AiPartySize(ai))
+        {
+            AiOrder(ai,ai.Party,OrderKind.Move,Navigation.Cell(bx,bz));
+            ai.Party.Clear(); ai.PartyTarget = -1; ai.Chase = -1;
+        }
         if (ai.Party.Count == 0 && !threatened)
         {
             var ready = home.Where(AiIdle).OrderBy(u => u.Id).Take(AiAssaultParty.MaxSize).ToArray();
@@ -319,19 +353,23 @@ public sealed partial class SimWorld
         }
         var (x,z) = SitePosition(target);
         // Defenders near the party come first: a unit razing a building ignores the units hitting it.
-        var defender = Units.Where(u => u.Present && u.Team != ai.Team && !u.RingActive
+        var defender = Units.Where(u => u.Present && u.Team != ai.Team && !u.RingActive && !ai.Unreachable.Contains(u.Id)
                 && DistanceSquared(u.X,u.Z,cx,cz) <= (long)AiEngageRadiusMm*AiEngageRadiusMm)
             .OrderBy(u => DistanceSquared(u.X,u.Z,cx,cz)).ThenBy(u => u.Id).FirstOrDefault();
+        if (defender != null && defender.Id != ai.Chase) { ai.Chase = defender.Id; ai.ChaseSince = Tick; }
+        // A defender the party cannot kill in 30 s (tucked in a pocket beyond melee reach) no longer holds up the razing.
+        if (defender != null && Tick-ai.ChaseSince >= AiStallTicks) { ai.Unreachable.Add(defender.Id); ai.Chase = -1; defender = null; }
         if (defender != null)
         {
-            AiOrder(ai,party.Where(u => u.Order == OrderKind.AttackStructure || AiIdle(u)).Select(u => u.Id),OrderKind.AttackMove,defender.Node);
+            AiOrder(ai,party.Where(u => u.Target < 0).Select(u => u.Id),OrderKind.Attack,defender.Node,defender.Id);
             return;
         }
         var arrived = party.Where(u => AiIdle(u) || u.Order == OrderKind.AttackMove && u.Goal < 0 && u.Target < 0
-            && DistanceSquared(u.X,u.Z,x,z) <= 25000L*25000).Select(u => u.Id).ToArray();
+            && DistanceSquared(u.X,u.Z,x,z) <= 25000L*25000
+            || ai.Unreachable.Contains(u.Target) || u.Order == OrderKind.Attack && ai.Unreachable.Contains(u.OrderTarget)).Select(u => u.Id).ToArray();
         if (arrived.Length > 0) AiOrder(ai,arrived,OrderKind.AttackStructure,target: target.Id);
     }
 
     private string AiDigest() => ":ai:"+string.Join(';',AiPlayers.Values.Select(a =>
-        $"{a.Team},{a.Personality.Id},{a.PartyTarget},{a.PartiesSent},{a.Project},{a.ProjectProgress},{a.ProjectMovedTick}:{string.Join(',',a.Party)}:{string.Join(',',a.RefusedCells.Order())}"));
+        $"{a.Team},{a.Personality.Id},{a.PartyTarget},{a.PartiesSent},{a.Project},{a.ProjectProgress},{a.ProjectMovedTick},{a.Chase},{a.ChaseSince},{a.Intruder},{a.IntruderSince}:{string.Join(',',a.Unreachable.Order())}:{string.Join(',',a.Party)}:{string.Join(',',a.RefusedCells.Order())}"));
 }

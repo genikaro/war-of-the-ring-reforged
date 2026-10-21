@@ -262,6 +262,18 @@ python tools/prepare_prototype.py --skirmish
 ./prototype/run.ps1 -Skirmish
 ```
 
+The skirmish plays against the enemy bot (build-27). `-AiPersonality Gimli` picks a
+shipped `.rai` personality and `-NoAi` keeps the enemy passive. To watch two bots
+fight instead (build-28), observe: nobody plays, any unit can be inspected but not
+commanded, and a panel shows both players.
+
+```powershell
+./prototype/run.ps1 -Observe -Bots Gimli,Aragorn -Speed 4
+```
+
+Game speed works in every mode: `-` and `+` step through 1x, 2x, 4x, 8x and 16x,
+Space pauses, and the observer panel has the same buttons.
+
 All generated game data stays in ignored `converted/prototype/` and `converted/skirmish/`. The source
 project contains no game assets. At launch the manifest's content hashes are
 checked before loading. Never distribute the local cache with the project.
@@ -355,6 +367,7 @@ a normal viewport capture with `-CapturePath`.
 ./prototype/run.ps1 -DefenseSmoke
 ./prototype/run.ps1 -VictorySmoke
 ./prototype/run.ps1 -AiSmoke
+./prototype/run.ps1 -ObserverSmoke
 ./prototype/run.ps1 -SurfaceSmoke
 ./prototype/run.ps1 -ObstacleSmoke
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --movement-benchmark converted/prototype/movement-after.json

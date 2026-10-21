@@ -20,6 +20,10 @@ param(
     [switch]$DefenseSmoke,
     [switch]$VictorySmoke,
     [switch]$AiSmoke,
+    [switch]$ObserverSmoke,
+    [switch]$Observe,
+    [string]$Bots,
+    [int]$Speed,
     [switch]$NoAi,
     [string]$AiPersonality,
     [switch]$MeleeSmoke,
@@ -56,8 +60,8 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 if ($LASTEXITCODE -ne 0) { throw 'C# build failed' }
 $arguments = @('--path', $PSScriptRoot)
 if ($Resolution) { $arguments += @('--resolution',$Resolution) }
-if ($SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke) { $Skirmish = $true }
-if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $AbilitySmoke -or $SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
+if ($SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $Observe) { $Skirmish = $true }
+if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $AbilitySmoke -or $SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
     $renderRate = if ($MotionSmoke -or $FormationSmoke) { '80' } else { '20' }
     if (-not $CapturePath) { $arguments += '--headless' }
     $arguments += @('--fixed-fps', $renderRate)
@@ -84,6 +88,10 @@ if ($SiegeSmoke) { $arguments += '--siege-smoke' }
 if ($DefenseSmoke) { $arguments += '--defense-smoke' }
 if ($VictorySmoke) { $arguments += '--victory-smoke' }
 if ($AiSmoke) { $arguments += '--ai-smoke' }
+if ($ObserverSmoke) { $arguments += @('--observer-smoke','--observe','--bots=Gimli,Aragorn') }
+if ($Observe) { $arguments += '--observe' }
+if ($Bots) { $arguments += "--bots=$Bots" }
+if ($Speed) { $arguments += "--speed=$Speed" }
 if ($NoAi) { $arguments += '--no-ai' }
 if ($AiPersonality) { $arguments += "--ai-personality=$AiPersonality" }
 if ($MeleeSmoke) { $arguments += '--melee-smoke' }

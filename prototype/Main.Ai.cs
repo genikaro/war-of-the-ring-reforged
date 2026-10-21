@@ -2,8 +2,8 @@ using Reforged.Simulation;
 using System.Text.Json;
 
 /// <summary>The enemy's skirmish AI: source rules and personalities from the cache, team 1 under the chosen
-/// personality (--ai-personality=&lt;file stem&gt;, default the medium adapter). --no-ai keeps the enemy passive, as
-/// do the smokes written for a passive enemy.</summary>
+/// personality (--ai-personality=&lt;file stem&gt;, default the medium adapter), or every side while observing
+/// (--bots=). --no-ai keeps the enemy passive, as do the smokes written for a passive enemy.</summary>
 public partial class Main
 {
     private bool _noAi;
@@ -27,15 +27,25 @@ public partial class Main
         var assault = ai.GetProperty("war_parties").GetProperty("ASSAULT");
         world.AiAssaultParty = new(assault.GetProperty("min_size").GetInt32(),assault.GetProperty("max_size").GetInt32(),
             assault.GetProperty("members").EnumerateArray().Where(m => m.GetProperty("kind").GetString() == "melee").Sum(m => m.GetProperty("share_ppm").GetInt32()));
-        if (_noAi || PassiveEnemyFixture) return;
-        string wanted = _aiPersonality == "" ? ai.GetProperty("default_personality").GetString()! : _aiPersonality;
-        var chosen = ai.GetProperty("personalities").EnumerateArray()
-            .FirstOrDefault(p => string.Equals(p.GetProperty("id").GetString(),wanted,StringComparison.OrdinalIgnoreCase));
-        if (chosen.ValueKind != JsonValueKind.Object) throw new InvalidOperationException("Unknown AI personality: "+wanted);
-        world.AiPlayers.Add(AiTeam,new(AiTeam,new(chosen.GetProperty("id").GetString()!,chosen.GetProperty("display_name").GetString()!,
-            chosen.GetProperty("difficulty").GetInt32(),chosen.GetProperty("aggressiveness").GetInt32(),chosen.GetProperty("tactics").GetInt32(),
-            chosen.GetProperty("scouting").GetInt32(),chosen.GetProperty("harassment").GetInt32(),
-            chosen.GetProperty("uses_special_abilities").GetBoolean(),chosen.GetProperty("uses_heroes").GetBoolean())));
+        if (_noAi || PassiveEnemyFixture && !_observing) return;
+        string fallback = ai.GetProperty("default_personality").GetString()!;
+        AiPersonality Personality(string wanted)
+        {
+            var chosen = ai.GetProperty("personalities").EnumerateArray()
+                .FirstOrDefault(p => string.Equals(p.GetProperty("id").GetString(),wanted,StringComparison.OrdinalIgnoreCase));
+            if (chosen.ValueKind != JsonValueKind.Object) throw new InvalidOperationException("Unknown AI personality: "+wanted);
+            return new(chosen.GetProperty("id").GetString()!,chosen.GetProperty("display_name").GetString()!,
+                chosen.GetProperty("difficulty").GetInt32(),chosen.GetProperty("aggressiveness").GetInt32(),chosen.GetProperty("tactics").GetInt32(),
+                chosen.GetProperty("scouting").GetInt32(),chosen.GetProperty("harassment").GetInt32(),
+                chosen.GetProperty("uses_special_abilities").GetBoolean(),chosen.GetProperty("uses_heroes").GetBoolean());
+        }
+        // Observing, a bot runs every start base; playing, only the enemy.
+        foreach (int team in _observing ? world.Contenders : [AiTeam])
+        {
+            string wanted = _observing ? _bots.ElementAtOrDefault(team) is { Length: > 0 } bot ? bot : fallback
+                : _aiPersonality == "" ? fallback : _aiPersonality;
+            world.AiPlayers.Add(team,new(team,Personality(wanted)));
+        }
     }
 
     private string AiSummary() => _world?.AiPlayers.GetValueOrDefault(AiTeam) is { } ai

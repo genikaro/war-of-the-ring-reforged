@@ -39,13 +39,13 @@ public partial class Main
         _rallyBanner.Visible = false; AddChild(_rallyBanner);
     }
 
-    private ProductionBuilding? SelectedProducer() => _selectedStructure is int id && _world!.Producers.TryGetValue(id,out var producer) && producer.Team == 0 ? producer : null;
+    private ProductionBuilding? SelectedProducer() => _selectedStructure is int id && _world!.Producers.TryGetValue(id,out var producer) && producer.Team == PlayerTeam ? producer : null;
 
     private void ChooseTraining(int slot)
     {
         if (SelectedProducer() is not { } producer) return;
-        if (!_world!.CanTrain(0,producer.Id,slot,out string reason)) { _status.Text = reason; return; }
-        _world.Enqueue(0,[],OrderKind.Train,slot,producer.Id);
+        if (!_world!.CanTrain(PlayerTeam,producer.Id,slot,out string reason)) { _status.Text = reason; return; }
+        _world.Enqueue(PlayerTeam,[],OrderKind.Train,slot,producer.Id);
         _status.Text = "Train "+_world.ProductionRules[producer.Units[slot]].DisplayName+(_paused ? " queued (paused)" : " order issued");
     }
 
@@ -53,7 +53,7 @@ public partial class Main
     private void CancelTraining(int index)
     {
         if (SelectedProducer() is not { Queue.Count: > 0 } producer) return;
-        _world!.Enqueue(0,[],OrderKind.CancelTraining,index,producer.Id);
+        _world!.Enqueue(PlayerTeam,[],OrderKind.CancelTraining,index,producer.Id);
         _status.Text = "Training cancellation queued";
     }
 
@@ -64,7 +64,7 @@ public partial class Main
         var hit = _picker.Pick(new(-origin.X,origin.Y,origin.Z),new(-direction.X,direction.Y,direction.Z));
         int cell = hit == null ? -1 : _world!.Navigation.Nearest(hit.Node);
         if (cell < 0) { _status.Text = "No walkable space at this point"; return true; }
-        _world!.Enqueue(0,[],OrderKind.SetRallyPoint,cell,producer.Id);
+        _world!.Enqueue(PlayerTeam,[],OrderKind.SetRallyPoint,cell,producer.Id);
         _status.Text = "Rally point set"+(_paused ? " (paused)" : "");
         _hud.Destination = mouse; _hud.DestinationTime = 0.7f;
         return true;

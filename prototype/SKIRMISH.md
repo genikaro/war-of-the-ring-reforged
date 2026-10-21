@@ -1040,3 +1040,58 @@ build order, the assault razing the enemy keep, base defence, that the AI never
 commands another team, and replay of a whole AI match. Python tests cover the
 `.rai` parser, the 13 personalities and the source AI columns. 757 simulation, 34
 worker-cache and 174 Python checks and 17 other skirmish and Helm's Deep smokes pass.
+
+## Build-28: observer mode, bot against bot and game speed
+
+Step 1 of the skirmish setup plan in the roadmap: watch bots fight, fast.
+
+**Observer.** `./prototype/run.ps1 -Observe -Bots Gimli,Aragorn` runs a bot on
+every start base, in base order (a missing entry takes the default personality),
+and nobody plays. The interface now asks for one `PlayerTeam` instead of assuming
+team 0 in about fifty places; observing, it is -1, so every command path finds no
+units of its own and nothing reaches the simulation, which the smoke checks by
+counting player commands (zero). Box and click selection inspect either side; the
+panel reads "Player 2 unit · Inspecting" and shows no commands. A panel at the top
+left lists each player in its colour with food, ore, population and buildings,
+and the bot's own status line (workers, army, assault, current project). Selection
+rings take the team colours, the resource strip and the allies/enemies counter
+are hidden, and the result panel names the winner: "Player 1 wins!".
+
+**Speed.** Pause and 1x, 2x, 4x, 8x or 16x, with `-` and `+` in any mode, the
+observer panel's buttons, or `-Speed` at launch. The simulation keeps its fixed
+50 ms tick; faster speeds run several ticks per physics frame, so a fast-forwarded
+match is tick for tick the match it would have been at 1x. Presentation keeps
+up: arrows and sounds follow every tick's events. The smoke measured 16 ticks a
+frame at 16x headless; frame rate at 16x on a real display with large armies is
+not measured yet.
+
+**Bot fixes found by watching bot against bot.**
+
+- A party's lone survivor kept the assault slot busy while twenty soldiers waited
+  at home. Below a third of the party size, survivors now fall back home and the
+  next party forms.
+- A moving enemy worker led a squad in circles, because attack-move's pursuit
+  rules ignore bait. Defenders and intruders now get explicit attack orders.
+- An enemy unit tucked into a pocket beyond melee reach (between a Mill and the
+  map edge in the fixture) held a party, or the whole home army, forever. A target
+  the bot cannot kill in 30 s is now given up on, and units locked on it are freed.
+- Both bots starved of food: ore passed 3000 while food sat near zero, so armies
+  stopped. Gatherers now split by what the bank lacks (75% on food while ore piles
+  up, 25% while food does, else half; at most six per Mill), and the worker target
+  grows by two per Mill. Food remains the limit on army size, because a Mill admits
+  one worker at a time (the build-17 owner rule); that rule may deserve a second
+  look now that bots show its effect.
+
+**Result.** Gimli (defensive, Difficulty 1) against Aragorn (aggressive,
+Difficulty 2): Aragorn's assaults from 4:00 cost both sides their armies, Gimli
+rebuilds faster and razes Aragorn's base, winning at 30:51 of game time. In the
+synthetic duel an aggressive bot crushes the default one at 7:54.
+
+Validation: `-ObserverSmoke` (9 cases) checks both bots, the panel, read-only
+inspection, zero player commands, the speed button (16 ticks a frame) and keys,
+and a fast-forwarded match to its named winner, and records a two-minute
+timeline of both bots. 3 new synthetic checks: a bot against bot match decides
+and replays identically, and a broken assault falls back so the next one forms. 760
+simulation and 34 worker-cache checks, the Python suite and the 18 other smokes pass.
+The economy fix moves the `-AiSmoke` timeline earlier: the default bot's assault
+leaves at 3:53 and razes a passive player at 5:12 (5:48 in build-27).
