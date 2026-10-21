@@ -290,6 +290,7 @@ def prepare_skirmish(output, install=None):
         bases.append({'team': team, 'start_point': point['name'], 'position': [x, y, z], 'footprint': footprint})
     construction, site_footprints = skirmish_construction.construction_data(resolver, skirmish_map.resource_nodes(scene))
     construction.update(skirmish_construction.placement_data(resolver))
+    construction['defenses'] = skirmish_construction.defense_data(output, resolver)
     nav, allowed, width, height = build_navigation(scene, resolver, output, [b['footprint'] for b in bases]+site_footprints,
         [s['obstacle'] for s in construction['sites']], precise=True)
     region = connected(allowed, width, height)

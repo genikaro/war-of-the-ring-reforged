@@ -1,7 +1,7 @@
 namespace Reforged.Simulation;
 
 public sealed record SimProjectile(int Id,int Unit,int Target,int Attack,int Hit,long DamageMilli,
-    int StartTick,int ReleaseTick,int ImpactTick,int X,int Y,int Z,int TargetX,int TargetY,int TargetZ,int Site = -1);
+    int StartTick,int ReleaseTick,int ImpactTick,int X,int Y,int Z,int TargetX,int TargetY,int TargetZ,int Site = -1,int Source = -1);
 
 public sealed partial class SimWorld
 {
@@ -32,21 +32,23 @@ public sealed partial class SimWorld
                     DamageSite(Units[arrow.Unit],site,arrow.Attack,arrow.Hit,arrow.DamageMilli,arrow.StartTick);
             }
             else if (Units[arrow.Target].Present)
-                ApplyHit(Units[arrow.Unit],Units[arrow.Target],arrow.Attack,arrow.Hit,arrow.DamageMilli,arrow.StartTick);
+                ApplyHit(arrow.Unit >= 0 ? Units[arrow.Unit] : null,Units[arrow.Target],arrow.Attack,arrow.Hit,arrow.DamageMilli,arrow.StartTick,arrow.Source);
             Projectiles.Remove(arrow);
         }
     }
 
-    private void ApplyHit(SimUnit unit,SimUnit target,int attack,int hit,long damage,int startTick)
+    /// <summary>A hit from a unit, or from a defending building (no unit, <paramref name="source"/> the site).</summary>
+    private void ApplyHit(SimUnit? unit,SimUnit target,int attack,int hit,long damage,int startTick,int source = -1)
     {
         damage = Math.Min(damage,target.HealthMilli); target.HealthMilli -= damage;
-        CombatEvents.Add(new(Tick,CombatEventKind.Hit,unit.Id,target.Id,attack,hit,damage,startTick,target.X,target.Y,target.Z));
+        CombatEvents.Add(new(Tick,CombatEventKind.Hit,unit?.Id ?? -1,target.Id,attack,hit,damage,startTick,target.X,target.Y,target.Z,source));
         if (target.Health <= 0)
         {
             CancelAbility(target);
-            if (damage > 0 && target.Team != unit.Team) unit.KillCount++;
+            if (unit != null && damage > 0 && target.Team != unit.Team) unit.KillCount++;
             CancelStrike(target);
         }
-        if (unit.Present) Retaliate(target,unit);
+        if (unit == null) RetaliateAgainstSite(target,source);
+        else if (unit.Present) Retaliate(target,unit);
     }
 }

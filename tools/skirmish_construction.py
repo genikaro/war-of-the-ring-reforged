@@ -7,6 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 
+import lsk
 import skirmish_map
 import wor
 
@@ -52,6 +53,46 @@ def placement_data(resolver):
             'placement_adapter': 'Footprints use source building passability (PATHING_CATEGORY_BUILDING) and current walker '
                                  'clearance under the oriented-collision box, no rotation. MustBePlacedNearOtherBuildings uses '
                                  'center distance to completed buildings within their MaxRadiusAllowingNewBuildings.'}
+
+
+def projectile_joint_mm(resolver, building, flag):
+    """Model-space offset of the skeleton joint carrying a JointFlags bit (bit = 1 << flag id), at the model's
+    scale, in simulation axes: x across, y up, z the source y."""
+    resolved = resolver.resolve(resolver.db['Models'].get(resolver.db['Buildings'].get(building)['Model']).name, recurse=False)
+    for skeleton in resolved['skeletons']:
+        for joint in lsk.parse((wor.ROOT / skeleton['file']).read_bytes()).joints:
+            if joint.flags & (1 << flag):
+                (x, y, z), scale = joint.bind_position, resolved['scale'][0]
+                return [round(x*scale*1000), round(z*scale*1000), round(y*scale*1000)]
+    raise ValueError('no joint with flag %d on %s' % (flag, building))
+
+
+def defense_data(output, resolver):
+    """Source building defenses of the placeable Tier 1 buildings (the Watchtower): weapon, rates of fire by
+    garrison size, the projectile joint and the arrow's model, launch sounds and trail."""
+    import combat_rules
+    defenses = {}
+    for name in CONSTRUCTION_ORDER:
+        record = resolver.db['Buildings'].get(name)
+        if record['BuildingDefenses1'] < 0:
+            continue
+        defense = resolver.db['BuildingDefenses'].get(record['BuildingDefenses1'])
+        weapon = resolver.db['Weapons'].get(defense['WeaponType'])
+        sources = {}
+        def trace(path):
+            path = Path(path).resolve()
+            sources[path.relative_to(wor.ROOT).as_posix() if path.is_relative_to(wor.ROOT) else path.name] =                 hashlib.sha256(path.read_bytes()).hexdigest()
+        rates = ['BaseRateOfFire', 'RateOfFireWithOneUnitGarrisoned', 'RateOfFireWithTwoUnitsGarrisoned',
+                 'RateOfFireWithThreeUnitsGarrisoned', 'RateOfFireWithFourUnitsGarrisoned']
+        defenses[name] = {'defense': defense.name, 'weapon': weapon.name,
+            'dps_milli': round((weapon['CuttingDamagePerSecond']+weapon['FireDamagePerSecond'])*1000),
+            'minimum_range_mm': round(weapon['MinimumRange']*1000), 'range_mm': round(weapon['MaximumRange']*1000),
+            'rates_milli': [round(defense[rate]*1000) for rate in rates],
+            'max_garrison': record['MaxGarrisonedUnits'],
+            'origin_mm': projectile_joint_mm(resolver, name, defense['ProjectileSourceJointFlag']),
+            'projectile': combat_rules.projectile_presentation(output, resolver, None, trace, weapon['AssociatedProjectile']),
+            'sources': sources}
+    return defenses
 
 
 def construction_data(resolver, resources):
@@ -106,10 +147,10 @@ def refresh(output):
     import skirmish_production
     data['economy'] = skirmish_economy.economy_data(resolver)
     data['production'] = skirmish_production.export(output, resolver, [m['unit'] for m in manifest['models']])
-    data['construction'] = {**construction, **placement_data(resolver)}
+    data['construction'] = {**construction, **placement_data(resolver), 'defenses': defense_data(output, resolver)}
     data['selectable_objects'] = skirmish_map.selectable_objects(scene, resolver)
     for file in [output/'navigation.json', output/'heights.bin', *building_paths, output/skirmish_production.RALLY_BANNER_FILE,
-                 *sorted((output/'interface').glob('*'))]:
+                 *sorted((output/'interface').glob('*')), *[p for p in sorted((output/'combat').rglob('*')) if p.is_file()]]:
         manifest['files'][file.relative_to(output).as_posix()] = hashlib.sha256(file.read_bytes()).hexdigest()
     path.write_text(json.dumps(manifest, indent=2)+'\n')
 

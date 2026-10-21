@@ -880,3 +880,60 @@ Validation: the siege smoke grows to 17 cases. It samples every besieger's
 rendered yaw against the direction to the building centre once the Citadel is
 visibly losing health, over about two thousand samples per run, and the check
 fails on build-22's presentation.
+
+## Build-24: axes at buildings and force attacks without retaliation
+
+Owner playtest fix (commit `da2b80b`). Missiles aimed at a building carry no
+target unit, and the projectile presentation looked up that missing unit every
+frame, so axes thrown at buildings never drew; they now fly to their recorded
+impact point. A unit no longer turns on whoever force-attacked it, nor on a
+teammate whose missile was already in flight. The Dwarf Hall smoke also
+force-attacks the Citadel and checks that the axes damage it and fly toward it.
+
+## Build-25: Watchtower defenses
+
+A completed Watchtower now shoots. The source gives the tower no weapon of its own
+in `Buildings`; its `BuildingDefenses1` points at `BUILDING_DEFENSES_G_WATCHTOWER`,
+which fires weapon 40 (Good Watchtower Arrow: 14 cutting damage per second, 0 to
+19 m, projectile 15) at 1.0 shots per second, rising to 1.2/1.4/1.6/1.75 with one
+to four garrisoned units. `tools/skirmish_construction.py` exports that row per
+placeable building as `construction.defenses`, with the arrow's model, launch
+sounds and trail through the same exporter the Archer and Axethrower use.
+
+The arrow leaves the tower's projectile joint. `ProjectileSourceJointFlag` is 11,
+`JOINT_FLAG_BUILDING_PROJECTILE`, and skeleton joint flags are bit masks: the
+tower skeleton's `J_Projectiles` carries flag `2048 = 1 << 11` (and `J_Entrance`
+carries `1 << 10`). At the model's 0.8 scale the joint sits 3.43 m up, 94 mm across
+and 159 mm forward of the building origin; the smoke measures the simulation's
+arrow origin against the drawn bone at 0.6 mm.
+
+The tower shoots the nearest present enemy within range, keeps that target while
+it stays valid, and switches when it dies or leaves. Each arrow carries the
+weapon's damage per second less the target's armour over one firing interval (20
+ticks at the base rate), so the rate sets the cadence and the damage per second
+stays the source's. A unit wearing the One Ring is not a target. An unfinished
+or ruined tower is silent, though an arrow already in flight still lands.
+
+An idle armed unit that is shot turns on the tower with an ordinary (unforced)
+attack on the building, as it would answer a unit. Workers, units holding ground
+and units already busy carry on; a unit already fighting someone keeps fighting.
+Because the tower shoots one unit at a time, its victims turn on it one after
+another rather than all at once.
+
+Adapters: ranges are centre distances from the building's origin; arrows fly at
+the 25 m/s the ranged units use and need no line of fire; the weapon has no
+damage type, so type matchups and `UnitToUnitModifiers` do not apply; garrisons
+are not simulated, so the tower always fires at its base rate; and the source
+`MaxSeekAngle`/`MaxSeekDistance` of the arrow are not modelled (arrows follow
+their target, as unit arrows do).
+
+The cache must be refreshed once: `python tools/skirmish_construction.py --cache converted/skirmish`.
+
+Validation: `./prototype/run.ps1 -DefenseSmoke` (10 cases) places a Watchtower
+through the Build menu, sends the builders home, spawns three enemy swordsmen
+beside it and lets the tower kill them as each victim turns on it, then spawns
+eight more that ruin it and checks it stops shooting. 13 new synthetic checks
+cover the cadence, damage, armour, nearest-target choice, range and team limits,
+retaliation, silence when unfinished or ruined, and replay. 737 simulation and
+34 worker-cache checks, the Python suite and 15 other skirmish and Helm's Deep
+smokes pass.

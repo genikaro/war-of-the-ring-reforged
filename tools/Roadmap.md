@@ -1,6 +1,6 @@
 # War of the Ring Reforged Roadmap
 
-Updated Oct 20, 2026 · @Evgenii
+Updated Oct 21, 2026 · @Evgenii
 
 Phases 1 and 2 implementation are complete. All 54 maps decode through EOF, including 752 decals. Helm's Deep and a decal-heavy Birth of the Uruk-Hai scene render and validate. An initial reference review has corrected prototype rendering bugs; controlled original-game fidelity validation remains open. The user has accepted Phase 3's movement and combat-spacing baseline. The command panel, explicit orders and first imported melee slice are implemented in the Godot 4 C# sandbox (engine chosen Oct 19). The Elven Archer ranged slice is implemented with projectile resolution. A bounded original-game command/combat comparison and correction pass remains open. Original armor/range formulas remain unresolved.
 
@@ -30,6 +30,19 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-25 (Oct 21):** Watchtower defenses. A completed Watchtower shoots its
+source weapon, `BuildingDefenses` row `G_WATCHTOWER` with weapon 40 (14 cutting
+damage per second, 19 m), at the nearest enemy in range once a second, from the
+tower skeleton's projectile joint (joint flags are bit masks: `J_Projectiles`
+carries `1 << 11`, the Building Projectile flag). Arrows use the source model,
+launch sounds and trail. An idle armed unit that is shot turns on the tower.
+Adapters: centre-distance ranges, 25 m/s arrows without line of fire, no damage
+type, and no garrison, so the tower stays at its base rate. Validation: a 10-case
+defense smoke, 13 new synthetic checks and all regressions. See [skirmish notes](../prototype/SKIRMISH.md#build-25-watchtower-defenses).
+
+**Build-24 (Oct 21):** axes thrown at buildings now draw, and force attacks no
+longer provoke retaliation. See [skirmish notes](../prototype/SKIRMISH.md#build-24-axes-at-buildings-and-force-attacks-without-retaliation).
+
 **Build-23 (Oct 21):** besiegers face the building. A melee attacker kept its
 approach heading and hit the wall sideways, since a unit's melee facing is chosen
 from its order in the presentation and no case covered an attack on a building. It
@@ -89,10 +102,9 @@ visible ground on the minimap, and the original ore, well and place-of-power
 minimap markers. Validation: a 12-case minimap smoke plus all regressions. See
 [the prototype README](../prototype/README.md).
 
-Next: Watchtower defenses, which the source defines in `BuildingDefenses` as
-weapon 40 fired once a second and faster with one to four garrisoned units; then
-a skirmish win condition, hero experience and levels, and the Axethrower's second
-throw.
+Next (after build-25): Watchtower garrisons (up to four units raising the rate of
+fire to 1.75 per second), a skirmish win condition, hero experience and levels,
+and the Axethrower's second throw.
 
 **Build-17 (Oct 21):** owner-defined Warcraft-style gathering. A raw ore pile
 gives one ore per pickaxe hit, five per trip. A completed Mill or Foundry admits
@@ -737,7 +749,7 @@ and production remain later work.
 
 - [ ] Load unit, weapon, building, spell and technique stats from the JSON tables (`Units`, `Weapons`, `Buildings`, `Spells`, `Techniques`, `UnitToUnitModifiers`, `BattleGear`, `HeroExperiences`); three demo units' base melee definitions and pair-rule support are implemented.
 - [ ] Economy: resources, workers, building and training queues, places of power (builds 5-8 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds, independent structure selection and worker clearance fixes; build-12 adds Citadel worker training with population reservation, cancellation and rally points; build-13 places every Tier 1 building with source passability and proximity; build-14 trains the Gondor Swordsman at the Barracks; build-15 the Dwarf Axethrower at the Dwarf Hall; build-17 replaces source gather rates with owner-defined Warcraft-style trips; build-19 trains Frodo, the last Tier 1 unit; build-20 narrows work ranges to the target's own footprint); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
-- [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them; build-21 adds damage to buildings, their destruction and worker repair, without building defenses, damage types for buildings or a win condition
+- [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them; build-21 adds damage to buildings, their destruction and worker repair, without damage types for buildings or a win condition; build-25 adds Watchtower defenses at the base rate of fire, without garrisons
 - [ ] Heroes, fate powers and spells (`SpellAndEventAndActions` chains events to actions)
 - [ ] Open `Rings.exe` in Ghidra to recover the formulas the tables only feed: damage, hit chance, experience, upgrade effects
 - [ ] Validate original command semantics against recorded inputs and expand hero abilities; build-2 connects Aragorn's source Q heal and W/E passive slots. F2 global Walk/Run and Hold Position labeling are implemented. Preserve documented prototype conveniences.

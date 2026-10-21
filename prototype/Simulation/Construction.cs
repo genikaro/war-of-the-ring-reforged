@@ -22,6 +22,9 @@ public sealed class ConstructionSite(int id,int obstacle,int radiusMm,string? bu
     public long RepairMicroTicks { get; internal set; }
     public int Health { get; internal set; }
     public bool Complete { get; internal set; }
+    /// <summary>Ticks until a defending building's next arrow, and the unit it is shooting (-1 for none).</summary>
+    public int DefenseCooldown { get; internal set; }
+    public int DefenseTarget { get; internal set; } = -1;
 }
 
 /// <summary>Foundations, integer cooperative construction and owned gathering improvements.</summary>

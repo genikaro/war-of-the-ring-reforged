@@ -1,5 +1,7 @@
 """Source costs, prerequisites and deterministic resource-site masks."""
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 import skirmish_construction
 from resolve_model import Resolver
@@ -56,6 +58,21 @@ class ConstructionImportTests(unittest.TestCase):
                          {'polygon_mm': [[-1956, -1956], [1956, -1956], [1956, 1956], [-1956, 1956]], 'min_height_mm': -400, 'max_height_mm': 400})
         self.assertEqual((data['placement_radius_mm']['BUILDING_G_TOWN_CENTER_LEVEL_1'], data['placement_radius_mm']['BUILDING_G_FOOD_STRUCTURE']),
                          (25000, 15000))
+
+    @unittest.skipUnless((wor.ROOT / 'TLOTR - War of the Ring/Database/Buildings.lqr').exists(), 'owner install not available')
+    def test_original_watchtower_defense(self):
+        with tempfile.TemporaryDirectory(dir=wor.ROOT / 'converted') as output:
+            data = skirmish_construction.defense_data(Path(output), Resolver())
+            self.assertEqual(sorted(data), ['BUILDING_G_TOWER'])
+            tower = data['BUILDING_G_TOWER']
+            self.assertEqual((tower['defense'], tower['weapon']), ('BUILDING_DEFENSES_G_WATCHTOWER', 'WEAPON_BUILDING_G_TOWER_MISSILE'))
+            self.assertEqual((tower['dps_milli'], tower['minimum_range_mm'], tower['range_mm'], tower['max_garrison']), (14000, 0, 19000, 4))
+            self.assertEqual(tower['rates_milli'], [1000, 1200, 1400, 1600, 1750])
+            # J_Projectiles carries JointFlags bit 11 (Building Projectile), at the model's 0.8 scale.
+            self.assertEqual(tower['origin_mm'], [94, 3434, 159])
+            self.assertEqual(tower['projectile']['Visual'], 'combat/projectile_evil_tower_arrow.glb')
+            self.assertTrue((Path(output) / tower['projectile']['Visual']).is_file())
+            self.assertEqual({s['EventName'] for s in tower['projectile']['LaunchSounds']}, {'SOUND_EVENT_WEAPON_ARROW_LAUNCH'})
 
 
 if __name__ == '__main__':

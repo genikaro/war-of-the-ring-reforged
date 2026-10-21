@@ -157,11 +157,12 @@ def demo_body_tuning(name, radius, height):
             'ModelScalePpm': scale, 'FriendlyCompressionPpm': 500_000}
 
 
-def projectile_presentation(output, resolver, unit_name, trace):
-    """Source projectile model, launch sounds and trail of one ranged unit's missile weapon."""
+def projectile_presentation(output, resolver, unit_name, trace, projectile_id=None):
+    """Source projectile model, launch sounds and trail of one ranged unit's missile weapon, or of a given projectile."""
     from lms2gltf import convert_model
-    record = resolver.db['Projectiles'].get(resolver.db['Weapons'].get(
-        resolver.db['Units'].get(unit_name)['MissileWeapon'])['AssociatedProjectile'])
+    if projectile_id is None:
+        projectile_id = resolver.db['Weapons'].get(resolver.db['Units'].get(unit_name)['MissileWeapon'])['AssociatedProjectile']
+    record = resolver.db['Projectiles'].get(projectile_id)
     path = Path(resolver.index.find('Projectiles',record['Filename']))
     projectile = lpo.parse(path.read_bytes())
     launch_sounds = export_sounds(output,resolver,lpo.launch_sound_events(projectile),trace,slots=6)

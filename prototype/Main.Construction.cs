@@ -33,7 +33,9 @@ public partial class Main
 
     private void LoadSkirmishConstruction(JsonElement data)
     {
-        if (!data.TryGetProperty("construction",out var construction) || !construction.TryGetProperty("placeable",out var placeable))
+        // build-25 adds the Watchtower's source defenses.
+        if (!data.TryGetProperty("construction",out var construction) || !construction.TryGetProperty("placeable",out var placeable)
+            || !construction.TryGetProperty("defenses",out var defenses))
             throw new InvalidOperationException("Refresh construction: python tools/skirmish_construction.py --cache converted/skirmish");
         var world = _world!;
         foreach (var start in data.GetProperty("bases").EnumerateArray())
@@ -66,6 +68,15 @@ public partial class Main
             world.Placements.Add(item.Name,new(polygon,footprint.GetProperty("min_height_mm").GetInt32(),footprint.GetProperty("max_height_mm").GetInt32(),
                 InteractionRadius(polygon.Select(p => Math.Sqrt((double)p.X*p.X+(double)p.Z*p.Z)).Max()),
                 item.Value.GetProperty("must_be_near").GetBoolean(),item.Value.GetProperty("drop_off").GetBoolean()));
+        }
+        foreach (var item in defenses.EnumerateObject())
+        {
+            var origin = item.Value.GetProperty("origin_mm");
+            var defense = new DefenseDefinition(item.Value.GetProperty("dps_milli").GetInt32(),item.Value.GetProperty("minimum_range_mm").GetInt32(),
+                item.Value.GetProperty("range_mm").GetInt32(),item.Value.GetProperty("rates_milli").EnumerateArray().Select(r => r.GetInt32()).ToArray(),
+                origin[0].GetInt32(),origin[1].GetInt32(),origin[2].GetInt32());
+            defense.Validate(); world.Defenses.Add(item.Name,defense);
+            LoadProjectileStyle(item.Name,item.Value.GetProperty("projectile"));
         }
         foreach (var radius in construction.GetProperty("placement_radius_mm").EnumerateObject()) world.PlacementRadiusMm.Add(radius.Name,radius.Value.GetInt32());
         var order = construction.GetProperty("order").EnumerateArray().Select(n => n.GetString()!).ToArray();

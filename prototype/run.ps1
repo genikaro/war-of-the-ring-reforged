@@ -17,6 +17,7 @@ param(
     [switch]$MinimapSmoke,
     [switch]$FrodoSmoke,
     [switch]$SiegeSmoke,
+    [switch]$DefenseSmoke,
     [switch]$MeleeSmoke,
     [switch]$EngagementSmoke,
     [switch]$AttackMoveEngagementSmoke,
@@ -51,8 +52,8 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 if ($LASTEXITCODE -ne 0) { throw 'C# build failed' }
 $arguments = @('--path', $PSScriptRoot)
 if ($Resolution) { $arguments += @('--resolution',$Resolution) }
-if ($SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $SiegeSmoke) { $Skirmish = $true }
-if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $AbilitySmoke -or $SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $SiegeSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
+if ($SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $SiegeSmoke -or $DefenseSmoke) { $Skirmish = $true }
+if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $AbilitySmoke -or $SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $SiegeSmoke -or $DefenseSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
     $renderRate = if ($MotionSmoke -or $FormationSmoke) { '80' } else { '20' }
     if (-not $CapturePath) { $arguments += '--headless' }
     $arguments += @('--fixed-fps', $renderRate)
@@ -76,6 +77,7 @@ if ($DwarfHallSmoke) { $arguments += '--dwarf-hall-smoke' }
 if ($MinimapSmoke) { $arguments += '--minimap-smoke' }
 if ($FrodoSmoke) { $arguments += '--frodo-smoke' }
 if ($SiegeSmoke) { $arguments += '--siege-smoke' }
+if ($DefenseSmoke) { $arguments += '--defense-smoke' }
 if ($MeleeSmoke) { $arguments += '--melee-smoke' }
 if ($EngagementSmoke) { $arguments += '--engagement-smoke' }
 if ($AttackMoveEngagementSmoke) { $arguments += '--attack-move-engagement-smoke' }

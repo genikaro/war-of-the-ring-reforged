@@ -53,38 +53,45 @@ public partial class Main
                 var (stream,volume) = LoadCombatSound(sound); _abilitySounds.Add((sound.GetProperty("EventId").GetInt32(),stream,volume));
             }
         if (rules.TryGetProperty("Projectiles",out var projectiles))
-        foreach (var item in projectiles.EnumerateObject())
-        {
-            var style = new ProjectileStyle(LoadGlb(item.Value.GetProperty("Visual").GetString()!,_teamColors[0]));
-            var launches = item.Value.GetProperty("LaunchSounds");
-            foreach (var sound in launches.EnumerateArray()) style.LaunchSounds.Add(LoadCombatSound(sound));
-            // One voice pool serves every ranged type, sized for the largest source voice cap.
-            int voices = launches.GetArrayLength() > 0 ? Math.Clamp(launches[0].GetProperty("MaxSimultaneous").GetInt32(),1,16) : 0;
-            while (_launchPlayers.Count < voices)
-            {
-                var player = new AudioStreamPlayer3D {MaxDistance = 65,UnitSize = 15};
-                AddChild(player); _launchPlayers.Add(player);
-            }
-            if (item.Value.TryGetProperty("Trail",out var trail) && trail.ValueKind == JsonValueKind.Object)
-            {
-                style.Trail = true;
-                style.TrailLifetime = trail.GetProperty("LifetimeMs").GetDouble()/1000;
-                style.TrailWidth = trail.GetProperty("WidthMm").GetSingle()/1000;
-                style.TrailEndWidth = trail.GetProperty("EndWidthMm").GetSingle()/1000;
-                style.TrailGray = trail.GetProperty("GrayTintPpm").GetSingle()/1000000;
-                Color Argb(uint value) => new((value>>16&255)/255f,(value>>8&255)/255f,(value&255)/255f,(value>>24)/255f);
-                style.TrailStart = Argb(trail.GetProperty("StartColorArgb").GetUInt32());
-                style.TrailEnd = Argb(trail.GetProperty("EndColorArgb").GetUInt32());
-                _trailMaterial ??= new() {Shader = new Shader {Code = "shader_type spatial; render_mode unshaded, cull_disabled, depth_draw_never, shadows_disabled; void fragment() { ALBEDO = COLOR.rgb; ALPHA = COLOR.a * smoothstep(0.0,0.35,UV.x) * smoothstep(0.0,0.35,1.0-UV.x); }"}};
-            }
-            _projectileStyles.Add(item.Name,style);
-        }
+            foreach (var item in projectiles.EnumerateObject()) LoadProjectileStyle(item.Name,item.Value);
         for (int index = 0; index < 4; index++)
         {
             var player = new AudioStreamPlayer3D { MaxDistance = 65,UnitSize = 15 };
             AddChild(player); _impactPlayers.Add(player);
         }
     }
+
+    /// <summary>A projectile's model, launch sounds and trail, keyed by the unit or building that fires it.</summary>
+    private void LoadProjectileStyle(string key,JsonElement projectile)
+    {
+        var style = new ProjectileStyle(LoadGlb(projectile.GetProperty("Visual").GetString()!,_teamColors[0]));
+        var launches = projectile.GetProperty("LaunchSounds");
+        foreach (var sound in launches.EnumerateArray()) style.LaunchSounds.Add(LoadCombatSound(sound));
+        // One voice pool serves every ranged type, sized for the largest source voice cap.
+        int voices = launches.GetArrayLength() > 0 ? Math.Clamp(launches[0].GetProperty("MaxSimultaneous").GetInt32(),1,16) : 0;
+        while (_launchPlayers.Count < voices)
+        {
+            var player = new AudioStreamPlayer3D {MaxDistance = 65,UnitSize = 15};
+            AddChild(player); _launchPlayers.Add(player);
+        }
+        if (projectile.TryGetProperty("Trail",out var trail) && trail.ValueKind == JsonValueKind.Object)
+        {
+            style.Trail = true;
+            style.TrailLifetime = trail.GetProperty("LifetimeMs").GetDouble()/1000;
+            style.TrailWidth = trail.GetProperty("WidthMm").GetSingle()/1000;
+            style.TrailEndWidth = trail.GetProperty("EndWidthMm").GetSingle()/1000;
+            style.TrailGray = trail.GetProperty("GrayTintPpm").GetSingle()/1000000;
+            Color Argb(uint value) => new((value>>16&255)/255f,(value>>8&255)/255f,(value&255)/255f,(value>>24)/255f);
+            style.TrailStart = Argb(trail.GetProperty("StartColorArgb").GetUInt32());
+            style.TrailEnd = Argb(trail.GetProperty("EndColorArgb").GetUInt32());
+            _trailMaterial ??= new() {Shader = new Shader {Code = "shader_type spatial; render_mode unshaded, cull_disabled, depth_draw_never, shadows_disabled; void fragment() { ALBEDO = COLOR.rgb; ALPHA = COLOR.a * smoothstep(0.0,0.35,UV.x) * smoothstep(0.0,0.35,1.0-UV.x); }"}};
+        }
+        _projectileStyles.Add(key,style);
+    }
+
+    private ProjectileStyle? ProjectileStyleFor(int unit,int site) => unit >= 0
+        ? _projectileStyles.GetValueOrDefault(_world!.Units[unit].Definition.Name)
+        : _world!.ConstructionSites.TryGetValue(site,out var building) && building.Building != null ? _projectileStyles.GetValueOrDefault(building.Building) : null;
 
     private void PresentCombatEvents()
     {
@@ -96,21 +103,21 @@ public partial class Main
             if (combat.Kind == CombatEventKind.Release)
             {
                 _arrowReleases++;
-                if (_projectileStyles.TryGetValue(_world.Units[combat.Unit].Definition.Name,out var style) && style.LaunchSounds.Count > 0)
+                if (ProjectileStyleFor(combat.Unit,combat.Site) is { LaunchSounds.Count: > 0 } style)
                 {
                     var launchPlayer = _launchPlayers[_launchCursor++%_launchPlayers.Count];
-                    var launchSound = style.LaunchSounds[(combat.Unit+combat.StartTick)%style.LaunchSounds.Count];
+                    var launchSound = style.LaunchSounds[(Math.Max(combat.Unit,combat.Site)+combat.StartTick)%style.LaunchSounds.Count];
                     launchPlayer.Stream = launchSound.Stream; launchPlayer.VolumeDb = launchSound.VolumeDb;
                     launchPlayer.Position = new(-combat.X/1000f,combat.Y/1000f,combat.Z/1000f);
                     launchPlayer.StreamPaused = _paused; launchPlayer.Play(); _launchSamples++;
                 }
             }
             if (combat.Kind != CombatEventKind.Hit) continue;
-            if (_world.Units[combat.Unit].Definition.FiresProjectile(combat.Attack)) _arrowHits++;
+            if (combat.Unit < 0 || _world.Units[combat.Unit].Definition.FiresProjectile(combat.Attack)) _arrowHits++;
             _strikeHits++;
             if (combat.DamageMilli <= 0 || _impactSounds.Count == 0) continue;
             var player = _impactPlayers[_impactCursor++%_impactPlayers.Count];
-            var sound = _impactSounds[(combat.Unit+combat.Attack+combat.Hit)%_impactSounds.Count];
+            var sound = _impactSounds[(Math.Max(combat.Unit,combat.Site)+combat.Attack+combat.Hit)%_impactSounds.Count];
             player.Stream = sound.Stream; player.VolumeDb = sound.VolumeDb;
             player.Position = new(-combat.X/1000f,combat.Y/1000f,combat.Z/1000f); player.Play(); _impactSamples++;
         }
@@ -130,7 +137,7 @@ public partial class Main
         {
             if (!_arrowViews.TryGetValue(arrow.Id,out var view))
             {
-                var style = _projectileStyles[_world.Units[arrow.Unit].Definition.Name];
+                if (ProjectileStyleFor(arrow.Unit,arrow.Source) is not { } style) continue;
                 view = (Node3D)style.Template.Duplicate(); AddChild(view); _arrowViews.Add(arrow.Id,view); _arrowVisuals++;
                 if (style.Trail)
                 {

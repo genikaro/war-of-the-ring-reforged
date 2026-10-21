@@ -1,8 +1,9 @@
 namespace Reforged.Simulation;
 
 public enum CombatEventKind { Start, Hit, Cancel, Release }
+/// <summary>Unit is -1 for a defending building's arrow, which Site then names.</summary>
 public sealed record CombatEvent(int Tick,CombatEventKind Kind,int Unit,int Target,int Attack,int Hit,long DamageMilli,
-    int StartTick,int X,int Y,int Z);
+    int StartTick,int X,int Y,int Z,int Site = -1);
 
 public sealed partial class SimWorld
 {

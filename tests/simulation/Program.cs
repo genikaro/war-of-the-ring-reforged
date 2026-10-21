@@ -65,6 +65,7 @@ EconomyChecks.Run(Check);
 ConstructionChecks.Run(Check);
 ProductionChecks.Run(Check);
 PlacementChecks.Run(Check);
+DefenseChecks.Run(Check);
 WorkerTrafficChecks.Run(Check);
 FootprintChecks.Run(Check);
 BodyCollisionChecks.Run(Check);
