@@ -68,6 +68,7 @@ public partial class Main : Node3D
     {
         public Node3D Root = root;
         public MeshInstance3D Ring = ring;
+        public HealthBar? Health;
         public AnimationPlayer? Player = player;
         public JsonElement Model = model;
         public string Clip = "";
@@ -263,6 +264,8 @@ public partial class Main : Node3D
                 AlbedoColor = new Color(team == 0 ? "e9c22d" : "e65045"), CullMode = BaseMaterial3D.CullModeEnum.Disabled,
                 ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
         root.AddChild(ring);
+        var health = new HealthBar(Math.Max(1.1f,2.2f*unit.Definition.BodyRadiusMm/1000f),.16f) { Position = new(0,.12f,0) };
+        root.AddChild(health);
         if (!_appearanceData.ContainsKey(modelKey.Item1)) _appearanceData[modelKey.Item1] = UnitAppearance.Read(System.IO.Path.Combine(_cache,modelKey.Item1));
         var appearance = new UnitAppearance(visual,_appearanceData[modelKey.Item1]);
         appearance.Apply(model.GetProperty("idle").GetString()!,0);
@@ -288,7 +291,7 @@ public partial class Main : Node3D
             appearance.Apply(model.GetProperty("idle").GetString()!,0);
             _equipmentStatesVerified = !idle.SequenceEqual(ready) && ready.SequenceEqual(attack) && idle.SequenceEqual(appearance.VisibleNodes);
         }
-        _views[unit.Id] = new UnitView(root,ring,player,model) { Appearance = appearance };
+        _views[unit.Id] = new UnitView(root,ring,player,model) { Appearance = appearance,Health = health };
     }
 
     private static IEnumerable<Node> Descendants(Node root)
@@ -708,6 +711,7 @@ public partial class Main : Node3D
         {
             var view = _views[unit.Id];
             PresentRing(unit,view);
+            view.Health?.Refresh(unit.Present ? unit.Health : 0,unit.MaxHealth);
             view.Ring.Visible = unit.Health > 0 && _selected.Contains(unit.Id);
             if (!view.Ring.Visible || (view.RingPosition == view.Root.Position && view.RingYaw == view.Root.Rotation.Y)) continue;
             var transform = view.Root.GlobalTransform; var inverse = transform.AffineInverse();

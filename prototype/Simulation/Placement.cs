@@ -102,7 +102,7 @@ public sealed partial class SimWorld
             var footprint = PlacementFootprint(building,command.Cell)!; var placement = Placements[building];
             var (x,z) = Navigation.Center(command.Cell);
             // A worker must reach the work envelope outside the new footprint before money is spent.
-            if (!ready.Any(u => EconomyRouteCandidates(u,x,z,placement.InteractionRadiusMm).Any(n => {
+            if (!ready.Any(u => EconomyRouteCandidates(u,new(x,z,placement.InteractionRadiusMm,-1)).Any(n => {
                 var (cx,cz) = Nav(u).Center(n); return !GridNavigation.FootprintBlocks(footprint,cx,cz,cx,cz,u.Definition.BodyRadiusMm); }))) return;
             int id = Math.Max(PlacedObstacleBase,Navigation.ObstacleIds.DefaultIfEmpty(0).Max()+1);
             Navigation.AddObstacle(id,[footprint]);
@@ -124,7 +124,7 @@ public sealed partial class SimWorld
     private void CompleteBuilding(ConstructionSite site,SimUnit builder)
     {
         var placement = Placements[site.Building!];
-        if (placement.DropOff) DropOffs.Add(new(site.Team,site.X,site.Z,placement.InteractionRadiusMm));
+        if (placement.DropOff) DropOffs.Add(new(site.Team,site.X,site.Z,placement.InteractionRadiusMm,site.Obstacle));
         // The builder stands on ground connected to the work envelope; trained units exit into the same region.
         if (ProducedUnits.TryGetValue(site.Building!,out var units) && units.Length > 0)
             Producers.Add(site.Id,new(site.Id,site.Team,site.X,site.Z,builder.Node,units));

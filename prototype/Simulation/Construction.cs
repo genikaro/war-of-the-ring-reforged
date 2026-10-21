@@ -29,6 +29,15 @@ public sealed partial class SimWorld
     public ConstructionDefinition SiteRules(ConstructionSite site) => site.Building is { } name ? BuildingRules[name] : ConstructionRules[Resources[site.Resource].Kind];
     public (int X,int Z) SitePosition(ConstructionSite site) => site.Building != null ? (site.X,site.Z) : (Resources[site.Resource].X,Resources[site.Resource].Z);
 
+    /// <summary>A Mill or Foundry foundation sits inside its resource, which keeps blocking the ground around
+    /// it, so a builder works against either footprint.</summary>
+    private WorkArea SiteArea(ConstructionSite site)
+    {
+        var (x,z) = SitePosition(site);
+        return site.Building != null ? new(x,z,site.RadiusMm,site.Obstacle)
+            : new(x,z,Math.Max(site.RadiusMm,Resources[site.Resource].RadiusMm),site.Obstacle,site.Resource);
+    }
+
     private bool HasBuilding(int team,string name) => StartBuildings.TryGetValue(team,out var starts) && starts.Contains(name)
         || ConstructionSites.Values.Any(s => s.Team == team && s.Complete && SiteRules(s).Name == name);
 
@@ -67,7 +76,6 @@ public sealed partial class SimWorld
         var workers = command.Units.Where(id => id >= 0 && id < Units.Count).Select(id => Units[id])
             .Where(u => u.Team == command.Team && u.Present && Workers.ContainsKey(u.Definition.Name)).ToArray();
         if (workers.Length == 0 || site.Team >= 0 && (site.Team != command.Team || site.Complete)) return;
-        var (x,z) = SitePosition(site);
         // A queued foundation reserves neither money nor space until its worker activates the order.
         var ready = new List<SimUnit>();
         foreach (var unit in workers)
@@ -80,7 +88,7 @@ public sealed partial class SimWorld
         if (site.Team < 0)
         {
             if (!CanStartConstruction(command.Team,site.Id,out _)) return;
-            if (!ready.Any(u => EconomyRouteCandidates(u,x,z,site.RadiusMm)
+            if (!ready.Any(u => EconomyRouteCandidates(u,SiteArea(site))
                 .Any(n => !Nav(u).ObstacleCovers(site.Obstacle,n)
                     && !Nav(u).ObstacleCoversGroundBody(site.Obstacle,Nav(u).Center(n).X,Nav(u).Center(n).Z)))) return;
             var rules = SiteRules(site); var bank = Economies[command.Team];
@@ -112,19 +120,17 @@ public sealed partial class SimWorld
     /// <summary>A builder at work: assigned to an unfinished owned site and standing within its work envelope.</summary>
     public bool IsBuilding(SimUnit unit) => unit.Present && unit.Order == OrderKind.Build
         && ConstructionSites.TryGetValue(unit.OrderTarget,out var site) && site.Team == unit.Team && !site.Complete
-        && unit.Goal < 0 && unit.TransitNode < 0 && unit.YieldFor < 0
-        && DistanceSquared(unit.X,unit.Z,SitePosition(site).X,SitePosition(site).Z) <= (long)site.RadiusMm*site.RadiusMm;
+        && unit.Goal < 0 && unit.TransitNode < 0 && unit.YieldFor < 0 && Reaches(SiteArea(site),unit.X,unit.Z);
 
     private void ApproachConstruction(SimUnit unit)
     {
         if (unit.Order != OrderKind.Build || !ConstructionSites.TryGetValue(unit.OrderTarget,out var site)) return;
         if (site.Team != unit.Team || site.Complete) { unit.Order = OrderKind.Idle; return; }
         unit.Target = -1; unit.AutoEngage = false;
-        var (x,z) = SitePosition(site);
-        if (unit.Goal < 0 && unit.TransitNode < 0 && unit.YieldFor < 0
-            && DistanceSquared(unit.X,unit.Z,x,z) > (long)site.RadiusMm*site.RadiusMm
+        var area = SiteArea(site);
+        if (unit.Goal < 0 && unit.TransitNode < 0 && unit.YieldFor < 0 && !Reaches(area,unit.X,unit.Z)
             && (unit.GatherPlanTick < 0 || Tick-unit.GatherPlanTick >= TicksPerSecond))
-        { unit.GatherPlanTick = Tick; PlanEconomyRoute(unit,x,z,site.RadiusMm); }
+        { unit.GatherPlanTick = Tick; PlanEconomyRoute(unit,area); }
     }
 
     private void UpdateConstruction()

@@ -23,7 +23,12 @@ public sealed record WorkerEconomy(int FoodCapacity,int OreCapacity,int RawOreLo
         return result;
     }
 }
-public sealed record ResourceDropOff(int Team,int X,int Z,int RadiusMm);
+public sealed record ResourceDropOff(int Team,int X,int Z,int RadiusMm,int Obstacle = -1);
+
+/// <summary>Where a worker may stand to work on a target. Precise footprints are measured directly, so the
+/// standing band hugs the building or pile; the circular envelope around the center is the fallback for maps
+/// without them, and bounds the candidate scan either way. A resource under a Mill or Foundry carries both.</summary>
+public readonly record struct WorkArea(int X,int Z,int RadiusMm,int Obstacle,int Second = -1);
 
 public sealed class TeamEconomy(int food,int ore,int foodCapacity = 99999,int oreCapacity = 99999)
 {
@@ -61,6 +66,22 @@ public sealed partial class SimWorld
     public Dictionary<string,WorkerEconomy> Workers { get; } = [];
     public SortedDictionary<int,GatherSource> Resources { get; } = [];
     public List<ResourceDropOff> DropOffs { get; } = [];
+
+    /// <summary>How far beyond a footprint a worker may stand and still work on it: a worker body and one grid
+    /// cell, the nearest a standing cell can sit once the obstacle is rasterized.</summary>
+    public int WorkReachMm => Workers.Keys.Select(name => Rules.Units.TryGetValue(name,out var definition) ? definition.BodyRadiusMm : 350)
+        .DefaultIfEmpty(350).Max()+Navigation.CellSize;
+
+    private WorkArea GatherArea(GatherSource source) => ConstructionSites.TryGetValue(source.Id,out var site) && site.Team >= 0
+        ? new(source.X,source.Z,Math.Max(source.RadiusMm,site.RadiusMm),source.Id,site.Obstacle)
+        : new(source.X,source.Z,source.RadiusMm,source.Id);
+
+    private static WorkArea DepotArea(ResourceDropOff depot) => new(depot.X,depot.Z,depot.RadiusMm,depot.Obstacle);
+
+    private bool Reaches(WorkArea area,int x,int z)
+        => Navigation.HasFootprints(area.Obstacle) || Navigation.HasFootprints(area.Second)
+            ? Navigation.WithinFootprintReach(area.Obstacle,x,z,WorkReachMm) || Navigation.WithinFootprintReach(area.Second,x,z,WorkReachMm)
+            : DistanceSquared(x,z,area.X,area.Z) <= (long)area.RadiusMm*area.RadiusMm;
 
     private void BeginGather(SimCommand command,bool activating)
     {
@@ -145,19 +166,19 @@ public sealed partial class SimWorld
         {
             unit.ReturningCargo = true;
             var depots = DropOffs.Where(d => d.Team == unit.Team).OrderBy(d => DistanceSquared(unit.X,unit.Z,d.X,d.Z)).ToArray();
-            if (depots.Any(d => DistanceSquared(unit.X,unit.Z,d.X,d.Z) <= (long)d.RadiusMm*d.RadiusMm))
+            if (depots.Any(d => Reaches(DepotArea(d),unit.X,unit.Z)))
             { BeginPhase(unit,GatherPhase.PuttingDown); return; }
             if (unit.GatherPlanTick >= 0 && Tick-unit.GatherPlanTick < TicksPerSecond) return;
             unit.GatherPlanTick = Tick;
             foreach (var candidate in depots)
-                if (PlanEconomyRoute(unit,candidate.X,candidate.Z,candidate.RadiusMm)) break;
+                if (PlanEconomyRoute(unit,DepotArea(candidate))) break;
             return;
         }
-        int radius = site is { Team: >= 0 } ? Math.Max(source.RadiusMm,site.RadiusMm) : source.RadiusMm;
-        if (DistanceSquared(unit.X,unit.Z,source.X,source.Z) > (long)radius*radius)
+        var area = GatherArea(source);
+        if (!Reaches(area,unit.X,unit.Z))
         {
             if (unit.GatherPlanTick < 0 || Tick-unit.GatherPlanTick >= TicksPerSecond)
-            { unit.GatherPlanTick = Tick; PlanEconomyRoute(unit,source.X,source.Z,radius); }
+            { unit.GatherPlanTick = Tick; PlanEconomyRoute(unit,area); }
             return;
         }
         if (!improved) { BeginPhase(unit,GatherPhase.Mining); return; }
@@ -180,30 +201,30 @@ public sealed partial class SimWorld
         return true;
     }
 
-    private IEnumerable<int> EconomyRouteCandidates(SimUnit unit,int x,int z,int radius)
+    private IEnumerable<int> EconomyRouteCandidates(SimUnit unit,WorkArea area)
     {
         var nav = Nav(unit);
         var reserved = OccupiedNodes(unit.Id);
         reserved.UnionWith(Units.Where(u => u.Id != unit.Id && u.Present && u.Goal >= 0).Select(u => u.Goal));
-        int minX = Math.Max(0,(x-radius)/nav.CellSize),maxX = Math.Min(nav.Width-1,(x+radius)/nav.CellSize);
-        int minZ = Math.Max(0,(z-radius)/nav.CellSize),maxZ = Math.Min(nav.Height-1,(z+radius)/nav.CellSize);
+        int minX = Math.Max(0,(area.X-area.RadiusMm)/nav.CellSize),maxX = Math.Min(nav.Width-1,(area.X+area.RadiusMm)/nav.CellSize);
+        int minZ = Math.Max(0,(area.Z-area.RadiusMm)/nav.CellSize),maxZ = Math.Min(nav.Height-1,(area.Z+area.RadiusMm)/nav.CellSize);
         var candidates = new List<int>();
         for (int row = minZ; row <= maxZ; row++)
         for (int col = minX; col <= maxX; col++)
         {
             int node = row*nav.Width+col; var at = nav.Center(node);
             if (!reserved.Contains(node) && nav.CanStand(node) && CanReachDestination(unit,node)
-                && DistanceSquared(at.X,at.Z,x,z) <= (long)radius*radius) candidates.Add(node);
+                && Reaches(area,at.X,at.Z)) candidates.Add(node);
         }
-        // The work envelope is conservative; prefer spots beside the target so workers mine, enter and hammer
-        // at the footprint instead of at the envelope's edge, unless that costs a long walk around it.
+        // Prefer spots beside the target so workers mine, enter and hammer at the footprint rather than at the
+        // far side of the standing band, unless that costs a long walk around it.
         return candidates.OrderBy(n => { var p = nav.Center(n);
-            return IntegerMotion.Length(p.X-unit.X,0,p.Z-unit.Z)+2*IntegerMotion.Length(p.X-x,0,p.Z-z); }).ThenBy(n => n);
+            return IntegerMotion.Length(p.X-unit.X,0,p.Z-unit.Z)+2*IntegerMotion.Length(p.X-area.X,0,p.Z-area.Z); }).ThenBy(n => n);
     }
 
-    private bool PlanEconomyRoute(SimUnit unit,int x,int z,int radius)
+    private bool PlanEconomyRoute(SimUnit unit,WorkArea area)
     {
-        foreach (int node in EconomyRouteCandidates(unit,x,z,radius))
+        foreach (int node in EconomyRouteCandidates(unit,area))
         {
             if (PathFromCurrentPosition(unit,node).Count == 0) continue;
             unit.OrderDestination = node; PlanOrderRoute(unit,node); return true;
@@ -214,6 +235,6 @@ public sealed partial class SimWorld
     private string EconomyDigest() => ":economy:"+string.Join(';',Economies.OrderBy(p => p.Key).Select(p => $"{p.Key},{p.Value.FoodMilli},{p.Value.OreMilli},{p.Value.FoodCapacityMilli},{p.Value.OreCapacityMilli}"))
         + ":resources:"+string.Join(';',Resources.Values.Select(r => $"{r.Id},{r.Kind},{r.X},{r.Z},{r.RadiusMm},{r.RemainingMilli},{r.RawFloorMilli},{r.RateMilliPerTick},{r.ImprovedRateMilliPerTick},{r.ImprovedFloorMilli}"))
         + ":workers:"+string.Join(';',Workers.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => $"{p.Key},{p.Value}"))
-        + ":depots:"+string.Join(';',DropOffs.Select(d => $"{d.Team},{d.X},{d.Z},{d.RadiusMm}"))
+        + ":depots:"+string.Join(';',DropOffs.Select(d => $"{d.Team},{d.X},{d.Z},{d.RadiusMm},{d.Obstacle}"))
         + ":cargo:"+string.Join(';',Units.Select(u => $"{u.CargoMilli},{u.CargoKind},{u.ReturningCargo},{u.GatherPlanTick},{u.GatherPhase},{u.GatherPhaseTick},{u.InsideSite}"));
 }

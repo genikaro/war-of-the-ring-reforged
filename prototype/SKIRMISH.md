@@ -86,9 +86,15 @@ can refresh only its economy metadata without re-exporting models.
 The current adapter interprets the raw rate as units/second and the raw fraction
 as the recoverable part of initial stock: 2475 of a 4500-unit pile. Integer
 milliresources retain subunit progress at 20 Hz. These interpretations still
-need controlled original-game measurement. Interaction distances use the imported
-footprint's farthest corner plus worker body radius and one navigation cell;
-they are conservative approach envelopes rather than original work ranges.
+need controlled original-game measurement. Work ranges measure the imported
+footprint itself: a worker may stand up to one worker body radius plus one
+navigation cell beyond it, which is the nearest a standing cell can sit once the
+footprint is rasterized. Build-20 replaced the earlier circle around the target
+centre, whose radius came from the footprint's farthest corner and therefore let
+workers mine and unload from two rows out on a footprint's flat sides. The
+circle survives only as the scan bound for candidate spots, and as the fallback
+on maps without precise footprints. The band is still an adapter policy rather
+than a measured original work range.
 Workers use ground navigation and shared body reservations for both trips.
 Start workers are also checked against the first worker's connected body graph;
 one original build-4 spawn was standable inside an isolated clearance pocket
@@ -136,10 +142,27 @@ one worker contributes one tick per tick, each extra worker adds 10%. Initial
 health is the imported 5%; health grows with progress. Original construction
 states 19/17/18 show at thirds of progress, then state 0 shows the healthy
 building. The cache restores hidden scaffold geometry and binds the original
-construction texture keys. Progress/health labels and building animation freeze
+construction texture keys. The world health bar and building animation freeze
 when paused. Equal thirds, additive build speed, linear health growth, fixed
 resource-site placement/orientation and interaction envelopes are adapter
 policies awaiting original-game measurement.
+
+### World health bars
+
+Build-20 replaced the floating `Name 42% 300/1200` label over a foundation with
+the world health bar the original draws: a billboarded black strip with a green
+fill at the foot of the unit or building, as in the October 21 campaign captures
+(`campaign-012`, where the selected Citadel carries one). Because construction
+health climbs from the imported 5% to full with the work done, the same bar reads
+as the build progress; the selection panel still prints `Construction NN%`.
+
+Two adapter policies: the bar shows only below full health, where the original
+also showed it for a selected unit at full health, and its width comes from the
+footprint's mean horizontal span (a unit's from its body radius) rather than a
+measured original size. Bars are drawn without depth testing, so they stay
+readable through the model they belong to, and they are added after a structure
+registers its pick geometry so the strip is never ray-picked as the building.
+Start and neutral structures take no damage yet, so they never carry one.
 
 A completed owned Mill enables food loads of ten; a completed owned Foundry
 doubles the raw ore rate and unlocks the remaining 45% of the pile. Workers
@@ -606,11 +629,11 @@ source resource states, so the pickaxe, sacks and put-down come from the model.
 - **Building.** A worker at work on a foundation faces it and loops the source
   `UNIT_ANIM_STATE_REPAIR` clip (`G_Human_Worker_Repair`), which shows the hammer.
   Construction rules are unchanged.
-- **Work spots.** The interaction envelopes stay conservative. Within one, a
-  worker now picks the cell that minimises its walking distance plus twice its
-  distance to the target. It therefore mines at the rocks, puts sacks down at the
-  Citadel door and enters or hammers at the building rather than at the edge
-  of the envelope. A shorter walk still wins when the near side is taken.
+- **Work spots.** Within the standing band a worker picks the cell that minimises
+  its walking distance plus twice its distance to the target. It therefore mines at
+  the rocks, puts sacks down at the Citadel door and enters or hammers at the
+  building rather than at the far side of the band. A shorter walk still wins when
+  the near side is taken.
 
 A worker inside a building has no body: it does not collide, block placement or
 spawning, or count as a target, and it cannot be clicked or selected. Entering

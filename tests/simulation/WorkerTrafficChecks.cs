@@ -55,6 +55,22 @@ public static class WorkerTrafficChecks
         world.Enqueue(0,[3],OrderKind.Move,goal);
         for (int i = 0; i < 300; i++) world.Step();
         check(worker.Node == goal && worker.Order == OrderKind.Idle,"real-map Move rescues a worker from the reported building corner");
+        // Work ranges measure the footprint, so a crew hugs the pile instead of spreading over the two rows
+        // the circumscribed envelope allowed on its flat sides.
+        var band = Load(cache);
+        int pile = band.Resources.Values.Where(r => r.Kind == ResourceKind.Ore)
+            .MinBy(r => SimWorld.DistanceSquared(r.X,r.Z,band.Units[0].X,band.Units[0].Z))!.Id;
+        int[] crew = band.Units.Where(u => u.Team == 0).Select(u => u.Id).ToArray();
+        band.Enqueue(0,crew,OrderKind.Gather,target: pile);
+        bool hugging = true; int swings = 0;
+        for (int tick = 0; tick < 2000; tick++)
+        {
+            band.Step();
+            foreach (var u in crew.Select(id => band.Units[id]).Where(u => u.GatherPhase == GatherPhase.Mining))
+            { swings++; hugging &= band.Navigation.WithinFootprintReach(pile,u.X,u.Z,band.WorkReachMm); }
+        }
+        check(swings > 0 && hugging && band.WorkReachMm == worker.Definition.BodyRadiusMm+band.Navigation.CellSize,
+            "miners stand within a body and a cell of the ore pile's footprint");
         foreach (var result in JsonSerializer.SerializeToElement(Probe(cache)).EnumerateArray())
         {
             string scenario = result.GetProperty("scenario").GetString()!;
@@ -108,7 +124,8 @@ public static class WorkerTrafficChecks
             int x = (int)Math.Round(at[0].GetDouble()*1000),z = (int)Math.Round(at[1].GetDouble()*1000);
             world.Economies.Add(team,new(state.GetProperty("food").GetInt32(),state.GetProperty("ore").GetInt32()));
             world.StartBuildings.Add(team,[start.GetProperty("building").GetString()!]);
-            world.DropOffs.Add(new(team,x,z,Radius(start.GetProperty("footprint_object").GetInt32(),x,z)));
+            int footprint = start.GetProperty("footprint_object").GetInt32();
+            world.DropOffs.Add(new(team,x,z,Radius(footprint,x,z),footprint));
         }
         foreach (var node in data.GetProperty("resources").EnumerateArray())
         {

@@ -16,13 +16,13 @@ public partial class Main
     private Node3D? _constructionPreview;
     private StandardMaterial3D? _previewMaterial;
     private bool _previewValid;
-    private sealed class BuildingVisual(Node3D root,UnitAppearance appearance,AnimationPlayer? player,string[] clips,Label3D label)
+    private sealed class BuildingVisual(Node3D root,UnitAppearance appearance,AnimationPlayer? player,string[] clips,HealthBar bar)
     {
         public Node3D Root = root;
         public UnitAppearance Appearance = appearance;
         public AnimationPlayer? Player = player;
         public string[] Clips = clips;
-        public Label3D Label = label;
+        public HealthBar Bar = bar;
         public int Stage = -1;
     }
 
@@ -74,6 +74,26 @@ public partial class Main
             world.StartStructures.Add(new(start.GetProperty("team").GetInt32(),start.GetProperty("building").GetString()!,
                 (int)Math.Round(at[0].GetDouble()*1000),(int)Math.Round(at[1].GetDouble()*1000)));
         }
+    }
+
+    /// <summary>A strip across the base of the foundation, from its footprint's mean horizontal span.</summary>
+    private (float Width,float Height) SiteBarSize(ConstructionSite site)
+    {
+        float span;
+        if (site.Building != null && _world!.Placements.TryGetValue(site.Building,out var placement))
+        {
+            var polygon = placement.Polygon;
+            span = (polygon.Max(p => p.X)-polygon.Min(p => p.X)+polygon.Max(p => p.Z)-polygon.Min(p => p.Z))/2000f;
+        }
+        else
+        {
+            var points = _obstacleLayers.EnumerateArray().First(o => o.GetProperty("id").GetInt32() == site.Obstacle)
+                .GetProperty("footprints").EnumerateArray().SelectMany(b => b.GetProperty("polygon").EnumerateArray())
+                .Select(p => (X: p[0].GetSingle(),Z: p[1].GetSingle())).ToArray();
+            span = (points.Max(p => p.X)-points.Min(p => p.X)+points.Max(p => p.Z)-points.Min(p => p.Z))/2;
+        }
+        float width = Math.Clamp(span*.8f,1.5f,12);
+        return (width,Math.Clamp(width*.05f,.18f,.34f));
     }
 
     private GatherSource? ResourceAt(Vector2 mouse)
@@ -212,12 +232,13 @@ public partial class Main
                 root.AddChild(model); AddChild(root);
                 var appearanceData = UnitAppearance.Read(System.IO.Path.Combine(_cache,_constructionFiles[rules.Name]));
                 var clips = BuildingStateClips(appearanceData);
-                var label = new Label3D { Position = new(0,7,0),FontSize = 48,PixelSize = .018f,
-                    Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,NoDepthTest = true,Modulate = new Color("fff3cb") };
-                root.AddChild(label);
-                view = new(root,new UnitAppearance(model,appearanceData),Descendants(model).OfType<AnimationPlayer>().FirstOrDefault(),clips,label);
+                var (barWidth,barHeight) = SiteBarSize(site);
+                var bar = new HealthBar(barWidth,barHeight) { Position = new(0,.14f,0) };
+                view = new(root,new UnitAppearance(model,appearanceData),Descendants(model).OfType<AnimationPlayer>().FirstOrDefault(),clips,bar);
                 _constructionViews.Add(site.Id,view);
                 RegisterStructure(site.Obstacle,site.Team,rules.Name,root,site.Resource);
+                // Added after registration so the strip is not picked as the structure's own geometry.
+                root.AddChild(bar);
             }
             int stage = site.Complete ? 3 : (int)Math.Min(2,site.ProgressMicroTicks*3/(rules.DurationTicks*1_000_000L));
             if (stage != view.Stage)
@@ -228,7 +249,8 @@ public partial class Main
                 view.Stage = stage;
             }
             if (view.Player != null) view.Player.SpeedScale = _paused ? 0 : 1;
-            view.Label.Text = site.Complete ? "" : $"{rules.DisplayName} {site.ProgressMicroTicks*100/(rules.DurationTicks*1_000_000L)}%\n{site.Health}/{rules.MaxHealth}";
+            // Construction health climbs with the work done, so the health bar doubles as the progress bar.
+            view.Bar.Refresh(site.Health,rules.MaxHealth);
         }
     }
 }

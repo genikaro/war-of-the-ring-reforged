@@ -80,7 +80,8 @@ public partial class Main
             int team = start.GetProperty("team").GetInt32(); var at = start.GetProperty("position");
             _world!.Economies.Add(team,new(_startState.Food,_startState.Ore,economy.GetProperty("food_capacity").GetInt32(),economy.GetProperty("ore_capacity").GetInt32()));
             int x = (int)Math.Round(at[0].GetDouble()*1000),z = (int)Math.Round(at[1].GetDouble()*1000);
-            _world.DropOffs.Add(new(team,x,z,SkirmishInteractionRadius(start.GetProperty("footprint_object").GetInt32(),x,z)));
+            int footprint = start.GetProperty("footprint_object").GetInt32();
+            _world.DropOffs.Add(new(team,x,z,SkirmishInteractionRadius(footprint,x,z),footprint));
         }
         foreach (var resource in data.GetProperty("resources").EnumerateArray())
         {

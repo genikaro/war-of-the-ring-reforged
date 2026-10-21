@@ -25,6 +25,15 @@ public sealed partial class GridNavigation
         }
     }
 
+    public bool HasFootprints(int obstacle) => _obstacles.TryGetValue(obstacle,out var item) && item.Footprints is { Length: > 0 };
+
+    /// <summary>True when a circle of this reach at the point touches the obstacle's footprint. Work ranges
+    /// measure the footprint itself, so a worker stands one row off a flat side instead of the two the
+    /// circumscribed envelope allowed.</summary>
+    public bool WithinFootprintReach(int obstacle,int x,int z,int reachMm)
+        => _obstacles.TryGetValue(obstacle,out var item) && item.Footprints is { Length: > 0 } footprints
+            && footprints.Any(f => FootprintBlocks(f,x,z,x,z,reachMm));
+
     private bool FootprintsBlock(int ax,int ay,int az,int bx,int by,int bz,int? obstacle = null)
     {
         var seen = new HashSet<int>();
