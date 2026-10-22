@@ -1349,3 +1349,75 @@ reference digest is 31E28C29... (Aragorn wins at tick 36111).
 
 Validation: 777 synthetic, 844 Helm's Deep and 34 worker-cache checks pass, and
 the observer smoke passes.
+
+## Build-35: any multiplayer map, any number of players
+
+Steps 2 and 3 of the skirmish setup plan in the roadmap, done together: extra
+player slots can only be tested on maps with more start points.
+
+**Maps.** `python tools/prepare_prototype.py --skirmish --map MP04_Wasteland` imports
+any of the 32 multiplayer maps into `converted/skirmish-maps/<stem>` (Bilbo's
+Bluffs keeps `converted/skirmish`), and `--all-maps` imports all of them, reporting
+any map that fails and continuing. Every start point gets a Good Citadel and four
+workers. `./prototype/run.ps1 -Map MP04_Wasteland` plays one. Three maps also carry
+editor markers of kinds 4 (script waypoint) and 5 (water ripple generator), which
+the decoder rejected before. Mighty Silverlode and Sandbar are river maps: the
+ground splits into two halves with two start points each. The importer kept only
+the largest walkable region, so it found no ground for half the workers. Now each
+base keeps the largest region that reaches its worker ring. In game, a worker
+must connect to the first worker of its own side, not to player 1's. All 32 maps
+import.
+
+**Crossings.** `SimulationTests --crossing-probe <cache>` lists, for every unit
+body, which start bases it can walk between. Every map connects all its bases for
+a Swordsman except Mighty Silverlode: its three rope bridges only fit Frodo's
+0.46 m body, so both armies stay on their own bank and the match cannot end.
+Sandbar crosses its river on wider Human Bridges. Rope bridges wide enough for
+armies are left for navigation work.
+
+**Players.** The importer writes eight slot colours from the source
+`TeamColors` table: blue and red as before, then green, purple, yellow, cyan,
+orange and pink. White `TEAM_COLOR_GRAY` is left out. The order is an adapter,
+because the original lobby lets each player choose. Minimap dots take a lighter
+shade of each slot's colour. Selection rings mark one's own side, not team 0. A
+bot runs every side but the player's (every side while observing). `-Bots`
+names personalities by slot in play too; `-AiPersonality` sets the rest. `-Bots
+Gimli,Aragorn` passed from PowerShell used to arrive as one space-joined name; it
+is now a list. The human is still always player 1; the setup screen (step 4)
+will lift that.
+
+**Reachable targets.** A bot's assault party used to march on the enemy building
+nearest in a straight line, even across a river it could not cross. It now takes
+the nearest building it can stand beside on its own ground (judged for the party's
+widest body), and a party counts as sent only once it has a target. Bilbo's Bluffs
+is unaffected (same digest).
+
+**One play change.** Idle units of the demo's enemy (team 1) chased any enemy
+they noticed, while every other side's idle units only guarded nearby
+(`IdleGuard`). The simulation now holds this as `AggressiveIdleTeams`; a skirmish
+fills it with every side without a player. A refactor run with the old set
+kept the observer match identical (digest 31E28C29...). With the new set, Gimli's
+side (player 1) fights back when idle as Aragorn's always did, and the Gimli
+against Aragorn match now ends with Gimli winning at 33:33 (tick 40258, digest
+75D5F383...). Every two-player fixture with a player keeps the old rule
+(only team 1 chases).
+
+**Observer smoke** now accepts any map and number of bots: every side runs its
+named bot, the panel lists every player, and the time limit grows by 20 game
+minutes per extra player.
+
+| Map | Bots | Result |
+|---|---|---|
+| Bilbo's Bluffs (2) | Gimli, Aragorn | Gimli wins at 33:33 |
+| Wasteland (4) | Gimli, Aragorn, Legolas, Saruman | Gimli wins at 45:01 |
+| Mighty Silverlode (4, river) | Gimli, Aragorn, Legolas, Saruman | Legolas and Saruman razed by 24:00, then a stalemate across the river |
+
+In the Wasteland match Legolas had lost every worker by 12:00 (food 0, ore 19)
+and never recovered; Saruman also ended without workers. A bot with neither
+workers nor money to train one cannot come back, a weakness for the bot work
+ahead.
+
+Validation: 778 synthetic, 845 Helm's Deep and 34 worker-cache checks pass, as do
+the Python tests, the observer smoke on Bilbo's Bluffs and Wasteland, and the
+skirmish, minimap, AI, victory and siege smokes. The observer smoke on Mighty
+Silverlode fails by design until rope bridges carry armies.

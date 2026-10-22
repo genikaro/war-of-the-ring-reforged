@@ -8,6 +8,8 @@ param(
     [switch]$OrdersSmoke,
     [switch]$AbilitySmoke,
     [switch]$Skirmish,
+    [ValidatePattern('^MP[0-9]{2}_[^\/.]+$')]
+    [string]$Map,
     [switch]$SkirmishSmoke,
     [switch]$ConstructionSmoke,
     [switch]$StructureSmoke,
@@ -22,7 +24,7 @@ param(
     [switch]$AiSmoke,
     [switch]$ObserverSmoke,
     [switch]$Observe,
-    [string]$Bots,
+    [string[]]$Bots,
     [int]$Speed,
     [switch]$Profile,
     [switch]$NoAi,
@@ -61,7 +63,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 if ($LASTEXITCODE -ne 0) { throw 'C# build failed' }
 $arguments = @('--path', $PSScriptRoot)
 if ($Resolution) { $arguments += @('--resolution',$Resolution) }
-if ($SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $Observe) { $Skirmish = $true }
+if ($SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $Observe -or $Map) { $Skirmish = $true }
 if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $AbilitySmoke -or $SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
     $renderRate = if ($MotionSmoke -or $FormationSmoke) { '80' } else { '20' }
     if (-not $CapturePath) { $arguments += '--headless' }
@@ -91,7 +93,7 @@ if ($VictorySmoke) { $arguments += '--victory-smoke' }
 if ($AiSmoke) { $arguments += '--ai-smoke' }
 if ($ObserverSmoke) { $arguments += @('--observer-smoke','--observe','--bots=Gimli,Aragorn') }
 if ($Observe) { $arguments += '--observe' }
-if ($Bots) { $arguments += "--bots=$Bots" }
+if ($Bots) { $arguments += "--bots=$($Bots -join ',')" }
 if ($Speed) { $arguments += "--speed=$Speed" }
 if ($Profile) { $arguments += '--profile' }
 if ($NoAi) { $arguments += '--no-ai' }
@@ -104,6 +106,8 @@ if ($SurfaceSmoke) { $arguments += '--surface-smoke' }
 if ($ObstacleSmoke) { $arguments += '--obstacle-smoke' }
 if ($CapturePath) { $arguments += "--capture=$([System.IO.Path]::GetFullPath($CapturePath))" }
 if ($CapturePath -and $Resolution) { $arguments += "--capture-resolution=$Resolution" }
+# Bilbo's Bluffs lives in converted/skirmish; -Map MP04_Wasteland uses converted/skirmish-maps/MP04_Wasteland.
+if ($Map -and -not $CachePath) { $CachePath = Join-Path $repo "converted/skirmish-maps/$Map" }
 if ($Skirmish -and -not $CachePath) { $CachePath = Join-Path $repo 'converted/skirmish' }
 if ($CachePath) { $arguments += "--cache=$([System.IO.Path]::GetFullPath($CachePath))" }
 & $GodotPath @arguments

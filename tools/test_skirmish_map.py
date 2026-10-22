@@ -51,6 +51,29 @@ class MarkerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'layout'):
             skirmish_map.parse_markers(data, metadata, self.names)
 
+    def test_waypoint_and_water_ripple_markers_are_not_start_points(self):
+        # MP04_Crosswoods, MP04_Spire_of_Mordor and MP08_Crazy_Corners carry kinds 4 and 5 beside their start points.
+        names = self.names + ['Script Waypoint 0', 'Water Ripple Generator 0']
+        data, metadata = marker_block([(1, 'Start Point 0', (1, 2, 3)), (4, 'Script Waypoint 0', (4, 5, 6)),
+                                       (5, 'Water Ripple Generator 0', (7, 8, 9))], names)
+        markers = skirmish_map.parse_markers(data, metadata, names)
+        self.assertEqual([m['kind'] for m in markers], [1, 4, 5])
+        self.assertEqual([p['name'] for p in skirmish_map.start_points(markers)], ['Start Point 0'])
+        data, metadata = marker_block([(3, 'Start Point 0', (1, 2, 3))], names)
+        with self.assertRaisesRegex(ValueError, 'invalid marker'):
+            skirmish_map.parse_markers(data, metadata, names)
+
+    def test_map_names(self):
+        self.assertEqual(skirmish_map.map_file(None), skirmish_map.MAP_FILE)
+        self.assertEqual(skirmish_map.map_file('MP04_Wasteland'), 'Multiplayer/MP04_Wasteland.wor')
+        self.assertEqual(skirmish_map.map_file('MP06_Wheel of Fate.wor'), 'Multiplayer/MP06_Wheel of Fate.wor')
+        for bad in ['../MP04_Wasteland', 'Multiplayer/MP04_Wasteland', 'C01_Mission', 'MP04_Wasteland.lqr', '..']:
+            with self.assertRaises(ValueError):
+                skirmish_map.map_file(bad)
+        self.assertEqual(skirmish_map.map_title('Multiplayer/MP04_Under_the_Canopy.wor'), 'Under the Canopy')
+        self.assertEqual(prepare_prototype.skirmish_cache(None), wor.ROOT / 'converted/skirmish')
+        self.assertEqual(prepare_prototype.skirmish_cache('MP08_Rift'), wor.ROOT / 'converted/skirmish-maps/MP08_Rift')
+
     def test_map_without_marker_block_has_no_start_points(self):
         self.assertEqual(skirmish_map.parse_markers(b'', {'sections': [], 'pre_terrain_records': {'present': False}}, []), [])
         with self.assertRaisesRegex(ValueError, 'no usable start'):

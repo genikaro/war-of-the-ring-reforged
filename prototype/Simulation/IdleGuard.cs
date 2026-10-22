@@ -3,9 +3,12 @@ namespace Reforged.Simulation;
 public sealed partial class SimWorld
 {
     private const int IdleAwarenessMm=10000,IdleLeashMm=12000;
-    // Team 1 already has the demo's aggressive opponent AI. Player-controlled
-    // idle units guard locally instead of inheriting that unrestricted pursuit.
-    private static bool IdleGuardEnabled(SimUnit unit) => unit.Order==OrderKind.Idle && unit.Definition.BodyRadiusMm>350 && unit.Team!=1;
+    /// <summary>Sides whose idle units pursue any enemy they notice: the demo's opponent (team 1) and, in a skirmish,
+    /// every side but the player's. Player-controlled idle units guard locally instead of inheriting that unrestricted
+    /// pursuit.</summary>
+    public HashSet<int> AggressiveIdleTeams { get; } = [1];
+
+    private bool IdleGuardEnabled(SimUnit unit) => unit.Order==OrderKind.Idle && unit.Definition.BodyRadiusMm>350 && !AggressiveIdleTeams.Contains(unit.Team);
 
     private bool IdleGuardMayAcquire(SimUnit unit,SimUnit enemy)
     {

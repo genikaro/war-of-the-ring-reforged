@@ -30,6 +30,15 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-35 (Oct 22):** any multiplayer map with any number of players (skirmish
+setup steps 2 and 3). All 32 maps import into their own caches (`--map`,
+`--all-maps`, `run.ps1 -Map`), with eight source slot colours and a bot on every
+side but the player's. A 4-bot free-for-all on Wasteland plays to a result. Bots
+attack only buildings they can reach, and every bot side's idle units now chase
+noticed enemies as team 1's always did, so the observer match changes: Gimli now
+wins at 33:33 (digest 75D5F383...). Mighty Silverlode's rope bridges are too narrow
+for armies. See [skirmish notes](../prototype/SKIRMISH.md#build-35-any-multiplayer-map-any-number-of-players).
+
 **Build-34 (Oct 22):** a wide body's attack-position search stops after 1,024
 nodes instead of 2,048 (owner's choice after an experiment; remembering failed
 searches was tried and dropped). Exhausted searches cost half as much; the observer
@@ -899,8 +908,8 @@ and production remain later work.
 - [ ] Customizable bots (owner request, Oct 21): choose a difficulty (Easy / Normal / Hard), then combine style traits. Difficulty sets how *well* a bot plays (think rate, worker target, reaction to attacks, retreating the wounded, target choice), ideally without resource bonuses; traits set *what* it plays by adjusting one shared strategy profile. Trait ideas: Expansionist (claims contested wells and ore early, second Citadel, more workers), Defender (Watchtower ring, attacks only with a full 12-unit party), Rusher (thin economy, two or three Barracks, smallest waves), Raider (small parties against workers and Mills; source `AIWARPARTY_RAIDING`), Tactician (assault with flank and fix groups; source war-party combos), Tower killer (Axethrower-led parties; source `AIWARPARTY_TOWERKILLER`), Hero lover (early Frodo). Some traits exclude each other (Rusher and Defender), others stack; the twelve shipped `.rai` personalities become presets; traits as data files would serve the modding item. Groundwork, in order: gather `SkirmishAi.cs` tunables into one profile record; raids, flanking and Watchtower garrisons; expansion with multiple Citadels; a skirmish setup screen for difficulty and traits (today only launch switches)
 - [ ] Skirmish setup, bot free-for-alls and an observer mode (owner request, Oct 21): create a skirmish with map selection, player slots (human, bot with difficulty and traits, observer, closed), teams and colours, so large free-for-alls between different bots can be watched. Facts: `extracted/Levels/Multiplayer` holds 32 maps whose `MPnn` prefix gives the player count, up to six 8-player maps; the skirmish importer is hard-wired to MP02 Bilbo's Bluffs and two start points, the cache carries two team colours, about 84 places in `prototype/` assume the human is team 0 and the AI team 1, and only the Good faction is exported. The simulation already handles any number of teams as separate sides, which is exactly a free-for-all, and its Razing outcome takes any number of contenders. Steps, in order:
   1. (Done in build-28.) Observer and speed: a bot on every side, a player-less observer HUD (every player's resources, population, army and AI status; read-only selection; camera free), and game speed control (pause, 1x to 16x by stepping the fixed-tick simulation several times per frame, so it stays deterministic) to skip the opening and jump into the fighting.
-  2. N players: replace the team-0/team-1 assumptions with player slots; per-slot colours from the source team-colour table; an AI per bot slot.
-  3. Map pipeline: `prepare_prototype.py --skirmish --map <name>` for any multiplayer map and its start points, one cache per map, and a batch for all 32; verify navigation, resources and start bases on each.
+  2. N players: replace the team-0/team-1 assumptions with player slots; per-slot colours from the source team-colour table; an AI per bot slot. (Build-35: eight slot colours, a bot on every side but the player's, `-Bots` by slot, minimap and rings by slot; the human is still always slot 1, which the setup screen will lift.)
+  3. Map pipeline: `prepare_prototype.py --skirmish --map <name>` for any multiplayer map and its start points, one cache per map, and a batch for all 32; verify navigation, resources and start bases on each. (Build-35: `--map`, `--all-maps`, `run.ps1 -Map`; all 32 maps import, and `SimulationTests --crossing-probe` shows every map connected for a Swordsman except MP04_Mighty_Silverlode, whose rope bridges only fit Frodo. Remaining: rope bridges wide enough for armies, and a bot that has lost every worker cannot recover.)
   4. Setup screen: map list with player count and minimap, slots, difficulty and traits, start.
   5. Teams and alliances (2v2 and up): split a unit's owner from its alliance, so allies share victory and do not attack each other.
   6. The Evil faction, so bots can differ by side as well as by style.

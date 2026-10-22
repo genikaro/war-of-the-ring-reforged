@@ -138,7 +138,7 @@ def refresh(output):
              for base in data['bases']]
     for base, footprint in zip(data['bases'], bases):
         footprint['name'] = 'Start Citadel %d' % base['team']
-    scene = world_scene.parse((wor.ROOT / 'extracted/Levels' / skirmish_map.MAP_FILE).read_bytes())
+    scene = world_scene.parse((wor.ROOT / 'extracted/Levels' / manifest.get('map_file', skirmish_map.MAP_FILE)).read_bytes())
     world_scene.resolve_objects(scene, resolver.db)
     prepare_prototype.build_navigation(scene, resolver, output, bases+footprints, [s['obstacle'] for s in construction['sites']], precise=True)
     prototype_clearance.refresh(output)

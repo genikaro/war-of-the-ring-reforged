@@ -230,7 +230,7 @@ public partial class Main : Node3D
             if (_surfaceSmoke && primary) { cell = surfaceNavigation.Nearest(surfaceStart, surfaceSpawns); surfaceSpawns.Add(cell); }
             var model = manifest.GetProperty("models")[spawn.GetProperty("model").GetInt32()];
             var definition = _rules.Units[model.GetProperty("unit").GetString()!];
-            if (_skirmish) cell = SkirmishSpawnCell(definition,cell);
+            if (_skirmish) cell = SkirmishSpawnCell(team,definition,cell);
             var unit = _world.Spawn(team, cell,definition);
             if (primary) _primarySquad.Add(unit.Id);
             AddUnitView(unit);
@@ -238,6 +238,7 @@ public partial class Main : Node3D
         _spawnCount = _world.Units.Count;
         _friendlySquads.AddRange(_world.Units.Where(u => u.Team == PlayerTeam).Select(u => u.Id).Chunk(6));
         for (int slot = 0; slot < _friendlySquads.Count; slot++) _controlGroups.Assign(slot,_friendlySquads[slot],LivingFriendly);
+        _commands.TeamColors = _teamColors;
         _commands.LoadArtwork(_cache,_world);
         _heroBar.LoadArtwork(_commands);
         _hudScale.Value = _commands.ScalePercent;
@@ -277,7 +278,7 @@ public partial class Main : Node3D
         root.AddChild(modelSize); modelSize.AddChild(visual);
         var ring = new MeshInstance3D { Mesh = ScenePresentation.SelectionRing(), Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             MaterialOverride = new StandardMaterial3D {
-                AlbedoColor = _observing ? TeamColor(team).Lightened(.25f) : new Color(team == 0 ? "e9c22d" : "e65045"), CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+                AlbedoColor = _observing ? TeamColor(team).Lightened(.25f) : new Color(team == PlayerTeam ? "e9c22d" : "e65045"), CullMode = BaseMaterial3D.CullModeEnum.Disabled,
                 ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
         root.AddChild(ring);
         var health = new HealthBar(Math.Max(1.1f,2.2f*unit.Definition.BodyRadiusMm/1000f),.16f) { Position = new(0,.12f,0) };

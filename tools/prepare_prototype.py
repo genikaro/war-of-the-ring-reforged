@@ -5,6 +5,7 @@ python tools/prepare_prototype.py --install "C:/Games/War of the Ring"
 No game files are included in the source project. Source directories are read only.
 """
 import argparse
+import math
 import base64
 from collections import deque
 import hashlib
@@ -31,9 +32,10 @@ import world_scene
 import wor2gltf
 
 
-def connected(allowed, width, height):
+def components(allowed, width, height):
+    """4-connected components of the allowed cells, in order of their first cell."""
     remaining = {i for i, value in enumerate(allowed) if value}
-    best = set()
+    found = []
     while remaining:
         first = min(remaining); remaining.remove(first)
         queue, component = deque([first]), {first}
@@ -43,9 +45,32 @@ def connected(allowed, width, height):
                         cell - width if y else -1, cell + width if y + 1 < height else -1]:
                 if nxt in remaining:
                     remaining.remove(nxt); component.add(nxt); queue.append(nxt)
+        found.append(component)
+    return found
+
+
+def connected(allowed, width, height):
+    """The largest component (the first of equal ones)."""
+    best = set()
+    for component in components(allowed, width, height):
         if len(component) > len(best):
             best = component
     return best
+
+
+def start_regions(allowed, width, height, spacing, centres, ring=skirmish_map.WORKER_RING):
+    """Ground the start bases stand on: for each base, the largest component reaching its worker ring. River maps
+    such as MP04_Mighty_Silverlode split the ground into halves, so the largest component alone misses bases."""
+    found = components(allowed, width, height)
+    owner = {cell: index for index, component in enumerate(found) for cell in component}
+    region = set()
+    for cx, cz in centres:
+        near = {owner[cell] for cell in owner
+                if ring[0] <= math.hypot(cell % width + .5 - cx/spacing, cell // width + .5 - cz/spacing)*spacing <= ring[1]}
+        if not near:
+            raise ValueError('no ground around the start point at %.1f, %.1f' % (cx, cz))
+        region |= found[max(near, key=lambda index: (len(found[index]), -index))]
+    return region
 
 
 def demo_layout(allowed, width, height, anchor):
@@ -163,10 +188,17 @@ def open_resolver(output, install=None):
     return Resolver(str(db_path)) if db_path else Resolver()
 
 
+# Player slot colours in slot order, one per start point of the largest (8-player) maps. The source table also has
+# white TEAM_COLOR_GRAY; blue and red keep the first two slots as before. The order is an adapter: the original lobby
+# lets each player pick.
+SLOT_COLORS = ['TEAM_COLOR_BLUE', 'TEAM_COLOR_RED', 'TEAM_COLOR_GREEN', 'TEAM_COLOR_PURPLE', 'TEAM_COLOR_YELLOW',
+               'TEAM_COLOR_CYAN', 'TEAM_COLOR_ORANGE', 'TEAM_COLOR_PINK']
+
+
 def team_colors(resolver):
     return [[resolver.db['TeamColors'].by_name[name][channel] / 255
              for channel in ['Red', 'Green', 'Blue']]
-            for name in ['TEAM_COLOR_BLUE', 'TEAM_COLOR_RED']]
+            for name in SLOT_COLORS]
 
 
 def walker_category(scene):
@@ -266,11 +298,21 @@ SKIRMISH_ROSTER = combat_rules.UNITS + skirmish_map.SKIRMISH_UNITS
 CITADEL_OBJECT_BASE = 10000
 
 
-def prepare_skirmish(output, install=None):
-    """Bilbo's Bluffs with a Good Citadel and four workers per side (build-4)."""
+def skirmish_cache(map_name=None):
+    """Default cache folder: converted/skirmish for Bilbo's Bluffs, converted/skirmish-maps/<stem> for any other map."""
+    file = skirmish_map.map_file(map_name)
+    return wor.ROOT / ('converted/skirmish' if file == skirmish_map.MAP_FILE else 'converted/skirmish-maps/' + Path(file).stem)
+
+
+def prepare_skirmish(output, install=None, map_name=None):
+    """A multiplayer map (default Bilbo's Bluffs) with a Good Citadel and four workers on every start point (build-4,
+    any map since build-35)."""
     output = Path(output).resolve()
     resolver = open_resolver(output, install)
-    source = wor.ROOT / 'extracted/Levels' / skirmish_map.MAP_FILE
+    map_file = skirmish_map.map_file(map_name)
+    source = wor.ROOT / 'extracted/Levels' / map_file
+    if not source.is_file():
+        raise ValueError('no such multiplayer map: ' + map_file)
     data = source.read_bytes()
     output.mkdir(parents=True, exist_ok=True)
     wor2gltf.export(source, output / 'map', resolver)
@@ -278,8 +320,8 @@ def prepare_skirmish(output, install=None):
     world_scene.resolve_objects(scene, resolver.db)
     metadata = scene['world'].metadata
     points = skirmish_map.start_points(skirmish_map.parse_markers(data, metadata, metadata['name_table']['names']))
-    if len(points) != 2:
-        raise ValueError('expected a two-player skirmish map')
+    if not 2 <= len(points) <= len(SLOT_COLORS):
+        raise ValueError('expected 2 to %d start points, found %d' % (len(SLOT_COLORS), len(points)))
     width, _ = walker_category(scene)['grid']
     spacing, heights = metadata['terrain']['cell_size'], scene['world'].heights
     bases = []
@@ -294,7 +336,7 @@ def prepare_skirmish(output, install=None):
     construction['defenses'] = skirmish_construction.defense_data(output, resolver)
     nav, allowed, width, height = build_navigation(scene, resolver, output, [b['footprint'] for b in bases]+site_footprints,
         [s['obstacle'] for s in construction['sites']], precise=True)
-    region = connected(allowed, width, height)
+    region = start_regions(allowed, width, height, spacing, [b['position'][:2] for b in bases])
     ground = bytes(1 if allowed[i] and i in region else 0 for i in range(width * height))
     spawns, groups = [], []
     roster = SKIRMISH_ROSTER
@@ -303,7 +345,7 @@ def prepare_skirmish(output, install=None):
     for base in bases:
         cells = skirmish_map.worker_cells(ground, width, height, spacing, base['position'])
         base['worker_cells'] = cells
-        groups.append({'id': base['team'], 'team': base['team'], 'name': ('Blue' if base['team'] == 0 else 'Red') + ' workers',
+        groups.append({'id': base['team'], 'team': base['team'], 'name': 'Player %d workers' % (base['team'] + 1),
                        'anchor': cells[0]})
         spawns.extend({'team': base['team'], 'cell': cell, 'group': base['team'], 'model': worker} for cell in cells)
     nodes = skirmish_map.resource_nodes(scene)
@@ -328,7 +370,8 @@ def prepare_skirmish(output, install=None):
                    'population': population, 'population_cap': citadel['AdditionalPopAdded'] + variables['DefaultInitialPopulationCapacity']}
     x, y, _ = bases[0]['position']
     camera_cell = int(y / spacing) * width + int(x / spacing)
-    manifest = {'format_version': 1, 'mode': 'skirmish', 'name': "Bilbo's Bluffs — Good Skirmish", 'map': 'map/scene.glb',
+    manifest = {'format_version': 1, 'mode': 'skirmish', 'name': skirmish_map.map_title(map_file) + ' — Good Skirmish', 'map': 'map/scene.glb',
+                'map_file': map_file, 'players': len(bases),
                 'team_colors': team_colors(resolver), 'models': models, 'spawns': spawns, 'groups': groups, 'camera_cell': camera_cell,
                 'rules': 'Imported combat stats, resource-site construction, carried food/ore and Citadel worker training; the rest of Tier 1 remains open.',
                 'skirmish': {'start_state': start_state, 'resources': nodes, 'building_files': building_files,
@@ -345,10 +388,25 @@ def prepare_skirmish(output, install=None):
     return manifest
 
 
+def prepare_all_maps(install=None):
+    """Every multiplayer map into its own cache; one map's failure is reported and the batch goes on."""
+    failed = []
+    for source in sorted((wor.ROOT / 'extracted/Levels/Multiplayer').glob('MP*.wor')):
+        try:
+            manifest = prepare_skirmish(skirmish_cache(source.stem), install, source.stem)
+            print('%s: %d players' % (source.stem, manifest['players']), flush=True)
+        except Exception as error:  # noqa: BLE001 - the summary names every failed map
+            print('%s: FAILED %s' % (source.stem, error), flush=True)
+            failed.append(source.stem)
+    return failed
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path)
-    parser.add_argument('--skirmish', action='store_true', help="Build the Bilbo's Bluffs skirmish cache (default folder converted/skirmish)")
+    parser.add_argument('--skirmish', action='store_true', help="Build a skirmish cache (default Bilbo's Bluffs in converted/skirmish)")
+    parser.add_argument('--map', help='Multiplayer map stem for --skirmish, e.g. MP04_Wasteland (default folder converted/skirmish-maps/<stem>)')
+    parser.add_argument('--all-maps', action='store_true', help='Build a skirmish cache for every multiplayer map, each in its default folder')
     parser.add_argument('--install', type=Path)
     parser.add_argument('--demo-only', action='store_true', help='Refresh squads and camera in an existing local cache without reconverting assets')
     parser.add_argument('--ui-only', action='store_true', help='Extract original HUD artwork into an existing cache')
@@ -356,7 +414,11 @@ if __name__ == '__main__':
     parser.add_argument('--units-only', action='store_true', help='Refresh unit models, combat rules, portraits and demo squads in an existing cache')
     args = parser.parse_args()
     if args.out is None:
-        args.out = wor.ROOT / ('converted/skirmish' if args.skirmish else 'converted/prototype')
+        args.out = skirmish_cache(args.map) if args.skirmish else wor.ROOT / 'converted/prototype'
+    if args.map and not args.skirmish:
+        parser.error('--map requires --skirmish')
+    if args.all_maps and (args.map or args.skirmish or args.demo_only or args.ui_only or args.rules_only or args.units_only):
+        parser.error('--all-maps builds every map cache; combine it only with --install')
     if args.skirmish and (args.demo_only or args.ui_only or args.rules_only):
         parser.error('--skirmish builds a full cache; combine it only with --install')
     if args.units_only:
@@ -375,8 +437,13 @@ if __name__ == '__main__':
         if args.install:
             parser.error('--demo-only uses an existing cache and cannot be combined with --install')
         refresh_demo(args.out)
+    elif args.all_maps:
+        failed = prepare_all_maps(args.install)
+        if failed:
+            raise SystemExit('%d maps failed: %s' % (len(failed), ', '.join(failed)))
     elif args.skirmish:
-        prepare_skirmish(args.out, args.install)
+        prepare_skirmish(args.out, args.install, args.map)
     else:
         prepare(args.out, args.install)
-    print('Prepared local sandbox cache: ' + str(args.out))
+    if not args.all_maps:
+        print('Prepared local sandbox cache: ' + str(args.out))

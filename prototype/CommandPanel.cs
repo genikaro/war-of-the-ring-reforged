@@ -8,6 +8,7 @@ public partial class CommandPanel : Control
 {
     /// <summary>The side the person at the keyboard commands; -1 while observing, which leaves every unit read-only.</summary>
     public int PlayerTeam { get; set; }
+    public Color[] TeamColors { get => _map.TeamColors; set => _map.TeamColors = value; }
     public event Action<OrderKind>? CommandChosen;
     public event Action<int>? GroupChosen;
     public event Action<int,bool,bool>? UnitChosen;

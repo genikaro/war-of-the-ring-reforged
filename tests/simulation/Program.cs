@@ -1,6 +1,7 @@
 using Reforged.Simulation;
 using System.Text.Json;
 
+if (Array.IndexOf(args,"--crossing-probe") is int crossingProbe && crossingProbe >= 0) { CrossingProbe.Run(args[crossingProbe+1]); return; }
 if (Array.IndexOf(args,"--building-gap-probe") is int gapProbe && gapProbe >= 0)
 {
     Console.WriteLine(JsonSerializer.Serialize(FootprintChecks.Gap(args[gapProbe+1]))); return;

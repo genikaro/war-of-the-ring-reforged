@@ -271,13 +271,24 @@ commanded, and a panel shows both players.
 ./prototype/run.ps1 -Observe -Bots Gimli,Aragorn -Speed 4
 ```
 
+Any of the 32 multiplayer maps imports into its own cache (build-35), with a Good
+Citadel and four workers on every start point and one colour per player slot. A
+bot runs every side but yours; `-Bots` names their personalities by slot (your own
+slot's entry is ignored while you play), and observing a big map is a free-for-all:
+
+```powershell
+python tools/prepare_prototype.py --skirmish --map MP04_Wasteland
+./prototype/run.ps1 -Map MP04_Wasteland -Observe -Bots Gimli,Aragorn,Legolas,Saruman -Speed 8
+python tools/prepare_prototype.py --all-maps
+```
+
 Game speed works in every mode: `-` and `+` step through 1x, 2x, 4x, 8x and 16x,
 Space pauses, and the observer panel has the same buttons.
 
 `-Profile` (any mode) prints, every two game minutes, the unit count and where
 simulation and frame time went, for chasing slow matches.
 
-All generated game data stays in ignored `converted/prototype/` and `converted/skirmish/`. The source
+All generated game data stays in ignored `converted/prototype/`, `converted/skirmish/` and `converted/skirmish-maps/`. The source
 project contains no game assets. At launch the manifest's content hashes are
 checked before loading. Never distribute the local cache with the project.
 
@@ -352,6 +363,7 @@ a normal viewport capture with `-CapturePath`.
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --cache converted/prototype
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --worker-cache converted/skirmish
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --crossing-probe converted/skirmish-maps/MP04_Wasteland
 ./prototype/run.ps1 -Smoke
 ./prototype/run.ps1 -MotionSmoke
 ./prototype/run.ps1 -CombatSmoke

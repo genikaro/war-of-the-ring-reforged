@@ -103,10 +103,12 @@ public static class WorkerTrafficChecks
         var body = navigation.ForBody(definition.BodyRadiusMm,definition.BodyHeightMm);
         foreach (var spawn in manifest.GetProperty("spawns").EnumerateArray())
         {
-            int cell = spawn.GetProperty("cell").GetInt32(),anchor = world.Units.FirstOrDefault()?.Node ?? cell;
+            // As in Main.SkirmishSpawnCell: each side connects to its own first worker (river maps split the ground).
+            int team = spawn.GetProperty("team").GetInt32(),cell = spawn.GetProperty("cell").GetInt32();
+            int anchor = world.Units.FirstOrDefault(u => u.Team == team)?.Node ?? -1;
             var taken = world.Units.Select(u => u.Node).ToHashSet();
-            if (!body.CanStand(cell) || taken.Contains(cell) || !body.IsConnected(cell,anchor)) cell = body.Nearest(cell,taken,connectedTo: anchor);
-            world.Spawn(spawn.GetProperty("team").GetInt32(),cell,definition);
+            if (!body.CanStand(cell) || taken.Contains(cell) || anchor >= 0 && !body.IsConnected(cell,anchor)) cell = body.Nearest(cell,taken,connectedTo: anchor);
+            world.Spawn(team,cell,definition);
         }
         var economy = data.GetProperty("economy"); var state = data.GetProperty("start_state");
         foreach (var worker in economy.GetProperty("workers").EnumerateObject())

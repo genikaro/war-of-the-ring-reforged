@@ -2,7 +2,7 @@ using Godot;
 using Reforged.Simulation;
 using System.Text.Json;
 
-/// <summary>Bilbo's Bluffs skirmish start: start buildings, resource strip and spawn placement.</summary>
+/// <summary>Skirmish start on any imported multiplayer map: start buildings, resource strip and spawn placement.</summary>
 public partial class Main
 {
     private bool _skirmish;
@@ -12,13 +12,15 @@ public partial class Main
     private int _skirmishResourceCount;
     private (int Population,int Capacity,int Food,int Ore) _startState;
 
-    /// <summary>Workers start on connected ground; a body-clearance miss moves the spawn to the nearest free standing cell.</summary>
-    private int SkirmishSpawnCell(UnitDefinition definition,int cell)
+    /// <summary>Workers start on ground connected to their side's first unit (river maps split the sides' ground);
+    /// a body-clearance miss moves the spawn to the nearest free standing cell.</summary>
+    private int SkirmishSpawnCell(int team,UnitDefinition definition,int cell)
     {
         var body = _world!.Navigation.ForBody(definition.BodyRadiusMm,definition.BodyHeightMm);
         var taken = _world.Units.Where(u => u.Health > 0).Select(u => u.Node).ToHashSet();
-        int anchor = _world.Units.FirstOrDefault()?.Node ?? cell;
-        int resolved = body.CanStand(cell) && !taken.Contains(cell) && body.IsConnected(cell,anchor)
+        // A side's first worker takes the nearest free cell; the importer already put its cell on the base's ground.
+        int anchor = _world.Units.FirstOrDefault(u => u.Team == team)?.Node ?? -1;
+        int resolved = body.CanStand(cell) && !taken.Contains(cell) && (anchor < 0 || body.IsConnected(cell,anchor))
             ? cell : body.Nearest(cell,taken,connectedTo: anchor);
         if (resolved < 0) throw new InvalidOperationException("No free ground for a start worker");
         return resolved;

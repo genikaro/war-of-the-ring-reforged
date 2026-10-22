@@ -15,6 +15,24 @@ class PrototypeImportTests(unittest.TestCase):
     def test_empty_grid_has_no_component(self):
         self.assertEqual(prepare_prototype.connected(bytes(9), 3, 3), set())
 
+    def test_start_regions_keep_both_banks_of_a_river(self):
+        # Two 30x40 banks split by a dry column; a 2x2 pocket on the left bank lies inside its base's worker ring.
+        width, height = 61, 40
+        allowed = bytearray(1 if x != 30 else 0 for _ in range(height) for x in range(width))
+        for x in (19, 20):
+            for z in (7, 8):
+                allowed[z*width+x] = 1
+            allowed[9*width+x] = allowed[6*width+x] = 0
+        for z in (6, 7, 8, 9):
+            allowed[z*width+18] = allowed[z*width+21] = 0
+        bank = prepare_prototype.connected(allowed, width, height)
+        region = prepare_prototype.start_regions(bytes(allowed), width, height, 1.0, [(10.0, 20.0), (50.0, 20.0)])
+        self.assertTrue(any(c % width > 30 for c in region) and any(c % width < 30 for c in region))
+        self.assertTrue(region >= bank)
+        self.assertFalse({7*width+19, 8*width+20} & region, 'a pocket is not a bank')
+        with self.assertRaisesRegex(ValueError, 'no ground'):
+            prepare_prototype.start_regions(bytes(width*height), width, height, 1.0, [(10.0, 20.0)])
+
     def test_demo_squads_are_connected_separate_and_repeatable(self):
         width, height, anchor = 80, 70, 35*80+25
         allowed = bytes([1]) * (width*height)

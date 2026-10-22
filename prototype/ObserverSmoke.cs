@@ -2,9 +2,10 @@ using Godot;
 using Reforged.Simulation;
 using System.Text.Json;
 
-/// <summary>Observer mode end to end on Bilbo's Bluffs: Gimli's bot against Aragorn's, watched by nobody's side.
-/// Checks the observer panel, read-only inspection of either side, that no player command is ever issued, the
-/// speed buttons and keys, and a fast-forwarded match to its result. Run with --observe --bots=Gimli,Aragorn.</summary>
+/// <summary>Observer mode end to end: on Bilbo's Bluffs Gimli's bot against Aragorn's (--observe --bots=Gimli,Aragorn),
+/// or a free-for-all of one bot per start point on any imported map (-Map MP04_Wasteland -Bots a,b,c,d), watched by
+/// nobody's side. Checks the observer panel, read-only inspection of another side, that no player command is ever
+/// issued, the speed buttons and keys, and a fast-forwarded match to its result.</summary>
 public partial class Main
 {
     private bool _observerSmoke;
@@ -27,11 +28,11 @@ public partial class Main
         switch (_observerPhase)
         {
             case 0:
-                _observerChecks["both_sides_run_their_bots"] = world.AiPlayers.Keys.SequenceEqual([0,1])
-                    && world.AiPlayers[0].Personality.Id == "Gimli" && world.AiPlayers[1].Personality.Id == "Aragorn";
+                _observerChecks["every_side_runs_its_bot"] = world.Contenders.Count >= 2 && world.AiPlayers.Keys.SequenceEqual(world.Contenders)
+                    && world.AiPlayers.Values.All(a => _bots.ElementAtOrDefault(a.Team) is not { Length: > 0 } bot || string.Equals(a.Personality.Id,bot,StringComparison.OrdinalIgnoreCase));
                 _observerChecks["nobody_plays"] = PlayerTeam == ObserverTeam && _commands.PlayerTeam == ObserverTeam && FriendlyHeroes().Count == 0;
-                _observerChecks["observer_panel_lists_both_players"] = _observerPanel.Visible && _observerRows.GetChildCount() == 2
-                    && _observerRows.GetChild(0).GetChild<Label>(1).Text.Contains("Gimli") && _observerRows.GetChild(1).GetChild<Label>(1).Text.Contains("Aragorn");
+                _observerChecks["observer_panel_lists_every_player"] = _observerPanel.Visible && _observerRows.GetChildCount() == world.Contenders.Count
+                    && world.AiPlayers.Values.Select((a,i) => _observerRows.GetChild(i).GetChild<Label>(1).Text.Contains(a.Personality.Id)).All(v => v);
                 FocusStructure(SmokeEnemyCitadel);
                 _observerPhase = 1; _observerStep = 0; break;
             case 1:
@@ -65,7 +66,8 @@ public partial class Main
                 PushKey(Key.Equal);
                 _observerPhase = 4; _observerStep = 0; break;
             case 4:
-                if (!world.MatchOver && world.Tick < 48000) { if (++_observerStep == 2 && _capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-observer.png"); break; }
+                // 40 game minutes for a duel, 20 more per extra player.
+                if (!world.MatchOver && world.Tick < 48000+24000*(world.Contenders.Count-2)) { if (++_observerStep == 2 && _capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-observer.png"); break; }
                 _observerChecks["fast_forward_reaches_a_result"] = world.MatchOver && world.Winner >= 0 && _speed == 16;
                 _observerChecks["observer_result_names_the_winner"] = _outcome.Visible && _outcomeTitle.Text == $"Player {world.Winner+1} wins!";
                 // Every bot order goes straight into the simulation; nothing came from the keyboard or mouse.
@@ -82,7 +84,7 @@ public partial class Main
                 if (++_observerStep < 4) break; // Let the capture finish writing.
                 var report = new { build = BuildInfo.Label,checks = _observerChecks,
                     passed = _observerChecks.Count == 10 && _observerChecks.Values.All(v => v),
-                    fixture = "--observe --bots=Gimli,Aragorn; the match runs at 16x after the speed checks",
+                    fixture = $"{System.IO.Path.GetFileName(_cache)} --observe --bots={string.Join(',',_bots)}; the match runs at 16x after the speed checks",
                     timeline = _observerTimeline,corpses_buried = _corpsesBuried,winner = world.Winner,outcome_tick = world.OutcomeTick,ticks_per_frame_at_16x = _observerBurst,
                     bots = world.AiPlayers.Values.Select(a => $"{a.Personality.Id}: {a.Status}").ToArray(),
                     ticks = world.Tick,status = _status.Text,digest = world.StateDigest() };

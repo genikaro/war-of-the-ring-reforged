@@ -1,8 +1,9 @@
-"""Skirmish start layout for MP02 Bilbo's Bluffs, decoded from the owner's install.
+"""Skirmish start layout of a multiplayer map (default MP02 Bilbo's Bluffs), decoded from the owner's install.
 
 The editor markers sit in the world's "pre_terrain_records" block: a flag byte, a
 u32 count, then fixed-size records (u32 type, u32 name index, u32 unknown, four
-floats of which x, y, z follow a zero), 1 = start point, 2 = creature spawn area.
+floats of which x, y, z follow a zero), 1 = start point, 2 = creature spawn area,
+4 = script waypoint, 5 = water ripple generator (kinds named after their markers).
 Everything here is a read-only decode; the runtime cache stores the results.
 """
 import math
@@ -14,7 +15,8 @@ import prototype_obstacles
 import wor
 
 MAP_FILE = 'Multiplayer/MP02_Bilbos_Bluffs.wor'
-MARKER_START, MARKER_CREATURE_SPAWN = 1, 2
+MARKER_START, MARKER_CREATURE_SPAWN, MARKER_SCRIPT_WAYPOINT, MARKER_WATER_RIPPLE = 1, 2, 4, 5
+MARKER_KINDS = (MARKER_START, MARKER_CREATURE_SPAWN, MARKER_SCRIPT_WAYPOINT, MARKER_WATER_RIPPLE)
 RESOURCE_OBJECTS = {'OBJECT_RESOURCE_ORE_PILE': 'ore', 'OBJECT_RESOURCE_FOOD_WELL': 'food'}
 CITADEL = 'BUILDING_G_TOWN_CENTER_LEVEL_1'
 START_WORKERS = 4
@@ -41,10 +43,25 @@ def parse_markers(data, metadata, names):
         base = offset + 5 + index*size
         kind, name_index = struct.unpack_from('<II', data, base)
         x, y, z = struct.unpack_from('<3f', data, base+16)
-        if name_index >= len(names) or not all(math.isfinite(v) for v in (x, y, z)) or kind not in (1, 2):
+        if name_index >= len(names) or not all(math.isfinite(v) for v in (x, y, z)) or kind not in MARKER_KINDS:
             raise ValueError('invalid marker record %d' % index)
         markers.append({'kind': kind, 'name': names[name_index], 'position': [x, y, z]})
     return markers
+
+
+def map_file(name=None):
+    """The multiplayer world for a map stem ("MP04_Wasteland") or file name; the default map when omitted."""
+    if not name:
+        return MAP_FILE
+    stem = Path(name).stem
+    if Path(name).name != name or Path(name).suffix not in ('', '.wor') or not stem.upper().startswith('MP'):
+        raise ValueError('expected a multiplayer map stem such as MP04_Wasteland: ' + name)
+    return 'Multiplayer/%s.wor' % stem
+
+
+def map_title(file):
+    """English title from the file stem: MP04_Under_the_Canopy -> Under the Canopy (the localized names are Russian)."""
+    return Path(file).stem.split('_', 1)[1].replace('_', ' ')
 
 
 def start_points(markers):

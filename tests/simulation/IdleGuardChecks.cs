@@ -35,6 +35,7 @@ static class IdleGuardChecks
         distant.Enqueue(2,[1],OrderKind.HoldGround); for(int tick=0;tick<30;tick++) distant.Step();
         check(quiet.Target<0 && quiet.X==5500,"idle guard ignores unengaged enemies beyond its ten-meter awareness radius");
 
+
         var edge=Open(); var watcherAtEdge=edge.Spawn(0,405,Body); edge.Spawn(2,415,Body).Health=10000;
         edge.Enqueue(2,[1],OrderKind.HoldGround); edge.Step();
         check(watcherAtEdge.Target==1,"idle guard includes the full ten-meter awareness boundary");
@@ -64,6 +65,15 @@ static class IdleGuardChecks
             "idle guard breaks a fleeing pursuit and returns near its guarded position");
         var replay=Passing(); for(int tick=0;tick<400;tick++) replay.Step();
         check(replay.StateDigest()==passing.StateDigest(),"idle awareness, pursuit leash and return replay identically");
+
+        var chasing=Passing(); chasing.AggressiveIdleTeams.Clear(); chasing.AggressiveIdleTeams.Add(0);
+        bool hunterReturned=false; int hunted=0;
+        for(int tick=0;tick<400;tick++)
+        {
+            chasing.Step(); var hunter=chasing.Units[0]; hunterReturned|=hunter.IdleGuardReturning;
+            hunted=Math.Max(hunted,(int)Math.Sqrt(SimWorld.DistanceSquared(hunter.X,hunter.Z,10500,10500)));
+        }
+        check(!hunterReturned && hunted>12200,"a side without a player (a skirmish bot in any slot) pursues past the guard's leash");
 
         nearby.Enqueue(0,[0],OrderKind.Move,420); nearby.Step();
         check(sentry.Order==OrderKind.Move && sentry.Target<0 && sentry.IdleGuardOrigin<0,"explicit Move immediately replaces automatic idle guard combat");

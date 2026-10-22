@@ -21,7 +21,7 @@ public partial class Main
         overlay.Waypoints.AddRange(_hud.Waypoints.Select(w => (w.From*stretch,w.To*stretch,w.Color)));
         overlay.WaypointMarks.AddRange(_hud.WaypointMarks.Select(m => m*stretch));
         root.AddChild(new BuildOverlay { Visible = _hud.Visible });
-        var hud = new CommandPanel { ManageCursor = false,BuildMenuOpen = _buildMenu }; root.AddChild(hud); hud.LoadArtwork(_cache,_world!);
+        var hud = new CommandPanel { ManageCursor = false,BuildMenuOpen = _buildMenu }; root.AddChild(hud); hud.TeamColors = _teamColors; hud.LoadArtwork(_cache,_world!);
         hud.Visible = _hud.Visible;
         var heroes = new HeroBar { Visible = _hud.Visible }; root.AddChild(heroes); heroes.LoadArtwork(hud);
         heroes.Refresh(FriendlyHeroes(),hud.Art,hud.EffectiveScale);

@@ -341,6 +341,21 @@ public sealed partial class SimWorld
         }
     }
 
+    /// <summary>Whether the unit can stand somewhere within striking reach of the site, on ground connected to its own.</summary>
+    private bool AiReaches(SimUnit unit,ConstructionSite site)
+    {
+        var area = SiegeArea(unit,site); var nav = Nav(unit);
+        int minX = Math.Max(0,(area.X-area.RadiusMm)/nav.CellSize),maxX = Math.Min(nav.Width-1,(area.X+area.RadiusMm)/nav.CellSize);
+        int minZ = Math.Max(0,(area.Z-area.RadiusMm)/nav.CellSize),maxZ = Math.Min(nav.Height-1,(area.Z+area.RadiusMm)/nav.CellSize);
+        for (int row = minZ; row <= maxZ; row++)
+        for (int col = minX; col <= maxX; col++)
+        {
+            int node = row*nav.Width+col; var at = nav.Center(node);
+            if (Reaches(area,at.X,at.Z) && nav.CanStand(node) && CanReachDestination(unit,node)) return true;
+        }
+        return false;
+    }
+
     private void AiAssault(AiPlayer ai,SimUnit[] home,int bx,int bz,bool threatened)
     {
         var enemyBuildings = ConstructionSites.Values.Where(s => s.Team >= 0 && s.Team != ai.Team && s.Health > 0).ToArray();
@@ -354,16 +369,20 @@ public sealed partial class SimWorld
         {
             var ready = home.Where(AiIdle).OrderBy(u => u.Id).Take(AiAssaultParty.MaxSize).ToArray();
             if (ready.Length < AiPartySize(ai) || enemyBuildings.Length == 0) return;
-            ai.Party.AddRange(ready.Select(u => u.Id)); ai.PartiesSent++; ai.PartyTarget = -1;
+            ai.Party.AddRange(ready.Select(u => u.Id)); ai.PartyTarget = -1;
         }
         if (ai.Party.Count == 0) return;
         var party = ai.Party.Select(id => Units[id]).ToArray();
         int cx = (int)party.Average(u => (long)u.X),cz = (int)party.Average(u => (long)u.Z);
         if (!ConstructionSites.TryGetValue(ai.PartyTarget,out var target) || target.Health <= 0 || target.Team == ai.Team || target.Team < 0)
         {
+            // The nearest building the party can walk to: across a river without a crossing, a closer one waits.
+            var widest = party.OrderByDescending(u => u.Definition.BodyRadiusMm).ThenBy(u => u.Id).First();
             target = enemyBuildings.OrderBy(s => DistanceSquared(SitePosition(s).X,SitePosition(s).Z,ai.PartyTarget < 0 ? bx : cx,ai.PartyTarget < 0 ? bz : cz))
-                .ThenBy(s => s.Id).FirstOrDefault();
+                .ThenBy(s => s.Id).FirstOrDefault(s => AiReaches(widest,s));
             if (target == null) { ai.Party.Clear(); ai.PartyTarget = -1; return; }
+            // Counted once it has somewhere to go: a party with no reachable target disbands without counting.
+            if (ai.PartyTarget < 0) ai.PartiesSent++;
             ai.PartyTarget = target.Id;
             var (tx,tz) = SitePosition(target);
             AiOrder(ai,ai.Party,OrderKind.AttackMove,Navigation.Cell(tx,tz));

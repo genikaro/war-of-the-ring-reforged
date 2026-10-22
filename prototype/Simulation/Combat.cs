@@ -222,7 +222,7 @@ public sealed partial class SimWorld
             unit.Target=unit.OrderTarget;
         if (unit.Target < 0 && (unit.Order is OrderKind.Attack or OrderKind.AttackMove or OrderKind.HoldGround or OrderKind.Patrol or OrderKind.Guard
             || (unit.Order == OrderKind.ForceAttack && unit.OrderTarget < 0 && unit.Goal < 0)
-            || (unit.Order == OrderKind.Idle && (IdleGuardEnabled(unit) || unit.Team == 1 || unit.AutoEngage))))
+            || (unit.Order == OrderKind.Idle && (IdleGuardEnabled(unit) || AggressiveIdleTeams.Contains(unit.Team) || unit.AutoEngage))))
         {
             SimUnit? enemy;
             using (SimProfiler.Time("ChooseOpponent")) enemy = ChooseOpponent(unit);

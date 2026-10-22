@@ -27,7 +27,7 @@ public partial class Main
             int cell = _world.Navigation.Cell(site.X+(int)(ring*1000*Math.Cos(step*Math.Tau/8)),
                 site.Z+(int)(ring*1000*Math.Sin(step*Math.Tau/8)));
             if (cell < 0) continue;
-            try { spawned.Add(_world.Spawn(team,SkirmishSpawnCell(definition,cell),definition).Id); }
+            try { spawned.Add(_world.Spawn(team,SkirmishSpawnCell(team,definition,cell),definition).Id); }
             catch (Exception error) when (error is ArgumentException or InvalidOperationException) { }
         }
         if (spawned.Count < count) throw new InvalidOperationException("Siege smoke could not place its squad");
