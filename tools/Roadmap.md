@@ -30,6 +30,11 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-34 (Oct 22):** a wide body's attack-position search stops after 1,024
+nodes instead of 2,048 (owner's choice after an experiment; remembering failed
+searches was tried and dropped). Exhausted searches cost half as much; the observer
+match now ends at 30:05 with a new reference digest (31E28C29...). See [skirmish notes](../prototype/SKIRMISH.md#build-34-smaller-attack-position-search-budget).
+
 **Build-33 (Oct 22):** combat targeting pass, no change in play. A unit grid
 (8 m buckets kept current by unit moves) serves the distance-bounded threat scans,
 and the wide-body attack-position search runs once instead of twice. Combat time in
@@ -716,9 +721,11 @@ window 4.2 ms per tick, 16x at 17-26 fps.
 - [x] Combat targeting (build-33): `UnitGrid` serves the distance-bounded threat
   scans, and the in-reach and waiting position searches share one pass. Combat fell
   from 0.8-1.3 to 0.5-0.7 ms per tick in big fights.
-- [ ] Failed attack-position searches still exhaust their 2,048-node budget
-  (0.1-0.35 ms per tick in big fights). Needs a change in play: a smaller budget,
-  or remembering a failure for a few ticks.
+- [x] Failed attack-position searches (build-34): budget 2,048 -> 1,024 nodes,
+  halving each exhausted search. Remembering a failure for 2 s was measured and
+  dropped (it skipped 681 of 7,924 failures and lengthened the late fights). About
+  three in four position searches still fail in crowded fights; a cheaper way to
+  tell early that no position is reachable would help more than any budget.
 - [ ] Use `UnitGrid` for the movement scans too (`ClearGroundStep`,
   `ClearCombatStep`, body overlap, `CanReserveMovement`); they matter more as unit
   counts grow beyond the current 70.

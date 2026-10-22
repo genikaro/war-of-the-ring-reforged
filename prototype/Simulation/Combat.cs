@@ -134,7 +134,7 @@ public sealed partial class SimWorld
             }
             // Positions in reach first, else the nearest waiting position.
             var (path,waiting)=Nav(unit).FindPathToAny(start,candidates.Where(c => !c.Waiting).Select(c => c.Node),
-                candidates.Where(c => c.Waiting).Select(c => c.Node),blocked,allowed:Allowed);
+                candidates.Where(c => c.Waiting).Select(c => c.Node),blocked,PositionSearchBudget,Allowed);
             if (path.Count > 0) return (path[^1],path,waiting);
         }
         else foreach (var candidate in candidates.OrderBy(c => c.Waiting).ThenBy(c => c.Cost).ThenBy(c => c.Node))
@@ -143,8 +143,14 @@ public sealed partial class SimWorld
             var path=Nav(unit).FindPath(start,candidate.Node,blocked);
             if (path.Count > 0) return (candidate.Node,path,candidate.Waiting);
         }
+        SimProfiler.Record("CombatPosition failed",SimProfiler.Start());
         return (-1,[],true);
     }
+
+    // Nodes a wide body's attack-position search may close (about an 18 m walk).
+    // Three in four searches fail in crowded fights, and a failed one used to
+    // spend 2,048 nodes; beyond this the unit waits and plans again later.
+    private const int PositionSearchBudget = 1024;
 
     private bool ClearCombatStep(SimUnit unit, int x, int y, int z)
     {

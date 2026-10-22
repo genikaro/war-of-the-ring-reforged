@@ -1315,3 +1315,37 @@ in play, such as a smaller budget or remembering a failure for a few ticks.
 
 Validation: 777 synthetic, 844 Helm's Deep and 34 worker-cache checks pass; the
 observer smoke passes with the unchanged digest.
+
+## Build-34: smaller attack-position search budget
+
+A deliberate, small change in play, chosen by the owner after an experiment. A
+wide body's search for an attack position may now close 1,024 nodes (about an
+18 m walk) instead of 2,048; beyond that it waits and plans again later, as it
+already did when the search failed. Exact counts from the observer match showed
+that about three in four position searches fail in crowded fights, and that a
+search running out of budget cost about 1 ms.
+
+Two options were measured on the Gimli against Aragorn observer match (one run
+each; any change in play sends the match down a different path, so these are
+different battles, not a matched comparison):
+
+| Variant | Winner, end | Failed / all searches | Budget-exhausted search | Combat (match average) |
+|---|---|---:|---:|---:|
+| build-33 | Aragorn, 28:15 | 3,559 / 4,788 | 997 us | 0.209 ms per tick |
+| remember a failure 2 s | Aragorn, 33:34 | 7,924 / 10,171 | 996 us | 0.367 ms per tick |
+| 1,024-node budget (kept) | Aragorn, 30:05 | 4,511 / 5,785 | 489 us | 0.184 ms per tick |
+
+Remembering failures was dropped. It skipped only 681 searches, because the planner
+already waits a second between attempts and targets change before a repeat. The
+match still diverged: bigger armies and longer late fights. The smaller budget
+halves each exhausted search and trims 0.1-0.15 ms from the heaviest fight windows.
+In the 18-against-18 crowd benchmark all 18 units on each side land hits (17 and 18
+before). The trade-off: a wide body gives up sooner on a position that is
+reachable only by a long walk around a crowd.
+
+The profile line now also prints each section's exact call count, and failed
+position searches are counted as `CombatPosition failed`. The observer match's new
+reference digest is 31E28C29... (Aragorn wins at tick 36111).
+
+Validation: 777 synthetic, 844 Helm's Deep and 34 worker-cache checks pass, and
+the observer smoke passes.

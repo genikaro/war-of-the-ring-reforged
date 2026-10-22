@@ -19,7 +19,7 @@ public partial class Main
         long steps = sections.FirstOrDefault(s => s.Name == "step").Calls;
         string line = $"PROFILE {TimeSpan.FromSeconds(_world.Tick/SimWorld.TicksPerSecond):mm\\:ss} units {_world.Units.Count(u => u.Health > 0)} "
             + $"frames {_profileFrames} steps {steps} fps {Engine.GetFramesPerSecond()} · "
-            + string.Join(" · ",sections.Select(s => $"{s.Name} {s.Ms:0}ms ({s.Ms/Math.Max(1,steps):0.###}/tick, {s.Calls/Math.Max(1.0,steps):0.#} calls/tick)"));
+            + string.Join(" · ",sections.Select(s => $"{s.Name} {s.Ms:0}ms ({s.Ms/Math.Max(1,steps):0.###}/tick, {s.Calls/Math.Max(1.0,steps):0.#} calls/tick, {s.Calls} calls)"));
         _profileFrames = 0;
         _profileLog.Add(line); GD.Print(line);
     }
