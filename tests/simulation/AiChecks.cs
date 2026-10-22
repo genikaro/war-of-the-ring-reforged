@@ -128,6 +128,26 @@ public static class AiChecks
         check(straggler.Order == OrderKind.Move && regroup.AiPlayers[1].Party.Order().SequenceEqual(fresh) && regroup.AiPlayers[1].PartiesSent == 1,
             "a broken assault falls back home and the idle army forms the next one");
 
+        // Regrouping (build-41): a new party musters on its route before marching, and moves on only once together;
+        // one attack-move to the target strung it out into a file.
+        var muster = Fixture();
+        var recruits = Enumerable.Range(0,8).Select(i => muster.Spawn(1,Cell(48+(i%4)*2,8+(i/4)*14),soldier).Id).ToArray();
+        Step(muster,25);
+        var musterBot = muster.AiPlayers[1];
+        var (mx,mz) = musterBot.Legs.Count > 0 ? muster.Navigation.Center(musterBot.Legs[0]) : (0,0);
+        check(musterBot.PartiesSent == 1 && musterBot.Legs.Count >= 1 && musterBot.Leg == 0
+            && recruits.All(id => muster.Units[id].Order == OrderKind.AttackMove && muster.Units[id].OrderDestination >= 0
+                && SimWorld.DistanceSquared(muster.Navigation.Center(muster.Units[id].OrderDestination).X,muster.Navigation.Center(muster.Units[id].OrderDestination).Z,mx,mz)
+                    <= (long)SimWorld.AiRegroupMm*SimWorld.AiRegroupMm),"a new party first musters on its route, not at the target: "+musterBot.Status);
+        long spread = -1;
+        for (int i = 0; i < 1200 && spread < 0; i++)
+        {
+            muster.Step();
+            if (musterBot.Leg > 0) spread = recruits.Max(id => SimWorld.DistanceSquared(muster.Units[id].X,muster.Units[id].Z,mx,mz));
+        }
+        check(spread >= 0 && spread <= (long)SimWorld.AiRegroupMm*SimWorld.AiRegroupMm,
+            $"the party marches on only once every member stands within 12 m of the muster point (farthest {Math.Sqrt(Math.Max(0,spread))/1000:0.#} m)");
+
         // Reinforcements (build-40): a full party's worth of idle soldiers at home joins a party still out and marches
         // on its target, instead of waiting for a remnant that may never come back.
         var reinforced = Fixture();

@@ -275,7 +275,8 @@ The skirmish plays against the enemy bot (build-27). Bots expand with a new Cita
 between 10 and 15 minutes, go all in when their army can no longer grow, and
 surrender when they can never field one again (build-38). Each expansion keeps half an
 assault party as its guard, home armies stop chasing enemies that have left, and idle
-soldiers reinforce a party already out (build-40). `-AiPersonality Gimli` picks a
+soldiers reinforce a party already out (build-40). Parties muster on their route and
+regroup on open ground every 25 m on the way (build-41). `-AiPersonality Gimli` picks a
 shipped `.rai` personality and `-NoAi` keeps the enemy passive. To watch two bots
 fight instead (build-28), observe: nobody plays and any unit can be inspected but not
 commanded. The spectator HUD (build-36) follows other RTS observer modes: a foldable

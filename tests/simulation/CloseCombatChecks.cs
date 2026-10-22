@@ -81,5 +81,21 @@ static class CloseCombatChecks
         }
         Console.WriteLine("CLOSE_COMBAT_ARMIES hitters="+string.Join('/',hitters.Select(h=>h.Count)));
         check(hitters.All(h=>h.Count>=16),"both attack-move armies bring back-row units into melee");
+
+        // An explicit attack on a far enemy (build-41): the bounded position search never reached 60 m, so a wide
+        // body stood, retried once a second and only stepped on when the target came close (bot parties chasing).
+        var swordsman=UnitDefinition.Probe with { BodyRadiusMm=570,BodyHeightMm=1800,AttackGapMm=500 };
+        var pursuit=new SimWorld(new(80,40,1000,Enumerable.Repeat(true,3200).ToArray(),new int[81*41]));
+        var hunter=pursuit.Spawn(0,20*80+5,swordsman); var quarry=pursuit.Spawn(1,20*80+70,swordsman);
+        pursuit.Enqueue(1,[quarry.Id],OrderKind.HoldGround); pursuit.Enqueue(0,[hunter.Id],OrderKind.Attack,target:quarry.Id);
+        int still=0,longest=0,struck=-1;
+        for(int tick=0;tick<1200 && struck<0;tick++)
+        {
+            int x=hunter.X; pursuit.Step();
+            still=hunter.X==x && !hunter.Attacking ? still+1 : 0; longest=Math.Max(longest,still);
+            if(pursuit.CombatEvents.Any(e=>e.Kind==CombatEventKind.Hit && e.Unit==hunter.Id)) struck=pursuit.Tick;
+        }
+        Console.WriteLine($"FAR_PURSUIT struck={struck} longest_stand={longest}");
+        check(struck>0 && longest<=10,"a wide body ordered to attack an enemy 65 m away walks there without stopping and strikes");
     }
 }

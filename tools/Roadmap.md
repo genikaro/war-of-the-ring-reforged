@@ -30,6 +30,17 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-41 (Oct 23):** bot armies regroup and keep walking. Saruman's army
+stopped and started because its Swordsmen and Axethrowers, ordered to attack a
+defender more than about 18 m away, never found an attack position within the
+bounded search and stood waiting; wide bodies now walk a full route toward a
+target more than 12 m away first (player orders too). Bot parties now muster on
+their route before leaving and regroup on open ground every 25 m instead of
+filing through narrow places. On Bilbo's Bluffs (Saruman against Aragorn) the
+party stands still on move orders 7% of the time instead of 39%, marches 4 m
+wide instead of 43 m, and Aragorn wins at 19:23 where build-40 stalemated.
+See [skirmish notes](../prototype/SKIRMISH.md#build-41-bot-armies-regroup-and-keep-walking).
+
 **Build-40 (Oct 22):** owner playtest fixes. Each bot expansion keeps half an
 assault party as its guard; the first Foundry goes on the home pile the bot's
 own miners stand on (it used to skip it and build at an expansion's pile). The

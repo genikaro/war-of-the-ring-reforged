@@ -152,6 +152,19 @@ public sealed partial class SimWorld
     // spend 2,048 nodes; beyond this the unit waits and plans again later.
     private const int PositionSearchBudget = 1024;
 
+    // Beyond this a wide body's position search, bounded above, rarely reaches the
+    // target: the unit stood, retried once a second and only stepped forward when
+    // the target happened to come close (bot parties chasing defenders, build-41).
+    // Such a unit first walks a full route toward the target, re-planned as it moves.
+    private const int PursuitRangeMm = 12000;
+
+    private (int Node,List<int> Path,bool Waiting) Pursuit(SimUnit unit,SimUnit target)
+    {
+        int goal = Nav(unit).Nearest(target.Node,connectedTo: unit.Node);
+        var path = goal < 0 ? [] : PathFromCurrentPosition(unit,goal,maxVisited: BlockedReplanBudget);
+        return path.Count > 0 ? (goal,path,false) : (-1,[],true);
+    }
+
     private bool ClearCombatStep(SimUnit unit, int x, int y, int z)
     {
         using var time = SimProfiler.Time("ClearCombatStep");
@@ -267,17 +280,19 @@ public sealed partial class SimWorld
             var (x,z) = Navigation.Center(unit.AttackNode);
             valid = AttackReach(unit,unit.AttackNode,x,Navigation.NodeHeight(unit.AttackNode),z,target);
         }
+        bool far = unit.Definition.BodyRadiusMm > 350 && SeparationSquared(unit,target) > (long)PursuitRangeMm*PursuitRangeMm;
         bool replan = unit.CombatTarget != target.Id || unit.CombatPlanTick < 0
-            || (Tick-unit.CombatPlanTick >= (unit.Definition.BodyRadiusMm > 350 && unit.CombatWaiting && unit.Goal < 0 ? 20 : 6)
+            || (Tick-unit.CombatPlanTick >= (unit.Definition.BodyRadiusMm > 350 && (far || unit.CombatWaiting && unit.Goal < 0) ? 20 : 6)
                 && (!valid || unit.CombatWaiting || unit.BlockedTicks >= 3
                     || (unit.Definition.BodyRadiusMm > 350 && unit.AvoidanceTicks >= 12) || unit.Goal < 0));
         if (replan)
         {
-            if (!CombatPlanningTurn(unit)) return unit.Path.Count == 0;
+            // A pursuer with no route left plans now: waiting for its turn (Units.Count/3 ticks) halted it for seconds.
+            if (!CombatPlanningTurn(unit) && !(far && unit.Goal < 0)) return unit.Path.Count == 0;
             RebaseCombatGround(unit);
             unit.AttackNode = -1;
-            var plan = CombatPosition(unit,target);
-            unit.AttackNode = unit.Goal = plan.Node; unit.Path = plan.Path;
+            var plan = far ? Pursuit(unit,target) : CombatPosition(unit,target);
+            unit.Goal = plan.Node; unit.AttackNode = far ? -1 : plan.Node; unit.Path = plan.Path;
             unit.CombatWaiting = plan.Waiting; unit.CombatTarget = target.Id; unit.CombatPlanTick = Tick;
             unit.Waypoint = 0; unit.BlockedTicks = 0; unit.AvoidanceTicks = 0;
             unit.FreeMovement = plan.Path.Count > 0 && plan.Path.All(FreeGround) && unit.TransitNode < 0;

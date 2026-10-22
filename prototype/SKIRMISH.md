@@ -1758,3 +1758,73 @@ Citadel falls; home soldiers chasing an enemy far from every building stand down
 idle soldiers enough for a party reinforce the party out; soldiers walled into a
 pocket stay out of the assault party). The pocket, Foundry, leash and
 trapped-soldier checks each fail with their fix reverted.
+
+## Build-41: bot armies regroup and keep walking
+
+Owner report from a bot game: Saruman's army often stopped, moved a little and
+stopped again, and bot armies marched out in a thin line that defenders picked off
+at the first narrow place.
+
+- **Stop-and-go (simulation).** A party fights off defenders near it with explicit
+  Attack orders, and the home army answers intruders the same way. A body wider
+  than 350 mm (Swordsman 570 mm, Axethrower 624 mm) finds its attack position with
+  a bounded search: `PositionSearchBudget` closes 1,024 nodes, about an 18 m walk
+  (build-34). Every position lies within 4.5 m of the target, so against a target
+  20-90 m away the search always failed: the unit stood with no route, retried
+  once a second (and only on its planning turn, one in `Units.Count`/3 ticks) and
+  stepped forward only when the target happened to come close. A party trace on
+  Bilbo's Bluffs (Saruman against Aragorn) found Saruman's party members standing
+  on such orders in 2,286 of 10,036 samples. Now a wide body more than 12 m
+  (`PursuitRangeMm`) from its target walks a full route toward it first
+  (`SimWorld.Pursuit`: the nearest open node by the target, the ordinary
+  replan budget), re-planned every second as the target moves, and a pursuer with
+  no route left plans at once instead of waiting for its turn. Within 12 m the
+  bounded position search takes over as before. Player orders get the same fix:
+  Swordsmen told to attack an enemy 60 m away used to stand still too.
+- **Regrouping (owner request).** A party used to receive one attack-move to its
+  target. Now it marches in legs (`AiPlayer.Legs`). It follows the widest member's
+  route: for a new party from the member nearest home, after razing a building from
+  the member nearest the party's centre. A new party first musters 15 m along that
+  route, then regroups every 25 m, each time on the most open ground within the
+  next 8 m of route (the most standable cells in a 7 x 7 m square, never a
+  passage). It marches the last 25 m (15 m after the muster) straight at the
+  target and razes it as before. The party moves to the next waypoint once every
+  member stands within 12 m of the current one, or once the member farthest from
+  it has not got closer for 10 s (one boxed in or unable to reach it). A fight, or
+  a building razed in passing, holds the march. Members that stopped short (back
+  from a chase, a reinforcement, a slot taken) are sent on to the waypoint, and
+  reinforcements head for it too. The bot's status reads "regrouping N/M".
+- **Not changed.** Party size, targets, defence, the fall-back and the all-in
+  rules. Formation slots at a waypoint come from the ordinary group-move
+  formation, so a waypoint in a narrow valley still lines the party up. The
+  openness test keeps waypoints out of passages, but a long narrow stretch
+  between waypoints is still walked in file.
+
+Bilbo's Bluffs, Saruman against Aragorn, traced every 10 ticks (one party
+member sample each):
+
+| | Build-40 | Build-41 |
+|---|---|---|
+| Saruman's party standing still on a move or attack order, not fighting | 39% | 7% |
+| Party spread while marching (median of the 90th-percentile member's distance from the centre) | 42.6 m | 4.1 m |
+| Result | no winner by 50:00 (both economies broken) | Aragorn wins at 19:23 (tick 23269) |
+
+Cost, with `-Profile` on the 8-bot MP08_Rift free-for-all (Aragorn, Gandalf,
+Saruman, Smaug, Gimli, Legolas, Grishnakh, Shelob), physics time per tick: pursuers
+now plan full routes, but they no longer re-run failing position searches every
+second. The build-41 run was stopped at 10:00 at the owner's request; the matches
+diverge, so this is a trend, not an exact comparison.
+
+| Game time | Build-40 | Build-41 |
+|---|---|---|
+| 06:00 | 24.4 ms | 8.9 ms |
+| 08:00 | 26.2 ms | 14.1 ms |
+| 10:00 | 37.3 ms | 15.9 ms |
+
+Build-40 then climbs to 56-106 ms per tick from 18:00 (not measured for build-41).
+
+Validation: `SimulationTests` passes all 800 checks (3 new). A Swordsman-sized body ordered
+to attack an enemy 65 m away walks there without standing still and strikes
+(with the fix disabled it stands for the whole minute), and a new bot party
+musters on its route, not at the target, and moves on only once every member
+stands within 12 m of the muster point.

@@ -25,6 +25,12 @@ public sealed class AiPlayer(int team,AiPersonality personality)
     /// <summary>Units of the assault under way, and the enemy building it is razing.</summary>
     public List<int> Party { get; } = [];
     public int PartyTarget { get; internal set; } = -1;
+    /// <summary>Waypoints on the party's route to PartyTarget where it regroups (build-41), the one it is heading for
+    /// (Legs.Count once on the final approach), and when the member farthest from it last got closer.</summary>
+    public List<int> Legs { get; } = [];
+    public int Leg { get; internal set; }
+    public int LegMovedTick { get; internal set; }
+    public long LegGap { get; internal set; }
     /// <summary>The guard of each expansion Citadel, by its site id; guards never join an assault.</summary>
     public SortedDictionary<int,AiGuardPost> Guards { get; } = [];
     public int PartiesSent { get; internal set; }
@@ -79,7 +85,8 @@ public sealed class AiPlayer(int team,AiPersonality personality)
 /// tearing down its buildings. Owner rules (build-40): every expansion Citadel keeps half a party as its guard, and a
 /// Foundry may go on the pile the bot's own miners stand on (they wait beside it for the foundation). Soldiers walled
 /// into a pocket never join an assault, home soldiers stop chasing enemies far from every building, and a full party's
-/// worth of idle soldiers reinforces a party still out. Not simulated: scouting, raids, flanking, harassment, heroes and
+/// worth of idle soldiers reinforces a party still out. Owner request (build-41): a party marches in legs, mustering
+/// on its route first and regrouping on open ground every 25 m, instead of filing through narrow places. Not simulated: scouting, raids, flanking, harassment, heroes and
 /// special abilities.</summary>
 public sealed partial class SimWorld
 {
@@ -89,7 +96,7 @@ public sealed partial class SimWorld
     public AiWarParty AiAssaultParty { get; set; } = new(5,12,800_000);
     public const int AiDefenseRadiusMm = 30000,AiEngageRadiusMm = 12000,AiStallTicks = 30*TicksPerSecond,AiFoodPerMill = 6,
         AiResourceClearanceMm = 10000,AiStagnationTicks = 180*TicksPerSecond,AiExpansionIntervalTicks = 600*TicksPerSecond,AiMaxCitadels = 3,
-        AiGuardSlackMm = 8000,AiClaimWaitMm = 15000;
+        AiGuardSlackMm = 8000,AiClaimWaitMm = 15000,AiMusterMm = 15000,AiLegMm = 25000,AiRegroupMm = 12000,AiLegPatienceTicks = 10*TicksPerSecond;
     /// <summary>AiPlayer.Project while its crew walks to a foundation not laid yet.</summary>
     private const int AiWalkingCrew = -2;
 
@@ -144,7 +151,8 @@ public sealed partial class SimWorld
         home = AiGuard(ai,expansions,home,threatened);
         AiAssault(ai,home,bx,bz,threatened);
         int guards = ai.Guards.Values.Sum(g => g.Units.Count);
-        ai.Status = $"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)}{(guards > 0 ? $" · guards {guards}" : "")} · {plan} · parties {ai.PartiesSent}";
+        string march = ai.Party.Count > 0 && ai.Leg < ai.Legs.Count ? $" · regrouping {ai.Leg+1}/{ai.Legs.Count}" : "";
+        ai.Status = $"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)}{march}{(guards > 0 ? $" · guards {guards}" : "")} · {plan} · parties {ai.PartiesSent}";
     }
 
     /// <summary>The bot's Citadels away from its start (foundations too), with the guards of fallen ones released and
@@ -615,15 +623,16 @@ public sealed partial class SimWorld
             target = enemyBuildings.OrderBy(s => DistanceSquared(SitePosition(s).X,SitePosition(s).Z,ai.PartyTarget < 0 ? bx : cx,ai.PartyTarget < 0 ? bz : cz))
                 .ThenBy(s => s.Id).FirstOrDefault(s => AiReaches(widest,s));
             if (target == null) { ai.Party.Clear(); ai.PartyTarget = -1; return; }
+            bool fresh = ai.PartyTarget < 0;
             // Counted once it has somewhere to go: a party with no reachable target disbands without counting.
-            if (ai.PartyTarget < 0) { ai.PartiesSent++; ai.LastArmyTick = Tick; }
+            if (fresh) { ai.PartiesSent++; ai.LastArmyTick = Tick; }
             ai.PartyTarget = target.Id;
-            var (tx,tz) = SitePosition(target);
-            AiOrder(ai,ai.Party,OrderKind.AttackMove,Navigation.Cell(tx,tz));
+            AiPlanLegs(ai,party,widest,target,fresh ? (bx,bz) : (cx,cz),fresh);
+            AiOrder(ai,ai.Party,OrderKind.AttackMove,AiLegCell(ai,target));
             return;
         }
         var (x,z) = SitePosition(target);
-        AiOrder(ai,reinforcements,OrderKind.AttackMove,Navigation.Cell(x,z));
+        AiOrder(ai,reinforcements,OrderKind.AttackMove,AiLegCell(ai,target));
         // Defenders near the party come first: a unit razing a building ignores the units hitting it. A defender the party
         // cannot kill in 30 s (tucked in a pocket beyond melee reach) no longer holds up the razing.
         var defender = AiStalled(ai,ai.ChaseSeen,Units.Where(u => u.Present && u.Team != ai.Team && !u.RingActive && !ai.Unreachable.Contains(u.Id)
@@ -636,14 +645,86 @@ public sealed partial class SimWorld
             AiOrder(ai,party.Where(u => u.Target < 0).Select(u => u.Id),OrderKind.Attack,defender.Node,defender.Id);
             return;
         }
+        if (ai.Leg < ai.Legs.Count) { AiRegroup(ai,ai.Party.Select(id => Units[id]).ToArray(),target); return; }
         var arrived = party.Where(u => AiIdle(u) || u.Order == OrderKind.AttackMove && u.Goal < 0 && u.Target < 0
             && DistanceSquared(u.X,u.Z,x,z) <= 25000L*25000
             || ai.Unreachable.Contains(u.Target) || u.Order == OrderKind.Attack && ai.Unreachable.Contains(u.OrderTarget)).Select(u => u.Id).ToArray();
         if (arrived.Length > 0) AiOrder(ai,arrived,OrderKind.AttackStructure,target: target.Id);
     }
 
+    private int AiLegCell(AiPlayer ai,ConstructionSite target) => ai.Leg < ai.Legs.Count ? ai.Legs[ai.Leg] : Navigation.Cell(SitePosition(target).X,SitePosition(target).Z);
+
+    /// <summary>Regrouping waypoints (build-41): one attack-move to the target strung a party out into a file that
+    /// defenders picked off at the first narrow place. A new party musters 15 m along its route from home, then the
+    /// party regroups every 25 m of the route, each time on the most open ground (a 7 x 7 m square, not a passage)
+    /// within the next 8 m, until the last 25 m (15 m after the muster), which it marches straight. The route is the widest member's, from the
+    /// member nearest home (a new party) or nearest the party's centre (after razing a building).</summary>
+    private void AiPlanLegs(AiPlayer ai,SimUnit[] party,SimUnit widest,ConstructionSite target,(int X,int Z) from,bool muster)
+    {
+        ai.Legs.Clear(); ai.Leg = 0; ai.LegGap = long.MaxValue; ai.LegMovedTick = Tick;
+        var nav = Nav(widest);
+        var lead = party.Where(u => nav.CanStand(u.Node)).OrderBy(u => DistanceSquared(u.X,u.Z,from.X,from.Z)).ThenBy(u => u.Id).FirstOrDefault();
+        if (lead == null) return;
+        var (tx,tz) = SitePosition(target);
+        int goal = nav.Nearest(Navigation.Cell(tx,tz),connectedTo: lead.Node);
+        if (goal < 0) return;
+        var route = nav.FindPath(lead.Node,goal,maxVisited: BlockedReplanBudget);
+        if (route.Count == 0) return;
+        var along = new long[route.Count];
+        for (int i = 1; i < route.Count; i++)
+        {
+            var (ax,az) = Navigation.Center(route[i-1]); var (px,pz) = Navigation.Center(route[i]);
+            along[i] = along[i-1]+(long)Math.Sqrt(DistanceSquared(ax,az,px,pz));
+        }
+        int Openness(int node)
+        {
+            if (node >= nav.GroundCount) return -1;
+            int col = node%nav.Width,row = node/nav.Width,open = 0;
+            for (int z = row-3; z <= row+3; z++)
+            for (int x = col-3; x <= col+3; x++)
+                if (x >= 0 && z >= 0 && x < nav.Width && z < nav.Height && nav.CanStand(z*nav.Width+x)) open++;
+            return nav.IsBottleneck(node) ? open-49 : open;
+        }
+        long next = muster ? AiMusterMm : AiLegMm;
+        for (int i = 0; ; )
+        {
+            while (i < route.Count && along[i] < next) i++;
+            if (i >= route.Count || along[^1]-along[i] < (muster && ai.Legs.Count == 0 ? AiMusterMm : AiLegMm)) break;
+            int best = i,bestOpen = Openness(route[i]);
+            for (int j = i+1; j < route.Count && along[j] <= along[i]+8000 && bestOpen < 49; j++)
+                if (Openness(route[j]) is var open && open > bestOpen) { best = j; bestOpen = open; }
+            ai.Legs.Add(route[best]);
+            next = along[best]+AiLegMm; i = best+1;
+        }
+    }
+
+    /// <summary>On the way to a waypoint: the party moves on once every member is within 12 m of it, or once the member
+    /// farthest from it has not got closer for 10 s (one boxed in, or that cannot reach it). A fight, or a building
+    /// razed in passing, holds the march. Members that stopped short walk on to the waypoint.</summary>
+    private void AiRegroup(AiPlayer ai,SimUnit[] party,ConstructionSite target)
+    {
+        int cell = ai.Legs[ai.Leg]; var (wx,wz) = Navigation.Center(cell);
+        long Gap(SimUnit u) => (long)Math.Sqrt(DistanceSquared(u.X,u.Z,wx,wz));
+        AiOrder(ai,party.Where(u => ai.Unreachable.Contains(u.Target) || u.Order == OrderKind.Attack && ai.Unreachable.Contains(u.OrderTarget)).Select(u => u.Id),
+            OrderKind.AttackMove,cell);
+        if (party.Any(u => u.Target >= 0 || u.SiteTarget >= 0 || u.Order == OrderKind.Attack)) { ai.LegGap = long.MaxValue; ai.LegMovedTick = Tick; return; }
+        long gap = party.Max(Gap);
+        if (gap > AiRegroupMm)
+        {
+            if (gap <= ai.LegGap-1000) { ai.LegGap = gap; ai.LegMovedTick = Tick; }
+            if (Tick-ai.LegMovedTick < AiLegPatienceTicks)
+            {
+                AiOrder(ai,party.Where(u => AiIdle(u) && Gap(u) > AiRegroupMm).Select(u => u.Id),OrderKind.AttackMove,cell);
+                return;
+            }
+        }
+        ai.Leg++; ai.LegGap = long.MaxValue; ai.LegMovedTick = Tick;
+        AiOrder(ai,ai.Party,OrderKind.AttackMove,AiLegCell(ai,target));
+    }
+
     private string AiDigest() => ":ai:"+string.Join(';',AiPlayers.Values.Select(a =>
         $"{a.Team},{a.Personality.Id},{a.PartyTarget},{a.PartiesSent},{a.Project},{a.ProjectProgress},{a.ProjectMovedTick},{a.Chase},{a.ChaseSince},{a.Intruder},{a.IntruderSince},"
         +$"{a.LastArmyTick},{a.AllIn},{a.CitadelSite.X},{a.CitadelSite.Z},{a.CrewDistance},{string.Join('/',a.IntruderSeen)},{string.Join('/',a.ChaseSeen)}:{string.Join(',',a.Unreachable.Order())}:{string.Join(',',a.Party)}:{string.Join(',',a.RefusedCells.Order())}"
-        +":guards:"+string.Join('|',a.Guards.Select(g => $"{g.Key}@{g.Value.Cell}={string.Join(',',g.Value.Units)}/{string.Join('/',g.Value.Seen)}"))));
+        +":guards:"+string.Join('|',a.Guards.Select(g => $"{g.Key}@{g.Value.Cell}={string.Join(',',g.Value.Units)}/{string.Join('/',g.Value.Seen)}"))
+        +$":legs:{a.Leg},{a.LegMovedTick},{a.LegGap}:{string.Join(',',a.Legs)}"));
 }
