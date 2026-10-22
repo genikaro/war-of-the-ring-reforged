@@ -1277,3 +1277,41 @@ somewhere, and only 14 of 224 failed floods were that kind anyway.
 
 Validation: 777 synthetic, 844 Helm's Deep and 34 worker-cache checks pass; the
 observer smoke passes with the unchanged digest.
+
+## Build-33: unit grid for threat scans, one-pass attack-position search
+
+Combat targeting pass, again bit-identical (the observer match keeps its digest).
+
+**Unit grid.** `UnitGrid` files every unit in an 8 m bucket by ground position;
+SimUnit's position setters move it between buckets, so the index is always
+current. The scans whose tests have a distance limit now ask the grid for the units
+within that limit and keep their exact tests: the immediate-opponent check of wide
+bodies (within the attacker's reach bound: its attack or melee reach, or both
+bodies' radii plus its gap), small melee units' 10 m opponent choice, the
+`Opponents` pool (reach or 10 m, plus targets allies share), room to fight, and
+the attacker-slot counts around a target. The grid keeps the largest body radius,
+reach and gap seen, so every bound is conservative. A temporary check confirmed
+that no query ever missed a unit within its radius, through all test suites and
+the full match. The melee threat scan has no distance limit and still checks
+every unit; it was already cheap (about 0.05 ms per tick).
+
+**Attack-position search.** A wide body looked for a position within reach and,
+if that failed, ran a second search for a waiting position. Both searches expand
+the same nodes in the same order, and the first usually failed only after its
+2,048-node budget. One pass now returns the first in-reach position closed, or
+else the first waiting position it closed along the way, which is exactly what the
+second search found.
+
+| Two-minute window | build-32 combat | build-33 combat | whole step before -> after |
+|---|---:|---:|---:|
+| 10:00 | 0.80 ms | 0.50 ms | 1.67 -> 1.43 ms |
+| 12:00 | 1.02 ms | 0.55 ms | 2.02 -> 1.67 ms |
+| 14:00 | 1.31 ms | 0.70 ms | 2.27 -> 1.76 ms |
+| 16:00 | 0.99 ms | 0.47 ms | 1.83 -> 1.41 ms |
+
+What is left in combat is mainly attack-position searches that still exhaust their
+budget (0.1-0.35 ms per tick in big fights). Cutting those further needs a change
+in play, such as a smaller budget or remembering a failure for a few ticks.
+
+Validation: 777 synthetic, 844 Helm's Deep and 34 worker-cache checks pass; the
+observer smoke passes with the unchanged digest.

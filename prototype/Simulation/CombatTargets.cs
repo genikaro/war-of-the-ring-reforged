@@ -19,12 +19,25 @@ public sealed partial class SimWorld
             && (UsesMissile(unit,target) || !UsesMissile(u,target))
             && (!earlierOnly || u.Id < unit.Id));
 
+    // Every reach test (melee, missile, either range rule) stays within this
+    // distance of the attacker, whatever body the target has.
+    private int ReachBound(SimUnit unit)
+    {
+        var d = unit.Definition;
+        return Math.Max(Math.Max(d.ReachMm,d.MeleeReachMm),d.BodyRadiusMm+Grid.MaxBodyRadiusMm+Math.Max(d.AttackGapMm,d.MeleeGapMm));
+    }
+    // The same bound for any attacker in the world.
+    private int AnyReachBound => Math.Max(Grid.MaxReachMm,2*Grid.MaxBodyRadiusMm+Grid.MaxGapMm);
+
     private IEnumerable<SimUnit> Opponents(SimUnit unit,int exclude = -1,bool requireSpace = false)
     {
         int shareRadius=IdleGuardEnabled(unit) ? IdleAwarenessMm : 6000;
-        var shared=Units.Where(u => u.Id != unit.Id && u.Team==unit.Team && u.Present && u.Target >= 0
+        var shared=NearUnits(unit.X,unit.Z,shareRadius).Where(u => u.Id != unit.Id && u.Team==unit.Team && u.Present && u.Target >= 0
             && SeparationSquared(unit,u)<=(long)shareRadius*shareRadius).Select(u=>u.Target).ToHashSet();
-        return Units.Where(u => u.Id != exclude && u.Team != unit.Team && u.Present
+        // Nearby enemies and the targets allies share; the order below is total, so the pool's order is irrelevant.
+        var pool=NearUnits(unit.X,unit.Z,Math.Max(10000,unit.Definition.ReachMm));
+        pool.AddRange(shared.Where(id => pool.All(u => u.Id != id)).Select(id => Units[id]));
+        return pool.Where(u => u.Id != exclude && u.Team != unit.Team && u.Present
                 && (SeparationSquared(unit,u) <= (long)Math.Max(10000,unit.Definition.ReachMm)*Math.Max(10000,unit.Definition.ReachMm) || shared.Contains(u.Id)) && MayAcquire(unit,u)
                 && ((unit.Definition.IsRanged && AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u)) || Nav(unit).IsConnected(unit.Node,u.Node))
                 && (!HoldsPosition(unit) || AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u)))
@@ -35,37 +48,37 @@ public sealed partial class SimWorld
             .ThenBy(c => c.Unit.Id).Select(c => c.Unit);
     }
 
-    // The nearest unit that passes the filter, the lower id on ties. Units are in
-    // id order, so a farther or equally near unit never needs the filter at all.
-    private SimUnit? NearestUnit(SimUnit unit,Func<SimUnit,bool> filter)
+    // The nearest candidate that passes the filter, the lower id on ties. A
+    // candidate that cannot beat the best so far never needs the filter at all.
+    private static SimUnit? NearestUnit(SimUnit unit,IEnumerable<SimUnit> candidates,Func<SimUnit,bool> filter)
     {
         SimUnit? best = null; long nearest = 0;
-        foreach (var u in Units)
+        foreach (var u in candidates)
         {
             long distance = SeparationSquared(unit,u);
-            if ((best == null || distance < nearest) && filter(u)) { best = u; nearest = distance; }
+            if ((best == null || distance < nearest || (distance == nearest && u.Id < best.Id)) && filter(u)) { best = u; nearest = distance; }
         }
         return best;
     }
 
     private SimUnit? ChooseOpponent(SimUnit unit) => unit.Definition.BodyRadiusMm > 350 || unit.Definition.IsRanged ? Opponents(unit).FirstOrDefault()
-        : NearestUnit(unit,u => u.Team != unit.Team && u.Present && SeparationSquared(unit,u)<=10_000L*10_000
+        : NearestUnit(unit,NearUnits(unit.X,unit.Z,10_000),u => u.Team != unit.Team && u.Present && SeparationSquared(unit,u)<=10_000L*10_000
             && Nav(unit).IsConnected(unit.Node,u.Node) && MayAcquire(unit,u)
             && (!HoldsPosition(unit) || AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u)));
 
-    private SimUnit? ImmediateOpponent(SimUnit unit) => NearestUnit(unit,u => u.Team != unit.Team && u.Present
+    private SimUnit? ImmediateOpponent(SimUnit unit) => NearestUnit(unit,NearUnits(unit.X,unit.Z,ReachBound(unit)),u => u.Team != unit.Team && u.Present
         && AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u) && MayAcquire(unit,u) && AttackerSlotForCandidate(unit,u));
 
     // A candidate is not yet assigned; count only fighters already in reach.
     private bool AttackerSlotForCandidate(SimUnit unit,SimUnit target) => UsesMissile(unit,target) || target.Definition.MaxAttackers == 0
-        || Units.Count(u => u.Id != unit.Id && u.Present && u.Target == target.Id && !UsesMissile(u,target)
+        || NearUnits(target.X,target.Z,AnyReachBound).Count(u => u.Id != unit.Id && u.Present && u.Target == target.Id && !UsesMissile(u,target)
             && (u.StrikeActive || u.Attacking) && AttackReach(u,u.Node,u.X,u.Y,u.Z,target)) < target.Definition.MaxAttackers;
 
     private void EngageMeleeThreat(SimUnit unit)
     {
         if (!unit.Definition.HasMelee || unit.Order is OrderKind.Move or OrderKind.ForceAttack) return;
         if (unit.Target >= 0 && Units[unit.Target].Present && !UsesMissile(unit,Units[unit.Target])) return;
-        var threat = NearestUnit(unit,u => u.Team != unit.Team && u.Present
+        var threat = NearestUnit(unit,Units,u => u.Team != unit.Team && u.Present
             && !UsesMissile(unit,u) && MayAcquire(unit,u));
         if (threat == null) return;
         ReleaseCombat(unit); unit.Target = threat.Id; unit.AttackMoveReturning = false;

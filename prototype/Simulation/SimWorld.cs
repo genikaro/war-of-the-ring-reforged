@@ -6,8 +6,13 @@ public sealed class SimUnit(int id, int team, int x, int z)
 {
     public int Id { get; } = id;
     public int Team { get; } = team;
-    public int X { get; internal set; } = x;
-    public int Z { get; internal set; } = z;
+    private int _x = x,_z = z;
+    private UnitDefinition _definition = UnitDefinition.Probe;
+    /// <summary>The spatial index this unit is filed in; position and definition changes keep it current.</summary>
+    internal UnitGrid? Grid;
+    internal int GridBucket;
+    public int X { get => _x; internal set { _x = value; Grid?.Moved(this); } }
+    public int Z { get => _z; internal set { _z = value; Grid?.Moved(this); } }
     public int Y { get; internal set; }
     public int Node { get; internal set; }
     public int TransitNode { get; internal set; } = -1;
@@ -16,7 +21,7 @@ public sealed class SimUnit(int id, int team, int x, int z)
     private long _healthMilli = 100_000;
     public int Health { get => (int)((_healthMilli+999)/1000); internal set => _healthMilli = Math.Max(0,(long)value*1000); }
     public long HealthMilli { get => _healthMilli; internal set => _healthMilli = Math.Max(0,value); }
-    public UnitDefinition Definition { get; internal set; } = UnitDefinition.Probe;
+    public UnitDefinition Definition { get => _definition; internal set { _definition = value; Grid?.Measure(value); } }
     public int MaxHealth => Definition.MaxHealth;
     public int KillCount { get; internal set; }
     public bool Walking { get; internal set; }
@@ -129,6 +134,11 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     private readonly Dictionary<int,bool> _walkingTeams = [];
     public bool IsWalking(int team) => _walkingTeams.GetValueOrDefault(team);
     private int _navigationRevision = navigation.Revision;
+    private readonly UnitGrid _grid = new(navigation.Width*navigation.CellSize,navigation.Height*navigation.CellSize);
+    // Spawn files new units; tests that edit Units directly get a full refile on the next query.
+    private UnitGrid Grid { get { if (_grid.Count != Units.Count) _grid.Rebuild(Units); return _grid; } }
+    /// <summary>A superset of the units, dead or alive, within this horizontal radius of the point.</summary>
+    private List<SimUnit> NearUnits(int x,int z,int radius) => Grid.Near(x,z,radius,[]);
 
     public SimUnit Spawn(int team, int cell,UnitDefinition? definition = null)
     {
@@ -136,7 +146,9 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         if (!Navigation.ForBody(definition.BodyRadiusMm,definition.BodyHeightMm).CanStand(cell)) throw new ArgumentException("Spawn cell is blocked for this body");
         var candidate = SpawnCandidate(team,cell,definition);
         if (!CanPlace(candidate)) throw new ArgumentException("Spawn cell occupied");
-        Units.Add(candidate); return candidate;
+        Units.Add(candidate);
+        if (_grid.Count == Units.Count-1) _grid.Add(candidate);
+        return candidate;
     }
 
     private SimUnit SpawnCandidate(int team,int cell,UnitDefinition definition)

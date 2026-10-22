@@ -30,6 +30,11 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-33 (Oct 22):** combat targeting pass, no change in play. A unit grid
+(8 m buckets kept current by unit moves) serves the distance-bounded threat scans,
+and the wide-body attack-position search runs once instead of twice. Combat time in
+big fights roughly halves; the observer match keeps its digest. See [skirmish notes](../prototype/SKIRMISH.md#build-33-unit-grid-for-threat-scans-one-pass-attack-position-search).
+
 **Build-32 (Oct 22):** third performance pass, no change in play. Route smoothing's
 swept-body test solved each row's cells directly instead of scanning a long
 path's bounding box, which halves mid-game unit movement; combat position and
@@ -708,12 +713,15 @@ window 4.2 ms per tick, 16x at 17-26 fps.
 - [ ] Unit movement step (0.5-0.65 ms per tick mid-game after build-32): each
   moving unit checks body overlap against every unit per step and reserves cells
   against every unit; a per-tick spatial grid would make both local.
-- [ ] Combat targeting (`UpdateCombat`, 0.8-1.3 ms per tick in big fights): about
-  half is `CombatPosition`, mostly `FindPathToAny` failing at its 2,048-node budget
-  (twice per plan for wide bodies); the rest is threat scanning (`combat engage`,
-  0.2-0.5 ms), which looks for the nearest enemy across the whole map. A coarse
-  spatial grid rebuilt once per tick would limit the scans; failed position searches
-  need a design change (smaller budget, or remembering a failure for a few ticks).
+- [x] Combat targeting (build-33): `UnitGrid` serves the distance-bounded threat
+  scans, and the in-reach and waiting position searches share one pass. Combat fell
+  from 0.8-1.3 to 0.5-0.7 ms per tick in big fights.
+- [ ] Failed attack-position searches still exhaust their 2,048-node budget
+  (0.1-0.35 ms per tick in big fights). Needs a change in play: a smaller budget,
+  or remembering a failure for a few ticks.
+- [ ] Use `UnitGrid` for the movement scans too (`ClearGroundStep`,
+  `ClearCombatStep`, body overlap, `CanReserveMovement`); they matter more as unit
+  counts grow beyond the current 70.
 - [ ] Occupancy: `OccupiedNodes` and `CanReserveMovement` scan every unit, several
   times per unit per tick (0.2-0.27 ms per tick after build-32's LINQ-free rewrite,
   quadratic in unit count). Keep

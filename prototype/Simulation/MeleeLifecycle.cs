@@ -23,7 +23,7 @@ public sealed partial class SimWorld
         if (UsesMissile(unit,target)) return true;
         int limit = target.Definition.MaxAttackers;
         if (limit == 0) return true;
-        return Units.Where(u => u.Present && u.Target == target.Id && !UsesMissile(u,target)
+        return NearUnits(target.X,target.Z,AnyReachBound).Where(u => u.Present && u.Target == target.Id && !UsesMissile(u,target)
             && (HoldsPosition(u) || RoomToFight(u))
             && AttackReach(u,u.Node,u.X,u.Y,u.Z,target)).OrderBy(u => u.Id).Take(limit).Any(u => u.Id == unit.Id);
     }

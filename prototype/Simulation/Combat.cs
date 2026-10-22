@@ -42,7 +42,7 @@ public sealed partial class SimWorld
         return path.Count is > 0 and <= 4;
     }
 
-    private bool RoomToFight(SimUnit unit) => !Units.Any(other => other.Id != unit.Id && other.Team == unit.Team
+    private bool RoomToFight(SimUnit unit) => !NearUnits(unit.X,unit.Z,unit.Definition.BodyRadiusMm+Grid.MaxBodyRadiusMm+400).Any(other => other.Id != unit.Id && other.Team == unit.Team
         && other.Present && VerticalOverlap(unit.Y,unit.Definition.BodyHeightMm,other.Y,other.Definition.BodyHeightMm)
         && DistanceSquared(unit.X,unit.Z,other.X,other.Z) < (long)StrikeSpacing(unit,other)*StrikeSpacing(unit,other));
 
@@ -125,20 +125,21 @@ public sealed partial class SimWorld
         int start = unit.TransitNode >= 0 && !unit.GroundSegment ? unit.TransitNode : unit.Node;
         if (unit.Definition.BodyRadiusMm > 350)
         {
+            using var wide = SimProfiler.Time("CombatPosition wide");
             bool Allowed(int node)
             {
                 if (unit.Order != OrderKind.AttackMove || unit.AttackMoveOrigin < 0) return true;
                 var (x,z)=Navigation.Center(node);
                 return InAttackMoveArea(unit,x,z,AttackRange(unit,target),target.Id);
             }
-            foreach (bool waiting in new[] {false,true})
-            {
-                var path=Nav(unit).FindPathToAny(start,candidates.Where(c => c.Waiting==waiting).Select(c => c.Node),blocked,allowed:Allowed);
-                if (path.Count > 0) return (path[^1],path,waiting);
-            }
+            // Positions in reach first, else the nearest waiting position.
+            var (path,waiting)=Nav(unit).FindPathToAny(start,candidates.Where(c => !c.Waiting).Select(c => c.Node),
+                candidates.Where(c => c.Waiting).Select(c => c.Node),blocked,allowed:Allowed);
+            if (path.Count > 0) return (path[^1],path,waiting);
         }
         else foreach (var candidate in candidates.OrderBy(c => c.Waiting).ThenBy(c => c.Cost).ThenBy(c => c.Node))
         {
+            using var small = SimProfiler.Time("CombatPosition small");
             var path=Nav(unit).FindPath(start,candidate.Node,blocked);
             if (path.Count > 0) return (candidate.Node,path,candidate.Waiting);
         }
@@ -180,7 +181,11 @@ public sealed partial class SimWorld
         // the following tick instead of starting another swing in this one.
         if (unit.LastStopTick==Tick) return true;
         if (unit.Order == OrderKind.Move) return false;
-        using (SimProfiler.Time("combat engage")) { EngageMeleeThreat(unit); EngageImmediateOpponent(unit); }
+        using (SimProfiler.Time("combat engage"))
+        {
+            using (SimProfiler.Time("EngageMeleeThreat")) EngageMeleeThreat(unit);
+            using (SimProfiler.Time("EngageImmediateOpponent")) EngageImmediateOpponent(unit);
+        }
         if (unit.Order==OrderKind.AttackMove && unit.AttackMoveReturning) return false;
         if (unit.Order==OrderKind.AttackMove && unit.Definition.BodyRadiusMm>350 && unit.Target>=0 && unit.AttackMoveOrigin>=0
             && !MayAcquire(unit,Units[unit.Target]))

@@ -711,10 +711,20 @@ public sealed partial class GridNavigation
 
     // One bounded search for an entire ring of acceptable combat positions.
     public List<int> FindPathToAny(int start,IEnumerable<int> destinations,IReadOnlySet<int>? blocked,int maxVisited = 2048,Func<int,bool>? allowed = null)
+        => FindPathToAny(start,destinations,[],blocked,maxVisited,allowed).Path;
+
+    /// <summary>The preferred search, and failing it the fallback one, in a single pass. The expansion order does
+    /// not depend on the goals, so the first fallback goal closed within the budget is exactly what a second search
+    /// for the fallback destinations would return; this saves repeating a failed search's whole budget.</summary>
+    public (List<int> Path,bool Fallback) FindPathToAny(int start,IEnumerable<int> preferred,IEnumerable<int> fallback,IReadOnlySet<int>? blocked,
+        int maxVisited = 2048,Func<int,bool>? allowed = null)
     {
         using var time = SimProfiler.Time("FindPathToAny");
-        var goals=destinations.Where(n => CanStand(n) && blocked?.Contains(n) != true && IsConnected(start,n)).ToHashSet();
-        if (goals.Count == 0) return [];
+        bool Usable(int n) => CanStand(n) && blocked?.Contains(n) != true && IsConnected(start,n);
+        var goals=preferred.Where(Usable).ToHashSet();
+        var others=fallback.Where(Usable).ToHashSet();
+        if (goals.Count == 0 && others.Count == 0) return ([],false);
+        int reserve = -1;
         long began = SimProfiler.Start();
         BeginSearch();
         int stamp=_searchStamp,closedCount=0; var neighbors=new List<int>(8);
@@ -724,7 +734,13 @@ public sealed partial class GridNavigation
         {
             if (_searchClosed[node] == stamp) continue;
             _searchClosed[node]=stamp; closedCount++;
-            if (goals.Contains(node)) return SearchPath(node);
+            if (goals.Contains(node)) return (SearchPath(node),false);
+            if (reserve < 0 && others.Contains(node))
+            {
+                // Closed nodes keep their predecessors, so this route can be rebuilt after the search.
+                reserve = node;
+                if (goals.Count == 0) break;
+            }
             OpenNeighbors(node,neighbors);
             foreach (int next in neighbors)
             {
@@ -734,8 +750,9 @@ public sealed partial class GridNavigation
                 _searchSeen[next]=stamp; _searchCost[next]=score; _searchPrevious[next]=node; open.Enqueue(next,(score,next));
             }
         }
+        if (reserve >= 0) return (SearchPath(reserve),true);
         SimProfiler.Record(closedCount < maxVisited ? "FindPathToAny exhausted" : "FindPathToAny budget",began);
-        return [];
+        return ([],false);
     }
 
     public int GroundHeight(int x, int z)
