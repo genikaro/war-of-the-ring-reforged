@@ -12,6 +12,12 @@ public partial class Main
     private int _inspectedEnemy;
 
     private void PushKey(Key key) => GetViewport().PushInput(new InputEventKey { Keycode = key,Pressed = true },true);
+    /// <summary>A key with its physical position, as grid hotkeys read it.</summary>
+    private void PushGridKey(int slot)
+    {
+        var key = (Key)(long)CommandPanel.GridKeys[slot];
+        GetViewport().PushInput(new InputEventKey { Keycode = key,PhysicalKeycode = key,Pressed = true },true);
+    }
 
     private void Click(Vector2 point,MouseButton button = MouseButton.Left,bool ctrl = false,bool shift = false,bool doubleClick = false)
     {

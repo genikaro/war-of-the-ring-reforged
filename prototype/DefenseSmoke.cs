@@ -55,6 +55,8 @@ public partial class Main
                 if (_defenseStep == 7) { Click(PlacementPoint(_defenseCell)); break; }
                 if (_defenseStep == 9)
                 {
+                    // The foundation goes down once a worker walks to the spot.
+                    if (Tower() == null && _frames < 1200) { _defenseStep--; break; }
                     _defenseChecks["watchtower_placed_with_source_cost"] = Tower() is { Team: 0 }
                         && world.Economies[0].Food == _startState.Food+300-105 && world.Economies[0].Ore == _startState.Ore+300-105;
                     _defensePhase = 1; _defenseStep = 0;
@@ -63,15 +65,21 @@ public partial class Main
             case 1:
                 var tower = Tower();
                 if (tower is not { Complete: true }) { if (++_defenseStep > 1200) _defensePhase = 5; break; }
-                _defenseTower = tower.Id; world.InstantBuildTeams.Remove(0);
-                _defenseChecks["watchtower_has_its_source_defense"] = world.SiteDefense(tower) is { DpsMilli: 14000,RangeMm: 19000,RatesMilli: [1000,1200,1400,1600,1750] }
-                    && tower.Health == 400 && _projectileStyles.ContainsKey(SmokeTower);
-                _defenseChecks["tower_holds_fire_without_enemies"] = !world.Projectiles.Any(p => p.Source == tower.Id) && tower.DefenseTarget < 0;
-                _focus = PositionOf(tower.X,tower.Z); UpdateCamera();
-                // Fixture: the builders go home, so the swordsmen meet the tower rather than the crew beside it.
-                double away = Math.Atan2(citadel.Z-tower.Z,citadel.X-tower.X);
-                var home = world.Navigation.Cell(citadel.X+(int)(12000*Math.Cos(away)),citadel.Z+(int)(12000*Math.Sin(away)));
-                world.Enqueue(0,world.Units.Where(u => u.Team == 0 && u.Present && world.Workers.ContainsKey(u.Definition.Name)).Select(u => u.Id),OrderKind.Move,home);
+                var builders = world.Units.Where(u => u.Team == 0 && u.Present && world.Workers.ContainsKey(u.Definition.Name)).ToArray();
+                if (_defenseTower < 0)
+                {
+                    _defenseTower = tower.Id; world.InstantBuildTeams.Remove(0);
+                    _defenseChecks["watchtower_has_its_source_defense"] = world.SiteDefense(tower) is { DpsMilli: 14000,RangeMm: 19000,RatesMilli: [1000,1200,1400,1600,1750] }
+                        && tower.Health == 400 && _projectileStyles.ContainsKey(SmokeTower);
+                    _defenseChecks["tower_holds_fire_without_enemies"] = !world.Projectiles.Any(p => p.Source == tower.Id) && tower.DefenseTarget < 0;
+                    _focus = PositionOf(tower.X,tower.Z); UpdateCamera();
+                    // Fixture: the builders, who laid the tower beside it, go home, so the swordsmen meet the tower rather than the crew.
+                    double away = Math.Atan2(citadel.Z-tower.Z,citadel.X-tower.X);
+                    var home = world.Navigation.Cell(citadel.X+(int)(12000*Math.Cos(away)),citadel.Z+(int)(12000*Math.Sin(away)));
+                    world.Enqueue(0,builders.Select(u => u.Id),OrderKind.Move,home);
+                    _defenseStep = 0; break;
+                }
+                if (builders.Any(u => u.Order == OrderKind.Move) && ++_defenseStep < 600) break;
                 _defenseSquad = SpawnSiegeSquad(1,tower.Id,3).ToArray();
                 _defenseClaimed = world.Units.Where(u => u.Team == 0).Sum(u => u.KillCount);
                 _defensePhase = 2; _defenseStep = 0; break;

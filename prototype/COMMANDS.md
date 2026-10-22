@@ -37,7 +37,12 @@ training for a completed producer). Workers add a Build button that swaps the
 unit commands for a page of buildings (see [Build menu](SKIRMISH.md#build-16-build-menu-and-working-construction-clicks)), while neutral structures and inspected
 enemy/neutral units have empty palettes. With your Citadel selected, right-click
 sets its rally point and Backspace cancels the last queued unit, following the
-original manual; see [training](SKIRMISH.md#build-12-citadel-worker-training). Source-selectable food wells, ore piles and the Place of Power
+original manual; see [training](SKIRMISH.md#build-12-citadel-worker-training). A rally point on a Mill, a Foundry, a well or an
+ore pile sends each new worker straight to gathering there. The Build page and the
+training buttons use Warcraft III grid hotkeys: each button's key is its position
+on the four-by-three grid, rows **Q W E R**, **A S D F**, **Z X C V** (by key
+position, so any keyboard layout works), shown in the button's corner; see
+[build-30](SKIRMISH.md#build-30-owner-playtest-fixes). Source-selectable food wells, ore piles and the Place of Power
 show original portraits; resources show remaining stock. See [skirmish selection](SKIRMISH.md#build-9-neutral-inspection-and-command-palettes).
 
 A structure-only drag opens one inspector, choosing the visible structure whose
@@ -63,7 +68,7 @@ supports click recall. Portrait clicks select one unit; Shift-click removes it.
 | Command | Shortcut | Behavior |
 | --- | --- | --- |
 | Move | M, then left-click | Move in formation. Ignore combat and damage en route. Return to Idle on arrival. |
-| Attack | A, then left-click | Enemy: attack and pursue. Neutral/friendly: force attack. Ground: attack-move, engaging enemies and resuming the destination. |
+| Attack | A, then left-click | Enemy: attack and pursue. Neutral/friendly: force attack. Ground: attack-move, engaging enemies and resuming the destination; with no enemy unit to fight, it razes enemy buildings it passes (within 10 m), then marches on. |
 | Stop | S | Cancel the current order, swing and queued route immediately, then resume default idle guarding from the next tick. |
 | Hold Position | H | Stop at the current position and proactively attack within melee reach. Drop an out-of-range target; never chase or yield. |
 | Guard | G, then friendly unit or terrain | Follow and defend a friendly unit, or defend a fixed location; return after an engagement. |
@@ -84,7 +89,11 @@ destinations receive distinct formation slots. Stop, Hold Ground and unmodified
 replacement orders clear the queue. A Shift move from Idle/Stop/Hold begins
 immediately. Patrol and Guard are ongoing orders;
 orders queued after them wait while that order is active. Replacement cancels
-the waiting queue.
+the waiting queue. While selected units have orders queued, or while Shift is
+held, a flag (the original rally banner) stands at each order's point and a
+dashed line joins them in order: green for moves, red for attacks, gold for
+gathering and building. Queued and pending building placements show as
+translucent buildings until the foundation goes down.
 
 Right-click terrain and enemies retains contextual Move and Attack. During
 targeting, Esc or right-click cancels targeting without

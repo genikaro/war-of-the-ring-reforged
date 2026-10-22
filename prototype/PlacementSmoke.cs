@@ -7,6 +7,8 @@ public partial class Main
     private bool _placementSmoke;
     private readonly Dictionary<string,bool> _placementChecks = [];
     private int[] _placementCells = [];
+    /// <summary>Frames the script has waited for workers to walk to a foundation, which the frame numbers below skip.</summary>
+    private int _placementHold;
     private const string SmokeCamp = "BUILDING_G_WORKER_STRUCTURE",SmokeBarracks = "BUILDING_G_GONDORIAN_BARRACKS";
 
     /// <summary>Valid, visible, mutually distant cells near the player's Citadel, one per building.</summary>
@@ -36,7 +38,9 @@ public partial class Main
         var world = _world!; var citadel = world.StartStructures.First(s => s.Team == 0);
         void Pointer(Vector2 point) => GetViewport().PushInput(new InputEventMouseMotion {Position = point,GlobalPosition = point},true);
         ConstructionSite? Site(string building,int cell) => world.ConstructionSites.Values.FirstOrDefault(s => s.Building == building && world.Navigation.Cell(s.X,s.Z) == cell);
-        switch (_frames)
+        bool Hold(bool waiting) { if (waiting) _placementHold++; return waiting; }
+        int campSlot = Array.FindIndex(_constructionChoices,c => c.Building == SmokeCamp);
+        switch (_frames-_placementHold)
         {
             case 3: PushKey(Key.Key1); _focus = PositionOf(citadel.X,citadel.Z); UpdateCamera(); break;
             case 4:
@@ -68,18 +72,21 @@ public partial class Main
                 break;
             case 12: Click(PlacementPoint(_placementCells[0])); break;
             case 14:
-                var camp = Site(SmokeCamp,_placementCells[0]);
-                _placementChecks["camp_placed_with_source_cost"] = camp is { Team: 0,Complete: false } && world.Economies[0].Ore == 245 && world.Economies[0].Food == 115
-                    && world.Commands.Any(c => c.Kind == OrderKind.PlaceBuilding && c.Units.Length == 4) && !_constructionTargeting;
-                _placementChecks["runtime_footprint_blocks_ground"] = camp != null && world.Navigation.IsObstacleActive(camp.Obstacle)
-                    && !world.Navigation.CanStand(_placementCells[0]) && _structureViews.ContainsKey(camp.Obstacle);
+                _placementChecks["camp_waits_for_a_worker"] = Site(SmokeCamp,_placementCells[0]) == null && world.Economies[0].Ore == 325
+                    && world.Commands.Any(c => c.Kind == OrderKind.PlaceBuilding && c.Units.Length == 4) && !_constructionTargeting
+                    && world.Units.Where(u => u.Team == 0).All(u => u.Order == OrderKind.PlaceBuilding) && _foundationGhosts.Count == 1;
                 _placementChecks["placement_returns_to_unit_commands"] = !_buildMenu && _commands.BuildButton.Visible && _commands.ButtonFor(OrderKind.Attack).Visible;
                 Click(_commands.BuildButton.GetGlobalRect().GetCenter()); break;
             case 15: Click(_commands.ConstructionButton(SmokeBarracks).GetGlobalRect().GetCenter()); break;
             case 16: Click(PlacementPoint(_placementCells[1]),shift: true); break;
             case 18:
-                _placementChecks["shift_placement_queued_without_payment"] = Site(SmokeBarracks,_placementCells[1]) == null && world.Economies[0].Ore == 245
+                _placementChecks["shift_placement_queued_without_payment"] = Site(SmokeBarracks,_placementCells[1]) == null
+                    && world.Economies[0].Ore == (Site(SmokeCamp,_placementCells[0]) == null ? 325 : 245)
                     && world.Units.Where(u => u.Team == 0).All(u => u.OrderQueue.Any(o => o.Kind == OrderKind.PlaceBuilding));
+                // Camp, then Barracks: a line to each, and the queued Barracks shows as a ghost (placements need no flag).
+                _placementChecks["queued_placements_show_lines_and_ghosts"] = _hud.Waypoints.Count == 2 && WaypointFlagsShown == 0
+                    && _foundationGhosts.Keys.Any(k => k.Building == SmokeBarracks);
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-waypoints.png");
                 PushKey(Key.B); break;
             case 20: Click(_commands.ConstructionButton(SmokeCamp).GetGlobalRect().GetCenter()); break;
             case 22: PushKey(Key.Escape); break;
@@ -88,12 +95,32 @@ public partial class Main
                 PushKey(Key.Escape); break;
             case 26:
                 _placementChecks["second_escape_returns_to_unit_commands"] = !_buildMenu && _selected.Count == 4 && _commands.ButtonFor(OrderKind.Attack).Visible; break;
+            case 27: PushGridKey(0); break; // The Build button's grid key opens the page.
+            case 28:
+                _placementChecks["grid_key_opens_build_page"] = _buildMenu && _commands.BuildBackButton.Visible
+                    && _commands.BuildButton.GetChildren().OfType<Label>().Any(l => l.Text == CommandPanel.GridKeys[0].ToString());
+                PushGridKey(campSlot); break;
+            case 29:
+                _placementChecks["grid_key_arms_the_building_in_its_slot"] = _constructionTargeting && _constructionBuilding == SmokeCamp
+                    && _commands.ConstructionButton(SmokeCamp).GetChildren().OfType<Label>().Any(l => l.Text == CommandPanel.GridKeys[campSlot].ToString());
+                PushKey(Key.Escape); break;
+            case 30: PushKey(Key.Escape); break;
+            case 40:
+                if (Hold(Site(SmokeCamp,_placementCells[0]) == null)) break;
+                var camp = Site(SmokeCamp,_placementCells[0]);
+                _placementChecks["camp_laid_on_arrival_with_source_cost"] = camp is { Team: 0,Complete: false } && world.Economies[0].Ore == 245 && world.Economies[0].Food == 115
+                    && !_buildMenu && !_constructionTargeting;
+                _placementChecks["runtime_footprint_blocks_ground"] = camp != null && world.Navigation.IsObstacleActive(camp.Obstacle)
+                    && !world.Navigation.CanStand(_placementCells[0]) && _structureViews.ContainsKey(camp.Obstacle) && !_foundationGhosts.Keys.Any(k => k.Building == SmokeCamp);
+                break;
             case 800:
+                if (Hold(Site(SmokeBarracks,_placementCells[1]) == null)) break;
                 _placementChecks["camp_complete_adds_population"] = Site(SmokeCamp,_placementCells[0]) is { Complete: true,Health: 400 } && world.PopulationCapacity(0) == 21
                     && _commands.ResourceReadout.StartsWith("4/21 ");
                 _placementChecks["queued_barracks_placed_once"] = world.ConstructionSites.Values.Count(s => s.Building == SmokeBarracks) == 1
                     && Site(SmokeBarracks,_placementCells[1]) is { Team: 0 } && world.Economies[0].Ore == 140 && world.Economies[0].Food == 55; break;
             case 1500:
+                if (Hold(Site(SmokeBarracks,_placementCells[1]) is not { Complete: true })) break;
                 var barracks = Site(SmokeBarracks,_placementCells[1]);
                 _placementChecks["barracks_complete_with_source_health"] = barracks is { Complete: true,Health: 700 } && _constructionViews[barracks.Id].Stage == 3;
                 _focus = PositionOf(barracks!.X,barracks.Z); UpdateCamera(); Click(StructureSmokePoint(barracks.Obstacle)); break;
@@ -113,6 +140,7 @@ public partial class Main
             case 1506: Click(_commands.BuildButton.GetGlobalRect().GetCenter()); break;
             case 1507: Click(_commands.ConstructionButton(SmokeCamp).GetGlobalRect().GetCenter()); break;
             case 1509: Click(PlacementPoint(_placementCells[2])); break;
+            case 1512: Hold(Site(SmokeCamp,_placementCells[2]) == null); break;
             case 1513: PushKey(Key.S); break;
             case 1533:
                 var second = Site(SmokeCamp,_placementCells[2]);
@@ -146,8 +174,8 @@ public partial class Main
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-swordsman.png");
                 break;
             case 1906:
-                var report = new { build = BuildInfo.Label,checks = _placementChecks,passed = _placementChecks.Count == 23 && _placementChecks.Values.All(v => v),
-                    cells = _placementCells,sites = world.ConstructionSites.Values.Where(s => s.Building != null).Select(s => new { s.Id,s.Building,s.X,s.Z,s.Team,s.Complete,s.Health }),
+                var report = new { build = BuildInfo.Label,checks = _placementChecks,passed = _placementChecks.Count == 27 && _placementChecks.Values.All(v => v),
+                    cells = _placementCells,held_frames = _placementHold,sites = world.ConstructionSites.Values.Where(s => s.Building != null).Select(s => new { s.Id,s.Building,s.X,s.Z,s.Team,s.Complete,s.Health }),
                     bank = new { world.Economies[0].FoodMilli,world.Economies[0].OreMilli },population = new { used = world.PopulationUsed(0),capacity = world.PopulationCapacity(0) },
                     selected = _selected,display = new { _commands.DisplayedName,_commands.DisplayedHealth,_commands.SingleUnitDetailsVisible },
                     status = _status.Text,commands = world.Commands,digest = world.StateDigest() };

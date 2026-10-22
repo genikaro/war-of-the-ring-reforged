@@ -149,7 +149,7 @@ public sealed partial class SimWorld
     // position). Movement below this method still uses the normal body checks.
     private bool UpdateCombat(SimUnit unit)
     {
-        if (unit.Order is OrderKind.UseAbility or OrderKind.Gather or OrderKind.Build or OrderKind.AttackStructure) return false;
+        if (unit.Order is OrderKind.UseAbility or OrderKind.Gather or OrderKind.Build or OrderKind.PlaceBuilding or OrderKind.AttackStructure) return false;
         // Stop cancels the current action now; normal idle guarding resumes on
         // the following tick instead of starting another swing in this one.
         if (unit.LastStopTick==Tick) return true;
@@ -198,6 +198,7 @@ public sealed partial class SimWorld
         if (unit.Target < 0)
         {
             if (released) ResumeAttackMove(unit);
+            if (AttackMoveSiege(unit)) return true;
             if (unit.Order == OrderKind.Attack) { unit.Order = OrderKind.Idle; unit.AutoEngage = true; }
             return HoldsPosition(unit);
         }

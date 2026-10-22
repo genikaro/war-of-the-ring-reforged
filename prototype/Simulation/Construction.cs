@@ -64,7 +64,7 @@ public sealed partial class SimWorld
             if ((unit.Node < nav.GroundCount ? nav.ObstacleCoversGroundBody(site.Obstacle,unit.X,unit.Z) : nav.ObstacleCovers(site.Obstacle,unit.Node))
                 || unit.TransitNode >= 0 && (nav.ObstacleCoversMovement(site.Obstacle,unit.Node,unit.TransitNode)
                     || nav.ObstacleCoversGroundBody(site.Obstacle,nav.Center(unit.TransitNode).X,nav.Center(unit.TransitNode).Z)))
-            { reason = "Placement blocked by a unit"; return false; }
+            { reason = UnitBlocksFoundation; return false; }
         }
         reason = "Ready to build"; return true;
     }
@@ -93,22 +93,49 @@ public sealed partial class SimWorld
             else ready.Add(unit);
         }
         if (ready.Count == 0) return;
-        if (site.Team < 0)
-        {
-            if (!CanStartConstruction(command.Team,site.Id,out _)) return;
-            if (!ready.Any(u => EconomyRouteCandidates(u,SiteArea(site))
-                .Any(n => !Nav(u).ObstacleCovers(site.Obstacle,n)
-                    && !Nav(u).ObstacleCoversGroundBody(site.Obstacle,Nav(u).Center(n).X,Nav(u).Center(n).Z)))) return;
-            var rules = SiteRules(site); var bank = Economies[command.Team];
-            bank.FoodMilli -= rules.FoodCost*1000L; bank.OreMilli -= rules.OreCost*1000L;
-            site.Team = command.Team; site.Health = Math.Max(1,(int)((long)rules.MaxHealth*rules.InitialHealthPpm/1_000_000));
-            Navigation.SetObstacle(site.Obstacle,true);
-        }
+        // As with open ground, the order only checks the site could be claimed; a worker beside it claims and pays.
+        if (site.Team < 0 && (!CanStartConstruction(command.Team,site.Id,out string reason) && reason != UnitBlocksFoundation
+            || !ready.Any(u => EconomyRouteCandidates(u,SiteArea(site),n => ClaimSpot(u,site,n)).Any()))) return;
         foreach (var unit in ready)
         {
             Apply(command with { Units = [unit.Id],Kind = OrderKind.Stop,Queued = false },activating);
             unit.Order = OrderKind.Build; unit.OrderTarget = site.Id; unit.GatherPlanTick = -1;
         }
+        foreach (var unit in ready.TakeWhile(_ => site.Team < 0)) ApproachConstruction(unit);
+    }
+
+    /// <summary>A cell a worker can claim a Mill or Foundry site from: outside the foundation it will raise.</summary>
+    private bool ClaimSpot(SimUnit unit,ConstructionSite site,int node)
+    {
+        var nav = Nav(unit); var (x,z) = nav.Center(node);
+        return !nav.ObstacleCovers(site.Obstacle,node) && !nav.ObstacleCoversGroundBody(site.Obstacle,x,z);
+    }
+
+    /// <summary>A worker sent to raise a Mill or Foundry claims, and pays for, the site once it stands beside it.</summary>
+    private void ApproachClaim(SimUnit unit,ConstructionSite site)
+    {
+        unit.Target = -1; unit.AutoEngage = false;
+        if (unit.Goal >= 0 || unit.TransitNode >= 0 || unit.YieldFor >= 0) return;
+        var area = SiteArea(site);
+        if (!Reaches(area,unit.X,unit.Z) || Nav(unit).ObstacleCoversGroundBody(site.Obstacle,unit.X,unit.Z))
+        {
+            if (unit.GatherPlanTick >= 0 && Tick-unit.GatherPlanTick < TicksPerSecond) return;
+            unit.GatherPlanTick = Tick;
+            if (PlanEconomyRoute(unit,area,allowed: n => ClaimSpot(unit,site,n))) unit.PlacementWaitTick = -1;
+            else Persevere(unit,"The building site cannot be reached");
+            return;
+        }
+        if (!CanStartConstruction(unit.Team,site.Id,out string reason))
+        {
+            var (x,z) = SitePosition(site);
+            AwaitClearGround(unit,reason,x,z,area.RadiusMm,(other,px,pz) => Nav(other).ObstacleCoversGroundBody(site.Obstacle,px,pz));
+            return;
+        }
+        var rules = SiteRules(site); var bank = Economies[unit.Team];
+        bank.FoodMilli -= rules.FoodCost*1000L; bank.OreMilli -= rules.OreCost*1000L;
+        site.Team = unit.Team; site.Health = Math.Max(1,(int)((long)rules.MaxHealth*rules.InitialHealthPpm/1_000_000));
+        Navigation.SetObstacle(site.Obstacle,true);
+        unit.PlacementWaitTick = -1;
     }
 
     private void CancelConstruction(SimCommand command)
@@ -133,7 +160,9 @@ public sealed partial class SimWorld
 
     private void ApproachConstruction(SimUnit unit)
     {
+        ApproachPlacement(unit);
         if (unit.Order != OrderKind.Build || !ConstructionSites.TryGetValue(unit.OrderTarget,out var site)) return;
+        if (site.Team < 0) { ApproachClaim(unit,site); return; }
         if (site.Team != unit.Team || (site.Complete && !NeedsRepair(site))) { unit.Order = OrderKind.Idle; return; }
         unit.Target = -1; unit.AutoEngage = false;
         var area = SiteArea(site);

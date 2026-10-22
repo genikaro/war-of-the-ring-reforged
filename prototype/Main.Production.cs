@@ -35,7 +35,8 @@ public partial class Main
             world.Producers.Add(id,new(id,team,(int)Math.Round(at[0].GetDouble()*1000),(int)Math.Round(at[1].GetDouble()*1000),
                 world.Units.First(u => u.Team == team).Node,producer.GetProperty("units").EnumerateArray().Select(u => u.GetString()!).ToArray()));
         }
-        _rallyBanner = LoadGlb(production.GetProperty("rally_banner").GetString()!,_teamColors[0]);
+        _waypointFlagFile = production.GetProperty("rally_banner").GetString()!;
+        _rallyBanner = LoadGlb(_waypointFlagFile,_teamColors[0]);
         _rallyBanner.Visible = false; AddChild(_rallyBanner);
     }
 
@@ -44,7 +45,7 @@ public partial class Main
     private void ChooseTraining(int slot)
     {
         if (SelectedProducer() is not { } producer) return;
-        if (!_world!.CanTrain(PlayerTeam,producer.Id,slot,out string reason)) { _status.Text = reason; return; }
+        if (!_world!.CanTrain(PlayerTeam,producer.Id,slot,out string reason)) { Notify(reason); return; }
         _world.Enqueue(PlayerTeam,[],OrderKind.Train,slot,producer.Id);
         _status.Text = "Train "+_world.ProductionRules[producer.Units[slot]].DisplayName+(_paused ? " queued (paused)" : " order issued");
     }
@@ -60,6 +61,14 @@ public partial class Main
     private bool TrySetRallyPoint(Vector2 mouse)
     {
         if (SelectedProducer() is not { } producer) return false;
+        // A well, an ore pile, or the Mill or Foundry standing on one: new workers go straight to gathering.
+        if (StructureAt(mouse) is { } structure && _structureViews[structure.Id].Resource is int resource and >= 0)
+        {
+            _world!.Enqueue(PlayerTeam,[],OrderKind.SetRallyResource,resource,producer.Id);
+            _status.Text = "Rally point set on "+_structureDefinitions[_structureViews[structure.Id].Type].GetProperty("display_name").GetString()+(_paused ? " (paused)" : "");
+            _hud.Destination = mouse; _hud.DestinationTime = 0.7f;
+            return true;
+        }
         Vector3 origin = _camera.ProjectRayOrigin(mouse),direction = _camera.ProjectRayNormal(mouse);
         var hit = _picker.Pick(new(-origin.X,origin.Y,origin.Z),new(-direction.X,direction.Y,direction.Z));
         int cell = hit == null ? -1 : _world!.Navigation.Nearest(hit.Node);

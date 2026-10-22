@@ -65,6 +65,7 @@ EconomyChecks.Run(Check);
 ConstructionChecks.Run(Check);
 ProductionChecks.Run(Check);
 PlacementChecks.Run(Check);
+SiegeChecks.Run(Check);
 DefenseChecks.Run(Check);
 OutcomeChecks.Run(Check);
 AiChecks.Run(Check);

@@ -30,6 +30,17 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-30 (Oct 22):** five fixes from an owner skirmish, Warcraft III style.
+Attack-move razes enemy buildings it passes (units first) and then marches on. A
+building ordered far away goes down, and is paid for, only when a worker reaches
+its spot; a ghost marks pending and queued placements, the player's idle units
+step aside, and a worker that can no longer lay it says why. The Build page and
+training buttons take grid hotkeys (QWER/ASDF/ZXCV by key position, letters on
+the buttons). Queued orders show a dashed line and the original gather-point
+flags. A Citadel rally point on a Mill, Foundry, well or ore pile sends new
+workers straight to gathering.
+See [skirmish notes](../prototype/SKIRMISH.md#build-30-owner-playtest-fixes).
+
 **Build-29 (Oct 22):** pathfinding performance, first pass, after an owner report
 of frame drops in large matches. `-Profile` prints where simulation and frame time
 go. A building laid or razed no longer wipes the pathfinder's edge caches across

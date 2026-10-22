@@ -10,6 +10,8 @@ public partial class Main
     private long _dwarfVictimHealth;
     private int _dwarfCitadelHealth = -1,_dwarfSiegeAimSamples;
     private bool _dwarfSiegeAimed = true;
+    /// <summary>Frames spent waiting for the workers to reach the Hall's spot, which the frame numbers below skip.</summary>
+    private int _dwarfHold;
     private const string SmokeDwarfHall = "BUILDING_G_DWARF_BARRACKS",SmokeAxethrower = "UNIT_G_DWARVEN_AXETHROWER";
 
     private void DwarfHallSmokeInput()
@@ -18,7 +20,8 @@ public partial class Main
         ConstructionSite? Hall() => world.ConstructionSites.Values.FirstOrDefault(s => s.Building == SmokeDwarfHall);
         if (_dwarfTrained >= 0 && !_dwarfCaptured && _capture != "" && world.Projectiles.Count > 0) { _dwarfCaptured = true; _ = CaptureFrame(false); }
         if (_dwarfCitadelHealth >= 0) SampleSiegeAxes(world);
-        switch (_frames)
+        bool Hold(bool waiting) { if (waiting) _dwarfHold++; return waiting; }
+        switch (_frames-_dwarfHold)
         {
             case 2:
                 // Test fixture: the start bank cannot afford a Dwarf Hall plus an Axethrower. Everything after this uses UI input.
@@ -28,8 +31,10 @@ public partial class Main
             case 6: _dwarfCell = VisiblePlacementCells(SmokeDwarfHall)[0]; Click(_commands.ConstructionButton(SmokeDwarfHall).GetGlobalRect().GetCenter()); break;
             case 8: Click(PlacementPoint(_dwarfCell)); break;
             case 10:
+                if (Hold(Hall() == null)) break;
                 _dwarfChecks["dwarf_hall_placed_with_source_cost"] = Hall() is { Team: 0,Complete: false } && world.Economies[0].Food == 335 && world.Economies[0].Ore == 525; break;
             case 760:
+                if (Hold(Hall() is not { Complete: true })) break;
                 var hall = Hall();
                 _dwarfChecks["dwarf_hall_complete_with_source_health"] = hall is { Complete: true,Health: 750 };
                 _focus = PositionOf(hall!.X,hall.Z); UpdateCamera(); Click(StructureSmokePoint(hall.Obstacle)); break;

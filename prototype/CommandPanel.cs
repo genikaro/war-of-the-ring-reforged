@@ -46,6 +46,23 @@ public partial class CommandPanel : Control
     public float EffectiveScale { get; private set; }
     public bool ManageCursor { get; set; } = true;
 
+    /// <summary>Grid hotkeys (Warcraft III's grid layout): the four-by-three action grid maps row by row onto the keys
+    /// under the left hand, so each building to place and unit to train is the key in its button's position.</summary>
+    public const string GridKeys = "QWERASDFZXCV";
+    public const int BackSlot = 11;
+    public static int GridSlot(Key physical) => physical is >= Key.A and <= Key.Z ? GridKeys.IndexOf((char)(long)physical) : -1;
+    private static void AddHotkey(Button button,string key)
+    {
+        var label = Text(key,new(35,34),new(16,18),13); label.HorizontalAlignment = HorizontalAlignment.Right; button.AddChild(label);
+    }
+
+    private string _notice = "";
+    private ulong _noticeUntil;
+    /// <summary>A refusal or failure shown above the console for a few seconds, like Warcraft's error text.</summary>
+    public void ShowNotice(string text) { _notice = text; _noticeUntil = Time.GetTicksMsec()+3000; }
+    private bool NoticeShowing => Time.GetTicksMsec() < _noticeUntil;
+    public string DisplayedHint => _hint.Text;
+
     public static readonly (OrderKind Kind,string Label,string Key,string Tip,string Icon)[] Commands = [
         (OrderKind.Attack,"Attack","A","Enemy: attack and pursue. Neutral/friendly: force attack. Ground: attack-move to the destination.","console_g_action_forceattack"),
         (OrderKind.HoldGround,"Hold Position","H","Hold this position and fight within reach without chasing.","console_g_action_standground"),
@@ -239,7 +256,7 @@ public partial class CommandPanel : Control
     public BattleMinimap Minimap => _map;
     public Texture2D? Art(string name) => _art.GetValueOrDefault(name);
 
-    public static string OrderName(OrderKind kind) => kind switch { OrderKind.AttackMove => "Attack-move",OrderKind.HoldGround => "Hold Position",OrderKind.ForceAttack => "Force Attack",OrderKind.ToggleWalkRun => "Walk / Run",OrderKind.UseAbility => "Greater Kingsfoil",_ => kind.ToString() };
+    public static string OrderName(OrderKind kind) => kind switch { OrderKind.AttackMove => "Attack-move",OrderKind.HoldGround => "Hold Position",OrderKind.ForceAttack => "Force Attack",OrderKind.ToggleWalkRun => "Walk / Run",OrderKind.UseAbility => "Greater Kingsfoil",OrderKind.PlaceBuilding => "Build",_ => kind.ToString() };
     public static string PortraitName(string name) => name switch { "Aragorn" => "Portrait_G_Aragorn","Frodo" => "Portrait_G_Frodo","Elf Knight" or "Elven Knight" => "Portrait_G_Elven_Knight","Elven Archer" => "Portrait_G_Elven_Archer","Human Worker" => "Portrait_G_Human_Worker","Gondor Swordsman" => "Portrait_G_Gondor_Swordsman","Dwarf Axethrower" => "Portrait_G_Dwarven_Axethrower",_ => "Portrait_E_Uruk_Hai" };
 
     public void Refresh(IReadOnlyList<SimUnit> units,Func<int,string> name,OrderKind? pending,bool paused,IReadOnlyList<int[]>? groups = null,int allies = 0,int enemies = 0,bool walking = false,int tick = 0,int pendingAbilitySlot = -1)
@@ -313,7 +330,7 @@ public partial class CommandPanel : Control
             _groups[slot].SetPressedNoSignal(available && groups[slot].SequenceEqual(units.Select(u => u.Id)));
             _groups[slot].TooltipText = $"Group {number}: {groups[slot].Length} units\nCtrl+{number}: assign · Shift+{number}: add selection\n{number}: recall · double-tap: center camera";
         }
-        _hint.Text = pending == OrderKind.UseAbility ? "Greater Kingsfoil: choose an injured friendly unit or Aragorn · Esc/right-click cancels"
+        _hint.Text = NoticeShowing ? _notice : pending == OrderKind.UseAbility ? "Greater Kingsfoil: choose an injured friendly unit or Aragorn · Esc/right-click cancels"
             : pending == OrderKind.Attack ? "Attack: enemy / neutral / friendly / ground · Shift-click queues · Esc/right-click cancels"
             : pending != null ? OrderName(pending.Value)+": choose a target · Shift-click queues · Esc/right-click cancels" : paused ? "Paused · orders will apply when play resumes" : "";
         _map.QueueRedraw();

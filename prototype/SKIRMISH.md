@@ -1132,3 +1132,74 @@ the corpse rule are kept in the roadmap's [performance backlog](../tools/Roadmap
 
 Validation: 760 simulation and 34 worker-cache checks and all skirmish and Helm's
 Deep smokes pass; the observer smoke's final digest matches build-28's.
+
+## Build-30: owner playtest fixes
+
+Five issues from an owner skirmish, each following Warcraft III where the
+original game is silent or clunky.
+
+**Attack-move razes buildings.** An attack-move fought only units and walked past
+enemy buildings. With no enemy unit to fight, it now takes the nearest enemy
+building within the 10 m units are acquired at (measured to the footprint), razes
+it with the ordinary siege approach and strikes, and resumes its march to its own
+destination when the building falls. Units always come first: one coming into
+range drops the building, and after the fight the attack-move finds it again. A
+building it cannot reach is passed by. The order stays an attack-move throughout
+(`SimUnit.SiteTarget`), so its queue, destination and formation slot are kept;
+a plain move still ignores buildings. The bots' assaults use attack-move, so they
+now also raze what lies on their way (a Watchtower, a Mill) instead of only their
+chosen target.
+
+**Foundations go down when a worker gets there.** Ordering a building spent the
+money and raised the foundation at once, wherever the workers were, so a bot's
+Mill appeared across the map long before its builders. The order now only checks
+that the building could go there and that a worker can reach a spot beside it;
+the workers walk there (`OrderKind.PlaceBuilding` for open ground, a Build order
+on the unclaimed site for a Mill or Foundry), and the first to stand beside the
+footprint lays it and pays. Workers bound for the same spot join that foundation.
+A translucent ghost of the building marks every pending or queued placement. On
+arrival the usual rules apply again: if the money was spent meanwhile, or the
+ground is no longer valid, the worker gives up and the console says why
+("Construction abandoned: Insufficient resources"). Units standing on the spot no
+longer block the order, only the laying: the player's own idle units step aside,
+and the worker waits up to 10 s for anyone else. The bots reserve the cost while
+their crew walks and give up a crew that cannot lay its building in 30 s.
+
+**Grid hotkeys.** The Build page and the training buttons take Warcraft III's grid
+layout: a button's key is its place on the four-by-three grid, rows Q W E R,
+A S D F, Z X C V, read by key position so other keyboard layouts work, and the
+letter is drawn in the button's corner. The Build button is Q (B still works),
+Back and a foundation's Cancel are V (Back also Esc). The unit commands keep their
+letters (A, H, G, T, S, M). A key for an unaffordable building says why above the
+console instead of doing nothing.
+
+**Waypoint flags.** With units selected that have orders queued, or while Shift is
+held, a dashed line runs from the units through each order's point in turn
+(green for moves, red for attacks, gold for gathering and building), and the
+original gather-point banner (`MODEL_G_GATHER_POINT`, the rally flag) stands at
+each point on open ground. Targets need no flag: the unit, building or resource
+marks the point, and placements show their ghost. Offscreen captures now include
+the lines.
+
+**Rally on a Mill or Foundry.** With the Citadel selected, right-clicking a Mill,
+a Foundry, a well or an ore pile sets the rally point on that resource
+(`OrderKind.SetRallyResource`): each new worker starts gathering there, and other
+units walk to it. A rally point on the ground replaces it.
+
+Validation: 17 new synthetic checks (attack-move razing a building, fighting the
+units beside it first and resuming its march, replayed identically; a plain move
+walking past; a far placement paying nothing until a worker arrives; joining a
+foundation; giving it up when the money is gone; idle units stepping aside; a
+Mill claimed on arrival; rally on a resource). 777 simulation and 34
+worker-cache checks pass. `-PlacementSmoke` gains four cases (27: the camp waits
+for a worker, queued placements show lines and ghosts, the grid keys open the
+page and arm the building in their slot), `-ConstructionSmoke` three (31: the
+Mill waits for a worker; with the Citadel selected, a right-click on the Mill and
+the Q key train a worker who then gathers there) and `-MinimapSmoke` one (16:
+Shift-queued orders show two flags and two lines). Frame-scripted smokes now hold
+their script while workers walk to a foundation. All other skirmish, AI, observer
+and Helm's Deep smokes pass, except `-FormationSmoke`'s `attack_move_arrived`,
+which fails the same way on build-29. The default bot's assault now leaves at 3:50
+and razes a passive player at 5:10 (3:53 and 5:12 in build-28). Bots razing
+buildings on their way changes the observer match: Aragorn now beats Gimli at
+28:15 (Gimli won at 30:51).

@@ -99,6 +99,15 @@ public static class ProductionChecks
         rally.Enqueue(0,[],OrderKind.SetRallyPoint,-1,Producer); rally.Step();
         check(rally.Producers[Producer].RallyCell == -1,"the rally point can be cleared");
 
+        var harvest = Fixture(); harvest.Workers.Add("probe",new(10,9));
+        harvest.Resources.Add(7,new(7,ResourceKind.Ore,25500,8500,100,500,550000,2000));
+        harvest.Enqueue(0,[],OrderKind.SetRallyResource,7,Producer); Train(harvest); Step(harvest,240);
+        var miner = harvest.Units[^1];
+        check(harvest.Producers[Producer].RallyResource == 7 && harvest.Producers[Producer].RallyCell >= 0 && harvest.Units.Count == 2
+            && miner.Order == OrderKind.Gather && miner.OrderTarget == 7,"a rally point on a resource sends each new worker to gather there");
+        harvest.Enqueue(0,[],OrderKind.SetRallyPoint,rallyCell,Producer); harvest.Step();
+        check(harvest.Producers[Producer].RallyResource == -1 && harvest.Producers[Producer].RallyCell == rallyCell,"a ground rally point replaces the resource");
+
         var large = Fixture(); var big = UnitDefinition.Probe with { Name = "big",BodyRadiusMm = 900 };
         large.Rules.Units.Add("big",big); large.ProductionRules.Add("big",new("big","Big",35,0,2,20));
         large.Producers.Remove(Producer); large.Producers.Add(Producer,new(Producer,0,10500,8500,2*30,["big"]));

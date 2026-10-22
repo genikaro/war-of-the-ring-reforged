@@ -83,6 +83,12 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public bool AttackMoveReturning { get; internal set; }
     public int AttackMoveIgnoredTarget { get; internal set; } = -1;
     public int AttackMoveIgnoreUntil { get; internal set; }
+    /// <summary>An enemy building this attack-move came across and is razing, or -1; and one it could not reach.</summary>
+    public int SiteTarget { get; internal set; } = -1;
+    public int AttackMoveIgnoredSite { get; internal set; } = -1;
+    /// <summary>Where a worker walking to lay a foundation puts it, and since when it has waited there for units to clear.</summary>
+    public int PlacementCell { get; internal set; } = -1;
+    public int PlacementWaitTick { get; internal set; } = -1;
     public List<PendingOrder> OrderQueue { get; } = [];
     public int PatrolStart { get; internal set; } = -1;
     public int PatrolEnd { get; internal set; } = -1;
@@ -180,7 +186,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         if (command.Kind == OrderKind.CancelConstruction) { CancelConstruction(command); return; }
         if (command.Kind == OrderKind.Train) { BeginTraining(command); return; }
         if (command.Kind == OrderKind.CancelTraining) { CancelTraining(command); return; }
-        if (command.Kind == OrderKind.SetRallyPoint) { SetRallyPoint(command); return; }
+        if (command.Kind is OrderKind.SetRallyPoint or OrderKind.SetRallyResource) { SetRallyPoint(command); return; }
         if (command.Kind == OrderKind.Gather) { BeginGather(command,activating); return; }
         if (command.Kind == OrderKind.AttackStructure) { BeginSiege(command,activating); return; }
         if (command.Kind == OrderKind.UseAbility) { BeginAbility(command); return; }
@@ -251,6 +257,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             unit.IdleGuardOrigin=-1; unit.IdleGuardReturning=false;
             unit.AttackMoveOrigin=unit.AttackMoveForward=unit.AttackMoveRouteStart=-1; unit.AttackMoveReturning=false;
             unit.AttackMoveIgnoredTarget=-1; unit.AttackMoveIgnoreUntil=0;
+            unit.SiteTarget=unit.AttackMoveIgnoredSite=unit.PlacementCell=unit.PlacementWaitTick=-1;
             unit.OrderTarget = command.Kind is OrderKind.Attack or OrderKind.ForceAttack or OrderKind.Guard ? command.Target : -1;
             unit.Target = command.Kind == OrderKind.Guard ? -1 : unit.OrderTarget;
             unit.PatrolStart = command.Kind == OrderKind.Patrol ? unit.Node : -1;
@@ -297,7 +304,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         // Exchange slots only within the same explicit order, and only when
         // the parked unit has a clear route to the unfinished slot.
         foreach (var parked in Units.Where(u => waiting.YieldFor < 0 && u.Id != waiting.Id && u.Team == waiting.Team && u.Present
-            && u.Goal < 0 && u.Target < 0 && u.YieldFor < 0 && u.OrderSequence == waiting.OrderSequence
+            && u.Goal < 0 && u.Target < 0 && u.SiteTarget < 0 && u.YieldFor < 0 && u.OrderSequence == waiting.OrderSequence
             && u.OrderSequence >= 0 && route.Contains(u.Node) && !Units.Any(o => o.Goal == u.Node)))
         {
             var occupied = OccupiedNodes(parked.Id);
@@ -415,11 +422,11 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     // advancing early arrivals keeps a dense perimeter from sealing its center.
     private bool AdvanceWideFormation(SimUnit waiting)
     {
-        if (waiting.Order is not (OrderKind.Move or OrderKind.AttackMove) || waiting.Target >= 0 || waiting.AttackMoveReturning || waiting.Goal < 0 || waiting.YieldFor >= 0) return false;
+        if (waiting.Order is not (OrderKind.Move or OrderKind.AttackMove) || waiting.Target >= 0 || waiting.SiteTarget >= 0 || waiting.AttackMoveReturning || waiting.Goal < 0 || waiting.YieldFor >= 0) return false;
         var (gx,gz) = Navigation.Center(waiting.Goal);
         long remaining = DistanceSquared(waiting.X,waiting.Z,gx,gz);
         foreach (var other in Units.Where(u => u.Id != waiting.Id && u.Team == waiting.Team && u.Present
-            && u.Goal >= 0 && u.Target < 0 && !u.AttackMoveReturning && u.Order == waiting.Order && u.FreeMovement && u.YieldFor < 0
+            && u.Goal >= 0 && u.Target < 0 && u.SiteTarget < 0 && !u.AttackMoveReturning && u.Order == waiting.Order && u.FreeMovement && u.YieldFor < 0
             && u.OrderSequence == waiting.OrderSequence).OrderBy(u => u.Id))
         {
             var (ox,oz) = Navigation.Center(other.Goal);
@@ -435,7 +442,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             return true;
         }
         foreach (var parked in Units.Where(u => u.Id != waiting.Id && u.Team == waiting.Team && u.Present
-            && u.Goal < 0 && u.Target < 0 && !u.AttackMoveReturning && u.OrderSequence == waiting.OrderSequence
+            && u.Goal < 0 && u.Target < 0 && u.SiteTarget < 0 && !u.AttackMoveReturning && u.OrderSequence == waiting.OrderSequence
             && u.OrderSequence >= 0 && u.TransitNode < 0).OrderBy(u => DistanceSquared(waiting.X,waiting.Z,u.X,u.Z)).ThenBy(u => u.Id))
         {
             if (!FreeGround(parked.Node) || DistanceSquared(parked.X,parked.Z,gx,gz) >= remaining
@@ -521,6 +528,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         CombatEvents.Clear();
         AbilityEvents.Clear();
         DestroyedSites.Clear();
+        FoundationFailures.Clear();
         NewlyDefeated.Clear();
         var actions = Commands.Where(c => c.Tick == Tick).Select(c => (c.Sequence, Action: (Action)(() => Apply(c))))
             .Concat(ObstacleCommands.Where(c => c.Tick == Tick)
@@ -569,7 +577,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 CancelStrike(unit);
                 unit.Order = OrderKind.Idle; unit.OrderDestination = unit.OrderTarget = -1;
                 unit.OrderQueue.Clear();
-                unit.Target = unit.Goal = unit.AttackNode = unit.CombatTarget = -1;
+                unit.Target = unit.Goal = unit.AttackNode = unit.CombatTarget = unit.SiteTarget = unit.PlacementCell = -1;
                 unit.AutoEngage = false; unit.Path.Clear(); continue;
             }
             if (unit.InsideSite >= 0) { UpdateGather(unit); continue; }

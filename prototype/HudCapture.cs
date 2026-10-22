@@ -15,6 +15,11 @@ public partial class Main
             VOffset = _camera.VOffset,Current = true }; viewport.AddChild(camera);
         var canvas = new CanvasLayer(); viewport.AddChild(canvas);
         var root = new Control { Size = _captureResolution,MouseFilter = Control.MouseFilterEnum.Ignore }; canvas.AddChild(root);
+        // Waypoint lines were projected for the window; rescale them to the capture.
+        var stretch = (Vector2)_captureResolution/GetViewport().GetVisibleRect().Size;
+        var overlay = new SandboxHud { Size = _captureResolution,MouseFilter = Control.MouseFilterEnum.Ignore,Visible = _hud.Visible }; root.AddChild(overlay);
+        overlay.Waypoints.AddRange(_hud.Waypoints.Select(w => (w.From*stretch,w.To*stretch,w.Color)));
+        overlay.WaypointMarks.AddRange(_hud.WaypointMarks.Select(m => m*stretch));
         root.AddChild(new BuildOverlay { Visible = _hud.Visible });
         var hud = new CommandPanel { ManageCursor = false,BuildMenuOpen = _buildMenu }; root.AddChild(hud); hud.LoadArtwork(_cache,_world!);
         hud.Visible = _hud.Visible;

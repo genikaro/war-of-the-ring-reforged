@@ -14,7 +14,8 @@ public partial class Main
     private (string Building,string Portrait)[] _constructionChoices = [];
     private readonly Dictionary<int,BuildingVisual> _constructionViews = [];
     private Node3D? _constructionPreview;
-    private StandardMaterial3D? _previewMaterial;
+    private StandardMaterial3D? _previewMaterial,_ghostMaterial;
+    private readonly Dictionary<(string Building,int X,int Z),Node3D> _foundationGhosts = [];
     private bool _previewValid;
     private sealed class BuildingVisual(Node3D root,UnitAppearance appearance,AnimationPlayer? player,string[] clips,HealthBar bar)
     {
@@ -156,12 +157,48 @@ public partial class Main
         _constructionTargeting = true; _constructionBuilding = building;
         var rules = _world!.BuildingRules.GetValueOrDefault(building) ?? _world.ConstructionRules[ResourceBuildingKind(building)!.Value];
         _status.Text = "Build "+rules.DisplayName+(ResourceBuildingKind(building) != null ? ": choose a resource site" : ": choose open ground near your buildings");
-        _constructionPreview = LoadGlb(_constructionFiles[building],_teamColors[0]); AddChild(_constructionPreview);
+        _previewMaterial = GhostMaterial(new Color(.3f,1,.3f,.45f));
+        _constructionPreview = BuildingGhost(building,_previewMaterial);
+    }
+
+    private static StandardMaterial3D GhostMaterial(Color color) => new() { Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+        ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,AlbedoColor = color };
+
+    /// <summary>The finished building drawn in one translucent colour.</summary>
+    private Node3D BuildingGhost(string building,StandardMaterial3D material)
+    {
+        var ghost = LoadGlb(_constructionFiles[building],_teamColors[0]); AddChild(ghost);
         var data = UnitAppearance.Read(System.IO.Path.Combine(_cache,_constructionFiles[building]));
-        new UnitAppearance(_constructionPreview,data).Apply(BuildingStateClips(data)[3],0);
-        _previewMaterial = new StandardMaterial3D { Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,AlbedoColor = new Color(.3f,1,.3f,.45f) };
-        foreach (var mesh in Descendants(_constructionPreview).OfType<MeshInstance3D>()) mesh.MaterialOverride = _previewMaterial;
+        new UnitAppearance(ghost,data).Apply(BuildingStateClips(data)[3],0);
+        foreach (var mesh in Descendants(ghost).OfType<MeshInstance3D>()) mesh.MaterialOverride = material;
+        return ghost;
+    }
+
+    /// <summary>Translucent buildings where the player's workers are headed to lay a foundation, queued placements
+    /// included, so a building ordered far away shows where it will stand until the foundation replaces it.</summary>
+    private void PresentFoundationGhosts()
+    {
+        var world = _world!;
+        var wanted = new HashSet<(string Building,int X,int Z)>();
+        foreach (var unit in world.Units.Where(u => u.Team == PlayerTeam && u.Health > 0))
+            foreach (var (kind,cell,target) in unit.OrderQueue.Select(o => (o.Kind,o.Cell,o.Target)).Prepend((unit.Order,unit.PlacementCell,unit.OrderTarget)))
+            {
+                if (kind == OrderKind.PlaceBuilding && cell >= 0 && target >= 0 && target < world.PlaceableBuildings.Count)
+                {
+                    var (x,z) = world.Navigation.Center(cell);
+                    if (!world.ConstructionSites.Values.Any(s => s.Team == PlayerTeam && s.Building != null && s.X == x && s.Z == z))
+                        wanted.Add((world.PlaceableBuildings[target],x,z));
+                }
+                else if (kind == OrderKind.Build && world.ConstructionSites.TryGetValue(target,out var site) && site.Team < 0)
+                { var (x,z) = world.SitePosition(site); wanted.Add((world.SiteRules(site).Name,x,z)); }
+            }
+        foreach (var key in _foundationGhosts.Keys.Where(k => !wanted.Contains(k)).ToArray()) { _foundationGhosts.Remove(key,out var old); old!.QueueFree(); }
+        _ghostMaterial ??= GhostMaterial(new Color(.6f,.85f,1,.35f));
+        foreach (var key in wanted.Where(k => !_foundationGhosts.ContainsKey(k)))
+        {
+            var ghost = BuildingGhost(key.Building,_ghostMaterial); ghost.Position = PositionOf(key.X,key.Z);
+            _foundationGhosts.Add(key,ghost);
+        }
     }
 
     /// <summary>Source construction thirds (states 19/17/18) followed by the healthy state 0 of a restored building model.</summary>
@@ -184,16 +221,16 @@ public partial class Main
         if (_constructionBuilding is { } building && ResourceBuildingKind(building) == null)
         {
             int cell = PlacementCellAt(mouse);
-            if (!_world!.CanPlaceBuilding(PlayerTeam,building,cell,out string blocked)) { _status.Text = blocked; return; }
+            if (!_world!.CanPlaceBuilding(PlayerTeam,building,cell,out string blocked,ignoreUnits: true)) { Notify(blocked); return; }
             _world.Enqueue(PlayerTeam,SelectedWorkers(),OrderKind.PlaceBuilding,cell,_world.PlaceableBuildings.IndexOf(building),queued);
             _status.Text = "Build "+_world.BuildingRules[building].DisplayName+(_paused ? " queued (paused)" : " order issued");
             ClearConstructionTargeting(); _buildMenu = false; return;
         }
         var source = ResourceAt(mouse);
-        if (source == null || _constructionBuilding is not { } resourceBuilding) { _status.Text = "Choose a resource site"; return; }
+        if (source == null || _constructionBuilding is not { } resourceBuilding) { Notify("Choose a resource site"); return; }
         var kind = ResourceBuildingKind(resourceBuilding)!.Value;
-        if (source.Kind != kind) { _status.Text = kind == ResourceKind.Food ? "A Mill requires a food well" : "A Foundry requires an ore pile"; return; }
-        if (!_world!.CanStartConstruction(PlayerTeam,source.Id,out string reason)) { _status.Text = reason; return; }
+        if (source.Kind != kind) { Notify(kind == ResourceKind.Food ? "A Mill requires a food well" : "A Foundry requires an ore pile"); return; }
+        if (!_world!.CanStartConstruction(PlayerTeam,source.Id,out string reason) && reason != SimWorld.UnitBlocksFoundation) { Notify(reason); return; }
         _world.Enqueue(PlayerTeam,SelectedWorkers(),OrderKind.Build,target: source.Id,queued: queued);
         _status.Text = "Build "+_world.ConstructionRules[kind].DisplayName+(_paused ? " queued (paused)" : " order issued");
         ClearConstructionTargeting(); _buildMenu = false;
@@ -208,14 +245,15 @@ public partial class Main
         if (ResourceBuildingKind(building) is not { } kind)
         {
             int cell = PlacementCellAt(_pointerPosition);
-            _previewValid = _world!.CanPlaceBuilding(PlayerTeam,building,cell,out _);
+            _previewValid = _world!.CanPlaceBuilding(PlayerTeam,building,cell,out _,ignoreUnits: true);
             if (cell >= 0) { var (x,z) = _world.Navigation.Center(cell); _constructionPreview.Position = PositionOf(x,z); }
             else _constructionPreview.Visible = false;
         }
         else
         {
             var source = ResourceAt(_pointerPosition);
-            _previewValid = source != null && source.Kind == kind && _world!.CanStartConstruction(PlayerTeam,source.Id,out _);
+            _previewValid = source != null && source.Kind == kind
+                && (_world!.CanStartConstruction(PlayerTeam,source.Id,out string reason) || reason == SimWorld.UnitBlocksFoundation);
             if (source != null) _constructionPreview.Position = PositionOf(source.X,source.Z);
             else
             {

@@ -14,6 +14,8 @@ public sealed class ProductionBuilding(int id,int team,int x,int z,int exitAncho
     public List<QueuedUnit> Queue { get; } = [];
     public int ProgressTicks { get; internal set; }
     public int RallyCell { get; internal set; } = -1;
+    /// <summary>A resource the rally point is set on: new workers gather there, everyone else walks to it.</summary>
+    public int RallyResource { get; internal set; } = -1;
 }
 
 /// <summary>Training queues: payment and population reservation on request, fixed-tick progress, spawning outside the producer.</summary>
@@ -75,8 +77,14 @@ public sealed partial class SimWorld
 
     private void SetRallyPoint(SimCommand command)
     {
-        if (Producers.TryGetValue(command.Target,out var producer) && producer.Team == command.Team && command.Cell < Navigation.NodeCount)
-            producer.RallyCell = Math.Max(-1,command.Cell);
+        if (!Producers.TryGetValue(command.Target,out var producer) || producer.Team != command.Team) return;
+        if (command.Kind == OrderKind.SetRallyResource)
+        {
+            // Warcraft style: a rally on a well, an ore pile or the Mill or Foundry over one sends new workers to gather.
+            if (!Resources.TryGetValue(command.Cell,out var source)) return;
+            producer.RallyResource = source.Id; producer.RallyCell = Navigation.Nearest(Navigation.Cell(source.X,source.Z));
+        }
+        else if (command.Cell < Navigation.NodeCount) { producer.RallyCell = Math.Max(-1,command.Cell); producer.RallyResource = -1; }
     }
 
     private void UpdateProduction()
@@ -93,7 +101,9 @@ public sealed partial class SimWorld
             var unit = Spawn(producer.Team,cell,definition);
             int sequence = producer.Queue[0].Sequence;
             producer.Queue.RemoveAt(0); producer.ProgressTicks = 0;
-            if (producer.RallyCell >= 0) Apply(new(Tick,sequence,producer.Team,[unit.Id],producer.RallyCell,Kind: OrderKind.Move),activating: true);
+            if (producer.RallyResource >= 0 && Workers.ContainsKey(definition.Name) && CanGather(producer.Team,producer.RallyResource))
+                BeginGather(new(Tick,sequence,producer.Team,[unit.Id],-1,producer.RallyResource,OrderKind.Gather),activating: true);
+            else if (producer.RallyCell >= 0) Apply(new(Tick,sequence,producer.Team,[unit.Id],producer.RallyCell,Kind: OrderKind.Move),activating: true);
         }
     }
 
@@ -121,7 +131,7 @@ public sealed partial class SimWorld
     }
 
     private string ProductionDigest() => ":production-rules:"+string.Join(';',ProductionRules.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => p.Value))
-        + ":producers:"+string.Join(';',Producers.Values.Select(p => $"{p.Id},{p.Team},{p.X},{p.Z},{p.ExitAnchor},{string.Join('/',p.Units)},{p.ProgressTicks},{p.RallyCell},{string.Join('/',p.Queue.Select(q => q.Unit+"#"+q.Sequence))}"))
+        + ":producers:"+string.Join(';',Producers.Values.Select(p => $"{p.Id},{p.Team},{p.X},{p.Z},{p.ExitAnchor},{string.Join('/',p.Units)},{p.ProgressTicks},{p.RallyCell},{p.RallyResource},{string.Join('/',p.Queue.Select(q => q.Unit+"#"+q.Sequence))}"))
         + ":population:"+MaxPopulation+","+InitialPopulationCapacity+","+string.Join(';',PopulationProvided.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => p.Key+"="+p.Value))
         + ":instant:"+string.Join(',',InstantBuildTeams.Order());
 }

@@ -1,6 +1,6 @@
 namespace Reforged.Simulation;
 
-public enum OrderKind { Idle, Move, Attack, AttackMove, Stop, HoldGround, Guard, Patrol, ForceAttack, ToggleWalkRun, UseAbility, Gather, Build, CancelConstruction, Train, CancelTraining, SetRallyPoint, PlaceBuilding, AttackStructure }
+public enum OrderKind { Idle, Move, Attack, AttackMove, Stop, HoldGround, Guard, Patrol, ForceAttack, ToggleWalkRun, UseAbility, Gather, Build, CancelConstruction, Train, CancelTraining, SetRallyPoint, PlaceBuilding, AttackStructure, SetRallyResource }
 public sealed record PendingOrder(OrderKind Kind,int Cell,int Target,int Sequence);
 
 public sealed partial class SimWorld
@@ -10,7 +10,7 @@ public sealed partial class SimWorld
         if (unit.Order is not (OrderKind.Move or OrderKind.AttackMove or OrderKind.Patrol or OrderKind.Guard or OrderKind.ForceAttack)) return;
         if (unit.Order==OrderKind.AttackMove)
         {
-            unit.AutoEngage=false; unit.AttackMoveOrigin=unit.AttackMoveForward=unit.AttackMoveRouteStart=-1; unit.AttackMoveReturning=false;
+            unit.AutoEngage=false; unit.AttackMoveOrigin=unit.AttackMoveForward=unit.AttackMoveRouteStart=unit.SiteTarget=-1; unit.AttackMoveReturning=false;
         }
         unit.Order = OrderKind.Idle; unit.OrderDestination = unit.OrderTarget = -1;
         unit.IdleGuardOrigin=unit.Node; unit.IdleGuardReturning=false;
@@ -66,7 +66,9 @@ public sealed partial class SimWorld
             unit.OrderDestination = unit.PatrolForward ? unit.PatrolEnd : unit.PatrolStart;
             PlanOrderRoute(unit,unit.OrderDestination); return;
         }
-        if (unit.Order is OrderKind.Guard or OrderKind.ForceAttack or OrderKind.Gather or OrderKind.Build) return;
+        // An attack-move standing at a building it razes has not reached its destination.
+        if (unit.Order is OrderKind.Guard or OrderKind.ForceAttack or OrderKind.Gather or OrderKind.Build or OrderKind.PlaceBuilding
+            || unit.Order==OrderKind.AttackMove && unit.SiteTarget>=0) return;
         CompleteTravelOrder(unit);
     }
 
@@ -160,6 +162,8 @@ public sealed partial class SimWorld
         : unit.Path.Skip(unit.Waypoint).Take(6).LastOrDefault(unit.OrderDestination);
     private static void BeginAttackMoveEncounter(SimUnit unit)
     {
+        // Units come first: a building being razed is dropped, and found again once the fight is over.
+        if (unit.Order==OrderKind.AttackMove) unit.SiteTarget=-1;
         if (unit.Order!=OrderKind.AttackMove || unit.AttackMoveOrigin>=0) return;
         unit.AttackMoveOrigin=unit.Node; unit.AttackMoveForward=MarchForward(unit);
     }
@@ -170,8 +174,8 @@ public sealed partial class SimWorld
         // order can return blows within reach, but can never start a pursuit.
         // A force attack never provokes its victim: only the owner's own order turns friendly units on each other.
         if (attacker.Order == OrderKind.ForceAttack || attacker.Team == victim.Team) return;
-        if (!victim.Present || victim.Order is OrderKind.Move or OrderKind.UseAbility or OrderKind.Gather or OrderKind.Build or OrderKind.AttackStructure
-            || victim.AttackMoveReturning) return;
+        if (!victim.Present || victim.Order is OrderKind.Move or OrderKind.UseAbility or OrderKind.Gather or OrderKind.Build or OrderKind.PlaceBuilding
+            or OrderKind.AttackStructure || victim.AttackMoveReturning) return;
         if (HoldsPosition(victim) && !AttackReach(victim,victim.Node,victim.X,victim.Y,victim.Z,attacker)) return;
         victim.AutoEngage = !HoldsPosition(victim);
         if (victim.Target < 0) { BeginAttackMoveEncounter(victim); victim.Target = attacker.Id; }

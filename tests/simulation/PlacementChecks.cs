@@ -45,13 +45,22 @@ public static class PlacementChecks
         void Place(SimWorld world,string name,int cell,bool queued = false,int team = 0,int[]? units = null)
             => world.Enqueue(team,units ?? [0,1],OrderKind.PlaceBuilding,cell,world.PlaceableBuildings.IndexOf(name),queued);
 
+        void StepUntil(SimWorld world,Func<bool> done,int limit) { for (int i = 0; i < limit && !done(); i++) world.Step(); }
         var camp = Fixture();
         check(camp.CanPlaceBuilding(0,"camp",Cell(22,15),out _),"open ground near the Citadel accepts a Camp");
         Place(camp,"camp",Cell(22,15)); camp.Step();
+        check(!camp.ConstructionSites.Values.Any(s => s.Building == "camp") && camp.Economies[0].OreMilli == 500_000
+            && camp.Units.Take(2).All(u => u.Order == OrderKind.PlaceBuilding && u.PlacementCell == Cell(22,15) && u.Goal >= 0),
+            "a distant placement raises and pays nothing until a worker gets there");
+        StepUntil(camp,() => camp.ConstructionSites.Values.Any(s => s.Building == "camp"),100);
         var site = camp.ConstructionSites.Values.SingleOrDefault(s => s.Building == "camp");
-        check(site is { Id: SimWorld.PlacedObstacleBase,Team: 0,Health: 20 } && camp.Economies[0].OreMilli == 420_000
-            && camp.Navigation.IsObstacleActive(site.Obstacle) && camp.Units.Take(2).All(u => u.Order == OrderKind.Build && u.OrderTarget == site.Id),
-            "placement pays once, activates a runtime footprint and assigns both workers");
+        var layer = camp.Units.Take(2).FirstOrDefault(u => u.Order == OrderKind.Build);
+        check(site is { Id: SimWorld.PlacedObstacleBase,Team: 0,Health: 20 } && camp.Economies[0].OreMilli == 420_000 && camp.Tick > 10
+            && camp.Navigation.IsObstacleActive(site.Obstacle) && layer != null && !camp.Navigation.ObstacleCoversGroundBody(site.Obstacle,layer.X,layer.Z),
+            "the first worker to arrive lays the foundation beside it, pays once and activates a runtime footprint");
+        camp.Step();
+        check(camp.Units.Take(2).All(u => u.Order == OrderKind.Build && u.OrderTarget == site!.Id && u.PlacementCell == -1),
+            "the other worker bound for the same spot joins the foundation");
         check(!camp.Navigation.CanStand(Cell(22,15)) && camp.Navigation.CanStand(Cell(25,15)) && !camp.Navigation.ForBody(1100,700).CanStand(Cell(25,15))
             && !camp.Navigation.ForBody(1200,700).CanStand(Cell(25,15)),"the runtime footprint is rasterized for each body, including graphs created later");
         check(!camp.CanPlaceBuilding(0,"barracks",Cell(28,9),out string reason) && reason == "Required building missing","Barracks require a completed Camp");
@@ -76,8 +85,27 @@ public static class PlacementChecks
             "an unaffordable placement creates no footprint");
         var stolen = Fixture(); Place(stolen,"camp",Cell(22,15),team: 1); stolen.Step();
         check(!stolen.ConstructionSites.Values.Any(s => s.Building != null) && stolen.Economies[1].Ore == 500,"another team cannot place with these workers");
+        var spent = Fixture(); Place(spent,"camp",Cell(22,15)); spent.Step(); spent.Economies[0] = new(500,10);
+        var failures = new List<(int Team,int Unit,string Reason)>();
+        for (int i = 0; i < 100 && spent.Units.Take(2).Any(u => u.Order == OrderKind.PlaceBuilding); i++) { spent.Step(); failures.AddRange(spent.FoundationFailures); }
+        check(!spent.ConstructionSites.Values.Any(s => s.Building != null) && spent.Units.Take(2).All(u => u.Order == OrderKind.Idle)
+            && spent.Economies[0].OreMilli == 10_000 && failures.Any(f => f is { Team: 0,Reason: "Insufficient resources" }),
+            "a worker that arrives after the money was spent gives the foundation up and says why");
+        var crowded = Fixture(); var idler = crowded.Spawn(0,Cell(22,15));
+        check(!crowded.CanPlaceBuilding(0,"camp",Cell(22,15),out _) && crowded.CanPlaceBuilding(0,"camp",Cell(22,15),out _,ignoreUnits: true),
+            "a unit on the spot blocks laying a foundation but not ordering one");
+        Place(crowded,"camp",Cell(22,15)); StepUntil(crowded,() => crowded.ConstructionSites.Values.Any(s => s.Building == "camp"),200);
+        var cleared = crowded.ConstructionSites.Values.SingleOrDefault(s => s.Building == "camp");
+        check(cleared != null && !crowded.Navigation.ObstacleCoversGroundBody(cleared.Obstacle,idler.X,idler.Z) && idler.Order is OrderKind.Idle or OrderKind.Move,
+            "an idle unit of the same side steps off the spot so the foundation can go down");
+        var mill = Fixture(); mill.Enqueue(0,[0],OrderKind.Build,target: 7); mill.Step();
+        check(mill.ConstructionSites[7].Team == -1 && mill.Economies[0].OreMilli == 500_000 && mill.Units[0].Order == OrderKind.Build,
+            "a distant Mill site is claimed and paid for only on arrival");
+        StepUntil(mill,() => mill.ConstructionSites[7].Team == 0,200);
+        check(mill.ConstructionSites[7].Team == 0 && mill.Economies[0].OreMilli == 450_000 && mill.Navigation.IsObstacleActive(20007)
+            && !mill.Navigation.ObstacleCoversGroundBody(20007,mill.Units[0].X,mill.Units[0].Z),"the arriving worker claims the Mill site from outside its footprint");
 
-        var cancelled = Fixture(); Place(cancelled,"camp",Cell(22,15)); Step(cancelled,5);
+        var cancelled = Fixture(); Place(cancelled,"camp",Cell(22,15)); Step(cancelled,60);
         int obstacle = cancelled.ConstructionSites.Values.Single(s => s.Building != null).Obstacle;
         cancelled.Enqueue(0,[],OrderKind.CancelConstruction,target: obstacle); cancelled.Step();
         check(!cancelled.ConstructionSites.ContainsKey(obstacle) && !cancelled.Navigation.IsObstacleActive(obstacle) && cancelled.Navigation.CanStand(Cell(22,15))

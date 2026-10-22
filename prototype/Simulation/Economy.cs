@@ -204,7 +204,7 @@ public sealed partial class SimWorld
         return true;
     }
 
-    private IEnumerable<int> EconomyRouteCandidates(SimUnit unit,WorkArea area)
+    private IEnumerable<int> EconomyRouteCandidates(SimUnit unit,WorkArea area,Func<int,bool>? allowed = null)
     {
         var nav = Nav(unit);
         var reserved = OccupiedNodes(unit.Id);
@@ -217,7 +217,7 @@ public sealed partial class SimWorld
         {
             int node = row*nav.Width+col; var at = nav.Center(node);
             if (!reserved.Contains(node) && nav.CanStand(node) && CanReachDestination(unit,node)
-                && Reaches(area,at.X,at.Z)) candidates.Add(node);
+                && Reaches(area,at.X,at.Z) && allowed?.Invoke(node) != false) candidates.Add(node);
         }
         // Prefer spots beside the target so workers mine, enter and hammer at the footprint rather than at the
         // far side of the standing band, unless that costs a long walk around it.
@@ -225,12 +225,15 @@ public sealed partial class SimWorld
             return IntegerMotion.Length(p.X-unit.X,0,p.Z-unit.Z)+2*IntegerMotion.Length(p.X-area.X,0,p.Z-area.Z); }).ThenBy(n => n);
     }
 
-    private bool PlanEconomyRoute(SimUnit unit,WorkArea area)
+    /// <summary>Route to the best work spot. A detour that keeps <paramref name="keepDestination"/> leaves the order's
+    /// own destination alone, so an attack-move can resume its march afterwards.</summary>
+    private bool PlanEconomyRoute(SimUnit unit,WorkArea area,bool keepDestination = false,Func<int,bool>? allowed = null)
     {
-        foreach (int node in EconomyRouteCandidates(unit,area))
+        foreach (int node in EconomyRouteCandidates(unit,area,allowed))
         {
             if (PathFromCurrentPosition(unit,node).Count == 0) continue;
-            unit.OrderDestination = node; PlanOrderRoute(unit,node); return true;
+            if (!keepDestination) unit.OrderDestination = node;
+            PlanOrderRoute(unit,node); return true;
         }
         return false;
     }

@@ -13,6 +13,8 @@ public partial class Main
     private bool _structureRecallExact = true;
     private int[] _structureRecalled = [];
     private int _structureGapDeviation;
+    /// <summary>Frames spent waiting for workers to reach a site, which the frame numbers below skip.</summary>
+    private int _structureHold;
 
     private void StructureSmokeDrag(Vector2 start,Vector2 end,bool shift = false)
     {
@@ -61,8 +63,10 @@ public partial class Main
             Focus(id); var point = StructureSmokePoint(id); var offset = new Vector2(reverse ? -12 : 12,12);
             StructureSmokeDrag(point-offset,point+offset,shift);
         }
-        if (_frames >= 1700 && _frames <= 1900) _structureGapDeviation = Math.Max(_structureGapDeviation,Math.Abs(world.Units[0].Z-45500));
-        switch (_frames)
+        bool Hold(bool waiting) { if (waiting) _structureHold++; return waiting; }
+        int frame = _frames-_structureHold;
+        if (frame >= 1700 && frame <= 1900) _structureGapDeviation = Math.Max(_structureGapDeviation,Math.Abs(world.Units[0].Z-45500));
+        switch (frame)
         {
             case 3:
                 _structureFood = world.Resources.Values.Where(r => r.Kind == ResourceKind.Food).MinBy(r => SimWorld.DistanceSquared(r.X,r.Z,world.Units[0].X,world.Units[0].Z))!.Id;
@@ -99,6 +103,7 @@ public partial class Main
             case 16:
                 PushKey(Key.Escape); _structureChecks["escape_clears_structure"] = _selectedStructure == null;
                 world.Enqueue(0,workers,OrderKind.Build,target: _structureFood); break;
+            case 22: Hold(world.ConstructionSites[_structureFood].Team < 0); break;
             case 23: Choose(world.ConstructionSites[_structureFood].Obstacle); break;
             case 26:
                 _structureChecks["unfinished_building_selected"] = _selectedStructure == world.ConstructionSites[_structureFood].Obstacle
@@ -110,6 +115,7 @@ public partial class Main
                 _structureChecks["cancel_prunes_selection_and_refunds"] = _selectedStructure == null && world.ConstructionSites[_structureFood].Team == -1
                     && world.Economies[0].OreMilli == _structureRefundBank+37500;
                 world.Enqueue(0,workers,OrderKind.Build,target: _structureFood); break;
+            case 619: Hold(!world.ConstructionSites[_structureFood].Complete); break;
             case 620: Choose(world.ConstructionSites[_structureFood].Obstacle); break;
             case 623:
                 _structureChecks["completed_mill_details"] = _commands.DisplayedName == "Mill" && _commands.DisplayedHealth == "570/570"
@@ -131,12 +137,16 @@ public partial class Main
             case 633:
                 _structureChecks["drag_keeps_structures_separate"] = _selectedStructure == null && _selected.Count > 0;
                 world.Enqueue(0,workers,OrderKind.Build,target: _structureOre); break;
+            case 639: Hold(world.ConstructionSites[_structureOre].Team < 0); break;
             case 640: Choose(world.ConstructionSites[_structureOre].Obstacle); break;
             case 643:
                 _structureChecks["foundry_foundation_details"] = _commands.DisplayedName == "Foundry" && SelectedStructureDetails() is {UnderConstruction: true}; break;
+            case 1449: Hold(!world.ConstructionSites[_structureOre].Complete); break;
             case 1450:
                 _structureChecks["foundry_complete"] = world.ConstructionSites[_structureOre].Complete;
                 PushKey(Key.Key1); break;
+            // Worker 0 may be inside the Mill, out of the recalled selection; recall again once it is out.
+            case 1451: if (!Hold(!world.Units[0].Present)) PushKey(Key.Key1); break;
             case 1452: Click(_commands.PortraitButton(0).GetGlobalRect().GetCenter()); break;
             case 1454:
                 _structureChecks["unit_palette_restored"] = !_commands.CommandPaletteEmpty && _commands.CommandsAvailable;
@@ -237,12 +247,12 @@ public partial class Main
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"structure-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("STRUCTURE_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
         }
-        if (_frames >= 2000 && _frames < 2027)
+        if (frame >= 2000 && frame < 2027)
         {
             var neutrals = _structureViews.Values.Where(v => v.Team < 0).OrderBy(v => v.Id).ToArray();
-            int index = (_frames-2000)/3;
-            if ((_frames-2000)%3 == 0) Choose(neutrals[index].Id);
-            if ((_frames-2000)%3 == 2) _structureChecks["neutral_placement_"+neutrals[index].Id] = _selectedStructure == neutrals[index].Id && _commands.CommandPaletteEmpty;
+            int index = (frame-2000)/3;
+            if ((frame-2000)%3 == 0) Choose(neutrals[index].Id);
+            if ((frame-2000)%3 == 2) _structureChecks["neutral_placement_"+neutrals[index].Id] = _selectedStructure == neutrals[index].Id && _commands.CommandPaletteEmpty;
         }
     }
 }

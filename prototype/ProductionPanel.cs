@@ -23,7 +23,7 @@ public partial class CommandPanel
         {
             int chosen = slot;
             var button = new Button { Position = new(788+slot*56,34),Size = new(54,54),FocusMode = FocusModeEnum.None,ExpandIcon = true,Visible = false };
-            Skin(button); button.Pressed += () => TrainingChosen?.Invoke(chosen);
+            Skin(button); AddHotkey(button,GridKeys[slot].ToString()); button.Pressed += () => TrainingChosen?.Invoke(chosen);
             _trainButtons[slot] = button; _content.AddChild(button);
         }
         // Original selection panel: the unit in training with the purple bar, followed by the queue.
@@ -55,12 +55,13 @@ public partial class CommandPanel
             var rules = world.ProductionRules[producer!.Units[slot]];
             button.Disabled = !world.CanTrain(PlayerTeam,producer.Id,slot,out string reason);
             button.Icon = _art.GetValueOrDefault(PortraitName(rules.DisplayName));
-            button.TooltipText = $"Train {rules.DisplayName}\n{rules.FoodCost} food · {rules.OreCost} ore · population {rules.Population} · {rules.DurationTicks/20}s"
+            button.TooltipText = $"Train {rules.DisplayName} [{GridKeys[slot]}]\n{rules.FoodCost} food · {rules.OreCost} ore · population {rules.Population} · {rules.DurationTicks/20}s"
                 + $"\nClick again to queue up to {SimWorld.ProductionQueueLimit}. Click a portrait in training or press Backspace to cancel for a full refund."
                 + (button.Disabled ? "\n"+reason : "");
         }
         if (producer == null) return;
-        string rally = producer.RallyCell >= 0 ? "Rally point set · right-click to move it" : "Right-click the battlefield to set a rally point";
+        string rally = producer.RallyResource >= 0 ? $"New workers gather {world.Resources[producer.RallyResource].Kind.ToString().ToLowerInvariant()} · right-click to move the rally point"
+            : producer.RallyCell >= 0 ? "Rally point set · right-click to move it" : "Right-click the battlefield, or a Mill or Foundry, to set a rally point";
         if (producer.Queue.Count == 0) { _order.Text = "Your structure · "+rally; return; }
         var active = world.ProductionRules[producer.Queue[0].Unit];
         int percent = producer.ProgressTicks*100/active.DurationTicks;

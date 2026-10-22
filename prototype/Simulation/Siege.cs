@@ -17,9 +17,14 @@ public sealed partial class SimWorld
     public bool CanAttackSite(int team,int site) => ConstructionSites.TryGetValue(site,out var target)
         && target.Team >= 0 && target.Team != team && target.Health > 0;
 
+    /// <summary>The building a unit is razing: its explicit target, or one its attack-move came across; -1 for none.</summary>
+    public static int SiegeTarget(SimUnit unit) => unit.Order == OrderKind.AttackStructure ? unit.OrderTarget
+        : unit.Order == OrderKind.AttackMove ? unit.SiteTarget : -1;
+
     /// <summary>Standing at a building and striking it, rather than still walking there.</summary>
-    public bool IsBesieging(SimUnit unit) => unit.Present && unit.Order == OrderKind.AttackStructure
-        && unit.Attacking && ConstructionSites.ContainsKey(unit.OrderTarget);
+    public bool IsBesieging(SimUnit unit) => unit.Present && unit.Attacking && ConstructionSites.ContainsKey(SiegeTarget(unit));
+
+    private enum SiegeStep { Walking, Striking, Unreachable }
 
     public bool NeedsRepair(ConstructionSite site) => site.Team >= 0 && site.Complete
         && site.Health > 0 && site.Health < SiteRules(site).MaxHealth;
@@ -64,12 +69,48 @@ public sealed partial class SimWorld
             unit.Goal = -1; unit.Path.Clear(); unit.Waypoint = 0; return false;
         }
         unit.Target = -1; unit.AutoEngage = false;
+        var step = Besiege(unit,site);
+        if (step == SiegeStep.Unreachable) { unit.Order = OrderKind.Idle; unit.OrderTarget = -1; }
+        return step == SiegeStep.Striking;
+    }
+
+    /// <summary>Attack-move razes the enemy buildings it passes, as in Warcraft: units first, then the nearest building
+    /// within the reach units are acquired at; the march resumes when it falls. One it cannot reach is passed by.
+    /// Returns true when the unit's tick is spent striking.</summary>
+    private bool AttackMoveSiege(SimUnit unit)
+    {
+        if (unit.Order != OrderKind.AttackMove || unit.Target >= 0 || unit.AttackMoveReturning || unit.RingActive || unit.Definition.DpsMilli <= 0) return false;
+        if (unit.SiteTarget >= 0 && !CanAttackSite(unit.Team,unit.SiteTarget))
+        { CancelStrike(unit); unit.SiteTarget = -1; ResumeAttackMove(unit); return false; }
+        if (unit.SiteTarget < 0)
+        {
+            // Twice a second is often enough to notice a building that does not move.
+            if ((Tick+unit.Id)%(TicksPerSecond/2) != 0 || (unit.SiteTarget = NearbyEnemySite(unit)) < 0) return false;
+            unit.SiegePlanTick = -1;
+        }
+        var step = Besiege(unit,ConstructionSites[unit.SiteTarget],keepDestination: true);
+        if (step == SiegeStep.Unreachable) { unit.AttackMoveIgnoredSite = unit.SiteTarget; unit.SiteTarget = -1; ResumeAttackMove(unit); }
+        return step == SiegeStep.Striking;
+    }
+
+    private int NearbyEnemySite(SimUnit unit)
+    {
+        int acquire = Math.Max(10000,unit.Definition.ReachMm);
+        bool Near(ConstructionSite site) => Navigation.HasFootprints(site.Obstacle) ? Navigation.WithinFootprintReach(site.Obstacle,unit.X,unit.Z,acquire)
+            : DistanceSquared(unit.X,unit.Z,SitePosition(site).X,SitePosition(site).Z) <= (long)(acquire+site.RadiusMm)*(acquire+site.RadiusMm);
+        return ConstructionSites.Values.Where(s => s.Id != unit.AttackMoveIgnoredSite && CanAttackSite(unit.Team,s.Id) && Near(s))
+            .OrderBy(s => DistanceSquared(unit.X,unit.Z,SitePosition(s).X,SitePosition(s).Z)).ThenBy(s => s.Id).Select(s => s.Id).DefaultIfEmpty(-1).First();
+    }
+
+    /// <summary>Walk to the building, then swing at it. An attack-move keeps its own destination while it detours.</summary>
+    private SiegeStep Besiege(SimUnit unit,ConstructionSite site,bool keepDestination = false)
+    {
         var (x,z) = SitePosition(site);
         var area = SiegeArea(unit,site);
         if (unit.Goal >= 0 || unit.TransitNode >= 0 || unit.YieldFor >= 0)
         {
             // Still travelling: let movement finish, but stop short once the building is in reach.
-            if (!Reaches(area,unit.X,unit.Z)) return false;
+            if (!Reaches(area,unit.X,unit.Z)) return SiegeStep.Walking;
             RebaseCombatGround(unit); unit.Goal = -1; unit.Path.Clear(); unit.Waypoint = 0; unit.FreeMovement = false;
         }
         if (!Reaches(area,unit.X,unit.Z))
@@ -78,14 +119,13 @@ public sealed partial class SimWorld
             if (unit.SiegePlanTick < 0 || Tick-unit.SiegePlanTick >= TicksPerSecond)
             {
                 unit.SiegePlanTick = Tick;
-                if (!PlanEconomyRoute(unit,area)) { unit.Order = OrderKind.Idle; unit.OrderTarget = -1; }
+                if (!PlanEconomyRoute(unit,area,keepDestination)) return SiegeStep.Unreachable;
             }
-            return false;
+            return SiegeStep.Walking;
         }
         unit.Attacking = true; unit.SiegePlanTick = -1;
-        if (!FaceForPoint(unit,x,z) && !unit.StrikeActive) return true;
-        StrikeSite(unit,site);
-        return true;
+        if (FaceForPoint(unit,x,z) || unit.StrikeActive) StrikeSite(unit,site);
+        return SiegeStep.Striking;
     }
 
     /// <summary>The unit's own attack clips and cadence, aimed at a building instead of a unit.</summary>
@@ -116,7 +156,7 @@ public sealed partial class SimWorld
         while (unit.NextHit < attack.Hits.Length && attack.Hits[unit.NextHit].Tick <= elapsed)
         {
             int index = unit.NextHit++;
-            if (site.Health <= 0 || unit.Order != OrderKind.AttackStructure) continue;
+            if (site.Health <= 0 || SiegeTarget(unit) != site.Id) continue;
             long rate = Math.Max(0,(long)unit.MeleeDamageRate-SiteRules(site).ArmorMilli);
             long damage = rate*attack.DurationTicks*attack.Hits[index].Scale/(TicksPerSecond*attack.Hits.Sum(h => (long)h.Scale));
             if (unit.Definition.FiresProjectile(unit.AttackVariant)) ReleaseSiegeProjectile(unit,site,index,damage);
@@ -195,5 +235,5 @@ public sealed partial class SimWorld
     }
 
     private string SiegeDigest() => ":repairs:"+string.Join(';',ConstructionSites.Values.Select(s => s.RepairMicroTicks))
-        + ":siege:"+string.Join(';',Units.Select(u => $"{u.SiegePlanTick},{u.SiegeForced}"));
+        + ":siege:"+string.Join(';',Units.Select(u => $"{u.SiegePlanTick},{u.SiegeForced},{u.SiteTarget},{u.AttackMoveIgnoredSite}"));
 }

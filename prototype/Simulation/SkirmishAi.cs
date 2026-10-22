@@ -39,7 +39,7 @@ public sealed class AiPlayer(int team,AiPersonality personality)
 /// recovered, so everything below is an adapter built on them, thinking once a second through the same commands a
 /// player issues. Economy: train workers to 8 + 2 x difficulty + 2 per Mill, and split them by what the bank lacks
 /// (75% on food while ore piles up, 25% while food does, else half; at most six per Mill), moving one gatherer a
-/// second. Building: one project at a time with two builders, placed on
+/// second. Building: one project at a time with two builders, who lay and pay for the foundation on arrival, placed on
 /// rings around home toward the enemy and 10 m clear of resources, abandoned for the source refund if it makes no
 /// progress for 30 s, in the order the source columns allow: economy buildings first (all AIMustHaveFirstPass), then
 /// one of each military building, then the remaining first-pass buildings (the Watchtower; a defensive personality,
@@ -60,6 +60,8 @@ public sealed partial class SimWorld
     public AiWarParty AiAssaultParty { get; set; } = new(5,12,800_000);
     public const int AiDefenseRadiusMm = 30000,AiEngageRadiusMm = 12000,AiStallTicks = 30*TicksPerSecond,AiFoodPerMill = 6,
         AiResourceClearanceMm = 10000;
+    /// <summary>AiPlayer.Project while its crew walks to a foundation not laid yet.</summary>
+    private const int AiWalkingCrew = -2;
 
     private void UpdateAi()
     {
@@ -160,6 +162,23 @@ public sealed partial class SimWorld
             if (crew < 2 && helper != null) AiOrder(ai,[helper.Id],OrderKind.Build,target: project.Id);
             return ("building "+SiteRules(project).DisplayName,0,0);
         }
+        // A crew still walking to lay the next foundation: its cost stays reserved until it goes down.
+        var walking = workers.Where(w => w.Order == OrderKind.PlaceBuilding
+            || w.Order == OrderKind.Build && ConstructionSites.TryGetValue(w.OrderTarget,out var claim) && claim.Team < 0).ToArray();
+        if (walking.Length > 0)
+        {
+            var lead = walking[0];
+            var pending = lead.Order == OrderKind.PlaceBuilding ? BuildingRules[PlaceableBuildings[lead.OrderTarget]] : SiteRules(ConstructionSites[lead.OrderTarget]);
+            if (ai.Project != AiWalkingCrew) { ai.Project = AiWalkingCrew; ai.ProjectMovedTick = Tick; }
+            else if (Tick-ai.ProjectMovedTick >= AiStallTicks)
+            {
+                if (lead.Order == OrderKind.PlaceBuilding) ai.RefusedCells.Add(lead.PlacementCell);
+                AiOrder(ai,walking.Select(w => w.Id),OrderKind.Stop);
+                ai.Project = -1;
+                return ("gave up laying "+pending.DisplayName,0,0);
+            }
+            return ("walking to lay "+pending.DisplayName,pending.FoodCost,pending.OreCost);
+        }
         string? next = AiNextBuilding(ai);
         if (next == null) return ("plan complete",0,0);
         var rules = BuildingRules.GetValueOrDefault(next) ?? ConstructionRules.Values.First(r => r.Name == next);
@@ -176,15 +195,14 @@ public sealed partial class SimWorld
         }
         else
         {
-            int before = ConstructionSites.Count;
             int cell = AiPlacementCell(ai,next,bx,bz);
             if (cell >= 0)
             {
                 AiOrder(ai,crewIds,OrderKind.PlaceBuilding,cell,PlaceableBuildings.IndexOf(next));
-                if (ConstructionSites.Count == before) ai.RefusedCells.Add(cell);
+                if (!crewIds.Any(id => Units[id].Order is OrderKind.PlaceBuilding or OrderKind.Build)) ai.RefusedCells.Add(cell);
             }
         }
-        return ("laying "+rules.DisplayName,0,0);
+        return ("laying "+rules.DisplayName,rules.FoodCost,rules.OreCost);
     }
 
     private string? AiNextBuilding(AiPlayer ai)

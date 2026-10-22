@@ -108,9 +108,18 @@ public partial class Main
                     _commands.Minimap.MapPoint(_minimapOrderTarget.X,_minimapOrderTarget.Z).Y/_commands.Minimap.Size.Y),ctrl: true); break;
             case 31:
                 _minimapChecks["ctrl_minimap_right_click_marches"] = world.Commands.Last().Kind == OrderKind.AttackMove;
+                var march = world.ConstructionSites[SkirmishObstacleBase];
+                _focus = PositionOf(march.X+6000,march.Z+2000); UpdateCamera();
+                // Shift queues a move behind the march: a flag at each point and a line through them.
+                var (qx,qz) = (march.X+4000,march.Z+14000); var queued = _commands.Minimap.MapPoint(qx,qz);
+                MinimapRightClick(MinimapSmokePoint(queued.X/_commands.Minimap.Size.X,queued.Y/_commands.Minimap.Size.Y),shift: true); break;
+            case 33:
+                _minimapChecks["queued_orders_show_waypoint_flags"] = world.Commands.Last() is { Kind: OrderKind.Move,Queued: true }
+                    && WaypointFlagsShown == 2 && _hud.Waypoints.Count == 2;
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-waypoints.png");
                 break;
-            case 34:
-                var report = new { build = BuildInfo.Label,checks = _minimapChecks,passed = _minimapChecks.Count == 15 && _minimapChecks.Values.All(v => v),
+            case 36:
+                var report = new { build = BuildInfo.Label,checks = _minimapChecks,passed = _minimapChecks.Count == 16 && _minimapChecks.Values.All(v => v),
                     markers = _minimapMarkers.Select(m => new { m.Type,m.X,m.Z }),view = _commands.Minimap.View.Select(p => new[] { p.X,p.Y }),
                     focus = new[] { _focus.X,_focus.Y,_focus.Z },yaw = _yaw,distance = _distance };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"minimap-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));

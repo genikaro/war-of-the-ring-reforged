@@ -13,6 +13,8 @@ public partial class Main
     private readonly HashSet<int> _smokeBuildingStages = [];
     private readonly Dictionary<int,int> _smokeInside = [];
     private int _smokeMostInside;
+    /// <summary>Frames spent waiting for workers to reach a site, which the frame numbers below skip.</summary>
+    private int _constructionHold,_smokeTrainedWorkers;
 
     private void ConstructionSmokeInput()
     {
@@ -49,7 +51,8 @@ public partial class Main
                 _smokeInside[worker.Id] = worker.InsideSite;
             }
         }
-        switch (_frames)
+        bool Hold(bool waiting) { if (waiting) _constructionHold++; return waiting; }
+        switch (_frames-_constructionHold)
         {
             case 3:
                 PushKey(Key.Key1);
@@ -73,6 +76,11 @@ public partial class Main
                 _constructionChecks["invalid_click_preserves_bank"] = _constructionTargeting && world.Economies[0].Ore == 325 && !world.Commands.Any(c => c.Kind == OrderKind.Build);
                 Focus(_smokeFoodSite);
                 Click(Point(_smokeFoodSite)); break;
+            case 12:
+                _constructionChecks["foundation_waits_for_a_worker"] = world.ConstructionSites[_smokeFoodSite].Team == -1 && world.Economies[0].Ore == 325
+                    && world.Units.Where(u => u.Team == 0).All(u => u.Order == OrderKind.Build && u.OrderTarget == _smokeFoodSite) && _foundationGhosts.Count == 1;
+                break;
+            case 13: Hold(world.ConstructionSites[_smokeFoodSite].Team < 0); break;
             case 14:
                 _constructionChecks["foundation_paid_once"] = world.ConstructionSites[_smokeFoodSite].Team == 0 && world.Economies[0].Ore == 275;
                 _constructionChecks["foundation_blocks_navigation"] = world.Navigation.IsObstacleActive(world.ConstructionSites[_smokeFoodSite].Obstacle);
@@ -88,6 +96,7 @@ public partial class Main
                     && !_constructionViews.ContainsKey(_smokeFoodSite);
                 Click(_commands.ConstructionButton(ResourceKind.Food).GetGlobalRect().GetCenter()); break;
             case 22: Click(Point(_smokeFoodSite)); break;
+            case 27: Hold(world.ConstructionSites[_smokeFoodSite].Team < 0); break;
             case 28: PushKey(Key.S); break;
             case 32: _smokePausedProgress = world.ConstructionSites[_smokeFoodSite].ProgressMicroTicks; break;
             case 60:
@@ -118,19 +127,36 @@ public partial class Main
             case 1204:
                 Click(Point(_smokeFoundrySite));
                 _constructionChecks["foundry_placement_dispatched"] = world.Commands.Any(c => c.Kind == OrderKind.Build && c.Target == _smokeFoundrySite); break;
+            case 1207: Hold(world.ConstructionSites[_smokeFoundrySite].Team < 0); break;
             case 1208:
-                _constructionChecks["foundry_source_cost"] = world.ConstructionSites[_smokeFoundrySite].Team == 0 && world.Economies[0].OreMilli == 182500; break;
+                _constructionChecks["foundry_source_cost"] = world.ConstructionSites[_smokeFoundrySite].Team == 0 && world.Economies[0].OreMilli == 182500;
+                FocusStructure(SmokeOwnCitadel); Click(StructureSmokePoint(SmokeOwnCitadel)); break;
+            case 1210:
+                // With the Citadel selected, right-click the Mill: new workers will gather food there.
+                FocusStructure(world.ConstructionSites[_smokeFoodSite].Obstacle);
+                Click(StructureSmokePoint(world.ConstructionSites[_smokeFoodSite].Obstacle),MouseButton.Right); break;
+            case 1212: PushGridKey(0); break; // Train a worker with the grid key of the first training button.
+            case 1214:
+                var citadel = world.Producers[SmokeOwnCitadel];
+                _constructionChecks["rally_on_mill_and_grid_key_trains"] = citadel.RallyResource == _smokeFoodSite && citadel.Queue.Count == 1
+                    && _commands.TrainButton(0).GetChildren().OfType<Label>().Any(l => l.Text == CommandPanel.GridKeys[0].ToString());
+                _smokeTrainedWorkers = world.Units.Count(u => u.Team == 0); break;
             case 2600:
                 var mill = world.ConstructionSites[_smokeFoodSite]; var foundry = world.ConstructionSites[_smokeFoundrySite];
                 _constructionChecks["foundry_complete_with_source_health"] = foundry is { Complete: true,Health: 750 };
                 _constructionChecks["improved_ore_delivered"] = world.Economies[0].OreMilli > 182500 && world.Resources[_smokeFoundrySite].ImprovedRateMilliPerTick == 20;
                 _constructionChecks["enemy_economy_inert"] = world.Economies[1].Ore == 325 && world.Economies[1].Food == 115;
+                // The worker trained at the Citadel was paid for from the bank.
+                var trainedWorker = world.ProductionRules[world.Producers[SmokeOwnCitadel].Units[0]];
                 _constructionChecks["ore_conserved_with_costs_and_refund"] = world.Resources.Values.Where(r => r.Kind == ResourceKind.Ore).Sum(r => 4500000-r.RemainingMilli)
-                    == world.Economies[0].OreMilli-325000+142500+world.Units.Where(u => u.CargoKind == ResourceKind.Ore).Sum(u => u.CargoMilli);
+                    == world.Economies[0].OreMilli-325000+142500+trainedWorker.OreCost*1000L+world.Units.Where(u => u.CargoKind == ResourceKind.Ore).Sum(u => u.CargoMilli);
                 _constructionChecks["food_conserved"] = world.Resources.Values.Where(r => r.Kind == ResourceKind.Food).Sum(r => 4500000-r.RemainingMilli)
-                    == world.Economies[0].FoodMilli-115000+world.Units.Where(u => u.CargoKind == ResourceKind.Food).Sum(u => u.CargoMilli);
+                    == world.Economies[0].FoodMilli-115000+trainedWorker.FoodCost*1000L+world.Units.Where(u => u.CargoKind == ResourceKind.Food).Sum(u => u.CargoMilli);
                 _constructionChecks["one_worker_inside_each_building"] = _smokeMostInside == 1;
-                var report = new { build = BuildInfo.Label,checks = _constructionChecks,passed = _constructionChecks.Count == 28 && _constructionChecks.Values.All(v => v),
+                var newcomer = world.Units.LastOrDefault(u => u.Team == 0);
+                _constructionChecks["trained_worker_gathers_at_the_rally_mill"] = world.Units.Count(u => u.Team == 0) == _smokeTrainedWorkers+1
+                    && newcomer is { Order: OrderKind.Gather } && newcomer.OrderTarget == _smokeFoodSite;
+                var report = new { build = BuildInfo.Label,checks = _constructionChecks,passed = _constructionChecks.Count == 31 && _constructionChecks.Values.All(v => v),
                     mill,foundry,bank = new {world.Economies[0].FoodMilli,world.Economies[0].OreMilli},
                     workers = world.Units.Where(u => u.Team == 0).Select(u => new {u.Id,u.Order,u.Goal,u.X,u.Z,u.CargoMilli,u.ReturningCargo}),
                     selected = _selected,status = _status.Text,commands = world.Commands,digest = world.StateDigest() };

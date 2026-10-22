@@ -398,6 +398,9 @@ public partial class Main : Node3D
                 else { _selected.Clear(); _selectedStructure = null; }
                 _dragging = false; _hud.SelectionBox = null;
             }
+            // Grid hotkeys go by key position, so they follow QWER/ASDF/ZXCV on any keyboard layout.
+            int gridSlot = CommandPanel.GridSlot(key.PhysicalKeycode);
+            if (gridSlot >= 0 && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed && UseGridHotkey(gridSlot)) return;
             OrderKind? command = key.Keycode switch {
                 Key.M => OrderKind.Move, Key.A => OrderKind.Attack,
                 Key.S => OrderKind.Stop, Key.H => OrderKind.HoldGround, _ => null };
@@ -641,6 +644,7 @@ public partial class Main : Node3D
             if (_engagementSmoke) RecordEngagementStep(System.Diagnostics.Stopwatch.GetElapsedTime(stepStart).TotalMilliseconds);
             PresentCombatEvents();
             PresentAbilityEvents();
+            PresentFoundationFailures();
             PresentOutcome();
         }
         if (_pendingObstacle >= 0)
@@ -669,7 +673,7 @@ public partial class Main : Node3D
             else if (_world.IsBesieging(unit))
             {
                 // Ranged besiegers already turn in the simulation; a melee one faces the building here.
-                var (siteX,siteZ) = _world.SitePosition(_world.ConstructionSites[unit.OrderTarget]);
+                var (siteX,siteZ) = _world.SitePosition(_world.ConstructionSites[SimWorld.SiegeTarget(unit)]);
                 view.Heading.Reset();
                 view.DesiredYaw = Mathf.Atan2(-(siteX-unit.X),siteZ-unit.Z);
             }
@@ -802,12 +806,14 @@ public partial class Main : Node3D
             if (!SelectedWorkers().Any()) ClearConstructionTargeting();
             _commands.RefreshConstruction(_world,units,_constructionTargeting,_constructionBuilding,_constructionChoices,SelectedStructureDetails());
             PresentConstruction();
+            PresentFoundationGhosts();
             PresentStructureSelection();
             PresentProduction();
             UpdateConstructionPreview();
         }
         _presentStep = false;
         if (_toolsPanel.Visible) RefreshDebugMenu();
+        PresentWaypoints();
         _hud.DestinationTime -= dt; _hud.QueueRedraw();
         _frames++;
         if (_commandSmoke) CommandSmokeInput();
