@@ -143,7 +143,7 @@ public partial class ObserverHud : Control
     private string PlayerTip(SimWorld world,int team)
     {
         var bot = world.AiPlayers.GetValueOrDefault(team);
-        string state = world.DefeatedTeams.Contains(team) ? "Defeated" : world.Winner == team ? "Winner" : bot is null ? "No bot" : bot.Status == "" ? "Starting" : bot.Status;
+        string state = world.DefeatedTeams.Contains(team) ? bot?.Status == "surrendered" ? "Surrendered" : "Defeated" : world.Winner == team ? "Winner" : bot is null ? "No bot" : bot.Status == "" ? "Starting" : bot.Status;
         return $"Player {team+1} · {PlayerName(world,team)}\n{state}\nClick to centre the camera on this base.";
     }
 

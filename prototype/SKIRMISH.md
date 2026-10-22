@@ -1536,7 +1536,7 @@ fights on Rift still cost 11-17 ms a tick, so 4x runs at about 2-3x there.
 `OccupiedNodes` (every unit scanned about 17 times a tick, 3.2 ms)
 and long but successful replans remain; see the roadmap's performance backlog.
 
-**Observer match.** The routes changed, so the matches changed, and two reference matches now stall instead of finishing. Gimli against Aragorn on Bilbo's Bluffs, which Gimli won at 33:33 in build-35, starves both sides: by 24:00 Aragorn has no workers, Gimli bleeds its last workers and neither army reaches assault size again, so the observer smoke's 40-minute result check fails (the other 14 checks pass). The 4-bot Wasteland match (Gimli won at 45:01 in build-35) freezes at 40:00: three bots have no workers, and Saruman lost its Citadel, so its six workers cannot deliver and it cannot afford a new one. With the bots swapped (Aragorn, Gimli) Bilbo's Bluffs ends with Aragorn winning at 26:00 (tick 31205). Going by the bots' status lines, these are bots that cannot recover once their economy is gone (open since build-35), not armies stuck on routes.
+**Observer match.** The routes changed, so the matches changed, and two reference matches now stall instead of finishing. Gimli against Aragorn on Bilbo's Bluffs, which Gimli won at 33:33 in build-35, starves both sides: by 24:00 Aragorn has no workers, Gimli bleeds its last workers and neither army reaches assault size again, so the observer smoke's 40-minute result check fails (the other 14 checks pass). The 4-bot Wasteland match (Gimli won at 45:01 in build-35) freezes at 40:00: three bots have no workers, and Saruman lost its Citadel, so its six workers cannot deliver and it cannot afford a new one. With the bots swapped (Aragorn, Gimli) Bilbo's Bluffs ends with Aragorn winning at 26:00 (tick 31205). Going by the bots' status lines, these are bots that cannot recover once their economy is gone (open since build-35), not armies stuck on routes. (Build-38 resolves both: see below.)
 
 Validation: 780 synthetic, 847 Helm's Deep and 34 worker-cache checks, and the
 sandbox, combat, melee, surface, obstacle, engagement, command, orders, ability,
@@ -1544,3 +1544,70 @@ skirmish, construction, structure, production, placement, Dwarf Hall, minimap,
 Frodo, siege, defense, victory and AI smokes pass. The observer smoke fails only
 its result check, as described above. The formation smoke keeps its known
 `attack_move_arrived` failure (since build-19).
+
+## Build-38: bots expand, go all in and surrender
+
+Build-37's new routes left two reference bot matches in a stalemate. The owner
+asked for a recovery rule, for bots that expand at around 10-15 minutes, and for a
+bot with no units and no money for one to surrender. All of it is in
+`prototype/Simulation/SkirmishAi.cs`. It acts through the same commands a player
+issues and replays identically.
+
+- **Expansion.** From 10:00 (aggressiveness 0) to 15:00 (aggressiveness 100), the
+  bot lays a Citadel by the unclaimed resource nearest home that lies outside every
+  own Citadel's reach (its 25 m building radius), at least 30 m from enemy
+  buildings, on ground a worker can walk to. It lays one more every 10 minutes, up
+  to three. The source Citadel has no "near your buildings" rule, accepts deliveries,
+  trains workers and adds 10 population, so an expansion feeds itself; Mills now go
+  on wells within 80 m of any own Citadel, not only home. A Citadel spot with no room
+  is never tried again, so its reserve cannot freeze the army.
+- **Rebuilding.** A lost Citadel is the first building the bot wants back, at the
+  old home unless an enemy building is near it.
+- **All in.** With no soldier trained or sent for 3 minutes and none affordable,
+  every idle soldier attacks whatever the party size, and does not fall back.
+- **Surrender.** A bot gives up when it can never field an army again: no soldier,
+  hero or unit in training, no worker able to earn (none alive, or no Citadel to
+  deliver to), and no money for any unit its buildings offer, nor for a new Citadel
+  while workers remain without one. Its buildings are torn down the way razing
+  removes them, so the ordinary Razing rule defeats it. The overview's tooltip
+  reads "Surrendered".
+- **Safer gathering.** Workers and new Mills avoid resources within 30 m of enemy
+  buildings while a safe one exists. Each lost worker had been retrained from the
+  food meant for soldiers.
+- **Patience by progress.** A crew walking to lay a building is given up after
+  30 s without getting closer, not after 30 s in total, so a long walk to an
+  expansion goes through.
+
+Watching the matches exposed three bot freezes, each fixed:
+
+- *Reachability from a blocked cell.* A unit at a work spot can stand on a
+  footprint cell, from which nothing is reachable. Expansion sites are now judged
+  from a worker on open ground, like build-37's assault check.
+- *Workers counted as a threat.* With expansions in the middle of the map, enemy
+  workers gathering nearby kept a bot "threatened" for good, and a threatened bot
+  never attacks. They are still attacked, but only enemy soldiers hold the assault
+  back now.
+- *Alternating targets.* The 30 s give-up timers (party defenders and home
+  intruders) restarted whenever the nearest enemy changed. Two units stuck in
+  pockets, taking turns as the nearest, held a party at home for 20 minutes. Each
+  enemy is now timed from when it came within range without a break, and enemies
+  that left are forgotten.
+
+| Match (observer, 16x) | build-37 | build-38 |
+|---|---|---|
+| Bilbo's Bluffs, Gimli vs Aragorn | no result in 40 min | Gimli wins at 33:26 (tick 40133, digest 9C0DC103...) |
+| Bilbo's Bluffs, Aragorn vs Gimli | Aragorn wins at 26:00 | Aragorn wins at 25:18, Gimli surrenders |
+| Wasteland, Gimli, Aragorn, Legolas, Saruman | frozen from 40:00 | Gimli wins at 48:15, Legolas surrenders at about 10:00 |
+
+In these matches Gimli (aggressiveness 35, due 11:45) had a second Citadel by
+14:00 and a third by 24:00; Aragorn and Saruman had their second by 16:00. The
+timeline samples every two minutes.
+
+Validation: 5 new synthetic checks (a bot with no units and no money surrenders;
+one whose workers can still earn does not; a small army waits while it may grow,
+then a spent bot sends its last soldiers all in; the bot expands by far ore after
+its time and not before). 785 synthetic, 852 Helm's Deep and 34 worker-cache
+checks pass, as do the sandbox, combat, melee, surface, obstacle, command,
+orders, ability, skirmish, construction, structure, production, placement, Dwarf
+Hall, minimap, Frodo, siege, defense, victory, AI and observer smokes. The
+observer smoke's result check passes again.

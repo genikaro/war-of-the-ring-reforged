@@ -30,6 +30,15 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-38 (Oct 22):** bots expand from 10-15 minutes (by aggressiveness) with a
+Citadel by unclaimed resources, then every 10 minutes up to three. They rebuild a
+lost Citadel, go all in when their army can no longer grow, and surrender when
+they can never field an army again. Workers keep away from resources near enemy
+buildings. Three freezes found by watching are fixed: reachability judged from a
+blocked cell, enemy workers counted as a threat, and give-up timers reset by
+alternating targets. The reference matches decide again (Gimli wins Bilbo's
+Bluffs at 33:26 and Wasteland at 48:15). See [skirmish notes](../prototype/SKIRMISH.md#build-38-bots-expand-go-all-in-and-surrender).
+
 **Build-37 (Oct 22):** an 8-bot free-for-all on MP08_Rift fell to 1 FPS once
 armies grew. Speed bursts now stop after 25 ms of simulation per frame, and Godot
 no longer stacks catch-up frames, so the game slows instead of the frame rate (the
@@ -937,7 +946,7 @@ and production remain later work.
 - [ ] Skirmish setup, bot free-for-alls and an observer mode (owner request, Oct 21): create a skirmish with map selection, player slots (human, bot with difficulty and traits, observer, closed), teams and colours, so large free-for-alls between different bots can be watched. Facts: `extracted/Levels/Multiplayer` holds 32 maps whose `MPnn` prefix gives the player count, up to six 8-player maps; the skirmish importer is hard-wired to MP02 Bilbo's Bluffs and two start points, the cache carries two team colours, about 84 places in `prototype/` assume the human is team 0 and the AI team 1, and only the Good faction is exported. The simulation already handles any number of teams as separate sides, which is exactly a free-for-all, and its Razing outcome takes any number of contenders. Steps, in order:
   1. (Done in build-28; spectator HUD redone in build-36.) Observer and speed: a bot on every side, a player-less observer HUD (every player's resources, population, army and AI status; read-only selection; camera free), and game speed control (pause, 1x to 16x by stepping the fixed-tick simulation several times per frame, so it stays deterministic) to skip the opening and jump into the fighting.
   2. N players: replace the team-0/team-1 assumptions with player slots; per-slot colours from the source team-colour table; an AI per bot slot. (Build-35: eight slot colours, a bot on every side but the player's, `-Bots` by slot, minimap and rings by slot; the human is still always slot 1, which the setup screen will lift.)
-  3. Map pipeline: `prepare_prototype.py --skirmish --map <name>` for any multiplayer map and its start points, one cache per map, and a batch for all 32; verify navigation, resources and start bases on each. (Build-35: `--map`, `--all-maps`, `run.ps1 -Map`; all 32 maps import, and `SimulationTests --crossing-probe` shows every map connected for a Swordsman except MP04_Mighty_Silverlode, whose rope bridges only fit Frodo. Remaining: rope bridges wide enough for armies, and a bot that has lost every worker cannot recover.)
+  3. Map pipeline: `prepare_prototype.py --skirmish --map <name>` for any multiplayer map and its start points, one cache per map, and a batch for all 32; verify navigation, resources and start bases on each. (Build-35: `--map`, `--all-maps`, `run.ps1 -Map`; all 32 maps import, and `SimulationTests --crossing-probe` shows every map connected for a Swordsman except MP04_Mighty_Silverlode, whose rope bridges only fit Frodo. Remaining: rope bridges wide enough for armies, and a bot that has lost every worker cannot recover; build-38 adds Citadel rebuilding, all-in attacks and surrender.)
   4. Setup screen: map list with player count and minimap, slots, difficulty and traits, start.
   5. Teams and alliances (2v2 and up): split a unit's owner from its alliance, so allies share victory and do not attack each other.
   6. The Evil faction, so bots can differ by side as well as by style.

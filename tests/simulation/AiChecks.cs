@@ -125,5 +125,44 @@ public static class AiChecks
         Step(defence,25);
         check(guards.All(id => defence.Units[id].Order == OrderKind.AttackMove || defence.Units[id].Target == raider.Id),"enemies near the base draw the home army");
         check(defence.AiPlayers[1].Party.Count == 0,"no assault leaves while the base is under threat");
+
+        // Surrender: no units left and no money for any unit.
+        var beaten = Fixture();
+        foreach (var unit in beaten.Units.Where(u => u.Team == 1)) unit.Health = 0;
+        beaten.Economies[1] = new(10,300);
+        Step(beaten,25);
+        check(beaten.AiPlayers[1].Status == "surrendered" && !beaten.OwnsBuilding(1) && beaten.MatchOver && beaten.Winner == 0,
+            "a bot with no units and no money for one surrenders and tears its buildings down");
+        var broke = Fixture(); broke.Economies[1] = new(0,0);
+        Step(broke,25);
+        check(broke.AiPlayers[1].Status != "surrendered" && broke.OwnsBuilding(1) && !broke.MatchOver,"a bot whose workers can still earn does not surrender");
+
+        // All in: soldiers that cannot grow into a party for three minutes attack anyway, and do not fall back.
+        var spent = Fixture();
+        foreach (var unit in spent.Units.Where(u => u.Team == 1)) unit.Health = 0;
+        spent.Economies[1] = new(0,0);
+        var lastStand = Enumerable.Range(0,2).Select(i => spent.Spawn(1,Cell(55,13+2*i),soldier).Id).ToArray();
+        Step(spent,SimWorld.AiStagnationTicks-40);
+        check(spent.AiPlayers[1].PartiesSent == 0,"a small army waits while it may still grow");
+        Step(spent,60);
+        check(spent.AiPlayers[1].PartiesSent == 1 && spent.AiPlayers[1].AllIn && lastStand.All(id => spent.Units[id].Order is OrderKind.AttackMove or OrderKind.AttackStructure),
+            "a spent bot sends its last soldiers all in: "+spent.AiPlayers[1].Status);
+
+        // Expansion: a Citadel by unclaimed ore outside the home Citadel's reach, from 10:00-15:00 by aggressiveness.
+        var expand = Fixture();
+        expand.Placements["keep"] = expand.Placements["keep"] with { MustBeNear = false,DropOff = true };
+        expand.Resources.Add(30,new(30,ResourceKind.Ore,36000,28500,4500,20,1_000_000,2000));
+        int expandAt = (600+3*50)*SimWorld.TicksPerSecond,laidAt = -1;
+        ConstructionSite? expansion = null;
+        for (int i = 0; i < expandAt+4000 && expansion == null; i++)
+        {
+            expand.Step();
+            expansion = expand.ConstructionSites.Values.FirstOrDefault(s => s.Team == 1 && !s.Prebuilt && s.Building == "keep");
+            if (expansion != null) laidAt = expand.Tick;
+        }
+        var (ex,ez) = expansion == null ? (0,0) : expand.SitePosition(expansion);
+        Console.WriteLine($"AI_EXPANSION due={expandAt} laid={laidAt} at=({ex},{ez})");
+        check(expansion != null && laidAt >= expandAt && (long)(ex-36000)*(ex-36000)+(long)(ez-28500)*(ez-28500) < (long)(ex-61000)*(ex-61000)+(long)(ez-15000)*(ez-15000),
+            $"the bot expands with a Citadel by the far ore after {expandAt/SimWorld.TicksPerSecond/60.0:0.#} minutes (laid at tick {laidAt}): "+expand.AiPlayers[1].Status);
     }
 }
