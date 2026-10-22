@@ -8,7 +8,8 @@ public partial class CommandPanel
     public event Action<int>? SpeedChosen;
     public event Action? PauseChosen;
     private Control _match = null!;
-    private Label _matchMap = null!,_matchClock = null!,_matchState = null!;
+    private Label _matchMap = null!,_matchClock = null!,_matchState = null!,_matchKeys = null!;
+    private const string MatchKeys = "Speed  - / +     Pause  Space";
     private Button _pause = null!;
     private Control _pauseGlyph = null!;
     private SpeedSlider _speedSlider = null!;
@@ -46,12 +47,13 @@ public partial class CommandPanel
         };
         _speedSlider = new SpeedSlider { Position = new(50,82),Size = new(166,44),TooltipText = "Game speed · drag, click or scroll · - and + keys" };
         _speedSlider.Chosen += index => SpeedChosen?.Invoke(index); _match.AddChild(_speedSlider);
-        var keys = Text("Speed  - / +     Pause  Space",new(0,136),new(224,20),11); keys.HorizontalAlignment = HorizontalAlignment.Center;
-        keys.AddThemeColorOverride("font_color",new Color("b8a97c")); _match.AddChild(keys);
+        _matchKeys = Text(MatchKeys,new(0,136),new(224,20),11); _matchKeys.HorizontalAlignment = HorizontalAlignment.Center;
+        _matchKeys.AddThemeColorOverride("font_color",new Color("b8a97c")); _matchKeys.MouseFilter = MouseFilterEnum.Stop; _match.AddChild(_matchKeys);
     }
 
-    /// <summary>The observer's match panel; called every frame while observing, after Refresh.</summary>
-    public void RefreshMatch(string map,int tick,int[] speeds,int speed,bool paused,string state)
+    /// <summary>The observer's match panel; called every frame while observing, after Refresh. Below 85% of
+    /// the chosen speed the key hint gives way to the speed the CPU actually manages.</summary>
+    public void RefreshMatch(string map,int tick,int[] speeds,int speed,bool paused,string state,double actualSpeed)
     {
         _matchMap.Text = map; _matchMap.TooltipText = map;
         var time = TimeSpan.FromSeconds(tick/(double)Reforged.Simulation.SimWorld.TicksPerSecond);
@@ -62,5 +64,11 @@ public partial class CommandPanel
         _speedSlider.Index = Math.Max(0,Array.IndexOf(speeds,speed)); _speedSlider.Paused = paused;
         _pause.SetPressedNoSignal(paused);
         if (_pauseShown != paused) { _pauseShown = paused; _pauseGlyph.QueueRedraw(); }
+        bool slowed = !paused && actualSpeed < speed*.85;
+        string keys = slowed ? $"CPU-bound · running at {actualSpeed.ToString("0.0",System.Globalization.CultureInfo.InvariantCulture)}x" : MatchKeys;
+        if (_matchKeys.Text == keys) return;
+        _matchKeys.Text = keys;
+        _matchKeys.AddThemeColorOverride("font_color",new Color(slowed ? "f0a04b" : "b8a97c"));
+        _matchKeys.TooltipText = slowed ? "The simulation cannot keep up with this speed here, so the game runs slower\ninstead of the frame rate. Every tick is still the same." : "";
     }
 }

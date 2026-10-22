@@ -13,6 +13,10 @@ public partial class Main
     private string[] _bots = [];
     private int _speed = 1;
     private static readonly int[] Speeds = [1,2,4,8,16];
+    /// <summary>Simulation time one physics frame's speed burst may take, in milliseconds.</summary>
+    private const double SpeedBudgetMs = 25;
+    private int _speedSampleTick;
+    private double _speedSampleSeconds,_actualSpeed = 1;
     private const int ObserverTeam = -1;
     private ObserverHud _observerHud = null!;
     /// <summary>The map's title from the cache manifest, without the mode suffix.</summary>
@@ -27,6 +31,7 @@ public partial class Main
     {
         _speed = Speeds.Contains(speed) ? speed : 1;
         _status.Text = $"Game speed {_speed}x";
+        _actualSpeed = _speed; _speedSampleSeconds = 0; _speedSampleTick = _world?.Tick ?? 0;
     }
 
     private void StepSpeed(int direction)
@@ -75,11 +80,23 @@ public partial class Main
         return left < players ? $"{left} of {players} players left" : players == 2 ? "Duel" : $"Free-for-all · {players} players";
     }
 
-    private void RefreshObserverPanel()
+    /// <summary>Game seconds per real second over the last real second, to show when the CPU holds the game
+    /// below its chosen speed (large maps, big fights).</summary>
+    private void MeasureSpeed(double delta)
     {
+        if (_paused || _world == null) { _speedSampleSeconds = 0; _speedSampleTick = _world?.Tick ?? 0; return; }
+        _speedSampleSeconds += delta;
+        if (_speedSampleSeconds < 1) return;
+        _actualSpeed = (_world.Tick-_speedSampleTick)/(double)SimWorld.TicksPerSecond/_speedSampleSeconds;
+        _speedSampleTick = _world.Tick; _speedSampleSeconds = 0;
+    }
+
+    private void RefreshObserverPanel(double delta)
+    {
+        MeasureSpeed(delta);
         if (!_observing || _world == null) return;
         _observerHud.Visible = true;
         _observerHud.Refresh(_world,TeamColor,_commands.Art,_commands.EffectiveScale);
-        _commands.RefreshMatch(_mapName,_world.Tick,Speeds,_speed,_paused,MatchState(_world));
+        _commands.RefreshMatch(_mapName,_world.Tick,Speeds,_speed,_paused,MatchState(_world),_actualSpeed);
     }
 }

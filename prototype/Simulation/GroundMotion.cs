@@ -6,16 +6,55 @@ public sealed partial class SimWorld
         => Nav(unit).IsConnected(unit.Node,goal) || unit.Node < Navigation.GroundCount
             && (unit.TransitNode < 0 || unit.GroundSegment) && Nav(unit).CanReachGroundPosition(unit.X,unit.Z,goal);
 
-    private List<int> PathFromCurrentPosition(SimUnit unit,int goal,IReadOnlySet<int>? blocked = null)
+    private List<int> PathFromCurrentPosition(SimUnit unit,int goal,IReadOnlySet<int>? blocked = null,int maxVisited = int.MaxValue)
     {
         var nav = Nav(unit);
         if (unit.Node >= Navigation.GroundCount || unit.TransitNode >= 0 && !unit.GroundSegment)
-            return nav.FindPath(unit.Node,goal,blocked);
+            return nav.FindPath(unit.Node,goal,blocked,maxVisited);
         // A connector must avoid standing workers even when the main wide-ground
         // route delegates ordinary traffic avoidance to the continuous follower.
         if (!nav.IsConnected(unit.Node,goal) && blocked == null)
         { var occupied = OccupiedNodes(unit.Id); occupied.Remove(unit.Node); blocked = occupied; }
-        return nav.FindPathFromGroundPosition(unit.X,unit.Z,goal,blocked);
+        return nav.FindPathFromGroundPosition(unit.X,unit.Z,goal,blocked,maxVisited);
+    }
+
+    /// <summary>A stuck unit's cheap way out: a short detour around the bodies in its way, back onto its own route
+    /// past the last of them within RepairReach nodes. Null when the route does not reach the goal or no such
+    /// detour is found within RepairBudget nodes; the caller then re-plans the whole route.</summary>
+    private List<int>? RepairRoute(SimUnit unit,int start,HashSet<int> blocked)
+    {
+        using var time = SimProfiler.Time("route repair");
+        var path = unit.Path;
+        if (path.Count == 0 || path[^1] != unit.Goal) return null;
+        int from = Math.Min(unit.Waypoint,path.Count-1),end = Math.Min(path.Count,from+RepairReach);
+        int first = from+2;
+        for (int i = from; i < end; i++) if (blocked.Contains(path[i])) first = Math.Max(first,i+1);
+        var rejoin = new Dictionary<int,int>();
+        for (int i = first; i < end; i++) rejoin.TryAdd(path[i],i);
+        if (rejoin.Count == 0) return null;
+        var detour = Nav(unit).FindPathToAny(start,rejoin.Keys,blocked,RepairBudget);
+        if (detour.Count == 0) { SimProfiler.Record("route repair failed",SimProfiler.Start()); return null; }
+        detour.AddRange(path.Skip(rejoin[detour[^1]]+1));
+        return detour;
+    }
+
+    /// <summary>Whether a map change in these cell rectangles can affect this unit's route: the rest of it passes
+    /// within a body radius and three cells of one (a new building may block it), or it never reached its goal
+    /// (a removed one may open the way).</summary>
+    private bool RouteMeetsChange(SimUnit unit,IReadOnlyList<(int X0,int Z0,int X1,int Z1)> areas)
+    {
+        if (unit.YieldFor >= 0 || unit.Path.Count == 0 || unit.Path[^1] != unit.Goal) return true;
+        int cell = Navigation.CellSize,margin = unit.Definition.BodyRadiusMm+3*cell;
+        int fromX = unit.X,fromZ = unit.Z;
+        for (int index = Math.Min(unit.Waypoint,unit.Path.Count-1); index < unit.Path.Count; index++)
+        {
+            var (toX,toZ) = Navigation.Center(unit.Path[index]);
+            foreach (var (x0,z0,x1,z1) in areas)
+                if (Math.Max(fromX,toX) >= x0*cell-margin && Math.Min(fromX,toX) <= (x1+1)*cell+margin
+                    && Math.Max(fromZ,toZ) >= z0*cell-margin && Math.Min(fromZ,toZ) <= (z1+1)*cell+margin) return true;
+            (fromX,fromZ) = (toX,toZ);
+        }
+        return false;
     }
 
     private static bool StableArrival(SimUnit unit) => unit.Definition.BodyRadiusMm > 350 && unit.Target < 0;

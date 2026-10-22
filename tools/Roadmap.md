@@ -30,6 +30,17 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-37 (Oct 22):** an 8-bot free-for-all on MP08_Rift fell to 1 FPS once
+armies grew. Speed bursts now stop after 25 ms of simulation per frame, and Godot
+no longer stacks catch-up frames, so the game slows instead of the frame rate (the
+match panel shows "CPU-bound · running at 2.3x"). Two play changes cut large-map
+cost. A map change re-plans only the routes it touches. A stuck unit tries a
+local detour first, and its full replan stops after 32,768 nodes. In Rift's big
+fights the median FPS went from 2 to 13-20, and ticks from 18-28 ms to 11-17 ms.
+The new routes leave two reference bot matches in a stalemate (Gimli against
+Aragorn on Bilbo's Bluffs, the Wasteland free-for-all): the bots cannot recover
+once their economy is gone. See [skirmish notes](../prototype/SKIRMISH.md#build-37-large-map-performance).
+
 **Build-36 (Oct 22):** spectator HUD in the style of other RTS observer modes. A
 foldable overview at the top right lists every player under an Economy tab (bank,
 income per minute, population, workers, army, buildings) or a Units tab (portraits
@@ -719,7 +730,10 @@ window 4.2 ms per tick, 16x at 17-26 fps.
   keep skinned, animated models in the scene for the whole match today. Free the
   view, its animation player and health bar; keep the simulation entry (unit ids
   are list indices).
-- [ ] Stuck-unit replanning: blocked units re-plan with other units' cells as
+- [ ] Stuck-unit replanning (build-37 bounded it: a local detour of up to 1,024
+  nodes back onto the route first, then a full replan capped at 32,768 nodes, or
+  8,192 when retrying after a failure; failed and capped searches on Rift fell from
+  6.1 to 0.7 ms per tick in big fights). Original note: blocked units re-plan with other units' cells as
   obstacles, and when bodies wall off a reachable goal the search floods the whole
   region. Build-31 removed the repeated floods from the fallback start cells (5-7 s
   down to under 1 s per worst two-minute window); each stuck unit still floods once
@@ -750,9 +764,15 @@ window 4.2 ms per tick, 16x at 17-26 fps.
   times per unit per tick (0.2-0.27 ms per tick after build-32's LINQ-free rewrite,
   quadratic in unit count). Keep
   an occupancy count per node updated as units move, or a per-tick spatial grid.
-- [ ] Route rebase after a map change re-plans every moving unit at once
-  (0.1-0.15 ms per tick averaged); re-plan only units whose path crosses the
-  changed area.
+- [x] Route rebase after a map change (build-37): only units whose remaining route
+  passes near a toggled obstacle, or never reached its goal, re-plan. On MP08_Rift
+  with 8 bots a change cost about 0.5 s and now about 90 ms. Play change: other
+  routes may miss a shortcut a destroyed building opened.
+- [ ] Large maps (build-37 status): on MP08_Rift big fights (150-215 units) cost
+  11-17 ms a tick after the local route repair, the 32,768 and 8,192 node replan
+  caps and the local rebase. 4x runs at about 2-3x there, at a median of 13-20 FPS.
+  Next: `OccupiedNodes` (about 17 full unit scans a tick, a fifth of the time)
+  and long but successful replans.
 - [ ] Bot think spikes: the placement ring search calls `CanPlaceBuilding` up to
   176 times in one think, and repeats it each second while nothing fits; cache
   refusals per building until the map changes, and stagger heavy bot work.

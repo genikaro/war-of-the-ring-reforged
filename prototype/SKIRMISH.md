@@ -1473,3 +1473,74 @@ synthetic checks cover the delivered totals (each credited load counted once, no
 effect on the digest): 780 simulation and 34 worker-cache checks pass, as do the
 command, orders, ability, skirmish, construction, structure, production, minimap,
 victory and observer smokes.
+
+## Build-37: large-map performance
+
+The owner watched an 8-bot free-for-all on MP08_Rift (512 x 512 m, the largest
+map; Aragorn, Gandalf, Saruman, Smaug, Gimli, Legolas, Grishnakh, Shelob at 4x)
+and saw 1 FPS. A windowed profile, sampled every 5 game seconds, showed two
+problems.
+
+**Frame scheduling (no play change).** From about 3:45 of game time, with 150
+units, a tick cost 8-28 ms, so 4x (80 ticks a second) could not keep up. Godot
+then ran up to eight catch-up physics frames, each a burst of four ticks, before
+drawing one frame. Now a speed burst stops once it has used 25 ms of simulation
+time in a physics frame, and Godot runs at most one physics frame per drawn frame
+(`physics/common/max_physics_steps_per_frame=1`). When the simulation cannot keep
+up, the game runs slower than the chosen speed instead of the frame rate dropping;
+the ticks are the same ones, spread over more frames. While observing, the match
+panel's key hint turns amber and reads "CPU-bound · running at 2.3x" whenever the
+measured speed falls below 85% of the chosen one.
+
+**Simulation cost (play changes, owner's choice: "fix both").** The grid has
+262,144 cells, 6.5 times Bilbo's Bluffs, so every whole-map search costs that much
+more. In the heavy phase two costs dominated:
+
+- *Route rebase, 23%.* Any building placed or destroyed anywhere made every moving
+  unit re-plan its whole route, about 0.5 s each time, 25 times in two minutes.
+  The navigation now records the cell rectangle around each toggled obstacle
+  (`GridNavigation.ChangedAreas`). On a change, only units whose remaining route
+  passes within a body radius and three cells of one re-plan, along with units
+  whose route never reached its goal, so a removed building can open their way.
+  Other routes stay as they are and may miss a shortcut a destroyed building
+  opened. Each change now costs about 90 ms on Rift.
+- *Blocked-unit replans, 42%.* A unit stuck behind other bodies re-planned its
+  whole route around them. When bodies sealed the goal off, the search flooded the
+  whole region, 76 ms each on Rift. Three changes:
+  1. A stuck unit first tries a local repair: a detour of at most 1,024 nodes
+     around the bodies, back onto its own route past the last body within 24
+     nodes ahead.
+  2. Failing that, the full replan stops after 32,768 nodes. Measured with no cap,
+     every successful replan on Bilbo's Bluffs closed at most 16,384 nodes; on
+     Rift 98% stay under 32,768.
+  3. A retry after a failed replan, which leaves no route to repair, gets 8,192.
+  A search that runs out counts as a failure, and the unit yields as before.
+
+**Bot fix found on the way.** With routes changed, a synthetic bot duel left 43
+soldiers idle. The bot judged whether its assault could reach a building from one
+party member, and that soldier stood inside its own Mill's footprint, from which
+nothing is reachable. The check now uses a widest member standing on open ground.
+
+| Rift, 4x, windowed (game time, units) | before: FPS (median) / tick | after: FPS (median) / tick |
+|---|---|---|
+| 0:06-1:30 (32-86) | 22-171 (112) / 3.1 ms | 75-167 (121) / 1.4 ms |
+| 1:45-3:30 (92-134) | 2-102 (58) / 6.6 ms | 9-94 (63) / 5.1 ms |
+| 3:45-4:10 (143-163) | 1-16 (2) / 17.6 ms | 7-43 (20) / 11.3 ms |
+| 4:15-5:15 (164-197) | not reached | 7-19 (17) / 17.3 ms |
+| 5:20-6:20 (201-215) | not reached | 9-20 (13) / 16.0 ms |
+
+With the frame budget alone, 3:45-4:10 ran at a median of 15 FPS with 18 ms
+ticks. From 3:45 on, per tick, blocked replans fell from 9.8 to 5.1 ms, failed and
+capped searches from 6.1 to 0.7 ms, and route rebase from 5.4 to 0.9 ms. Big
+fights on Rift still cost 11-17 ms a tick, so 4x runs at about 2-3x there.
+`OccupiedNodes` (every unit scanned about 17 times a tick, 3.2 ms)
+and long but successful replans remain; see the roadmap's performance backlog.
+
+**Observer match.** The routes changed, so the matches changed, and two reference matches now stall instead of finishing. Gimli against Aragorn on Bilbo's Bluffs, which Gimli won at 33:33 in build-35, starves both sides: by 24:00 Aragorn has no workers, Gimli bleeds its last workers and neither army reaches assault size again, so the observer smoke's 40-minute result check fails (the other 14 checks pass). The 4-bot Wasteland match (Gimli won at 45:01 in build-35) freezes at 40:00: three bots have no workers, and Saruman lost its Citadel, so its six workers cannot deliver and it cannot afford a new one. With the bots swapped (Aragorn, Gimli) Bilbo's Bluffs ends with Aragorn winning at 26:00 (tick 31205). Going by the bots' status lines, these are bots that cannot recover once their economy is gone (open since build-35), not armies stuck on routes.
+
+Validation: 780 synthetic, 847 Helm's Deep and 34 worker-cache checks, and the
+sandbox, combat, melee, surface, obstacle, engagement, command, orders, ability,
+skirmish, construction, structure, production, placement, Dwarf Hall, minimap,
+Frodo, siege, defense, victory and AI smokes pass. The observer smoke fails only
+its result check, as described above. The formation smoke keeps its known
+`attack_move_arrived` failure (since build-19).

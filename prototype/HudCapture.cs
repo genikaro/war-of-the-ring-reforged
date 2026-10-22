@@ -33,7 +33,7 @@ public partial class Main
             _world.Units.Count(u => u.Team == PlayerTeam && u.Health > 0),_world.Units.Count(u => u.Team != PlayerTeam && u.Health > 0),_world.IsWalking(PlayerTeam),_world.Tick,_pendingAbilitySlot);
         if (_observing)
         {
-            hud.RefreshMatch(_mapName,_world.Tick,Speeds,_speed,_paused,MatchState(_world));
+            hud.RefreshMatch(_mapName,_world.Tick,Speeds,_speed,_paused,MatchState(_world),_actualSpeed);
             var overview = new ObserverHud { Visible = _hud.Visible }; root.AddChild(overview); overview.Mirror(_observerHud);
             overview.Refresh(_world,TeamColor,hud.Art,hud.EffectiveScale);
         }

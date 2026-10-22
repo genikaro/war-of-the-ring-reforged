@@ -17,6 +17,8 @@ project/assembly_name="Reforged"
 
 [physics]
 common/physics_ticks_per_second=20
+; One physics frame per drawn frame: when the simulation cannot keep up, the game slows instead of the frame rate.
+common/max_physics_steps_per_frame=1
 common/physics_jitter_fix=0.0
 
 [rendering]

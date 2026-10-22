@@ -639,9 +639,12 @@ public partial class Main : Node3D
         _presentStep = _paused;
         _singleStepRequested = false;
         // Game speed: several fixed ticks per physics frame. A single step while paused stays a single step,
-        // and the result panel pausing the game ends the burst.
+        // and the result panel pausing the game ends the burst. So does the frame budget: when ticks are too
+        // slow for the chosen speed the game runs slower, not the frame rate, and every tick stays the same.
         using var physicsTime = SimProfiler.Time("godot physics frame");
-        for (int burst = _presentStep ? 1 : _speed, step = 0; step < burst && (step == 0 || !_paused); step++)
+        long burstStart = System.Diagnostics.Stopwatch.GetTimestamp();
+        for (int burst = _presentStep ? 1 : _speed, step = 0; step < burst && (step == 0 || !_paused
+            && System.Diagnostics.Stopwatch.GetElapsedTime(burstStart).TotalMilliseconds < SpeedBudgetMs); step++)
         {
             long stepStart=_engagementSmoke?System.Diagnostics.Stopwatch.GetTimestamp():0;
             _world.Step();
@@ -739,7 +742,7 @@ public partial class Main : Node3D
         if (_world is null || _loadFailed) return;
         using var processTime = SimProfiler.Time("godot process frame");
         ReportProfile();
-        RefreshObserverPanel();
+        RefreshObserverPanel(delta);
         float dt = (float)Math.Min(delta, 0.1);
         if (!_paused || _presentStep)
             foreach (var unit in _world.Units)

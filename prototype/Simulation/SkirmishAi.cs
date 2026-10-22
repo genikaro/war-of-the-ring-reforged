@@ -377,7 +377,8 @@ public sealed partial class SimWorld
         if (!ConstructionSites.TryGetValue(ai.PartyTarget,out var target) || target.Health <= 0 || target.Team == ai.Team || target.Team < 0)
         {
             // The nearest building the party can walk to: across a river without a crossing, a closer one waits.
-            var widest = party.OrderByDescending(u => u.Definition.BodyRadiusMm).ThenBy(u => u.Id).First();
+            // Judged from a widest member on open ground: one boxed in by a building raised under it reaches nothing.
+            var widest = party.OrderByDescending(u => u.Definition.BodyRadiusMm).ThenByDescending(u => Nav(u).CanStand(u.Node)).ThenBy(u => u.Id).First();
             target = enemyBuildings.OrderBy(s => DistanceSquared(SitePosition(s).X,SitePosition(s).Z,ai.PartyTarget < 0 ? bx : cx,ai.PartyTarget < 0 ? bz : cz))
                 .ThenBy(s => s.Id).FirstOrDefault(s => AiReaches(widest,s));
             if (target == null) { ai.Party.Clear(); ai.PartyTarget = -1; return; }

@@ -288,7 +288,9 @@ python tools/prepare_prototype.py --all-maps
 
 Game speed works in every mode: `-` and `+` step through 1x, 2x, 4x, 8x and 16x,
 and Space pauses. While observing, the match panel's pause button and notched
-slider (click, drag or scroll it) do the same.
+slider (click, drag or scroll it) do the same. When the simulation cannot keep up
+with the chosen speed (big fights on large maps), the game runs slower instead of
+the frame rate, and the match panel shows the speed actually reached.
 
 `-Profile` (any mode) prints, every two game minutes, the unit count and where
 simulation and frame time went, for chasing slow matches.

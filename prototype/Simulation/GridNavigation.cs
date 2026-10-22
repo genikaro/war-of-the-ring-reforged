@@ -56,6 +56,10 @@ public sealed partial class GridNavigation
     public int BodyHeightMm { get; }
     private bool TypedBody => BodyRadiusMm != 350 || BodyHeightMm != 700;
     public int Revision { get; private set; }
+    /// <summary>The cell rectangle (inclusive) around every obstacle toggled since the owner last cleared the list,
+    /// so the simulation re-plans only the routes a change can touch. Body graphs leave theirs empty.</summary>
+    public List<(int X0,int Z0,int X1,int Z1)> ChangedAreas { get; } = [];
+    private bool _bodyGraph;
     public IEnumerable<int> ObstacleIds => _obstacles.Keys.Order();
 
     public GridNavigation(int width, int height, int cellSize, bool[] allowed, int[] heights,
@@ -162,7 +166,7 @@ public sealed partial class GridNavigation
         var blocked = profile?.Nodes ?? Enumerable.Range(0,_surfaces.Length)
             .Where(i => radius > _surfaces[i].ClearanceRadiusMm).Select(i => GroundCount+i).ToArray();
         var graph = new GridNavigation(Width,Height,CellSize,Allowed,Heights,_surfaces,
-            profile?.Obstacles ?? _obstacles.Values.Where(o => !_runtimeFootprints.ContainsKey(o.Id)).ToArray(),radius,height,blocked,profile?.Edges);
+            profile?.Obstacles ?? _obstacles.Values.Where(o => !_runtimeFootprints.ContainsKey(o.Id)).ToArray(),radius,height,blocked,profile?.Edges) { _bodyGraph = true };
         // Runtime placements are rasterized for this body's own clearance; they start inactive.
         foreach (var (id,footprints) in _runtimeFootprints) graph.AddObstacle(id,footprints);
         foreach (int id in ObstacleIds.Where(id => !_runtimeFootprints.ContainsKey(id) && !IsObstacleActive(id))) graph.SetObstacle(id,false);
@@ -222,6 +226,7 @@ public sealed partial class GridNavigation
         }
         if (active) _activeObstacles.Add(id); else _activeObstacles.Remove(id);
         _components = null;
+        if (!_bodyGraph && ObstacleCells(obstacle) is { } area) ChangedAreas.Add(area);
         InvalidateNear(obstacle);
         _bottlenecks.Clear();
         Revision++;
@@ -423,12 +428,7 @@ public sealed partial class GridNavigation
     /// of such an edge lie within a body radius and a diagonal of them; the margin covers that.</summary>
     private void InvalidateNear(NavigationObstacle obstacle)
     {
-        int x0 = int.MaxValue,z0 = int.MaxValue,x1 = int.MinValue,z1 = int.MinValue;
-        void Include(int x,int z) { x0 = Math.Min(x0,x); z0 = Math.Min(z0,z); x1 = Math.Max(x1,x); z1 = Math.Max(z1,z); }
-        foreach (int node in obstacle.Nodes.Concat(obstacle.Edges.SelectMany(e => new[] {e.A,e.B}))) Include(Column(node)%Width,Column(node)/Width);
-        foreach (var footprint in obstacle.Footprints ?? [])
-            foreach (var point in footprint.Polygon) Include(Math.Clamp(point.X/CellSize,0,Width-1),Math.Clamp(point.Z/CellSize,0,Height-1));
-        if (x0 > x1) return;
+        if (ObstacleCells(obstacle) is not var (x0,z0,x1,z1)) return;
         int margin = 3+(BodyRadiusMm+CellSize-1)/CellSize;
         for (int z = Math.Max(0,z0-margin); z <= Math.Min(Height-1,z1+margin); z++)
         for (int x = Math.Max(0,x0-margin); x <= Math.Min(Width-1,x1+margin); x++)
@@ -442,6 +442,17 @@ public sealed partial class GridNavigation
             if (_edgeCache != null) Array.Clear(_edgeCache,cell*8,8);
             foreach (int next in TopologyNeighbors(cell)) if (next < GroundCount) _groundEdges.Remove((Math.Min(cell,next),Math.Max(cell,next)));
         }
+    }
+
+    /// <summary>The cells an obstacle's nodes, edges and footprints cover, as an inclusive rectangle, or null.</summary>
+    private (int X0,int Z0,int X1,int Z1)? ObstacleCells(NavigationObstacle obstacle)
+    {
+        int x0 = int.MaxValue,z0 = int.MaxValue,x1 = int.MinValue,z1 = int.MinValue;
+        void Include(int x,int z) { x0 = Math.Min(x0,x); z0 = Math.Min(z0,z); x1 = Math.Max(x1,x); z1 = Math.Max(z1,z); }
+        foreach (int node in obstacle.Nodes.Concat(obstacle.Edges.SelectMany(e => new[] {e.A,e.B}))) Include(Column(node)%Width,Column(node)/Width);
+        foreach (var footprint in obstacle.Footprints ?? [])
+            foreach (var point in footprint.Polygon) Include(Math.Clamp(point.X/CellSize,0,Width-1),Math.Clamp(point.Z/CellSize,0,Height-1));
+        return x0 > x1 ? null : (x0,z0,x1,z1);
     }
 
     private void BeginSearch()
@@ -633,7 +644,10 @@ public sealed partial class GridNavigation
         if (_groundLinks.TryGetValue(id, out var links)) foreach (int link in links) yield return link;
     }
 
-    public List<int> FindPath(int start, int goal, IReadOnlySet<int>? blocked = null)
+    /// <summary>A* from start to goal. A search that avoids blocked nodes (other units' bodies) gives up after
+    /// closing maxVisited nodes, which counts as a failed flood: a goal walled off by bodies would otherwise
+    /// cost a flood of the whole region on every retry.</summary>
+    public List<int> FindPath(int start, int goal, IReadOnlySet<int>? blocked = null, int maxVisited = int.MaxValue)
     {
         using var time = SimProfiler.Time("FindPath");
         long began = SimProfiler.Start();
@@ -650,11 +664,17 @@ public sealed partial class GridNavigation
         }
         _searchSeen[start] = stamp; _searchCost[start] = 0; _searchPrevious[start] = -1;
         open.Enqueue(start, (Heuristic(start), start));
+        int closed = 0;
         while (open.TryDequeue(out int cell, out _))
         {
             if (_searchClosed[cell] == stamp) continue;
             _searchClosed[cell] = stamp;
             if (cell == goal) return SearchPath(cell);
+            if (blocked != null && ++closed > maxVisited)
+            {
+                SimProfiler.Record("FindPath budget (blocked)",began);
+                _lastFloodStamp = stamp; return [];
+            }
             OpenNeighbors(cell,neighbors);
             foreach (int next in neighbors)
             {
@@ -689,10 +709,10 @@ public sealed partial class GridNavigation
     public bool CanReachGroundPosition(int x,int z,int goal)
         => IsConnected(Cell(x,z),goal) || GroundRouteStarts(x,z,goal).Any();
 
-    public List<int> FindPathFromGroundPosition(int x,int z,int goal,IReadOnlySet<int>? blocked = null)
+    public List<int> FindPathFromGroundPosition(int x,int z,int goal,IReadOnlySet<int>? blocked = null,int maxVisited = int.MaxValue)
     {
         using var time = SimProfiler.Time("FindPathFromGround");
-        var path = FindPath(Cell(x,z),goal,blocked);
+        var path = FindPath(Cell(x,z),goal,blocked,maxVisited);
         if (path.Count > 0) return path;
         // A start that an earlier failed search here already reached cannot reach the goal either: its route would
         // have extended that search's. Skipping it changes no result, and saves re-flooding the same region.
@@ -702,7 +722,7 @@ public sealed partial class GridNavigation
         {
             if (floods.Contains(_searchClosed.Length > start ? _searchClosed[start] : 0)) continue;
             using var retry = SimProfiler.Time("FindPathFromGround retry");
-            path = FindPath(start,goal,blocked);
+            path = FindPath(start,goal,blocked,maxVisited);
             if (_lastFloodStamp != 0) floods.Add(_lastFloodStamp);
             if (path.Count > 0) return path;
         }

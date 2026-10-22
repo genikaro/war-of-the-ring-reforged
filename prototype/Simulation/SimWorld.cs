@@ -476,6 +476,14 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         return false;
     }
 
+    /// <summary>Nodes a stuck unit's body-avoiding replan may close before it gives up and yields (see FindPath);
+    /// a retry after a failed one gets the smaller budget. Measured in build-37: on Bilbo's Bluffs every successful
+    /// replan closed at most 16,384 nodes and a failed one flooded its whole region (under 16,384); on MP08_Rift
+    /// 98% of successes stay under 32,768, and a failure costs 12-17 ms instead of a 76 ms flood of the map.</summary>
+    private const int BlockedReplanBudget = 32768,RetryReplanBudget = 8192;
+    /// <summary>A local repair rejoins the route within this many nodes ahead, closing at most RepairBudget nodes.</summary>
+    private const int RepairReach = 24,RepairBudget = 1024;
+
     private HashSet<int> OccupiedNodes(int except)
     {
         using var time = SimProfiler.Time("OccupiedNodes");
@@ -557,9 +565,12 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         using (SimProfiler.Time("route rebase")) if (_navigationRevision != Navigation.Revision)
         {
             using var hit = SimProfiler.Time("route rebase hit");
-            // Rebuild routes at a tick boundary. Starting from the last reached
-            // node also safely brings an in-flight unit back to its cell center.
-            foreach (var unit in Units.Where(u => u.Present && u.Goal >= 0))
+            // Rebuild the routes a change can touch at a tick boundary. Starting from the last reached node also
+            // safely brings an in-flight unit back to its cell center. Routes elsewhere stay as they are: they
+            // may miss a shortcut a removed building opened, but a building going up on one side of a large map
+            // no longer re-plans every moving unit on the other.
+            var areas = Navigation.ChangedAreas.ToArray(); Navigation.ChangedAreas.Clear();
+            foreach (var unit in Units.Where(u => u.Present && u.Goal >= 0 && RouteMeetsChange(u,areas)))
             {
                 RebaseGround(unit);
                 unit.YieldFor = unit.YieldGoal = -1;
@@ -644,8 +655,12 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 int start = unit.Node;
                 var blocked = OccupiedNodes(unit.Id);
                 blocked.Remove(start);
-                unit.Path = PathFromCurrentPosition(unit,unit.YieldGoal >= 0 ? unit.YieldGoal : unit.Goal,
-                    unit.FreeMovement && unit.Definition.BodyRadiusMm > 350 ? null : blocked);
+                bool avoid = !(unit.FreeMovement && unit.Definition.BodyRadiusMm > 350);
+                // A unit whose last replan already failed keeps no route to repair; it retries on a smaller budget.
+                bool routed = unit.Path.Count > 0 && unit.Path[^1] == unit.Goal;
+                unit.Path = (avoid && unit.YieldGoal < 0 ? RepairRoute(unit,start,blocked) : null)
+                    ?? PathFromCurrentPosition(unit,unit.YieldGoal >= 0 ? unit.YieldGoal : unit.Goal,avoid ? blocked : null,
+                        routed ? BlockedReplanBudget : RetryReplanBudget);
                 unit.Waypoint = 0; unit.BlockedTicks = 0;
                 // A blocked idle unit has no destination worth displacing
                 // others for; it rests where it stands instead.
