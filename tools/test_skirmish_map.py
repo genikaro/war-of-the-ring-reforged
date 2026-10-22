@@ -135,6 +135,45 @@ class WorkerCellTests(unittest.TestCase):
             skirmish_map.worker_cells(bytes(width*height), width, height, 1.0, (30.0, 30.0))
 
 
+class StartPositionTests(unittest.TestCase):
+    CITADEL = [[-4.8, -3.6], [4.8, -3.6], [4.8, 3.6], [-4.8, 3.6]]
+    RADII = {'ore': 6.0, 'food': 7.0}
+
+    def place(self, centre, resources, buildable=None, width=80):
+        polygon = [[x+centre[0], z+centre[1]] for x, z in self.CITADEL]
+        buildable = buildable or bytes([1]) * (width*width)
+        return skirmish_map.start_position(polygon, centre, resources, self.RADII, buildable, width, width, 1.0)
+
+    def test_polygon_distance_is_zero_inside_and_euclidean_outside(self):
+        square = [(0, 0), (2, 0), (2, 2), (0, 2)]
+        self.assertEqual(skirmish_map.polygon_distance((1, 1), square), 0)
+        self.assertAlmostEqual(skirmish_map.polygon_distance((5, 1), square), 3)
+        self.assertAlmostEqual(skirmish_map.polygon_distance((5, 6), square), 5)
+
+    def test_a_clear_start_point_keeps_its_marker(self):
+        self.assertEqual(self.place((40.0, 40.0), [{'kind': 'ore', 'position': [40.0, 55.0, 0]}]), (0, 0))
+
+    def test_a_citadel_moves_out_of_a_well_radius_by_the_shortest_step(self):
+        well = {'kind': 'food', 'position': [40.0, 47.0, 0]}
+        dx, dz = self.place((40.0, 40.0), [well])
+        # The wall facing the well stands 3.4 m from it at the marker and must stand 7 m: 3.6 m away, on a 0.5 m lattice.
+        self.assertEqual((dx, dz), (0, -4.0))
+        polygon = [(x+40+dx, z+40+dz) for x, z in self.CITADEL]
+        self.assertGreaterEqual(skirmish_map.polygon_distance(well['position'][:2], polygon), 7)
+
+    def test_unbuildable_ground_is_avoided_and_no_room_is_rejected(self):
+        width = 80
+        buildable = bytearray([1]) * (width*width)
+        for cell in range(width*width):
+            if cell // width < 40:
+                buildable[cell] = 0
+        dx, dz = self.place((40.0, 40.0), [], bytes(buildable))
+        # Cell centres from row 40 (40.5 m) on lie inside a footprint whose near wall is at 39.9 m.
+        self.assertEqual((dx, dz), (0, 3.5))
+        with self.assertRaisesRegex(ValueError, 'no room for a start Citadel'):
+            self.place((40.0, 40.0), [], bytes(width*width))
+
+
 class RosterTests(unittest.TestCase):
     def test_skirmish_roster_extends_the_demo_roster_without_reordering(self):
         roster = prepare_prototype.SKIRMISH_ROSTER

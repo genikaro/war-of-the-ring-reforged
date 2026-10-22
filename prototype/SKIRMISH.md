@@ -1828,3 +1828,44 @@ to attack an enemy 65 m away walks there without standing still and strikes
 (with the fix disabled it stands for the whole minute), and a new bot party
 musters on its route, not at the target, and moves on only once every member
 stands within 12 m of the muster point.
+
+## Build-42: buildings on the minimap, start Citadels clear of resources
+
+Owner requests: show buildings on the minimap at their real size, and keep
+buildings (start Citadels included) at the minimum distance from resources.
+
+- **Minimap buildings.** Every standing building and foundation is drawn as its
+  footprint polygon (`GridNavigation.Footprints`) in its team's colour, over the
+  resource markers, so a Mill or Foundry shows its owner; foundations are half
+  transparent until complete. A Citadel is 9.6 x 7.3 m: about 8 px on Bilbo's
+  Bluffs (200 m), 3 px on the 512 m maps.
+- **Start Citadels.** The source rule is `Objects.MinBuildingPlacementRadius`: no
+  building within 6 m of an ore pile or 7 m of a food well (measured here from the
+  resource's centre to the Citadel's footprint). The importer used to put each
+  Citadel straight on its start marker, and on most maps that put a pile or well
+  inside the radius, some under the Citadel's walls (MP02_Jungle_Fever,
+  MP08_Crazy_Corners). `skirmish_map.start_position` now keeps the marker when it
+  is clear, else moves the Citadel to the nearest spot on a 0.5 m lattice within
+  20 m where every resource is clear and every cell under the footprint is source
+  building ground (`PATHING_CATEGORY_BUILDING`). Walker bits and scenery are not
+  checked: several markers (MP04_Spire_of_Mordor, MP07_Choke) already stand over
+  them in the source. Workers spawn around the new position.
+- **Moves.** Bilbo's Bluffs, MP04_Mighty_Silverlode and MP04_Wasteland are
+  unchanged; elsewhere most Citadels move 1-10 m, the largest 16 m
+  (MP04_Spire_of_Mordor, slot 3, where building ground is narrow). The other 31
+  map caches need a re-import (`prepare_prototype.py --skirmish --all-maps`).
+- **Placement (owner follow-up).** Every open-ground building the player or a bot
+  places obeys the same radius: `CanPlaceBuilding` refuses a footprint within it
+  with "Too close to a resource". The radius travels in the economy cache as
+  `sources.<kind>.building_clearance_mm` (refresh old caches with
+  `python tools/skirmish_economy.py --cache <cache>`); the runtime keeps it in
+  `SimWorld.ResourceClearanceMm`, outside the state digest. Mills and Foundries go
+  on their resource as before. Bots keep their own 10 m centre clearance on top.
+
+Validation: 4 new importer tests (polygon distance, a clear marker stays, the
+shortest step out of a well's radius, unbuildable ground avoided and no room
+rejected), the economy import tests check the exported radius, a new placement
+check refuses a Camp inside a well's radius and accepts it just outside, and
+`-MinimapSmoke` gains `buildings_drawn_at_footprint_size` (17 checks). On Bilbo's
+Bluffs the home pile and well are 12-13 m from the Citadel, so `-PlacementSmoke`
+now looks for its three spots up to 25 m out instead of 19 m.

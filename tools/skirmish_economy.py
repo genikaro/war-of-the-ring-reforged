@@ -65,7 +65,9 @@ def economy_data(resolver):
             'rate_milli_per_tick': round(record['ResourceGatherRateRaw'] * 1000 / 20),
             'raw_fraction_ppm': round(record['MaxGatherPercentageRaw'] * 1_000_000),
             'improved_rate_milli_per_tick': round(record['ResourceGatherRateWithBuilding'] * 1000 / 20),
-            'improved_fraction_ppm': round(record['MaxGatherPercentageWithBuilding'] * 1_000_000)}
+            'improved_fraction_ppm': round(record['MaxGatherPercentageWithBuilding'] * 1_000_000),
+            # No open-ground building within this distance of the resource (build-42).
+            'building_clearance_mm': round(record['MinBuildingPlacementRadius'] * 1000)}
     return {'format_version': 2, 'ticks_per_second': 20,
             'workers': {'UNIT_G_HUMAN_WORKER': {'food_capacity': worker['MaxCarriedFood'], 'ore_capacity': worker['MaxCarriedOre'],
                                                 'raw_ore_load': RAW_ORE_LOAD, 'inside_ticks': INSIDE_TICKS,

@@ -22,17 +22,17 @@ class EconomyImportTests(unittest.TestCase):
             db = {'Units': FakeTable({'UNIT_G_HUMAN_WORKER': {'MaxCarriedFood': 13, 'MaxCarriedOre': 7}}),
                   'WorldVariables': FakeTable({'world': {'DefaultInitialFoodCapacity': 100, 'DefaultInitialOreCapacity': 200}}),
                   'Objects': FakeTable({'OBJECT_RESOURCE_ORE_PILE': {'ResourceGatherRateRaw': .6, 'MaxGatherPercentageRaw': .25,
-                                             'ResourceGatherRateWithBuilding': 1.2, 'MaxGatherPercentageWithBuilding': .8},
+                                             'ResourceGatherRateWithBuilding': 1.2, 'MaxGatherPercentageWithBuilding': .8, 'MinBuildingPlacementRadius': 6.0},
                                         'OBJECT_RESOURCE_FOOD_WELL': {'ResourceGatherRateRaw': 0, 'MaxGatherPercentageRaw': 0,
-                                             'ResourceGatherRateWithBuilding': .4, 'MaxGatherPercentageWithBuilding': 1}})}
+                                             'ResourceGatherRateWithBuilding': .4, 'MaxGatherPercentageWithBuilding': 1, 'MinBuildingPlacementRadius': 7.5}})}
         with mock.patch.object(skirmish_economy, 'worker_animations', return_value={'mine': 'clips'}):
             data = skirmish_economy.economy_data(FakeResolver())
         self.assertEqual(data['workers']['UNIT_G_HUMAN_WORKER'], {'food_capacity': 13, 'ore_capacity': 7, 'raw_ore_load': 5,
                                                                   'inside_ticks': 40, 'animations': {'mine': 'clips'}})
         self.assertEqual(data['sources']['ore'], {'rate_milli_per_tick': 30, 'raw_fraction_ppm': 250000,
-                         'improved_rate_milli_per_tick': 60, 'improved_fraction_ppm': 800000})
+                         'improved_rate_milli_per_tick': 60, 'improved_fraction_ppm': 800000, 'building_clearance_mm': 6000})
         self.assertEqual(data['sources']['food'], {'rate_milli_per_tick': 0, 'raw_fraction_ppm': 0,
-                         'improved_rate_milli_per_tick': 20, 'improved_fraction_ppm': 1000000})
+                         'improved_rate_milli_per_tick': 20, 'improved_fraction_ppm': 1000000, 'building_clearance_mm': 7500})
         self.assertEqual((data['food_capacity'], data['ore_capacity']), (100, 200))
 
     def test_gather_clips_round_up_to_ticks_and_hit_on_the_supply_sound(self):
@@ -66,9 +66,9 @@ class EconomyImportTests(unittest.TestCase):
                          ('UNIT_ANIM_STATE_RESOURCE_ORE_WALK', 'G_Human_Worker_Resource_Walk'))
         self.assertEqual((clips['build']['state'], clips['build']['clip']), ('UNIT_ANIM_STATE_REPAIR', 'G_Human_Worker_Repair'))
         self.assertEqual(data['sources']['ore'], {'rate_milli_per_tick': 10, 'raw_fraction_ppm': 550000,
-                         'improved_rate_milli_per_tick': 20, 'improved_fraction_ppm': 1000000})
+                         'improved_rate_milli_per_tick': 20, 'improved_fraction_ppm': 1000000, 'building_clearance_mm': 6000})
         self.assertEqual(data['sources']['food'], {'rate_milli_per_tick': 0, 'raw_fraction_ppm': 0,
-                         'improved_rate_milli_per_tick': 20, 'improved_fraction_ppm': 1000000})
+                         'improved_rate_milli_per_tick': 20, 'improved_fraction_ppm': 1000000, 'building_clearance_mm': 7000})
         self.assertEqual((data['food_capacity'], data['ore_capacity']), (99999, 99999))
 
 

@@ -132,6 +132,61 @@ def building_footprint(resolver, building, position, object_id, angle=0.0):
     return prototype_obstacles.footprint(boxes[0], obj, resolved['scale']), resolved['scale']
 
 
+def placement_radii(resolver):
+    """Source Objects.MinBuildingPlacementRadius of each resource kind in metres (ore pile 6, food well 7)."""
+    return {kind: resolver.db['Objects'].get(name)['MinBuildingPlacementRadius'] for name, kind in RESOURCE_OBJECTS.items()}
+
+
+def polygon_distance(point, polygon):
+    """Distance from a point to a convex polygon, 0 inside it."""
+    px, pz = point
+    inside, best = True, math.inf
+    for (ax, az), (bx, bz) in zip(polygon, polygon[1:] + polygon[:1]):
+        dx, dz = bx-ax, bz-az
+        if dx*(pz-az) - dz*(px-ax) < 0:
+            inside = False
+        t = max(0.0, min(1.0, ((px-ax)*dx + (pz-az)*dz) / (dx*dx + dz*dz)))
+        best = min(best, math.hypot(px-ax-t*dx, pz-az-t*dz))
+    return 0.0 if inside else best
+
+
+START_SEARCH = (0.5, 20.0)
+
+
+def start_position(polygon, centre, resources, radii, buildable, width, height, spacing, search=START_SEARCH):
+    """Where a start Citadel goes: its marker unless its footprint comes within a resource's source
+    MinBuildingPlacementRadius or covers ground that cannot be built on; then the nearest such spot on a fine
+    lattice. The marker on several maps (MP02_Jungle_Fever, MP08_Crazy_Corners) puts a pile or well under the
+    Citadel's walls. Returns the horizontal offset (dx, dz) to move the marker footprint by."""
+    hull = [tuple(p[:2]) for p in polygon]
+    if sum((b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0]) for a, b, c in zip(hull, hull[1:], hull[2:])) < 0:
+        hull.reverse()
+    xmin, xmax = min(p[0] for p in hull), max(p[0] for p in hull)
+    zmin, zmax = min(p[1] for p in hull), max(p[1] for p in hull)
+
+    def fits(dx, dz):
+        shifted = [(x+dx, z+dz) for x, z in hull]
+        if any(polygon_distance(r['position'][:2], shifted) < radii[r['kind']] for r in resources):
+            return False
+        for cz in range(math.floor((zmin+dz)/spacing), math.floor((zmax+dz)/spacing)+1):
+            for cx in range(math.floor((xmin+dx)/spacing), math.floor((xmax+dx)/spacing)+1):
+                if not (0 <= cx < width and 0 <= cz < height):
+                    return False
+                if not buildable[cz*width+cx] and polygon_distance(((cx+.5)*spacing, (cz+.5)*spacing), shifted) == 0:
+                    return False
+        return True
+
+    step, reach = search
+    rings = round(reach/step)
+    offsets = sorted(((x*step, z*step) for z in range(-rings, rings+1) for x in range(-rings, rings+1)
+                      if math.hypot(x, z) <= rings),
+                     key=lambda o: (round(math.hypot(*o), 6), round(math.atan2(o[1], o[0]), 6)))
+    found = next((o for o in offsets if fits(*o)), None)
+    if found is None:
+        raise ValueError('no room for a start Citadel within %.0f m of the start point at %.1f, %.1f' % (reach, *centre[:2]))
+    return found
+
+
 def worker_cells(allowed, width, height, spacing, centre, count=START_WORKERS, ring=WORKER_RING):
     """Deterministic start-worker cells spread around a building on connected ground."""
     cx, cz = centre[0]/spacing, centre[1]/spacing

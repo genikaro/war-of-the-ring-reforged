@@ -510,7 +510,8 @@ and animation player.
 The minimap smoke test (build-18, skirmish cache) checks the original ore, well and
 place-of-power markers against the source objects, the view outline, minimap
 press-and-drag, release, edge and corner scrolling, and that scrolling stops when
-the pointer leaves the window. It writes `converted/skirmish/minimap-smoke-report.json`.
+the pointer leaves the window, and (build-42) that every start Citadel is drawn at
+its footprint's size in its team's colour. It writes `converted/skirmish/minimap-smoke-report.json`.
 The surface smoke test places six units on an elevated deck, dispatches a
 right-click order, then checks Ctrl + Alt + right-click terrain picking with the same
 screen position. The obstacle smoke test removes and restores an obstacle

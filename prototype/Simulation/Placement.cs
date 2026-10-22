@@ -18,6 +18,10 @@ public sealed partial class SimWorld
     public List<StartStructure> StartStructures { get; } = [];
     /// <summary>Source building passability per ground cell; null allows any walkable cell.</summary>
     public bool[]? BuildingGround { get; set; }
+    /// <summary>Source Objects.MinBuildingPlacementRadius per resource kind (ore pile 6 m, food well 7 m): no open-ground
+    /// footprint may come this close to the resource's centre. A Mill or Foundry is raised on its resource instead.</summary>
+    public Dictionary<ResourceKind,int> ResourceClearanceMm { get; } = [];
+    public const string TooCloseToResource = "Too close to a resource";
 
     public NavigationFootprint? PlacementFootprint(string building,int cell)
     {
@@ -68,6 +72,8 @@ public sealed partial class SimWorld
         // ponytail: center distance to a completed building of the team; the original's measurement is unverified.
         if (placement.MustBeNear && !PlacementAnchors(team).Any(a => DistanceSquared(a.X,a.Z,x,z) <= (long)a.Radius*a.Radius))
         { reason = "Too far from your buildings"; return false; }
+        if (Resources.Values.Any(r => ResourceClearanceMm.TryGetValue(r.Kind,out int clearance) && GridNavigation.FootprintBlocks(footprint,r.X,r.Z,r.X,r.Z,clearance)))
+        { reason = TooCloseToResource; return false; }
         foreach (int covered in CoveredCells(footprint))
         {
             if (BuildingGround is { } ground && !ground[covered]) { reason = "Ground unsuitable for building"; return false; }

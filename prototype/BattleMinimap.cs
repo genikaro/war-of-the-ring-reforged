@@ -47,12 +47,28 @@ public partial class BattleMinimap : Control
         return new((1-x/(nav.Width*nav.CellSize))*Size.X,z/(nav.Height*nav.CellSize)*Size.Y);
     }
 
+    /// <summary>Every standing building and foundation as its footprint outline on the minimap, with its team.</summary>
+    public IEnumerable<(int Team,bool Complete,Vector2[] Outline)> Buildings()
+    {
+        foreach (var site in _world!.ConstructionSites.Values.Where(s => s.Team >= 0 && s.Health > 0))
+            foreach (var footprint in _world.Navigation.Footprints(site.Obstacle))
+                yield return (site.Team,site.Complete,footprint.Polygon.Select(p => MapPoint(p.X,p.Z)).ToArray());
+    }
+
     public override void _Draw()
     {
         if (_world == null || _terrain == null) return;
         DrawTextureRect(_terrain,new(Vector2.Zero,Size),false);
         foreach (var (icon,x,z) in _markers)
             DrawTextureRect(icon,new(MapPoint(x,z)-Vector2.One*MarkerSize/2,Vector2.One*MarkerSize),false);
+        // Buildings at their footprint's size, over the resource markers so a claimed well or pile shows its owner;
+        // foundations are paler until complete.
+        foreach (var (team,complete,outline) in Buildings())
+        {
+            var color = team < TeamColors.Length ? TeamColors[team] : new Color("ded2a5");
+            DrawColoredPolygon(outline,complete ? color : color with { A = .5f });
+            DrawPolyline([..outline,outline[0]],color.Darkened(.55f),1);
+        }
         foreach (var unit in _world.Units.Where(u => u.Present))
             DrawRect(new Rect2(MapPoint(unit.X,unit.Z)-new Vector2(1.5f,1.5f),new(3,3)),unit.Team >= 0 && unit.Team < TeamColors.Length ? TeamColors[unit.Team].Lightened(.25f) : new Color("ded2a5"));
         if (View.Length > 2) DrawPolyline([..View.Select(p => MapPoint(p.X,p.Y)),MapPoint(View[0].X,View[0].Y)],Colors.White,1.5f);

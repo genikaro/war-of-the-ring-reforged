@@ -53,6 +53,13 @@ public partial class Main
                     && SimWorld.DistanceSquared((int)m.X,(int)m.Z,r.X,r.Z) < 1500L*1500));
                 var nav = world.Navigation;
                 _minimapChecks["markers_inside_map"] = _minimapMarkers.All(m => m.X >= 0 && m.Z >= 0 && m.X <= nav.Width*nav.CellSize && m.Z <= nav.Height*nav.CellSize);
+                // Each start Citadel is drawn at its footprint's size (9.6 x 7.3 m) in its team's colour.
+                var shapes = _commands.Minimap.Buildings().ToArray(); var scale = _commands.Minimap.Size/new Vector2(nav.Width*nav.CellSize,nav.Height*nav.CellSize);
+                _minimapChecks["buildings_drawn_at_footprint_size"] = shapes.Length == world.ConstructionSites.Values.Count(s => s.Team >= 0 && s.Health > 0)
+                    && world.ConstructionSites.Values.Where(s => s.Prebuilt).All(s => shapes.Any(b => b.Team == s.Team && b.Complete
+                        && Math.Abs(b.Outline.Max(p => p.X)-b.Outline.Min(p => p.X)-9600*scale.X) < .5f
+                        && Math.Abs(b.Outline.Max(p => p.Y)-b.Outline.Min(p => p.Y)-7272*scale.Y) < .5f
+                        && Inside(b.Outline,_commands.Minimap.MapPoint(s.X,s.Z))));
                 _minimapChecks["view_outline_contains_camera_pivot"] = _commands.Minimap.View.Length == 4
                     && Inside(_commands.Minimap.View,new(-_focus.X*1000,_focus.Z*1000));
                 break;
@@ -119,7 +126,7 @@ public partial class Main
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-waypoints.png");
                 break;
             case 36:
-                var report = new { build = BuildInfo.Label,checks = _minimapChecks,passed = _minimapChecks.Count == 16 && _minimapChecks.Values.All(v => v),
+                var report = new { build = BuildInfo.Label,checks = _minimapChecks,passed = _minimapChecks.Count == 17 && _minimapChecks.Values.All(v => v),
                     markers = _minimapMarkers.Select(m => new { m.Type,m.X,m.Z }),view = _commands.Minimap.View.Select(p => new[] { p.X,p.Y }),
                     focus = new[] { _focus.X,_focus.Y,_focus.Z },yaw = _yaw,distance = _distance };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"minimap-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));

@@ -17,7 +17,8 @@ public partial class Main
         var world = _world!; var citadel = world.StartStructures.First(s => s.Team == 0);
         var chosen = new List<int>();
         foreach (string building in buildings)
-            for (int step = 0; step < 64; step++)
+            // Rings 13-25 m out: the source clearance around the home pile and well (build-42) closes much of the inner ones.
+            for (int step = 0; step < 112; step++)
             {
                 double angle = step*Math.PI/8; int distance = 13000+step/16*2000;
                 int cell = world.Navigation.Cell(citadel.X+(int)(Math.Cos(angle)*distance),citadel.Z+(int)(Math.Sin(angle)*distance));

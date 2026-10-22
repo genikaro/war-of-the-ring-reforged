@@ -205,6 +205,18 @@ def walker_category(scene):
     return next(c for c in scene['pathing']['categories'] if c['name'] == 'PATHING_CATEGORY_WALKER')
 
 
+def start_ground(scene):
+    """Cells a start Citadel may cover: source building passability. Walker bits and scenery are not checked: several
+    start points (MP04_Spire_of_Mordor, MP07_Choke) already put the Citadel over unpainted walker cells or scenery."""
+    category = walker_category(scene)
+    width, height = category['grid']
+    building = next((c for c in scene['pathing']['categories'] if c['name'] == 'PATHING_CATEGORY_BUILDING' and 'painted' in c), None)
+    if not building or building['grid'] != category['grid']:
+        return bytes([1]) * (width * height)
+    bits = building['painted']['words']
+    return bytes((bits[i // 32] >> (i % 32)) & 1 for i in range(width * height))
+
+
 def build_navigation(scene, resolver, output, extra_footprints=(), inactive_obstacles=(), precise=False):
     """Write navigation.json and heights.bin; shared by the demo and skirmish maps."""
     category = walker_category(scene)
@@ -324,9 +336,13 @@ def prepare_skirmish(output, install=None, map_name=None):
         raise ValueError('expected 2 to %d start points, found %d' % (len(SLOT_COLORS), len(points)))
     width, _ = walker_category(scene)['grid']
     spacing, heights = metadata['terrain']['cell_size'], scene['world'].heights
+    buildable, resources, radii = start_ground(scene),skirmish_map.resource_nodes(scene), skirmish_map.placement_radii(resolver)
     bases = []
     for team, point in enumerate(points):
         x, y, _ = point['position']
+        marker, _ = skirmish_map.building_footprint(resolver, skirmish_map.CITADEL, (x, y, 0), CITADEL_OBJECT_BASE + team)
+        dx, dy = skirmish_map.start_position(marker['polygon'], (x, y), resources, radii, buildable, width, len(buildable)//width, spacing)
+        x, y = x+dx, y+dy
         z = prototype_navigation.terrain_height(x, y, width, spacing, heights)
         footprint, _ = skirmish_map.building_footprint(resolver, skirmish_map.CITADEL, (x, y, z), CITADEL_OBJECT_BASE + team)
         footprint['name'] = 'Start Citadel %d' % team

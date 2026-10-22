@@ -80,6 +80,11 @@ public static class PlacementChecks
         check(!invalid.CanPlaceBuilding(0,"camp",Cell(30,20),out reason) && reason == "Too close to another structure or resource","footprints cannot cover a resource-building site");
         check(!invalid.CanPlaceBuilding(0,"keep",Cell(36,4),out reason) && reason == "Placement blocked by a unit","units inside the footprint block placement");
         check(!invalid.CanPlaceBuilding(0,"camp",Cell(0,15),out reason) && reason == "Choose open ground inside the map","footprints stay inside the map");
+        // The well stands at (30.5, 20.5) m; a Camp is 4 m wide. Its source clearance is 7 m from the well's centre.
+        var clear = Fixture(); clear.ResourceClearanceMm.Add(ResourceKind.Food,7000);
+        check(invalid.CanPlaceBuilding(0,"camp",Cell(22,20),out _) && !clear.CanPlaceBuilding(0,"camp",Cell(22,20),out reason)
+            && reason == SimWorld.TooCloseToResource && clear.CanPlaceBuilding(0,"camp",Cell(20,20),out _),
+            "no footprint within a resource's source MinBuildingPlacementRadius");
         var poor = Fixture(79); Place(poor,"camp",Cell(22,15)); poor.Step();
         check(!poor.ConstructionSites.Values.Any(s => s.Building != null) && poor.Economies[0].OreMilli == 79_000 && poor.Navigation.ObstacleIds.Max() == 20007,
             "an unaffordable placement creates no footprint");

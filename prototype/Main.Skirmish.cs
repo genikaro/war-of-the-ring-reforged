@@ -81,6 +81,10 @@ public partial class Main
         // Format 2 (build-17) adds the worker's gathering clips and owner trip rules.
         if (economy.GetProperty("format_version").GetInt32() != 2 || economy.GetProperty("ticks_per_second").GetInt32() != SimWorld.TicksPerSecond)
             throw new InvalidOperationException("Refresh skirmish economy: python tools/skirmish_economy.py --cache converted/skirmish");
+        // Build-42 adds each source's building clearance.
+        foreach (var source in economy.GetProperty("sources").EnumerateObject())
+            _world!.ResourceClearanceMm[source.Name == "ore" ? ResourceKind.Ore : ResourceKind.Food] = source.Value.TryGetProperty("building_clearance_mm",out var clearance)
+                ? clearance.GetInt32() : throw new InvalidOperationException("Refresh skirmish economy: python tools/skirmish_economy.py --cache converted/skirmish");
         foreach (var worker in economy.GetProperty("workers").EnumerateObject())
         {
             _world!.Workers.Add(worker.Name,WorkerEconomy.Parse(worker.Value));
