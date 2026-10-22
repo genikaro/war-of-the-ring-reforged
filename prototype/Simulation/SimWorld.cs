@@ -629,6 +629,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             }
             if (unit.Target < 0 && unit.Goal >= 0 && unit.BlockedTicks >= (unit.FreeMovement ? 3 : 10))
             {
+                using var replanTime = SimProfiler.Time("blocked replan");
                 RebaseGround(unit);
                 int start = unit.Node;
                 var blocked = OccupiedNodes(unit.Id);

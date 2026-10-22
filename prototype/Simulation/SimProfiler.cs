@@ -21,6 +21,10 @@ public static class SimProfiler
 
     public static Scope Time(string name) => new(name,Enabled ? Stopwatch.GetTimestamp() : 0);
 
+    /// <summary>A timestamp to pass to Record later, for timing only some outcomes of a call.</summary>
+    public static long Start() => Enabled ? Stopwatch.GetTimestamp() : 0;
+    public static void Record(string name,long start) => new Scope(name,start).Dispose();
+
     /// <summary>Milliseconds and calls per section since the last call, slowest first; resets the totals.</summary>
     public static (string Name,double Ms,long Calls)[] Take()
     {

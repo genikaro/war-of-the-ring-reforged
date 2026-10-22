@@ -30,6 +30,13 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-31 (Oct 22):** corpse removal and stuck-unit replanning. Bodies sink away
+60 s after death (owner's choice; the original fades them after 10 s) and their
+models stop rendering and animating. A stuck unit's route fallback no longer
+re-floods a region an earlier failed search already proved closed, which removes
+most remaining pathfinding spikes without changing any route; the observer match
+ends exactly as on build-30 (same final digest). See [skirmish notes](../prototype/SKIRMISH.md#build-31-corpse-removal-and-stuck-unit-replanning).
+
 **Build-30 (Oct 22):** five fixes from an owner skirmish, Warcraft III style.
 Attack-move razes enemy buildings it passes (units first) and then marches on. A
 building ordered far away goes down, and is paid for, only when a worker reaches
@@ -673,7 +680,7 @@ and its final digest must not change unless a change is meant to alter play.
 Build-29 measured: mid-game ticks 1.7-2 ms (5-6 ms before), worst two-minute
 window 4.2 ms per tick, 16x at 17-26 fps.
 
-- [ ] Remove dead bodies. The original fades a corpse after
+- [x] Remove dead bodies (build-31, after 60 s). The original fades a corpse after
   `WorldVariables.UnitCorpsePersistSeconds` (10 s), beginning within
   `ObjectFadeProximity` (15 m) of the camera; the owner suggested 60 s. Dead units
   keep skinned, animated models in the scene for the whole match today. Free the
@@ -681,10 +688,14 @@ window 4.2 ms per tick, 16x at 17-26 fps.
   are list indices).
 - [ ] Stuck-unit replanning: blocked units re-plan with other units' cells as
   obstacles, and when bodies wall off a reachable goal the search floods the whole
-  region (most remaining spikes: 2-5 s of pathfinding per two-minute window).
-  Options: remember that a goal was unreachable for a few ticks, bound a blocked
-  replan by distance or visited nodes and fall back to waiting, or search to the
-  nearest free cell beside the goal.
+  region. Build-31 removed the repeated floods from the fallback start cells (5-7 s
+  down to under 1 s per worst two-minute window); each stuck unit still floods once
+  per retry. Options: remember that a goal was unreachable for a few ticks, bound a
+  blocked replan by distance or visited nodes and fall back to waiting, or search
+  to the nearest free cell beside the goal.
+- [ ] Unit movement step (about 1 ms per tick mid-game after build-31): each
+  moving unit checks body overlap against every unit per step and reserves cells
+  against every unit; a per-tick spatial grid would make both local.
 - [ ] Combat targeting (`UpdateCombat`, 0.5-0.9 ms per tick mid-game): candidate
   enemies are scanned across all units; a coarse spatial grid rebuilt once per tick
   would limit each scan to nearby cells.

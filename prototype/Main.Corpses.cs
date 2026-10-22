@@ -1,0 +1,33 @@
+using Godot;
+using Reforged.Simulation;
+
+/// <summary>Bodies leave the field a minute after death: they sink into the ground over two seconds, then their
+/// model is hidden and its node disabled, so the animation player and skinning stop costing frames. The owner chose
+/// 60 s (2026-10-22); the original fades a corpse after WorldVariables.UnitCorpsePersistSeconds, 10 s. The sinking
+/// is an adapter for that fade. Presentation only: the simulation keeps the dead unit, whose id is its list index.</summary>
+public partial class Main
+{
+    private const int CorpseTicks = 60*SimWorld.TicksPerSecond,CorpseSinkTicks = 2*SimWorld.TicksPerSecond;
+    private const float CorpseSinkDepth = 1.5f;
+    private int _corpsesBuried;
+
+    /// <summary>Places a dead unit's body; true once it has gone and needs no further presentation.</summary>
+    private bool PresentCorpse(SimUnit unit,UnitView view,double fraction)
+    {
+        if (view.Buried) return true;
+        if (unit.Health > 0) { view.DeathTick = -1; return false; }
+        if (view.DeathTick < 0) view.DeathTick = _world!.Tick;
+        double age = _world!.Tick-view.DeathTick+fraction-CorpseTicks;
+        if (age <= 0) return false;
+        if (age < CorpseSinkTicks)
+        {
+            view.Root.Position = UnitPosition(unit) with { Y = UnitPosition(unit).Y-CorpseSinkDepth*(float)(age/CorpseSinkTicks) };
+            return true;
+        }
+        view.Buried = true; view.Root.Visible = false; view.Ring.Visible = false;
+        view.Root.ProcessMode = Node.ProcessModeEnum.Disabled;
+        view.Player?.Stop();
+        _corpsesBuried++;
+        return true;
+    }
+}

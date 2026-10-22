@@ -70,14 +70,20 @@ public partial class Main
                 _observerChecks["observer_result_names_the_winner"] = _outcome.Visible && _outcomeTitle.Text == $"Player {world.Winner+1} wins!";
                 // Every bot order goes straight into the simulation; nothing came from the keyboard or mouse.
                 _observerChecks["observer_never_issued_a_command"] = world.Commands.Count == 0;
+                // Bodies leave a minute after death: gone ones are hidden and disabled, none goes early.
+                var gone = _views.Where(p => p.Value.Buried).ToArray();
+                _observerChecks["corpses_leave_after_a_minute"] = gone.Length > 0
+                    && gone.All(p => !p.Value.Root.Visible && p.Value.Root.ProcessMode == Node.ProcessModeEnum.Disabled && world.Units[p.Key].Health <= 0
+                        && world.Tick-p.Value.DeathTick >= CorpseTicks)
+                    && _views.Where(p => !p.Value.Buried && world.Units[p.Key].Health <= 0).All(p => world.Tick-p.Value.DeathTick < CorpseTicks+CorpseSinkTicks+SimWorld.TicksPerSecond);
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-result.png");
                 _observerPhase = 5; _observerStep = 0; break;
             case 5:
                 if (++_observerStep < 4) break; // Let the capture finish writing.
                 var report = new { build = BuildInfo.Label,checks = _observerChecks,
-                    passed = _observerChecks.Count == 9 && _observerChecks.Values.All(v => v),
+                    passed = _observerChecks.Count == 10 && _observerChecks.Values.All(v => v),
                     fixture = "--observe --bots=Gimli,Aragorn; the match runs at 16x after the speed checks",
-                    timeline = _observerTimeline,winner = world.Winner,outcome_tick = world.OutcomeTick,ticks_per_frame_at_16x = _observerBurst,
+                    timeline = _observerTimeline,corpses_buried = _corpsesBuried,winner = world.Winner,outcome_tick = world.OutcomeTick,ticks_per_frame_at_16x = _observerBurst,
                     bots = world.AiPlayers.Values.Select(a => $"{a.Personality.Id}: {a.Status}").ToArray(),
                     ticks = world.Tick,status = _status.Text,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"observer-smoke-report.json"),

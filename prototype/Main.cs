@@ -74,6 +74,9 @@ public partial class Main : Node3D
         public string Clip = "";
         public string? State;
         public bool Died;
+        /// <summary>The tick the presentation first saw this unit dead, and whether its body has left the field.</summary>
+        public int DeathTick = -1;
+        public bool Buried;
         public float DesiredYaw;
         public Vector3 RingPosition = new(float.PositiveInfinity, 0, 0);
         public float RingYaw;
@@ -658,6 +661,7 @@ public partial class Main : Node3D
         foreach (var unit in _world.Units)
         {
             var view = _views[unit.Id];
+            if (view.Buried) continue;
             if (unit.Casting && unit.OrderTarget >= 0)
             {
                 var target = _world.Units[unit.OrderTarget];
@@ -739,6 +743,7 @@ public partial class Main : Node3D
             {
                 var view = _views[unit.Id];
                 double fraction = _paused ? 1 : Engine.GetPhysicsInterpolationFraction();
+                if (PresentCorpse(unit,view,fraction)) continue;
                 if (unit.Movement.Count > 0)
                 {
                     var position = MovementPlayback.Sample(unit.Movement,fraction);
@@ -768,6 +773,7 @@ public partial class Main : Node3D
         foreach (var unit in _world.Units)
         {
             var view = _views[unit.Id];
+            if (view.Buried) continue;
             PresentRing(unit,view);
             view.Health?.Refresh(unit.Present ? unit.Health : 0,unit.MaxHealth);
             view.Ring.Visible = unit.Health > 0 && _selected.Contains(unit.Id);

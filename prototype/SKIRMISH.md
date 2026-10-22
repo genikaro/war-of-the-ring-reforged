@@ -1203,3 +1203,35 @@ which fails the same way on build-29. The default bot's assault now leaves at 3:
 and razes a passive player at 5:10 (3:53 and 5:12 in build-28). Bots razing
 buildings on their way changes the observer match: Aragorn now beats Gimli at
 28:15 (Gimli won at 30:51).
+
+## Build-31: corpse removal and stuck-unit replanning
+
+Second performance pass. Build-30 belongs to the parallel playtest-fix session.
+
+**Bodies leave after a minute.** A dead unit's model used to stay in the scene,
+skinned and animated, for the rest of the match. Sixty seconds after death (the
+owner's choice; the original's `WorldVariables.UnitCorpsePersistSeconds` is 10 s,
+with a fade) the body now sinks 1.5 m into the ground over two seconds, then its
+model is hidden and its node disabled, so its animation player and skinning stop
+running and the per-frame presentation loops skip it. The sinking stands in for
+the original fade. The simulation keeps the dead unit: unit ids are list indices.
+
+**No more repeated floods for a stuck unit.** The profiler showed the remaining
+spikes came from blocked units re-planning: the search from the unit's own cell
+fails, then the ground-position fallback retried from each nearby start cell, and
+every retry flooded the same walled-off region again (about 20 ms each). A start
+that an earlier failed search from the same position already reached cannot reach
+the goal either, because its route would have extended that search's, so such
+retries are now skipped. Results are unchanged; in the worst two-minute windows
+blocked replanning fell from about 7 s and 5.8 s to under 1 s.
+
+The Gimli against Aragorn observer match ends exactly as on build-30 (Aragorn wins
+at tick 33895 with the same final digest), and 153 bodies left the field during it.
+Its closing siege still shows heavy blocked replanning, about 4 s in the last two
+minutes, as armies crowd around the last buildings. Remaining costs, mostly unit movement and
+combat targeting, are listed in the roadmap's [performance backlog](../tools/Roadmap.md#performance-backlog).
+
+Validation: the observer smoke gains a corpse check (10 cases): every removed body
+is hidden and disabled and was dead for at least 60 s, and no body outstays its
+minute and sinking. 760 simulation and 34 worker-cache checks and all skirmish and
+Helm's Deep smokes pass.

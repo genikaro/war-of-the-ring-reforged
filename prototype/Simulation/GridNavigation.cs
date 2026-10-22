@@ -50,6 +50,8 @@ public sealed partial class GridNavigation
     private sbyte[]? _standCache,_edgeCache;
     private int[] _searchCost = [],_searchPrevious = [],_searchSeen = [],_searchClosed = [];
     private int _searchStamp;
+    /// <summary>The stamp of the last FindPath that explored its whole region without reaching the goal, else 0.</summary>
+    private int _lastFloodStamp;
     public int BodyRadiusMm { get; }
     public int BodyHeightMm { get; }
     private bool TypedBody => BodyRadiusMm != 350 || BodyHeightMm != 700;
@@ -590,6 +592,8 @@ public sealed partial class GridNavigation
     public List<int> FindPath(int start, int goal, IReadOnlySet<int>? blocked = null)
     {
         using var time = SimProfiler.Time("FindPath");
+        long began = SimProfiler.Start();
+        _lastFloodStamp = 0;
         if (!IsConnected(start,goal) || blocked?.Contains(goal) == true) return [];
         // Array-backed A*: same priorities, neighbour order and tie rules as the dictionary version it replaced.
         BeginSearch();
@@ -617,6 +621,8 @@ public sealed partial class GridNavigation
                 open.Enqueue(next, (candidate + Heuristic(next), next));
             }
         }
+        SimProfiler.Record(blocked == null ? "FindPath flood (static)" : "FindPath flood (blocked)",began);
+        _lastFloodStamp = stamp;
         return [];
     }
 
@@ -641,11 +647,19 @@ public sealed partial class GridNavigation
 
     public List<int> FindPathFromGroundPosition(int x,int z,int goal,IReadOnlySet<int>? blocked = null)
     {
+        using var time = SimProfiler.Time("FindPathFromGround");
         var path = FindPath(Cell(x,z),goal,blocked);
         if (path.Count > 0) return path;
+        // A start that an earlier failed search here already reached cannot reach the goal either: its route would
+        // have extended that search's. Skipping it changes no result, and saves re-flooding the same region.
+        var floods = new List<int>(2);
+        if (_lastFloodStamp != 0) floods.Add(_lastFloodStamp);
         foreach (int start in GroundRouteStarts(x,z,goal,blocked))
         {
+            if (floods.Contains(_searchClosed.Length > start ? _searchClosed[start] : 0)) continue;
+            using var retry = SimProfiler.Time("FindPathFromGround retry");
             path = FindPath(start,goal,blocked);
+            if (_lastFloodStamp != 0) floods.Add(_lastFloodStamp);
             if (path.Count > 0) return path;
         }
         return [];
