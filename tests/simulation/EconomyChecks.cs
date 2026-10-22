@@ -47,8 +47,12 @@ public static class EconomyChecks
         Until(world,() => worker.Order == OrderKind.Idle);
         check(world.Economies[0].Ore == 345 && world.Resources[7].RemainingMilli == 0 && worker.CargoMilli == 0,"full loads return to owned depot without loss");
         check(world.Economies[1].Ore == 325 && worker.Order == OrderKind.Idle,"gather credits only owner and ends on exhaustion");
+        check(world.Economies[0].GatheredOreMilli == 20000 && world.Economies[0].GatheredFoodMilli == 0 && world.Economies[1].GatheredOreMilli == 0,
+            "the observer's delivered total counts each credited load once");
         var replay = Fixture(); replay.Enqueue(0,[0],OrderKind.Gather,target: 7); Step(replay,world.Tick);
         check(replay.StateDigest() == world.StateDigest(),"economy replay is deterministic");
+        replay.Economies[0].GatheredOreMilli++;
+        check(replay.StateDigest() == world.StateDigest(),"delivered totals for the observer stay out of the digest");
         replay.Economies[0].OreMilli++;
         check(replay.StateDigest() != world.StateDigest(),"digest includes fractional bank state");
 

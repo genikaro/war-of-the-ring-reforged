@@ -163,6 +163,7 @@ public partial class Main : Node3D
         var manifest = ReadJson("manifest.json");
         if (manifest.GetProperty("format_version").GetInt32() != 1) throw new InvalidOperationException("Unsupported cache format");
         _skirmish = manifest.TryGetProperty("mode",out var mode) && mode.GetString() == "skirmish";
+        _mapName = manifest.GetProperty("name").GetString()!.Split(" — ")[0];
         foreach (var file in manifest.GetProperty("files").EnumerateObject())
         {
             string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(_cache, file.Name));
@@ -402,6 +403,7 @@ public partial class Main : Node3D
                 else { _selected.Clear(); _selectedStructure = null; }
                 _dragging = false; _hud.SelectionBox = null;
             }
+            if (_observing && ObserverHotkey(key)) return;
             // Grid hotkeys go by key position, so they follow QWER/ASDF/ZXCV on any keyboard layout.
             int gridSlot = CommandPanel.GridSlot(key.PhysicalKeycode);
             if (gridSlot >= 0 && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed && UseGridHotkey(gridSlot)) return;

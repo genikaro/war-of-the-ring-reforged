@@ -1421,3 +1421,55 @@ Validation: 778 synthetic, 845 Helm's Deep and 34 worker-cache checks pass, as d
 the Python tests, the observer smoke on Bilbo's Bluffs and Wasteland, and the
 skirmish, minimap, AI, victory and siege smokes. The observer smoke on Mighty
 Silverlode fails by design until rope bridges carry armies.
+
+## Build-36: spectator HUD
+
+The owner asked for a more useful, more compact observer interface, built the way
+other RTS observer modes are (StarCraft II, Age of Empires II, Warcraft III). The
+build-28 panel at the top left, one long text line per player, is gone.
+
+**Overview (top right).** A panel under the build label lists every player in its
+colour, with two tabs:
+
+- **Economy:** food and ore in the bank, income (food and ore delivered in the
+  last game minute; the tooltip splits it), population used / capacity, workers,
+  army (every living unit that is not a worker) and buildings including foundations
+  (the tooltip lists them). Column heads are the console's resource icons and the
+  worker, Swordsman and Citadel portraits.
+- **Units:** a portrait per living unit type, workers first, with its count.
+
+E and U open a tab; pressing the open tab's key, clicking its button, the chevron
+or Tab folds the panel down to its tab strip. A click on a player's name centres the
+camera on that player's Citadel (or what is left of the base). A defeated player's
+row dims; the bot's status line moved to the name's tooltip. The panel scales with
+the console (HUD scale setting).
+
+**Match panel (console).** While observing there is nothing to command, so the
+action grid shows the match instead, as the command card does in those games: the
+map's name on the strip above it, the game clock, the state ("Duel",
+"Free-for-all · 4 players", "3 of 4 players left", "Player 1 · Gimli wins"), a
+pause button and a notched speed slider for 1x to 16x (click, drag or scroll it).
+`-` and `+` still step the speed in any mode and move the slider. Control group
+buttons and the walk/run button are hidden while observing, and the empty
+selection reads "Click any unit or building to inspect it".
+
+**Income source.** Each side's bank now also counts what workers have delivered
+(`TeamEconomy.GatheredFoodMilli` / `GatheredOreMilli`), credited at the same
+put-down that fills the bank. Cheats and refunds do not count. The totals are
+derived, so they stay out of the state digest: the Gimli against Aragorn match
+ends exactly as on build-35 (Gimli wins at tick 40258, digest 75D5F383...).
+
+Offscreen captures now draw the overview and the match panel too, and give the
+capture's console the observer's `PlayerTeam`.
+
+Validation: the observer smoke grows to 15 cases. New: the match panel replaces
+the commands (map without the mode suffix, clock, state, no groups or pace
+button), the Units tab's counts add up to each side's living units, the tabs
+switch and fold by click, E and Tab, a player's name centres the camera on that
+base, the slider's 16x notch runs 16 ticks a frame, and the pause button pauses
+and resumes; the result check also reads the winner off the match panel. With
+`-CapturePath` it saves frames at 10:00 (Economy) and 12:00 (Units). Two new
+synthetic checks cover the delivered totals (each credited load counted once, no
+effect on the digest): 780 simulation and 34 worker-cache checks pass, as do the
+command, orders, ability, skirmish, construction, structure, production, minimap,
+victory and observer smokes.

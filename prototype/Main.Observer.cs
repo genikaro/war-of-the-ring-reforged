@@ -3,9 +3,10 @@ using Reforged.Simulation;
 
 /// <summary>Watching bots fight. With --observe every start base is run by a bot (--bots=Gimli,Aragorn picks each
 /// side's personality, missing entries use the default) and nobody plays: PlayerTeam is -1, so every command path
-/// finds no units of its own, selection inspects any side, and a panel shows each player's economy, army and bot
-/// status. Game speed (pause, 1x to 16x, with - and + in any mode) steps the fixed-tick simulation several times per
-/// physics frame, so a fast-forwarded match is the same match, tick for tick.</summary>
+/// finds no units of its own and selection inspects any side. The spectator HUD follows other RTS observer modes:
+/// a foldable overview at the top right (Economy and Units tabs, E and U) and, in the console's action grid, the
+/// map, the game clock and the speed controls. Game speed (pause, 1x to 16x, with - and + in any mode) steps the
+/// fixed-tick simulation several times per physics frame, so a fast-forwarded match is the same match, tick for tick.</summary>
 public partial class Main
 {
     private bool _observing;
@@ -13,10 +14,9 @@ public partial class Main
     private int _speed = 1;
     private static readonly int[] Speeds = [1,2,4,8,16];
     private const int ObserverTeam = -1;
-    private PanelContainer _observerPanel = null!;
-    private Label _observerTitle = null!;
-    private VBoxContainer _observerRows = null!;
-    private readonly Dictionary<int,Button> _speedButtons = [];
+    private ObserverHud _observerHud = null!;
+    /// <summary>The map's title from the cache manifest, without the mode suffix.</summary>
+    private string _mapName = "";
 
     /// <summary>The side the person at the keyboard commands; -1 while observing.</summary>
     private int PlayerTeam => _observing ? ObserverTeam : 0;
@@ -27,7 +27,6 @@ public partial class Main
     {
         _speed = Speeds.Contains(speed) ? speed : 1;
         _status.Text = $"Game speed {_speed}x";
-        foreach (var (value,button) in _speedButtons) button.ButtonPressed = value == _speed;
     }
 
     private void StepSpeed(int direction)
@@ -38,49 +37,49 @@ public partial class Main
 
     private void CreateObserverPanel()
     {
-        _observerPanel = new PanelContainer { Position = new(16,16),Visible = false };
-        _observerPanel.AddThemeStyleboxOverride("panel",new StyleBoxFlat {
-            BgColor = new Color(.035f,.055f,.07f,.9f),ContentMarginLeft = 14,ContentMarginRight = 14,
-            ContentMarginTop = 10,ContentMarginBottom = 10,CornerRadiusTopLeft = 8,CornerRadiusBottomRight = 8 });
-        _hud.AddChild(_observerPanel);
-        var root = new VBoxContainer(); root.AddThemeConstantOverride("separation",8); _observerPanel.AddChild(root);
-        _observerTitle = new Label { Modulate = new Color("d8b574") }; _observerTitle.AddThemeFontSizeOverride("font_size",18); root.AddChild(_observerTitle);
-        var speeds = new HBoxContainer(); speeds.AddThemeConstantOverride("separation",4); root.AddChild(speeds);
-        speeds.AddChild(DebugButton("Pause",() => SetPaused(!_paused)));
-        foreach (int speed in Speeds)
-        {
-            var button = DebugButton(speed+"x",() => SetSpeed(speed)); button.ToggleMode = true; button.ButtonPressed = speed == _speed;
-            _speedButtons[speed] = button; speeds.AddChild(button);
-        }
-        _observerRows = new VBoxContainer(); _observerRows.AddThemeConstantOverride("separation",6); root.AddChild(_observerRows);
+        _observerHud = new ObserverHud { Visible = false }; _hud.AddChild(_observerHud);
+        _observerHud.PlayerChosen += CenterOnPlayer;
+        _commands.SpeedChosen += index => SetSpeed(Speeds[index]);
+        _commands.PauseChosen += () => SetPaused(!_paused);
+    }
+
+    /// <summary>E and U open the overview's tabs and Tab folds it; nothing else uses them while nobody plays.</summary>
+    private bool ObserverHotkey(InputEventKey key)
+    {
+        if (key.CtrlPressed || key.AltPressed || key.MetaPressed) return false;
+        bool Is(Key letter) => key.Keycode == letter || key.PhysicalKeycode == letter;
+        if (Is(Key.E)) _observerHud.Choose(ObserverHud.Page.Economy);
+        else if (Is(Key.U)) _observerHud.Choose(ObserverHud.Page.Units);
+        else if (key.Keycode == Key.Tab) _observerHud.Toggle();
+        else return false;
+        return true;
+    }
+
+    /// <summary>A player's name in the overview: centre on their Citadel, or what is left of their base.</summary>
+    private void CenterOnPlayer(int team)
+    {
+        var world = _world!;
+        var site = world.ConstructionSites.Values.Where(s => s.Team == team && s.Health > 0).OrderByDescending(s => s.Prebuilt).ThenBy(s => s.Id).FirstOrDefault();
+        var unit = world.Units.FirstOrDefault(u => u.Team == team && u.Present);
+        if (site != null) { var (x,z) = world.SitePosition(site); _focus = PositionOf(x,z); }
+        else if (unit != null) _focus = UnitPosition(unit);
+        else return;
+        ClampFocus(); UpdateCamera();
+    }
+
+    /// <summary>The match panel's line under the clock.</summary>
+    private string MatchState(SimWorld world)
+    {
+        int players = world.Contenders.Count,left = players-world.DefeatedTeams.Count;
+        if (world.MatchOver) return world.Winner < 0 ? "No buildings left" : $"Player {world.Winner+1} · {world.AiPlayers.GetValueOrDefault(world.Winner)?.Personality.Id ?? "player"} wins";
+        return left < players ? $"{left} of {players} players left" : players == 2 ? "Duel" : $"Free-for-all · {players} players";
     }
 
     private void RefreshObserverPanel()
     {
         if (!_observing || _world == null) return;
-        _observerPanel.Visible = true;
-        var world = _world;
-        _observerTitle.Text = $"Observer · {(_paused ? "paused" : _speed+"x")} · {TimeSpan.FromSeconds(world.Tick/SimWorld.TicksPerSecond):m\\:ss}";
-        var teams = world.Contenders.ToArray();
-        while (_observerRows.GetChildCount() < teams.Length)
-        {
-            var row = new HBoxContainer(); row.AddThemeConstantOverride("separation",8);
-            row.AddChild(new ColorRect { CustomMinimumSize = new(10,36) });
-            row.AddChild(new Label());
-            _observerRows.AddChild(row);
-        }
-        for (int i = 0; i < teams.Length; i++)
-        {
-            int team = teams[i];
-            var row = _observerRows.GetChild<HBoxContainer>(i);
-            var bot = world.AiPlayers.GetValueOrDefault(team);
-            var bank = world.Economies.GetValueOrDefault(team);
-            int buildings = world.ConstructionSites.Values.Count(s => s.Team == team && s.Health > 0);
-            // The bot's own status already counts workers, army and assaults.
-            string state = world.DefeatedTeams.Contains(team) ? "defeated" : world.Winner == team ? "winner" : bot is null ? "no bot" : bot.Status == "" ? "starting" : bot.Status;
-            row.GetChild<ColorRect>(0).Color = TeamColor(team);
-            row.GetChild<Label>(1).Text = $"Player {team+1} · {bot?.Personality.Id ?? "—"} · food {bank?.Food ?? 0} · ore {bank?.Ore ?? 0} · pop {world.PopulationUsed(team)}/{world.PopulationCapacity(team)}"
-                + $" · buildings {buildings}\n{state}";
-        }
+        _observerHud.Visible = true;
+        _observerHud.Refresh(_world,TeamColor,_commands.Art,_commands.EffectiveScale);
+        _commands.RefreshMatch(_mapName,_world.Tick,Speeds,_speed,_paused,MatchState(_world));
     }
 }

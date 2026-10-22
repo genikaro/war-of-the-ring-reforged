@@ -264,8 +264,12 @@ python tools/prepare_prototype.py --skirmish
 
 The skirmish plays against the enemy bot (build-27). `-AiPersonality Gimli` picks a
 shipped `.rai` personality and `-NoAi` keeps the enemy passive. To watch two bots
-fight instead (build-28), observe: nobody plays, any unit can be inspected but not
-commanded, and a panel shows both players.
+fight instead (build-28), observe: nobody plays and any unit can be inspected but not
+commanded. The spectator HUD (build-36) follows other RTS observer modes: a foldable
+overview at the top right lists every player under an Economy tab (food, ore,
+income per minute, population, workers, army, buildings) or a Units tab (a portrait
+per unit type with its count), and the console's action grid, which has nothing to
+command, shows the map, the game clock and the speed controls.
 
 ```powershell
 ./prototype/run.ps1 -Observe -Bots Gimli,Aragorn -Speed 4
@@ -283,7 +287,8 @@ python tools/prepare_prototype.py --all-maps
 ```
 
 Game speed works in every mode: `-` and `+` step through 1x, 2x, 4x, 8x and 16x,
-Space pauses, and the observer panel has the same buttons.
+and Space pauses. While observing, the match panel's pause button and notched
+slider (click, drag or scroll it) do the same.
 
 `-Profile` (any mode) prints, every two game minutes, the unit count and where
 simulation and frame time went, for chasing slow matches.
@@ -333,6 +338,11 @@ checked before loading. Never distribute the local cache with the project.
 | Menu: Rotate left / Rotate right | Rotate the camera |
 | Mouse wheel | Zoom |
 | Space | Pause/resume simulation and unit animation |
+| - / + | Game speed down / up (1x, 2x, 4x, 8x, 16x) |
+| Observing: E / U | Open the overview's Economy / Units tab; the open tab's key folds the overview |
+| Observing: Tab or the overview's chevron | Fold or unfold the overview |
+| Observing: a player's name in the overview | Center the camera on that player's base |
+| Observing: speed slider / pause button | Choose the game speed / pause and resume |
 | Esc | Cancel targeting; then close the build page; otherwise clear selection |
 | Right-click while targeting | Cancel targeting and retain the current order |
 | Restart sandbox | Reset the encounter |

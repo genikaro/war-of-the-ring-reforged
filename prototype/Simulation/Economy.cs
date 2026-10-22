@@ -38,6 +38,10 @@ public sealed class TeamEconomy(int food,int ore,int foodCapacity = 99999,int or
     public long OreCapacityMilli { get; } = oreCapacity * 1000L;
     public int Food => (int)(FoodMilli / 1000);
     public int Ore => (int)(OreMilli / 1000);
+    /// <summary>Everything workers have delivered, for the observer's income readout. Derived from the
+    /// deliveries, so it stays out of the state digest.</summary>
+    public long GatheredFoodMilli { get; internal set; }
+    public long GatheredOreMilli { get; internal set; }
 }
 
 /// <summary>Source stock. The source rates only gate availability: owner-defined trips set the amounts.</summary>
@@ -156,7 +160,8 @@ public sealed partial class SimWorld
             if (elapsed < worker.PutDownTicks) return;
             long space = unit.CargoKind == ResourceKind.Ore ? bank.OreCapacityMilli-bank.OreMilli : bank.FoodCapacityMilli-bank.FoodMilli;
             long amount = Math.Min(unit.CargoMilli,Math.Max(0,space));
-            if (unit.CargoKind == ResourceKind.Ore) bank.OreMilli += amount; else bank.FoodMilli += amount;
+            if (unit.CargoKind == ResourceKind.Ore) { bank.OreMilli += amount; bank.GatheredOreMilli += amount; }
+            else { bank.FoodMilli += amount; bank.GatheredFoodMilli += amount; }
             unit.CargoMilli -= amount;
             if (unit.CargoMilli > 0) return; // Keep cargo while storage is full.
             unit.GatherPhase = GatherPhase.None; unit.ReturningCargo = false; unit.GatherPlanTick = -1;

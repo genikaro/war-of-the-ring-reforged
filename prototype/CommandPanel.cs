@@ -146,6 +146,7 @@ public partial class CommandPanel : Control
         CreateConstructionButtons();
         CreateStructureDetails();
         CreateProductionControls();
+        CreateMatchControls();
         _hint = Text("",new(260,-27),new(760,24),13); _content.AddChild(_hint);
         var config = new ConfigFile();
         if (config.Load("user://interface.cfg") == Error.Ok) ScalePercent = Math.Clamp(config.GetValue("hud","scale_percent",100).AsDouble(),75,150);
@@ -267,13 +268,18 @@ public partial class CommandPanel : Control
         // button between a press and its release (separate frames) would drop the click.
         bool controllable = available && units.All(u => u.Team == PlayerTeam);
         bool single = units.Count == 1;
+        // Observing: no groups or pace to set, and the action grid shows the match instead.
+        bool observing = PlayerTeam < 0;
+        _match.Visible = _matchMap.Visible = observing; _walkRun.Visible = !observing;
         RefreshAbilities(units,pending,tick,pendingAbilitySlot);
         _single.Visible = single; _roster.Visible = !single;
         _title.Position = single ? new(335,59) : new(265,59); _title.Size = single ? new(435,22) : new(505,22);
         _title.Text = single ? name(units[0].Id) : available
-            ? $"{units.Count} selected   "+string.Join(" · ",units.GroupBy(u => name(u.Id)).Select(g => $"{g.Count()} {g.Key}")) : "Select your forces";
+            ? $"{units.Count} selected   "+string.Join(" · ",units.GroupBy(u => name(u.Id)).Select(g => $"{g.Count()} {g.Key}"))
+            : observing ? "Click any unit or building to inspect it" : "Select your forces";
         _order.Text = available ? string.Join(" · ",units.GroupBy(u => u.Order).Select(g => $"{OrderName(g.Key)} ({g.Count()})"))
-            + (units.Sum(u => u.OrderQueue.Count) > 0 ? $"   +{units.Sum(u => u.OrderQueue.Count)} queued" : "") : "Ctrl + number: assign group · Shift + number: add units";
+            + (units.Sum(u => u.OrderQueue.Count) > 0 ? $"   +{units.Sum(u => u.OrderQueue.Count)} queued" : "")
+            : observing ? "Observer · E economy · U units · Tab folds the overview" : "Ctrl + number: assign group · Shift + number: add units";
         _armies.Text = $"Allies {allies}    Enemies {enemies}";
         _walkRun.SetPressedNoSignal(walking);
         string pace = walking ? "Walking" : "Running";
@@ -325,6 +331,7 @@ public partial class CommandPanel : Control
             button.Disabled = !controllable;
             button.SetPressedNoSignal(controllable && (PanelCommand(pending) == kind || (pending == null && units.All(u => PanelCommand(u.Order) == kind))));
         }
+        foreach (var group in _groups) group.Visible = !observing;
         if (groups != null) for (int slot = 0; slot < 10; slot++)
         {
             string number = slot == 9 ? "0" : (slot+1).ToString(); _groups[slot].Text = number+(groups[slot].Length > 0 ? $"·{groups[slot].Length}" : "");
@@ -333,7 +340,7 @@ public partial class CommandPanel : Control
         }
         _hint.Text = NoticeShowing ? _notice : pending == OrderKind.UseAbility ? "Greater Kingsfoil: choose an injured friendly unit or Aragorn · Esc/right-click cancels"
             : pending == OrderKind.Attack ? "Attack: enemy / neutral / friendly / ground · Shift-click queues · Esc/right-click cancels"
-            : pending != null ? OrderName(pending.Value)+": choose a target · Shift-click queues · Esc/right-click cancels" : paused ? "Paused · orders will apply when play resumes" : "";
+            : pending != null ? OrderName(pending.Value)+": choose a target · Shift-click queues · Esc/right-click cancels" : paused && !observing ? "Paused · orders will apply when play resumes" : "";
         _map.QueueRedraw();
         if (pending != OrderKind.UseAbility) UpdateCursor(pending);
     }
