@@ -30,6 +30,18 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-40 (Oct 22):** owner playtest fixes. Each bot expansion keeps half an
+assault party as its guard; the first Foundry goes on the home pile the bot's
+own miners stand on (it used to skip it and build at an expansion's pile). The
+frame-rate drop from about 13:00 was a Swordsman trapped in a ten-cell pocket by
+its Barracks, waiting for room every tick (21 ms a tick by 12:00): trained units
+now exit into an open region, the exit search is one pass, and trapped soldiers
+no longer hold up assaults. Two freezes in the reference matches are fixed: home
+armies stop chasing enemies far from every building, and a full party's worth of
+idle soldiers reinforces a party still out. Aragorn now wins Bilbo's Bluffs at
+17:54 and the Wasteland free-for-all at 18:33.
+See [skirmish notes](../prototype/SKIRMISH.md#build-40-expansion-guards-home-foundry-trapped-spawns).
+
 **Build-39 (Oct 22):** skirmish setup screen (step 4). `./prototype/run.ps1
 -Skirmish` opens a lobby: every multiplayer map with its player count and a preview
 of its start positions, You / a bot personality / Closed for each start position (no
@@ -789,6 +801,11 @@ window 4.2 ms per tick, 16x at 17-26 fps.
   caps and the local rebase. 4x runs at about 2-3x there, at a median of 13-20 FPS.
   Next: `OccupiedNodes` (about 17 full unit scans a tick, a fifth of the time)
   and long but successful replans.
+- [x] A trained unit waiting for room (build-40): the exit search rescanned a
+  49 x 49 window up to 16 times a tick, testing each cell against every unit's
+  node, and a unit whose exit lay in a pocket waited for good (21 ms a tick on
+  Bilbo's Bluffs). It is one sorted pass now, and exits only into regions of 200
+  cells or more.
 - [ ] Bot think spikes: the placement ring search calls `CanPlaceBuilding` up to
   176 times in one think, and repeats it each second while nothing fits; cache
   refusals per building until the map changes, and stagger heavy bot work.

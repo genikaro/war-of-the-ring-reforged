@@ -1665,3 +1665,96 @@ construction, structure, production, placement, Dwarf Hall, minimap, Frodo, sieg
 defense, victory, AI and observer smokes pass. The observer match keeps build-38's
 digest (Gimli wins at tick 40133, 9C0DC103...), so making the human's slot a
 choice changed no bot match. No simulation code changed.
+
+## Build-40: expansion guards, home Foundry, trapped spawns
+
+Owner playtest of build-39 (1v1 on Bilbo's Bluffs): expansions fell to the first
+raid, Aragorn's bot built its Foundry on an expansion's ore pile but never on the
+pile at its main base, and from about 13:00 the frame rate dropped to 18-20 FPS
+and never recovered.
+
+- **Expansion guards (owner rule).** Every Citadel the bot raises more than 30 m
+  from its start, foundations included, keeps half an assault party (rounded up:
+  six for the most defensive personality, three for the most aggressive; Aragorn
+  4, Gimli 5) as its guard. Guards are recruited from the idle home army, nearest
+  first, while the base is not under threat, before an assault may form, and
+  never join one. They hold a cell 12-24 m from the Citadel toward the nearest
+  enemy building, 10 m clear of resources so they stay out of the gatherers' way.
+  They attack enemies within 30 m of their Citadel (soldiers first, given up on
+  after 30 s like the home army's), walk back once the fight is over or has led
+  them 10 m beyond that radius, and are released when the Citadel falls. The home
+  army still answers raids on an expansion too. The bot's status reads
+  "guards N".
+- **Foundry at home.** The plan skipped any ore pile where `CanStartConstruction`
+  refused with "Placement blocked by a unit": at a raw pile the bot's own miners
+  always stand on the Foundry's foundation, so the first Foundry went to a pile
+  nobody mined, which on Bilbo's Bluffs is the expansion's. The plan now takes the
+  nearest pile anyway. While a crew walks over to claim it, the pile's empty-handed
+  miners stop and wait within 15 m (no new orders), the arriving crew moves the
+  idle ones off the foundation as it does for open-ground buildings, and once the
+  foundation is down they go back to mining.
+- **Trapped spawns (the FPS drop).** `-Profile` showed the `production` section
+  climbing from 0.1 ms to 21 ms per tick between 08:00 and 12:00, and on.
+  Aragorn's second Barracks recorded its builder's cell as the exit; a Swordsman
+  (body radius 570 mm) cannot stand there, and the nearest cell it can stand on lay
+  in a ten-cell pocket between buildings. Five Swordsmen spawned into it; once it
+  was full, the sixth waited for room forever, re-running the exit search every
+  tick. Each search rescanned a 49 x 49 window up to 16 times, testing every cell
+  against every unit's node.
+  - A trained unit (and a worker leaving a Mill or Foundry) now exits into a
+    region of at least 200 cells (`SimWorld.OpenRegionCells`); the nearest
+    standable cell in a smaller one is passed over while an open region is within
+    the window (`GridNavigation.NearestOpen`, region sizes counted by the
+    connected-region flood, `ComponentSize`).
+  - The exit search is one sorted pass (`GridNavigation.NearestSequence`) that
+    tests the region before the reserved cells. A synthetic check compares it with
+    the repeated `Nearest` calls on random grids for both body kinds.
+  - The trapped Swordsmen had also stalled Aragorn's war: a party member that can
+    never arrive keeps the party alive, and no new party forms while one exists,
+    so the home army piled up around the Barracks (29-39 units within 30 m). Units
+    standing in a pocket smaller than 200 cells no longer join a party or a guard,
+    and leave a party they are in.
+
+With the spawn fixed, the reference match no longer slowed down but froze instead
+(no unit died from 24:00 to 40:00). A dump of every unit showed both home armies
+standing at home on explicit Attack orders against units 150 m away at the other
+base, with no route planned. The orders came from base defence: Gimli had put a
+Mill by the ore pile Aragorn mined, so Aragorn's miners there were intruders, and
+an explicit attack (like a bot's idle units) pursues an enemy anywhere. A soldier
+on such a chase is never idle, so no party formed again.
+
+- **Defence leash.** A home soldier whose enemy is more than 12 m away and more
+  than 40 m (the defence radius plus 10 m) from every building of its side stands
+  down. A soldier fighting an enemy beside it is left alone, wherever it is.
+
+The four-bot Wasteland match then froze too, from about 44:00 to the 80-minute
+limit: Saruman kept 29 soldiers at home behind a party of two (a third of its party
+size of six, so not "broken") that never came back, and only one party is ever out.
+
+- **Reinforcements.** Once a full party's worth of idle soldiers stands at home
+  while a party is out, they join it and attack-move on its target; the party keeps
+  its target and its count in `PartiesSent`.
+
+| Match (observer, 16x) | build-39 | build-40 |
+|---|---|---|
+| Bilbo's Bluffs, Gimli vs Aragorn | Gimli wins at 33:26 (tick 40133, digest 9C0DC103...) | Aragorn wins at 17:54 (tick 21478, digest F4F223E2...) |
+| Wasteland, Gimli, Aragorn, Legolas, Saruman | Gimli wins at 48:15 | Aragorn wins at 18:33 (tick 22259, digest AA0B9FFE...) |
+| Simulation per tick on Bilbo, two minutes to 10:00 / 12:00 | 11.9 / 22.2 ms and climbing (the stuck Barracks) | 0.65 / 0.74 ms, at most 1.1 ms all match |
+
+On Bilbo's Bluffs both bots' first Foundry goes on their home pile. Aragorn
+expands at about 15:00 with its four guards there, and its second party, grown by
+reinforcements to 21, razes Gimli by 17:54. Each bot keeps one Foundry, as before:
+the Foundry's `AILowerPriorityIfExists` column is true. Reinforced waves make the
+aggressive personalities much stronger; with leash but without reinforcements
+Aragorn won at 31:33 (tick 37862), and Wasteland froze. The timings are headless;
+the GPU side was not measured.
+
+Validation: 12 new synthetic checks (the exit search's single pass matches repeated
+`Nearest` calls on random grids; a trained unit exits beside its producer, not into
+a nine-cell pocket by the anchor; the first Foundry goes on the mined home pile, not
+a far one; an expansion draws half a party as its guard, which holds a cell beside
+it, stays out of the assault, attacks a raider there and is released when the
+Citadel falls; home soldiers chasing an enemy far from every building stand down;
+idle soldiers enough for a party reinforce the party out; soldiers walled into a
+pocket stay out of the assault party). The pocket, Foundry, leash and
+trapped-soldier checks each fail with their fix reverted.

@@ -5,12 +5,12 @@ public static class ProductionChecks
     public static void Run(Action<bool,string> check)
     {
         const int Producer = 10000;
-        SimWorld Fixture(int food = 115,int width = 30,int height = 16,int capacity = 10)
+        SimWorld Fixture(int food = 115,int width = 30,int height = 16,int capacity = 10,bool[]? allowed = null)
         {
             // A 3x3 producer footprint around the center of cell (cx,cz).
             int cx = width == 30 ? 10 : width/2,cz = width == 30 ? 8 : height/2;
             int[] footprint = [.. from dz in new[] {-1,0,1} from dx in new[] {-1,0,1} select (cz+dz)*width+cx+dx];
-            var nav = new GridNavigation(width,height,1000,Enumerable.Repeat(true,width*height).ToArray(),new int[(width+1)*(height+1)],
+            var nav = new GridNavigation(width,height,1000,allowed ?? Enumerable.Repeat(true,width*height).ToArray(),new int[(width+1)*(height+1)],
                 obstacles: [new NavigationObstacle(Producer,footprint,[])]);
             var rules = new CombatRules(); rules.Units.Add("probe",UnitDefinition.Probe);
             var world = new SimWorld(nav,rules);
@@ -115,6 +115,31 @@ public static class ProductionChecks
         Train(large); Step(large,20);
         check(large.Units.Count == 2 && large.Units[1].Definition.Name == "big" && large.Navigation.ForBody(900,700).CanStand(large.Units[1].Node),
             "a larger trained body exits through a cell it can stand on");
+
+        // The recorded anchor in a walled nine-cell pocket (Aragorn's Barracks on Bilbo's Bluffs, build-40): trained
+        // units used to exit into it, and once it filled, the finished unit searched for room every tick for good.
+        var pocket = Fixture(allowed: [.. Enumerable.Range(0,30*16).Select(c => !(c%30 <= 4 && c/30 <= 4 && (c%30 is 0 or 4 || c/30 is 0 or 4)))]);
+        check(pocket.Navigation.ComponentSize(pocket.Producers[Producer].ExitAnchor) == 9,"the fixture's anchor lies in a nine-cell pocket");
+        Train(pocket); Step(pocket,240);
+        var escaped = pocket.Units[^1];
+        check(pocket.Units.Count == 2 && pocket.Navigation.ComponentSize(escaped.Node) >= SimWorld.OpenRegionCells
+            && Math.Max(Math.Abs(escaped.Node%30-10),Math.Abs(escaped.Node/30-8)) == 2,"a trained unit exits beside its producer, not into a pocket by the anchor");
+
+        // The exit search's single sorted pass returns what repeated Nearest calls did, for worker and typed bodies.
+        var random = new Random(40); bool same = true; int found = 0;
+        for (int trial = 0; trial < 24; trial++)
+        {
+            var grid = new GridNavigation(40,30,1000,[.. Enumerable.Range(0,1200).Select(_ => random.Next(5) > 0)],new int[41*31]);
+            if (trial%2 == 1) grid = grid.ForBody(570,1800);
+            int center = random.Next(1200),anchor = trial%3 == 0 ? -1 : grid.Nearest(random.Next(1200));
+            var excluded = Enumerable.Range(0,30).Select(_ => random.Next(1200)).ToHashSet(); var mirror = new HashSet<int>(excluded);
+            var repeated = new List<int>();
+            for (int next; repeated.Count < 40 && (next = grid.Nearest(center,excluded,connectedTo: anchor)) >= 0;) { repeated.Add(next); excluded.Add(next); }
+            var sequence = new List<int>();
+            foreach (int next in grid.NearestSequence(center,mirror,anchor)) { if (sequence.Count == 40) break; sequence.Add(next); mirror.Add(next); }
+            same &= repeated.SequenceEqual(sequence); if (repeated.Count > 0) found++;
+        }
+        check(same && found >= 20,$"the exit search's single pass returns the cells repeated nearest-cell searches did ({found} non-empty trials)");
 
         // A 5x5 grid leaves sixteen exit cells around the footprint; occupy every one.
         var blocked = Fixture(width: 5,height: 5,capacity: 30);

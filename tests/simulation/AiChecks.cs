@@ -5,19 +5,20 @@ public static class AiChecks
 {
     public static void Run(Action<bool,string> check)
     {
-        const int W = 70,H = 30,Keep0 = 10000,Keep1 = 10001,Well = 7,Pile = 8;
+        const int W = 70,H = 30,Keep0 = 10000,Keep1 = 10001,Well = 7,Pile = 8,FarPile = 31,Outpost = 20040;
         int Cell(int x,int z) => z*W+x;
         int[] Box(int x0,int z0,int size) => [.. from z in Enumerable.Range(z0,size) from x in Enumerable.Range(x0,size) select Cell(x,z)];
         FootprintPoint[] Square(int half) => [new(-half,-half),new(half,-half),new(half,half),new(-half,half)];
         var worker = UnitDefinition.Probe with { Name = "worker",DpsMilli = 2000 };
         var soldier = UnitDefinition.Probe with { Name = "soldier" };
         AiPersonality Personality(int aggressiveness,int difficulty = 1) => new("test","Test",difficulty,aggressiveness,50,50,50,true,true);
-        SimWorld Fixture(int aggressiveness = 50,bool mirror = false)
+        SimWorld Fixture(int aggressiveness = 50,bool mirror = false,bool foundry = false,bool[]? allowed = null)
         {
-            var nav = new GridNavigation(W,H,1000,Enumerable.Repeat(true,W*H).ToArray(),new int[(W+1)*(H+1)],
+            var nav = new GridNavigation(W,H,1000,allowed ?? Enumerable.Repeat(true,W*H).ToArray(),new int[(W+1)*(H+1)],
                 obstacles: [new NavigationObstacle(Keep0,Box(6,12,6),[]),new NavigationObstacle(Keep1,Box(58,12,6),[]),
-                    new NavigationObstacle(20007,Box(50,2,3),[]),new NavigationObstacle(20017,Box(17,2,3),[])]);
-            nav.SetObstacle(20007,false); nav.SetObstacle(20017,false);
+                    new NavigationObstacle(20007,Box(50,2,3),[]),new NavigationObstacle(20017,Box(17,2,3),[]),
+                    new NavigationObstacle(20008,Box(49,23,7),[]),new NavigationObstacle(20031,Box(34,23,5),[]),new NavigationObstacle(Outpost,Box(28,2,4),[])]);
+            foreach (int id in new[] {20007,20017,20008,20031,Outpost}) nav.SetObstacle(id,false);
             var rules = new CombatRules(); rules.Units.Add("probe",UnitDefinition.Probe); rules.Units.Add("worker",worker); rules.Units.Add("soldier",soldier);
             var world = new SimWorld(nav,rules);
             world.Workers.Add("worker",new(10,9));
@@ -67,6 +68,14 @@ public static class AiChecks
                 world.ConstructionSites.Add(Well+10,new(Well+10,20017,2500));
                 world.Economies[0] = new(300,300);
                 world.AiPlayers.Add(0,new(0,Personality(80)));
+            }
+            if (foundry)
+            {
+                // A Foundry over the home pile, whose 7x7 foundation covers where its raw miners stand, and one over a far pile.
+                world.Resources.Add(FarPile,new(FarPile,ResourceKind.Ore,36500,25500,4500,20,1_000_000,2000));
+                world.ConstructionRules.Add(ResourceKind.Ore,new("foundry","Foundry",ResourceKind.Ore,0,50,60,570,750000,750000,100000,50000,["keep"]));
+                world.ConstructionSites.Add(Pile,new(Pile,20008,5000)); world.ConstructionSites.Add(FarPile,new(FarPile,20031,4000));
+                world.AiBuildings.Add("foundry",new("ECONOMY",true,-1,true));
             }
             return world;
         }
@@ -119,6 +128,17 @@ public static class AiChecks
         check(straggler.Order == OrderKind.Move && regroup.AiPlayers[1].Party.Order().SequenceEqual(fresh) && regroup.AiPlayers[1].PartiesSent == 1,
             "a broken assault falls back home and the idle army forms the next one");
 
+        // Reinforcements (build-40): a full party's worth of idle soldiers at home joins a party still out and marches
+        // on its target, instead of waiting for a remnant that may never come back.
+        var reinforced = Fixture();
+        var holdouts = Enumerable.Range(0,3).Select(i => reinforced.Spawn(1,Cell(30,13+2*i),soldier)).ToArray();
+        foreach (var unit in holdouts) { unit.Order = OrderKind.HoldGround; reinforced.AiPlayers[1].Party.Add(unit.Id); }
+        reinforced.AiPlayers[1].PartyTarget = Keep0;
+        var reserve = Enumerable.Range(0,8).Select(i => reinforced.Spawn(1,Cell(48+(i%4)*2,8+(i/4)*14),soldier).Id).ToArray();
+        Step(reinforced,25);
+        check(reinforced.AiPlayers[1].Party.Count == 11 && reserve.All(id => reinforced.Units[id].Order == OrderKind.AttackMove)
+            && reinforced.AiPlayers[1].PartyTarget == Keep0 && reinforced.AiPlayers[1].PartiesSent == 0,"idle soldiers enough for a party reinforce the party out");
+
         var defence = Fixture();
         var guards = Enumerable.Range(0,3).Select(i => defence.Spawn(1,Cell(52,13+2*i),soldier).Id).ToArray();
         var raider = defence.Spawn(0,Cell(46,15),soldier); raider.Order = OrderKind.HoldGround;
@@ -164,5 +184,63 @@ public static class AiChecks
         Console.WriteLine($"AI_EXPANSION due={expandAt} laid={laidAt} at=({ex},{ez})");
         check(expansion != null && laidAt >= expandAt && (long)(ex-36000)*(ex-36000)+(long)(ez-28500)*(ez-28500) < (long)(ex-61000)*(ex-61000)+(long)(ez-15000)*(ez-15000),
             $"the bot expands with a Citadel by the far ore after {expandAt/SimWorld.TicksPerSecond/60.0:0.#} minutes (laid at tick {laidAt}): "+expand.AiPlayers[1].Status);
+
+        // The first Foundry goes on the pile the bot's own workers mine (Aragorn on Bilbo's Bluffs, build-40): standing
+        // on its foundation, they used to rule it out, and the Foundry went up at an expansion's pile instead.
+        var mined = Fixture(foundry: true);
+        bool mining = false;
+        for (int i = 0; i < 8000 && mined.ConstructionSites[Pile].Team < 0 && mined.ConstructionSites[FarPile].Team < 0; i++)
+        {
+            mined.Step();
+            mining |= mined.ConstructionSites.Values.Count(s => s.Team == 1 && !s.Prebuilt) >= 2
+                && mined.Units.Any(u => u.Team == 1 && u.Present && u.Order == OrderKind.Gather && u.OrderTarget == Pile);
+        }
+        check(mining && mined.ConstructionSites[Pile].Team == 1 && mined.ConstructionSites[FarPile].Team < 0,
+            "the bot lays its first Foundry on the home pile its workers mine, not on a far one: "+mined.AiPlayers[1].Status);
+
+        // Expansion guards (owner rule, build-40): half a party holds a cell by each expansion Citadel, answers raiders
+        // there and never joins an assault.
+        var guarded = Fixture();
+        guarded.Units[2].Health = 0; // the other side's worker would stand within the outpost's defence radius
+        guarded.ConstructionSites.Add(Outpost,new(Outpost,Outpost,4000,"keep",30000,4000) { Team = 1,Health = 400,Complete = true });
+        var garrison = Enumerable.Range(0,6).Select(i => guarded.Spawn(1,Cell(46+(i%3)*2,9+(i/3)*12),soldier).Id).ToArray();
+        Step(guarded,25);
+        var bot = guarded.AiPlayers[1]; var post = bot.Guards.GetValueOrDefault(Outpost);
+        check(post != null && post.Units.Count == guarded.AiGuardSize(bot) && guarded.AiGuardSize(bot) == 4
+            && post.Units.All(id => guarded.Units[id].Order == OrderKind.Move) && bot.Party.Count == 0,
+            "an expansion Citadel draws half a party from the idle home army: "+bot.Status);
+        Step(guarded,600);
+        var (px,pz) = guarded.Navigation.Center(post!.Cell);
+        check(post.Units.All(id => guarded.Units[id].Order is OrderKind.Idle or OrderKind.Stop
+                && SimWorld.DistanceSquared(guarded.Units[id].X,guarded.Units[id].Z,px,pz) <= (long)SimWorld.AiGuardSlackMm*SimWorld.AiGuardSlackMm)
+            && SimWorld.DistanceSquared(px,pz,30000,4000) is >= 11000L*11000 and <= 25000L*25000,"the guards hold a cell beside the expansion");
+        var reinforcements = Enumerable.Range(0,8).Select(i => guarded.Spawn(1,Cell(48+(i%4)*2,8+(i/4)*14),soldier).Id).ToArray();
+        Step(guarded,25);
+        check(bot.Party.Count == 10 && !bot.Party.Intersect(post.Units).Any() && bot.PartiesSent == 1,"guards stay out of the assault party");
+        var outpostRaider = guarded.Spawn(0,Cell(22,9),soldier); outpostRaider.Order = OrderKind.HoldGround;
+        Step(guarded,25);
+        check(post.Units.All(id => guarded.Units[id].Target == outpostRaider.Id || guarded.Units[id].OrderTarget == outpostRaider.Id),"the guards attack a raider by their Citadel");
+        guarded.ConstructionSites[Outpost].Health = 0;
+        Step(guarded,25);
+        check(bot.Guards.Count == 0,"a fallen expansion releases its guards");
+
+        // A home army chasing an enemy far from every building stands down (build-40): explicit attacks pursue across
+        // the map, and on Bilbo's Bluffs both home armies stood frozen on such chases with no party ever forming.
+        var chase = Fixture();
+        var chasers = Enumerable.Range(0,3).Select(i => chase.Spawn(1,Cell(52,13+2*i),soldier).Id).ToArray();
+        var far = chase.Spawn(0,Cell(15,25),soldier); far.Order = OrderKind.HoldGround;
+        chase.Enqueue(1,chasers,OrderKind.Attack,far.Node,far.Id);
+        Step(chase,60);
+        check(chasers.All(id => chase.Units[id].Order is OrderKind.Stop or OrderKind.Idle && chase.Units[id].Target < 0)
+            && chasers.All(id => chase.Units[id].X > 40000),"home soldiers chasing an enemy far from every building stand down");
+
+        // Soldiers walled into a pocket stay out of assaults (build-40): a member that could never arrive kept the
+        // party alive, and with it every later assault from forming.
+        var walled = Fixture(allowed: [.. Enumerable.Range(0,W*H).Select(c => !(c%W is >= 64 and <= 68 && c/W >= 25 && (c%W is 64 or 68 || c/W == 25)))]);
+        var stuck = Enumerable.Range(0,2).Select(i => walled.Spawn(1,Cell(65+2*i,27),soldier).Id).ToArray();
+        var fit = Enumerable.Range(0,8).Select(i => walled.Spawn(1,Cell(48+(i%4)*2,8+(i/4)*14),soldier).Id).ToArray();
+        Step(walled,25);
+        check(walled.Navigation.ComponentSize(walled.Units[stuck[0]].Node) < SimWorld.OpenRegionCells && walled.AiPlayers[1].Party.Order().SequenceEqual(fit)
+            && walled.AiPlayers[1].PartiesSent == 1,"soldiers walled into a pocket stay out of the assault party");
     }
 }

@@ -9,6 +9,14 @@ public sealed record AiBuildingRule(string Class,bool MustHaveFirstPass,int MaxD
 public sealed record AiUnitRule(bool NeverAdd,int Assault);
 /// <summary>AIWARPARTY_ASSAULT: size bounds and the melee share of its member classes.</summary>
 public sealed record AiWarParty(int MinSize,int MaxSize,int MeleeSharePpm);
+/// <summary>Soldiers kept at an expansion Citadel, holding a cell beside it.</summary>
+public sealed class AiGuardPost(int cell)
+{
+    public int Cell { get; } = cell;
+    public List<int> Units { get; } = [];
+    /// <summary>Since when each enemy near the Citadel has been there, as AiPlayer.IntruderSeen.</summary>
+    public SortedDictionary<int,int> Seen { get; } = [];
+}
 
 public sealed class AiPlayer(int team,AiPersonality personality)
 {
@@ -17,6 +25,8 @@ public sealed class AiPlayer(int team,AiPersonality personality)
     /// <summary>Units of the assault under way, and the enemy building it is razing.</summary>
     public List<int> Party { get; } = [];
     public int PartyTarget { get; internal set; } = -1;
+    /// <summary>The guard of each expansion Citadel, by its site id; guards never join an assault.</summary>
+    public SortedDictionary<int,AiGuardPost> Guards { get; } = [];
     public int PartiesSent { get; internal set; }
     /// <summary>Cells where a placement was refused although CanPlaceBuilding allowed it (no reachable work spot).</summary>
     public HashSet<int> RefusedCells { get; } = [];
@@ -66,7 +76,11 @@ public sealed class AiPlayer(int team,AiPersonality personality)
 /// by the nearest safe resource outside its Citadels' reach, then once more every 10 minutes, up to three; with no
 /// soldier trained or sent for 3 minutes and none affordable, every idle soldier goes all in, without falling back;
 /// and a bot that can never field an army again (no soldier, no worker able to earn, nothing affordable) surrenders,
-/// tearing down its buildings. Not simulated: scouting, raids, flanking, harassment, heroes and special abilities.</summary>
+/// tearing down its buildings. Owner rules (build-40): every expansion Citadel keeps half a party as its guard, and a
+/// Foundry may go on the pile the bot's own miners stand on (they wait beside it for the foundation). Soldiers walled
+/// into a pocket never join an assault, home soldiers stop chasing enemies far from every building, and a full party's
+/// worth of idle soldiers reinforces a party still out. Not simulated: scouting, raids, flanking, harassment, heroes and
+/// special abilities.</summary>
 public sealed partial class SimWorld
 {
     public SortedDictionary<int,AiPlayer> AiPlayers { get; } = [];
@@ -74,7 +88,8 @@ public sealed partial class SimWorld
     public Dictionary<string,AiUnitRule> AiUnits { get; } = [];
     public AiWarParty AiAssaultParty { get; set; } = new(5,12,800_000);
     public const int AiDefenseRadiusMm = 30000,AiEngageRadiusMm = 12000,AiStallTicks = 30*TicksPerSecond,AiFoodPerMill = 6,
-        AiResourceClearanceMm = 10000,AiStagnationTicks = 180*TicksPerSecond,AiExpansionIntervalTicks = 600*TicksPerSecond,AiMaxCitadels = 3;
+        AiResourceClearanceMm = 10000,AiStagnationTicks = 180*TicksPerSecond,AiExpansionIntervalTicks = 600*TicksPerSecond,AiMaxCitadels = 3,
+        AiGuardSlackMm = 8000,AiClaimWaitMm = 15000;
     /// <summary>AiPlayer.Project while its crew walks to a foundation not laid yet.</summary>
     private const int AiWalkingCrew = -2;
 
@@ -94,6 +109,9 @@ public sealed partial class SimWorld
     private bool IsAiSoldier(SimUnit unit) => !IsAiWorker(unit) && !unit.Definition.Hero && unit.Definition.DpsMilli > 0
         && !(AiUnits.GetValueOrDefault(unit.Definition.Name)?.NeverAdd ?? false);
     private static bool AiIdle(SimUnit unit) => unit.Order is OrderKind.Idle or OrderKind.Stop && unit.OrderQueue.Count == 0 && unit.Target < 0;
+    /// <summary>Standing in a pocket it can never walk out of. A party member there would never arrive, and the party,
+    /// never emptying, would keep the next one from forming.</summary>
+    private bool AiTrapped(SimUnit unit) => Nav(unit).CanStand(unit.Node) && Nav(unit).ComponentSize(unit.Node) < OpenRegionCells;
 
     private (int X,int Z) AiBase(AiPlayer ai)
     {
@@ -113,26 +131,107 @@ public sealed partial class SimWorld
             foreach (var site in ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Health > 0).ToArray()) DestroySite(site,null);
             ai.Status = "surrendered"; return;
         }
-        ai.Party.RemoveAll(id => !Units[id].Present);
+        ai.Party.RemoveAll(id => !Units[id].Present || AiTrapped(Units[id]));
         if (ai.Party.Count == 0) ai.AllIn = false;
-        var home = mine.Where(u => IsAiSoldier(u) && !ai.Party.Contains(u.Id)).ToArray();
+        var expansions = AiExpansions(ai);
+        var home = mine.Where(u => IsAiSoldier(u) && !ai.Party.Contains(u.Id) && !ai.Guards.Values.Any(g => g.Units.Contains(u.Id))).ToArray();
         var (bx,bz) = AiBase(ai);
         bool threatened = AiDefend(ai,home);
         if (!threatened) AiRepair(ai,workers);
         var (plan,reserveFood,reserveOre) = AiConstruction(ai,workers,bx,bz);
         AiAssignWorkers(ai,workers);
         AiTrain(ai,living,reserveFood,reserveOre);
+        home = AiGuard(ai,expansions,home,threatened);
         AiAssault(ai,home,bx,bz,threatened);
-        ai.Status = $"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)} · {plan} · parties {ai.PartiesSent}";
+        int guards = ai.Guards.Values.Sum(g => g.Units.Count);
+        ai.Status = $"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)}{(guards > 0 ? $" · guards {guards}" : "")} · {plan} · parties {ai.PartiesSent}";
+    }
+
+    /// <summary>The bot's Citadels away from its start (foundations too), with the guards of fallen ones released and
+    /// fallen guards struck off.</summary>
+    private ConstructionSite[] AiExpansions(AiPlayer ai)
+    {
+        var start = StartStructures.FirstOrDefault(s => s.Team == ai.Team);
+        var expansions = start == null ? [] : ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Health > 0 && s.Building == start.Building
+            && DistanceSquared(s.X,s.Z,start.X,start.Z) > (long)AiDefenseRadiusMm*AiDefenseRadiusMm).ToArray();
+        foreach (int id in ai.Guards.Keys.Where(id => !expansions.Any(s => s.Id == id)).ToArray()) ai.Guards.Remove(id);
+        foreach (var post in ai.Guards.Values) post.Units.RemoveAll(id => !Units[id].Present);
+        return expansions;
+    }
+
+    /// <summary>Half an assault party, rounded up: from six for the most defensive personality to three for the most aggressive.</summary>
+    public int AiGuardSize(AiPlayer ai) => (AiPartySize(ai)+1)/2;
+
+    /// <summary>Expansion guards (owner rule, build-40): every expansion Citadel keeps AiGuardSize soldiers on a cell
+    /// beside it, recruited from the idle home army (nearest first) while the base is not under threat, before an
+    /// assault may form. They attack enemies within the defence radius of their Citadel, soldiers before workers,
+    /// giving up on one after 30 s like the home army, and walk back to their cell once the fight is over or has led
+    /// them 10 m past the radius. Returns the home soldiers left for the assault.</summary>
+    private SimUnit[] AiGuard(AiPlayer ai,ConstructionSite[] expansions,SimUnit[] home,bool threatened)
+    {
+        var free = threatened ? [] : home.Where(u => AiIdle(u) && !AiTrapped(u)).ToList();
+        foreach (var site in expansions)
+        {
+            ai.Guards.TryGetValue(site.Id,out var post);
+            var recruits = free.OrderBy(u => DistanceSquared(u.X,u.Z,site.X,site.Z)).ThenBy(u => u.Id)
+                .Take(AiGuardSize(ai)-(post?.Units.Count ?? 0)).ToArray();
+            if (recruits.Length > 0)
+            {
+                if (post == null) ai.Guards[site.Id] = post = new(AiGuardCell(ai,site,recruits[0]));
+                post.Units.AddRange(recruits.Select(u => u.Id)); free.RemoveAll(recruits.Contains);
+            }
+            if (post == null || post.Units.Count == 0) continue;
+            var guards = post.Units.Select(id => Units[id]).ToArray();
+            AiOrder(ai,guards.Where(u => ai.Unreachable.Contains(u.Target) || u.Order == OrderKind.Attack && ai.Unreachable.Contains(u.OrderTarget)).Select(u => u.Id),OrderKind.Stop);
+            var intruder = AiStalled(ai,post.Seen,Units.Where(u => u.Present && u.Team != ai.Team && !u.RingActive && !ai.Unreachable.Contains(u.Id)
+                    && DistanceSquared(u.X,u.Z,site.X,site.Z) <= (long)AiDefenseRadiusMm*AiDefenseRadiusMm)
+                .OrderBy(u => IsAiWorker(u) ? 1 : 0).ThenBy(u => DistanceSquared(u.X,u.Z,site.X,site.Z)).ThenBy(u => u.Id).ToArray());
+            if (intruder != null) { AiOrder(ai,guards.Where(u => u.Target < 0).Select(u => u.Id),OrderKind.Attack,intruder.Node,intruder.Id); continue; }
+            var (px,pz) = Navigation.Center(post.Cell);
+            long leash = AiDefenseRadiusMm+10000;
+            AiOrder(ai,guards.Where(u => AiIdle(u) && DistanceSquared(u.X,u.Z,px,pz) > (long)AiGuardSlackMm*AiGuardSlackMm
+                || (u.Order == OrderKind.Attack || u.Target >= 0) && DistanceSquared(u.X,u.Z,site.X,site.Z) > leash*leash).Select(u => u.Id),OrderKind.Move,post.Cell);
+        }
+        return home.Where(u => !ai.Guards.Values.Any(g => g.Units.Contains(u.Id))).ToArray();
+    }
+
+    /// <summary>Where an expansion's guard stands: 12-24 m from the Citadel toward the nearest enemy building, alternating
+    /// either side of that direction, on ground the first recruit can walk to and 10 m clear of resources, so the guard
+    /// stays out of the gatherers' way; the Citadel's own cell when no such cell exists.</summary>
+    private int AiGuardCell(AiPlayer ai,ConstructionSite site,SimUnit soldier)
+    {
+        var enemy = ConstructionSites.Values.Where(s => s.Team >= 0 && s.Team != ai.Team && s.Health > 0)
+            .OrderBy(s => DistanceSquared(SitePosition(s).X,SitePosition(s).Z,site.X,site.Z)).ThenBy(s => s.Id).Select(SitePosition).DefaultIfEmpty((site.X,site.Z)).First();
+        double facing = Math.Atan2(enemy.Z-site.Z,enemy.X-site.X);
+        var nav = Nav(soldier);
+        for (int ring = 12000; ring <= 24000; ring += 3000)
+            for (int step = 0; step < 16; step++)
+            {
+                double angle = facing+(step%2 == 0 ? 1 : -1)*((step+1)/2)*Math.Tau/16;
+                int cell = Navigation.Cell(site.X+(int)Math.Round(ring*Math.Cos(angle)),site.Z+(int)Math.Round(ring*Math.Sin(angle)));
+                if (cell < 0 || !nav.CanStand(cell)) continue;
+                var (x,z) = Navigation.Center(cell);
+                if (Resources.Values.Any(r => DistanceSquared(r.X,r.Z,x,z) < (long)AiResourceClearanceMm*AiResourceClearanceMm)) continue;
+                if (CanReachDestination(soldier,cell)) return cell;
+            }
+        return Navigation.Cell(site.X,site.Z);
     }
 
     /// <summary>Every home soldier answers enemies near the base, soldiers before workers, except one it could not kill in
     /// 30 s. Only enemy soldiers count as a threat that holds the assault back: workers gathering by an expansion do not.</summary>
     private bool AiDefend(AiPlayer ai,SimUnit[] home)
     {
-        // Soldiers still locked on an intruder given up as unreachable stand down.
-        AiOrder(ai,home.Where(u => ai.Unreachable.Contains(u.Target) || u.Order == OrderKind.Attack && ai.Unreachable.Contains(u.OrderTarget)).Select(u => u.Id),OrderKind.Stop);
         var buildings = ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Health > 0).Select(SitePosition).ToArray();
+        // Soldiers still locked on an intruder given up as unreachable stand down, and so do those chasing an enemy out
+        // of reach (build-40): beyond 12 m of the soldier and 10 m past the defence radius of every building. Explicit
+        // attacks and a bot's idle units pursue across the map, and one that finds no way there stands still on the
+        // chase; Bilbo's Bluffs had both home armies frozen so, with no party ever forming again.
+        long leash = AiDefenseRadiusMm+10000;
+        bool Gone(SimUnit u,int id) => id >= 0 && id < Units.Count && Units[id] is var enemy
+            && DistanceSquared(u.X,u.Z,enemy.X,enemy.Z) > (long)AiEngageRadiusMm*AiEngageRadiusMm
+            && buildings.All(b => DistanceSquared(b.X,b.Z,enemy.X,enemy.Z) > leash*leash);
+        AiOrder(ai,home.Where(u => ai.Unreachable.Contains(u.Target) || Gone(u,u.Target)
+            || u.Order == OrderKind.Attack && (ai.Unreachable.Contains(u.OrderTarget) || Gone(u,u.OrderTarget))).Select(u => u.Id),OrderKind.Stop);
         var intruders = Units.Where(u => u.Present && u.Team != ai.Team && !u.RingActive && !ai.Unreachable.Contains(u.Id)
                 && buildings.Any(b => DistanceSquared(b.X,b.Z,u.X,u.Z) <= (long)AiDefenseRadiusMm*AiDefenseRadiusMm))
             .OrderBy(u => IsAiWorker(u) ? 1 : 0).ThenBy(u => buildings.Min(b => DistanceSquared(b.X,b.Z,u.X,u.Z))).ThenBy(u => u.Id).ToArray();
@@ -316,8 +415,9 @@ public sealed partial class SimWorld
     {
         if (bx == 0 && bz == 0) (bx,bz) = AiBase(ai);
         var homes = DropOffs.Where(d => d.Team == ai.Team).Select(d => (X: d.X,Z: d.Z)).Append((X: bx,Z: bz)).ToArray();
-        // Affordability is the plan's concern; every other refusal rules the site out.
-        bool Open(GatherSource r) => CanStartConstruction(ai.Team,r.Id,out var reason) || reason == "Insufficient resources";
+        // Affordability is the plan's concern, and units on the foundation (its own miners at a raw ore pile, above
+        // all) step away while the crew walks over; every other refusal rules the site out.
+        bool Open(GatherSource r) => CanStartConstruction(ai.Team,r.Id,out var reason) || reason is "Insufficient resources" or UnitBlocksFoundation;
         return Resources.Values.Where(r => r.Kind == kind && ConstructionSites.TryGetValue(r.Id,out var site) && site.Team < 0 && Open(r)
                 && (anyDistance || homes.Any(h => DistanceSquared(r.X,r.Z,h.X,h.Z) <= 80000L*80000)) && !AiUnsafe(ai,r.X,r.Z))
             .OrderBy(r => DistanceSquared(r.X,r.Z,bx,bz)).ThenBy(r => r.Id).Select(r => r.Id).DefaultIfEmpty(-1).First();
@@ -371,12 +471,20 @@ public sealed partial class SimWorld
 
     private void AiAssignWorkers(AiPlayer ai,SimUnit[] workers)
     {
-        var idle = workers.Where(w => w.Order is OrderKind.Idle or OrderKind.Stop && w.OrderQueue.Count == 0).ToList();
+        // A pile a crew is walking over to claim for a Foundry: its raw miners stand on the foundation. They stop and
+        // wait beside it until it goes down (the arriving crew moves idle units off it); before build-40 the crew
+        // waited them out and gave up, and the Foundry went up at a pile nobody mined, far from home.
+        var claiming = workers.Where(w => w.Order == OrderKind.Build && ConstructionSites.TryGetValue(w.OrderTarget,out var s) && s.Team < 0)
+            .Select(w => w.OrderTarget).ToHashSet();
+        AiOrder(ai,workers.Where(w => w.Order == OrderKind.Gather && w.CargoMilli == 0 && claiming.Contains(w.OrderTarget)).Select(w => w.Id),OrderKind.Stop);
+        bool Waiting(SimUnit w) => claiming.Any(id => SitePosition(ConstructionSites[id]) is var (x,z)
+            && DistanceSquared(w.X,w.Z,x,z) <= (long)AiClaimWaitMm*AiClaimWaitMm);
+        var idle = workers.Where(w => w.Order is OrderKind.Idle or OrderKind.Stop && w.OrderQueue.Count == 0 && !Waiting(w)).ToList();
         int want = AiFoodTarget(ai,workers.Length+workers.Count(w => w.InsideSite >= 0));
         // Sources by enemy buildings bleed workers to their defenders; they are used only when nothing else is left.
         var exposed = Resources.Values.Where(r => AiUnsafe(ai,r.X,r.Z)).Select(r => r.Id).ToHashSet();
         bool anySafe = Resources.Values.Any(r => !exposed.Contains(r.Id) && CanGather(ai.Team,r.Id));
-        bool Usable(GatherSource r) => CanGather(ai.Team,r.Id) && (!anySafe || !exposed.Contains(r.Id));
+        bool Usable(GatherSource r) => CanGather(ai.Team,r.Id) && (!anySafe || !exposed.Contains(r.Id)) && !claiming.Contains(r.Id);
         foreach (var worker in idle)
         {
             var kind = FoodGatherers(ai) < want ? ResourceKind.Food : ResourceKind.Ore;
@@ -479,17 +587,26 @@ public sealed partial class SimWorld
             AiOrder(ai,ai.Party,OrderKind.Move,Navigation.Cell(bx,bz));
             ai.Party.Clear(); ai.PartyTarget = -1; ai.Chase = -1;
         }
-        if (ai.Party.Count == 0 && !threatened)
+        int[] reinforcements = [];
+        if (!threatened)
         {
-            var ready = home.Where(AiIdle).OrderBy(u => u.Id).Take(AiAssaultParty.MaxSize).ToArray();
-            // A spent bot (no soldier trained or sent for 3 minutes, none affordable now) throws in whatever it has left.
-            bool spent = ready.Length > 0 && Tick-ai.LastArmyTick >= AiStagnationTicks && !AiAffordsSoldier(ai);
-            if (ready.Length < AiPartySize(ai) && !spent || enemyBuildings.Length == 0) return;
-            ai.Party.AddRange(ready.Select(u => u.Id)); ai.PartyTarget = -1; ai.AllIn = ready.Length < AiPartySize(ai);
+            var ready = home.Where(u => AiIdle(u) && !AiTrapped(u)).OrderBy(u => u.Id).Take(AiAssaultParty.MaxSize).ToArray();
+            if (ai.Party.Count == 0)
+            {
+                // A spent bot (no soldier trained or sent for 3 minutes, none affordable now) throws in whatever it has left.
+                bool spent = ready.Length > 0 && Tick-ai.LastArmyTick >= AiStagnationTicks && !AiAffordsSoldier(ai);
+                if (ready.Length < AiPartySize(ai) && !spent || enemyBuildings.Length == 0) return;
+                ai.Party.AddRange(ready.Select(u => u.Id)); ai.PartyTarget = -1; ai.AllIn = ready.Length < AiPartySize(ai);
+            }
+            // Reinforcements (build-40): a full party's worth idle at home while one is out joins it and marches on its
+            // target, so a remnant held up for good (two units for 36 minutes on Wasteland) no longer keeps every later
+            // assault at home.
+            else if (ready.Length >= AiPartySize(ai)) reinforcements = [.. ready.Select(u => u.Id)];
         }
         if (ai.Party.Count == 0) return;
         var party = ai.Party.Select(id => Units[id]).ToArray();
         int cx = (int)party.Average(u => (long)u.X),cz = (int)party.Average(u => (long)u.Z);
+        if (reinforcements.Length > 0) { ai.Party.AddRange(reinforcements); ai.AllIn = false; ai.LastArmyTick = Tick; }
         if (!ConstructionSites.TryGetValue(ai.PartyTarget,out var target) || target.Health <= 0 || target.Team == ai.Team || target.Team < 0)
         {
             // The nearest building the party can walk to: across a river without a crossing, a closer one waits.
@@ -506,6 +623,7 @@ public sealed partial class SimWorld
             return;
         }
         var (x,z) = SitePosition(target);
+        AiOrder(ai,reinforcements,OrderKind.AttackMove,Navigation.Cell(x,z));
         // Defenders near the party come first: a unit razing a building ignores the units hitting it. A defender the party
         // cannot kill in 30 s (tucked in a pocket beyond melee reach) no longer holds up the razing.
         var defender = AiStalled(ai,ai.ChaseSeen,Units.Where(u => u.Present && u.Team != ai.Team && !u.RingActive && !ai.Unreachable.Contains(u.Id)
@@ -526,5 +644,6 @@ public sealed partial class SimWorld
 
     private string AiDigest() => ":ai:"+string.Join(';',AiPlayers.Values.Select(a =>
         $"{a.Team},{a.Personality.Id},{a.PartyTarget},{a.PartiesSent},{a.Project},{a.ProjectProgress},{a.ProjectMovedTick},{a.Chase},{a.ChaseSince},{a.Intruder},{a.IntruderSince},"
-        +$"{a.LastArmyTick},{a.AllIn},{a.CitadelSite.X},{a.CitadelSite.Z},{a.CrewDistance},{string.Join('/',a.IntruderSeen)},{string.Join('/',a.ChaseSeen)}:{string.Join(',',a.Unreachable.Order())}:{string.Join(',',a.Party)}:{string.Join(',',a.RefusedCells.Order())}"));
+        +$"{a.LastArmyTick},{a.AllIn},{a.CitadelSite.X},{a.CitadelSite.Z},{a.CrewDistance},{string.Join('/',a.IntruderSeen)},{string.Join('/',a.ChaseSeen)}:{string.Join(',',a.Unreachable.Order())}:{string.Join(',',a.Party)}:{string.Join(',',a.RefusedCells.Order())}"
+        +":guards:"+string.Join('|',a.Guards.Select(g => $"{g.Key}@{g.Value.Cell}={string.Join(',',g.Value.Units)}/{string.Join('/',g.Value.Seen)}"))));
 }

@@ -38,6 +38,7 @@ public sealed partial class GridNavigation
     private readonly Dictionary<(int, int), int> _blockedEdges = [];
     private readonly Dictionary<int,HashSet<int>> _obstacleEdgeNeighbors = [];
     private int[]? _components;
+    private readonly Dictionary<int,int> _componentSizes = [];
     private readonly Dictionary<int,bool> _bottlenecks = [];
     private readonly Dictionary<(int,int),BodyNavigationProfile> _profiles = [];
     private readonly Dictionary<(int,int),GridNavigation> _bodyGraphs = [];
@@ -301,6 +302,61 @@ public sealed partial class GridNavigation
         return best;
     }
 
+    /// <summary>As Nearest, but passing over ground cells in regions of fewer than <paramref name="minCells"/> nodes
+    /// (pockets walled in by buildings or cliffs) while an open region is within range.</summary>
+    public int NearestOpen(int cell, int minCells, int radius = 24)
+    {
+        if (cell < 0 || cell >= GroundCount) return Nearest(cell, radius: radius);
+        int cx = cell % Width, cz = cell / Width, best = -1, distance = int.MaxValue;
+        for (int z = Math.Max(0, cz - radius); z <= Math.Min(Height - 1, cz + radius); z++)
+        for (int x = Math.Max(0, cx - radius); x <= Math.Min(Width - 1, cx + radius); x++)
+        {
+            int id = z * Width + x, d = (x-cx)*(x-cx) + (z-cz)*(z-cz);
+            if (d < distance && ComponentSize(id) >= minCells) { best = id; distance = d; }
+        }
+        return best >= 0 ? best : Nearest(cell, radius: radius);
+    }
+
+    /// <summary>The cells repeated Nearest(cell, excluded, radius, connectedTo) calls return when the caller adds each
+    /// rejected cell to <paramref name="excluded"/> before asking for the next, in one sorted pass over the window.</summary>
+    public IEnumerable<int> NearestSequence(int cell, HashSet<int> excluded, int connectedTo, int radius = 24)
+    {
+        if (cell < 0 || cell >= NodeCount) yield break;
+        if (cell >= GroundCount)
+        {
+            // Surface layers keep the breadth-first search; a cell the caller did not exclude ends the sequence.
+            for (int next = Nearest(cell, excluded, radius, connectedTo); next >= 0; next = Nearest(cell, excluded, radius, connectedTo))
+            {
+                yield return next;
+                if (!excluded.Contains(next)) yield break;
+            }
+            yield break;
+        }
+        int cx = cell % Width, cz = cell / Width;
+        foreach (var (dx, dz) in WindowByDistance(radius))
+        {
+            int x = cx + dx, z = cz + dz;
+            if (x < 0 || z < 0 || x >= Width || z >= Height) continue;
+            int id = z * Width + x;
+            // Region before reservation: the reserved set is checked cell by cell against every unit's node.
+            if (CanStand(id) && (connectedTo < 0 || IsConnected(id, connectedTo)) && CanReserve(id, excluded)) yield return id;
+        }
+    }
+
+    private static readonly Dictionary<int,(int Dx,int Dz)[]> WindowOrders = [];
+
+    /// <summary>Offsets in a square window by squared distance, ties in row order (Nearest's strict-less scan).</summary>
+    private static (int Dx,int Dz)[] WindowByDistance(int radius)
+    {
+        lock (WindowOrders)
+        {
+            if (WindowOrders.TryGetValue(radius, out var order)) return order;
+            order = [.. from dz in Enumerable.Range(-radius, 2*radius+1) from dx in Enumerable.Range(-radius, 2*radius+1)
+                orderby dx*dx+dz*dz, dz, dx select (dx, dz)];
+            WindowOrders[radius] = order; return order;
+        }
+    }
+
     public int FormationSlot(int anchor, IReadOnlySet<int> reserved)
     {
         // Extra formation slots should leave passage entrances open when a
@@ -370,20 +426,31 @@ public sealed partial class GridNavigation
         if (!CanStand(node)) return;
         if (_components == null)
         {
-            _components = new int[NodeCount]; Array.Fill(_components,-1);
+            _components = new int[NodeCount]; Array.Fill(_components,-1); _componentSizes.Clear();
         }
         if (_components[node] < 0)
         {
             var queue = new Queue<int>(); queue.Enqueue(node); _components[node] = node;
             var neighbors = new List<int>(8);
+            int size = 0;
             while (queue.TryDequeue(out int current))
             {
+                size++;
                 OpenNeighbors(current,neighbors);
                 foreach (int next in neighbors)
                     if (StandCached(next) && _components[next] < 0)
                     { _components[next] = node; queue.Enqueue(next); }
             }
+            _componentSizes[node] = size;
         }
+    }
+
+    /// <summary>How many nodes share this node's connected region; 0 where the body cannot stand.</summary>
+    public int ComponentSize(int node)
+    {
+        if (!CanStand(node)) return 0;
+        WarmConnectedRegion(node);
+        return _componentSizes[_components![node]];
     }
 
     public IEnumerable<int> Neighbors(int id)

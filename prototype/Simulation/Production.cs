@@ -23,6 +23,8 @@ public sealed partial class SimWorld
 {
     // ponytail: the original queue length is unverified; five matches the selection-panel slots used here.
     public const int ProductionQueueLimit = 5;
+    /// <summary>Regions with fewer nodes are pockets walled in by buildings or cliffs: a unit there can never leave.</summary>
+    public const int OpenRegionCells = 200;
     public Dictionary<string,ProductionDefinition> ProductionRules { get; } = [];
     public SortedDictionary<int,ProductionBuilding> Producers { get; } = [];
     public Dictionary<string,int> PopulationProvided { get; } = [];
@@ -116,15 +118,16 @@ public sealed partial class SimWorld
     {
         var body = Navigation.ForBody(definition.BodyRadiusMm,definition.BodyHeightMm);
         var taken = OccupiedNodes(-1);
-        // The anchor was recorded for another body; a larger trained unit needs a cell it can stand on.
-        if (!body.CanStand(anchor)) anchor = body.Nearest(anchor);
+        // The anchor was recorded for another body. A larger trained unit needs a cell it can stand on, in a region
+        // it can walk out of: the nearest standable cell may lie in a pocket beside the building (build-40).
+        if (!body.CanStand(anchor) || body.ComponentSize(anchor) < OpenRegionCells) anchor = body.NearestOpen(anchor,OpenRegionCells);
         if (anchor < 0) return -1;
         // Sixteen candidates bound the per-tick cost while a crowd blocks the exit.
-        for (int attempt = 0; attempt < 16; attempt++)
+        int attempts = 0;
+        foreach (int cell in body.NearestSequence(center,taken,anchor))
         {
-            int cell = body.Nearest(center,taken,connectedTo: anchor);
-            if (cell < 0) return -1;
             if (CanPlace(SpawnCandidate(team,cell,definition))) return cell;
+            if (++attempts == 16) return -1;
             taken.Add(cell);
         }
         return -1;
