@@ -8,7 +8,7 @@ public partial class Main
 {
     private Control _outcome = null!;
     private Label _outcomeTitle = null!,_outcomeDetail = null!;
-    private Button _outcomeContinue = null!,_outcomeRestart = null!;
+    private Button _outcomeContinue = null!,_outcomeRestart = null!,_outcomeSetup = null!;
     private bool _outcomeShown;
 
     private void CreateOutcomePanel()
@@ -34,13 +34,15 @@ public partial class Main
         choices.AddThemeConstantOverride("separation",16); box.AddChild(choices);
         _outcomeContinue = DebugButton("Continue",ContinueAfterOutcome); _outcomeContinue.CustomMinimumSize = new(140,40); choices.AddChild(_outcomeContinue);
         _outcomeRestart = DebugButton("Restart",() => GetTree().ReloadCurrentScene()); _outcomeRestart.CustomMinimumSize = new(140,40); choices.AddChild(_outcomeRestart);
+        // Back to the skirmish setup screen, when the match was chosen there.
+        _outcomeSetup = DebugButton("Setup",ReturnToSetup); _outcomeSetup.CustomMinimumSize = new(140,40); choices.AddChild(_outcomeSetup);
     }
 
     private void PresentOutcome()
     {
         if (_outcomeShown || _world is not { MatchOver: true } world) return;
         _outcomeShown = true;
-        bool won = world.Winner == 0;
+        bool won = world.Winner == PlayerTeam;
         if (_observing)
         {
             // An observer has no side: name the winner in its colour.

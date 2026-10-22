@@ -6,7 +6,7 @@ public partial class Main
     private readonly Dictionary<string,Button> _cameraButtons = [];
     private HSlider _hudScale = null!;
     private Label _debugSummary = null!, _debugSelection = null!, _help = null!;
-    private Button _debugPause = null!, _debugStep = null!, _debugFocus = null!, _debugGrant = null!;
+    private Button _debugPause = null!, _debugStep = null!, _debugFocus = null!, _debugGrant = null!, _setupButton = null!;
     private CheckButton _debugInstant = null!;
     private const int CheatGrant = 1000;
     private bool _openDebugMenu, _singleStepRequested, _presentStep;
@@ -48,6 +48,8 @@ public partial class Main
         _debugStep = DebugButton("Step one tick",() => { if (_paused) _singleStepRequested = true; });
         _debugStep.TooltipText = "Advance the paused simulation by one 50 ms tick."; session.AddChild(_debugStep);
         session.AddChild(DebugButton("Restart encounter",() => GetTree().ReloadCurrentScene()));
+        _setupButton = DebugButton("Skirmish setup",ReturnToSetup); _setupButton.TooltipText = "Back to the setup screen, keeping this match's choices.";
+        session.AddChild(_setupButton);
         body.AddChild(new HSeparator()); body.AddChild(DebugText("Camera"));
         var views = new HBoxContainer(); body.AddChild(views);
         foreach (var (view,label) in new[] { ("squad","All squads"),("fortress","Fortress"),("overview","Whole map") })

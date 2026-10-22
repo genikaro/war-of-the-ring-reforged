@@ -1611,3 +1611,57 @@ checks pass, as do the sandbox, combat, melee, surface, obstacle, command,
 orders, ability, skirmish, construction, structure, production, placement, Dwarf
 Hall, minimap, Frodo, siege, defense, victory, AI and observer smokes. The
 observer smoke's result check passes again.
+
+## Build-39: skirmish setup screen
+
+Step 4 of the skirmish setup plan in the roadmap: a match no longer needs
+command-line flags. `./prototype/run.ps1 -Skirmish` on its own (or `-Setup`) opens
+a lobby, `prototype/SetupScreen.cs`, laid out like those of Warcraft III and
+StarCraft II.
+
+- **Maps.** Every source map in `extracted/Levels/Multiplayer` and every imported
+  cache, sorted by player count. Each shows its title and start positions; one not
+  imported yet is dimmed, and its tooltip and the status line give the
+  `prepare_prototype.py --skirmish --map <stem>` command.
+- **Preview.** The map's walkable ground shaded by height (the in-game minimap's
+  look), wells and ore piles, and each start position numbered in its slot colour.
+  Yours is ringed in gold and a closed one is struck out. Map sizes come from the
+  first bytes of `navigation.json`, so listing 32 maps parses no grids; a grid is
+  read only for the preview of the map on show.
+- **Slots.** One row per start position: You, Closed, or a bot from the cache's
+  13 `.rai` personalities with its difficulty (Easy, Normal, Hard). Choosing You
+  for a slot hands the previous one to the default bot. With no slot set to You,
+  you watch (observer mode). Start needs two open positions.
+- **Speed.** The match panel's notched slider, 1x to 16x.
+
+Start keeps the choice in a static field and reloads the scene (`prototype/Main.Setup.cs`).
+The reload loads that map with you in the chosen slot (`PlayerTeam`), a bot in every
+other open slot and nothing in the closed ones. A closed slot gets no workers, Citadel,
+bank, drop-off, producer or bot, and its start footprint is freed, so the Razing
+outcome counts only open slots. Restart replays the same choice. The result panel's
+new Setup button and the debug menu's Skirmish setup button return to the screen,
+which starts from the last choices. Launch flags that choose a match skip the screen,
+so every existing smoke runs as before.
+
+**You in any slot.** The human was always player 1. The last places that assumed
+it now ask `PlayerTeam`: the result title, the foundation Cancel button, repairing
+your own Mill or Foundry, the colours of the placement ghost and the rally banner,
+and whether a clicked unit is an enemy.
+
+Validation: `-SetupSmoke` (10 cases) drives the screen with press-and-release clicks
+across three scene reloads:
+
+1. It lists every map, Bilbo's Bluffs (2) and Boneyard (8) imported.
+2. On Boneyard it puts you in slot 3, closes slots 6-8, names Gimli and Aragorn for
+   slots 1-2, sets 2x, and checks the status line. The match must load Boneyard with
+   you as player 3 (four workers, your resource strip, no bot of yours), five
+   contenders, nothing in the closed slots (no units, buildings or bank; footprints
+   inactive), bots in slots 1, 2, 4 and 5 with the named personalities, at 2x.
+3. The debug menu's button returns to the screen with those choices kept. Then
+   Gimli against Aragorn on Bilbo's Bluffs, observed at 16x, must load as chosen.
+
+The sandbox, combat, melee, surface, obstacle, command, orders, ability, skirmish,
+construction, structure, production, placement, Dwarf Hall, minimap, Frodo, siege,
+defense, victory, AI and observer smokes pass. The observer match keeps build-38's
+digest (Gimli wins at tick 40133, 9C0DC103...), so making the human's slot a
+choice changed no bot match. No simulation code changed.

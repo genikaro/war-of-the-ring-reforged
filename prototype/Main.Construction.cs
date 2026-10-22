@@ -39,7 +39,7 @@ public partial class Main
             || !construction.TryGetProperty("defenses",out var defenses))
             throw new InvalidOperationException("Refresh construction: python tools/skirmish_construction.py --cache converted/skirmish");
         var world = _world!;
-        foreach (var start in data.GetProperty("bases").EnumerateArray())
+        foreach (var start in OpenBases(data))
             world.StartBuildings.Add(start.GetProperty("team").GetInt32(),[start.GetProperty("building").GetString()!]);
         int Armor(string name) => _structureDefinitions.TryGetValue(name,out var definition)
             ? (int)Math.Round(definition.GetProperty("armor").GetDouble()*1000) : 0;
@@ -83,7 +83,7 @@ public partial class Main
         var order = construction.GetProperty("order").EnumerateArray().Select(n => n.GetString()!).ToArray();
         world.PlaceableBuildings.AddRange(order.Where(world.BuildingRules.ContainsKey));
         _constructionChoices = order.Select(n => (n,_structureDefinitions[n].GetProperty("portrait").GetString()!)).ToArray();
-        foreach (var start in data.GetProperty("bases").EnumerateArray())
+        foreach (var start in OpenBases(data))
         {
             var at = start.GetProperty("position");
             world.StartStructures.Add(new(start.GetProperty("team").GetInt32(),start.GetProperty("building").GetString()!,
@@ -167,7 +167,7 @@ public partial class Main
     /// <summary>The finished building drawn in one translucent colour.</summary>
     private Node3D BuildingGhost(string building,StandardMaterial3D material)
     {
-        var ghost = LoadGlb(_constructionFiles[building],_teamColors[0]); AddChild(ghost);
+        var ghost = LoadGlb(_constructionFiles[building],TeamColor(Math.Max(0,PlayerTeam))); AddChild(ghost);
         var data = UnitAppearance.Read(System.IO.Path.Combine(_cache,_constructionFiles[building]));
         new UnitAppearance(ghost,data).Apply(BuildingStateClips(data)[3],0);
         foreach (var mesh in Descendants(ghost).OfType<MeshInstance3D>()) mesh.MaterialOverride = material;

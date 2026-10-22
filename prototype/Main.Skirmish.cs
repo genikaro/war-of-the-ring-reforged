@@ -31,7 +31,10 @@ public partial class Main
         var data = manifest.GetProperty("skirmish");
         LoadStructureDefinitions(data);
         var files = data.GetProperty("building_files");
-        foreach (var start in data.GetProperty("bases").EnumerateArray())
+        // A closed slot has no base: its start footprint frees the ground.
+        foreach (var start in Bases(data).Where(b => !SlotOpen(b.GetProperty("team").GetInt32())))
+            _world!.Navigation.SetObstacle(start.GetProperty("footprint_object").GetInt32(),false);
+        foreach (var start in OpenBases(data))
         {
             int team = start.GetProperty("team").GetInt32();
             var at = start.GetProperty("position");
@@ -84,7 +87,7 @@ public partial class Main
             _workerClips[worker.Name] = worker.Value.GetProperty("animations").EnumerateObject()
                 .ToDictionary(c => c.Name,c => (c.Value.GetProperty("state").GetString()!,c.Value.GetProperty("clip").GetString()!));
         }
-        foreach (var start in data.GetProperty("bases").EnumerateArray())
+        foreach (var start in OpenBases(data))
         {
             int team = start.GetProperty("team").GetInt32(); var at = start.GetProperty("position");
             _world!.Economies.Add(team,new(_startState.Food,_startState.Ore,economy.GetProperty("food_capacity").GetInt32(),economy.GetProperty("ore_capacity").GetInt32()));
@@ -166,7 +169,7 @@ public partial class Main
         if (!_skirmish || _orders.Pending != null || !_world!.Units.Any(u => u.Team == PlayerTeam && u.Health > 0
             && _selected.Contains(u.Id) && _world.Workers.ContainsKey(u.Definition.Name))) return false;
         if (StructureAt(mouse) is { } structure && _world.ConstructionSites.Values.FirstOrDefault(s => s.Obstacle == structure.Id)
-            is { Team: 0 } owned && (!owned.Complete || _world.NeedsRepair(owned)))
+            is { } owned && owned.Team == PlayerTeam && (!owned.Complete || _world.NeedsRepair(owned)))
         {
             _world.Enqueue(PlayerTeam,SelectedWorkers(),OrderKind.Build,target: owned.Id,queued: queued);
             _status.Text = owned.Complete ? "Repair "+_world.SiteRules(owned).DisplayName : "Resume construction";

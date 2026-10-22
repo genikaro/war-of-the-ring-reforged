@@ -58,7 +58,7 @@ public partial class CommandPanel
         _buildButton.Visible = workers && !BuildMenuOpen;
         _buildButton.Icon ??= _art.GetValueOrDefault("console_g_action_build");
         _backButton.Visible = page;
-        bool cancel = structure is { Team: 0,UnderConstruction: true };
+        bool cancel = structure is { UnderConstruction: true } && structure.Team == PlayerTeam;
         _cancelConstructionButton.Visible = cancel; _cancelConstructionButton.Disabled = !cancel;
         for (int index = 0; index < _constructionButtons.Length; index++)
         {

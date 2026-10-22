@@ -23,7 +23,7 @@ public partial class Main
     private string _mapName = "";
 
     /// <summary>The side the person at the keyboard commands; -1 while observing.</summary>
-    private int PlayerTeam => _observing ? ObserverTeam : 0;
+    private int PlayerTeam => _observing ? ObserverTeam : _humanTeam;
 
     private Color TeamColor(int team) => team >= 0 && team < _teamColors.Length ? _teamColors[team] : new Color("ded2a5");
 

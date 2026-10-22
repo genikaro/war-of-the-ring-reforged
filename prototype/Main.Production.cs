@@ -27,7 +27,7 @@ public partial class Main
         var producers = production.GetProperty("producers");
         foreach (var producer in producers.EnumerateObject())
             world.ProducedUnits.Add(producer.Name,producer.Value.GetProperty("units").EnumerateArray().Select(u => u.GetString()!).ToArray());
-        foreach (var start in data.GetProperty("bases").EnumerateArray())
+        foreach (var start in OpenBases(data))
         {
             if (!producers.TryGetProperty(start.GetProperty("building").GetString()!,out var producer)) continue;
             int team = start.GetProperty("team").GetInt32(),id = start.GetProperty("footprint_object").GetInt32(); var at = start.GetProperty("position");
@@ -36,7 +36,7 @@ public partial class Main
                 world.Units.First(u => u.Team == team).Node,producer.GetProperty("units").EnumerateArray().Select(u => u.GetString()!).ToArray()));
         }
         _waypointFlagFile = production.GetProperty("rally_banner").GetString()!;
-        _rallyBanner = LoadGlb(_waypointFlagFile,_teamColors[0]);
+        _rallyBanner = LoadGlb(_waypointFlagFile,TeamColor(Math.Max(0,PlayerTeam)));
         _rallyBanner.Visible = false; AddChild(_rallyBanner);
     }
 

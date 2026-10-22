@@ -262,6 +262,15 @@ python tools/prepare_prototype.py --skirmish
 ./prototype/run.ps1 -Skirmish
 ```
 
+`-Skirmish` on its own opens the skirmish setup screen (build-39; `-Setup` always
+does). It is a lobby in the manner of Warcraft III and StarCraft II: every
+multiplayer map with its player count and a preview of its start positions, and one
+row per start position set to You, a bot personality (with its difficulty) or
+Closed. With no slot set to You, you watch. It also sets the start speed. Restart on
+the result panel replays the same setup; its Setup button, or the debug menu's
+Skirmish setup button, goes back to the screen. Any flag that chooses the match
+(`-Map`, `-Observe`, `-Bots`, `-Speed`, `-NoAi`, `-AiPersonality`, the smokes) skips the screen.
+
 The skirmish plays against the enemy bot (build-27). Bots expand with a new Citadel
 between 10 and 15 minutes, go all in when their army can no longer grow, and
 surrender when they can never field one again (build-38). `-AiPersonality Gimli` picks a
@@ -397,6 +406,7 @@ a normal viewport capture with `-CapturePath`.
 ./prototype/run.ps1 -VictorySmoke
 ./prototype/run.ps1 -AiSmoke
 ./prototype/run.ps1 -ObserverSmoke
+./prototype/run.ps1 -SetupSmoke
 ./prototype/run.ps1 -SurfaceSmoke
 ./prototype/run.ps1 -ObstacleSmoke
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --movement-benchmark converted/prototype/movement-after.json

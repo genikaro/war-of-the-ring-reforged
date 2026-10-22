@@ -103,6 +103,8 @@ public partial class Main : Node3D
             if (arg.StartsWith("--ai-personality=")) _aiPersonality = arg[17..];
             if (arg == "--ai-smoke") _aiSmoke = true;
             if (arg == "--observer-smoke") _observerSmoke = true;
+            if (arg == "--setup") _setupMode = true;
+            if (arg == "--setup-smoke") _setupSmoke = _setupMode = true;
             if (arg.StartsWith("--capture-resolution="))
             {
                 var size = arg[21..].Split('x'); _captureResolution = new(int.Parse(size[0]),int.Parse(size[1]));
@@ -136,6 +138,10 @@ public partial class Main : Node3D
             if (arg == "--attack-move-engagement-smoke") _attackMoveEngagementSmoke=_engagementSmoke=true;
             if (arg == "--formation-smoke") _formationSmoke=_engagementSmoke=true;
         }
+        // The setup screen chooses the match; once chosen, its choice replaces the launch arguments.
+        if (_setupMode && _chosenSetup is { } setup) ApplySetup(setup);
+        else if (_setupMode) { ShowSetupScreen(); return; }
+        _setupButton.Visible = _outcomeSetup.Visible = _setupMode;
         _hud.Visible = !_hideHud;
         _commands.PlayerTeam = PlayerTeam;
         if (!Speeds.Contains(_speed)) throw new ArgumentOutOfRangeException(nameof(_speed),"Game speed is 1, 2, 4, 8 or 16");
@@ -148,7 +154,7 @@ public partial class Main : Node3D
             RefreshDebugMenu();
             _status.Text = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             GD.PushError(error.ToString());
-            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke || _observerSmoke || _engagementSmoke || _capture != "") GetTree().Quit(1);
+            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke || _observerSmoke || _setupSmoke || _engagementSmoke || _capture != "") GetTree().Quit(1);
         }
     }
 
@@ -227,7 +233,8 @@ public partial class Main : Node3D
         foreach (var spawn in manifest.GetProperty("spawns").EnumerateArray())
         {
             int team = spawn.GetProperty("team").GetInt32(), cell = spawn.GetProperty("cell").GetInt32();
-            bool primary = team == 0 && _primarySquad.Count < 6;
+            if (_skirmish && !SlotOpen(team)) continue;
+            bool primary = team == PlayerTeam && _primarySquad.Count < 6;
             if (_surfaceSmoke && primary) { cell = surfaceNavigation.Nearest(surfaceStart, surfaceSpawns); surfaceSpawns.Add(cell); }
             var model = manifest.GetProperty("models")[spawn.GetProperty("model").GetInt32()];
             var definition = _rules.Units[model.GetProperty("unit").GetString()!];
@@ -512,7 +519,8 @@ public partial class Main : Node3D
         if (unit != null)
         {
             if (_orders.Pending == OrderKind.Guard && unit.Team < 0) { _status.Text = "Guard requires a friendly unit or location"; return; }
-            if (_orders.Resolve(unit.Node,unit.Team > 0 ? unit.Id : -1,out var targeted,unit.Team <= 0 ? unit.Id : -1,queued)) SendOrder(targeted,queued);
+            bool enemy = unit.Team >= 0 && unit.Team != PlayerTeam;
+            if (_orders.Resolve(unit.Node,enemy ? unit.Id : -1,out var targeted,enemy ? -1 : unit.Id,queued)) SendOrder(targeted,queued);
             else _status.Text = "Guard requires a friendly unit or location";
             return;
         }
@@ -739,6 +747,7 @@ public partial class Main : Node3D
 
     public override void _Process(double delta)
     {
+        if (_setupScreen != null) { _frames++; if (_setupSmoke) SetupSmokeInput(); return; }
         if (_world is null || _loadFailed) return;
         using var processTime = SimProfiler.Time("godot process frame");
         ReportProfile();
@@ -839,6 +848,7 @@ public partial class Main : Node3D
             finally { _injectingConstructionInput = false; }
         }
         if (_engagementSmoke) { if (_formationSmoke) FormationSmokeInput(); else EngagementSmokeInput(); }
+        if (_setupSmoke) SetupSmokeInput();
         if (_obstacleSmoke) ObstacleSmokeInput();
         if (_surfaceSmoke && _frames == 5)
         {
@@ -863,7 +873,7 @@ public partial class Main : Node3D
         if (_smoke) SmokeInput();
         if (_smoke && _capture != "" && _frames == (_combatSmoke ? 180 : 60)) _ = CaptureFrame(false);
         if (_smoke && _world.Tick >= 420) FinishSmoke();
-        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_productionSmoke && !_placementSmoke && !_dwarfHallSmoke && !_minimapSmoke && !_frodoSmoke && !_siegeSmoke && !_defenseSmoke && !_victorySmoke && !_aiSmoke && !_observerSmoke && !_engagementSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
+        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_productionSmoke && !_placementSmoke && !_dwarfHallSmoke && !_minimapSmoke && !_frodoSmoke && !_siegeSmoke && !_defenseSmoke && !_victorySmoke && !_aiSmoke && !_observerSmoke && !_setupSmoke && !_engagementSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
     }
 
     private string UnitName(int id) => _world!.Units[id].Definition.DisplayName;

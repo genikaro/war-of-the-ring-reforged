@@ -30,6 +30,13 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-39 (Oct 22):** skirmish setup screen (step 4). `./prototype/run.ps1
+-Skirmish` opens a lobby: every multiplayer map with its player count and a preview
+of its start positions, You / a bot personality / Closed for each start position (no
+human means watching), and the start speed. You can play any slot; closed slots get
+no base. Restart replays the setup, and Setup returns to it. Launch flags still
+skip it. See [skirmish notes](../prototype/SKIRMISH.md#build-39-skirmish-setup-screen).
+
 **Build-38 (Oct 22):** bots expand from 10-15 minutes (by aggressiveness) with a
 Citadel by unclaimed resources, then every 10 minutes up to three. They rebuild a
 lost Citadel, go all in when their army can no longer grow, and surrender when
@@ -947,7 +954,7 @@ and production remain later work.
   1. (Done in build-28; spectator HUD redone in build-36.) Observer and speed: a bot on every side, a player-less observer HUD (every player's resources, population, army and AI status; read-only selection; camera free), and game speed control (pause, 1x to 16x by stepping the fixed-tick simulation several times per frame, so it stays deterministic) to skip the opening and jump into the fighting.
   2. N players: replace the team-0/team-1 assumptions with player slots; per-slot colours from the source team-colour table; an AI per bot slot. (Build-35: eight slot colours, a bot on every side but the player's, `-Bots` by slot, minimap and rings by slot; the human is still always slot 1, which the setup screen will lift.)
   3. Map pipeline: `prepare_prototype.py --skirmish --map <name>` for any multiplayer map and its start points, one cache per map, and a batch for all 32; verify navigation, resources and start bases on each. (Build-35: `--map`, `--all-maps`, `run.ps1 -Map`; all 32 maps import, and `SimulationTests --crossing-probe` shows every map connected for a Swordsman except MP04_Mighty_Silverlode, whose rope bridges only fit Frodo. Remaining: rope bridges wide enough for armies, and a bot that has lost every worker cannot recover; build-38 adds Citadel rebuilding, all-in attacks and surrender.)
-  4. Setup screen: map list with player count and minimap, slots, difficulty and traits, start.
+  4. Setup screen: map list with player count and minimap, slots, difficulty and traits, start. (Build-39: map list with previews, You / bot / Closed per start position, any human slot or none, start speed; bot difficulty and traits wait for the customizable-bot work.)
   5. Teams and alliances (2v2 and up): split a unit's owner from its alliance, so allies share victory and do not attack each other.
   6. The Evil faction, so bots can differ by side as well as by style.
 - [ ] List every `BattleScriptInterface` function the 26 mission DLLs import, with its signature, as the scripting API spec

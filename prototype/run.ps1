@@ -23,6 +23,8 @@ param(
     [switch]$VictorySmoke,
     [switch]$AiSmoke,
     [switch]$ObserverSmoke,
+    [switch]$Setup,
+    [switch]$SetupSmoke,
     [switch]$Observe,
     [string[]]$Bots,
     [int]$Speed,
@@ -56,6 +58,9 @@ if (-not $GodotPath) {
     if (Test-Path -LiteralPath $bundled) { $GodotPath = $bundled }
     else { $GodotPath = (Get-Command godot -ErrorAction Stop).Source }
 }
+# -Skirmish with nothing else that chooses the match opens the setup screen; -Setup always does.
+$launchOnly = @('Skirmish','GodotPath','DotnetPath','Resolution','HideHud','DebugMenu','View')
+$setupMode = $Setup -or $SetupSmoke -or ($Skirmish -and -not ($PSBoundParameters.Keys | Where-Object { $_ -notin $launchOnly }))
 $env:DOTNET_ROOT = Split-Path -Parent $DotnetPath
 $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
@@ -64,7 +69,7 @@ if ($LASTEXITCODE -ne 0) { throw 'C# build failed' }
 $arguments = @('--path', $PSScriptRoot)
 if ($Resolution) { $arguments += @('--resolution',$Resolution) }
 if ($SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $Observe -or $Map) { $Skirmish = $true }
-if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $AbilitySmoke -or $SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
+if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $AbilitySmoke -or $SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $SetupSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
     $renderRate = if ($MotionSmoke -or $FormationSmoke) { '80' } else { '20' }
     if (-not $CapturePath) { $arguments += '--headless' }
     $arguments += @('--fixed-fps', $renderRate)
@@ -92,6 +97,8 @@ if ($DefenseSmoke) { $arguments += '--defense-smoke' }
 if ($VictorySmoke) { $arguments += '--victory-smoke' }
 if ($AiSmoke) { $arguments += '--ai-smoke' }
 if ($ObserverSmoke) { $arguments += @('--observer-smoke','--observe','--bots=Gimli,Aragorn') }
+if ($setupMode) { $arguments += '--setup' }
+if ($SetupSmoke) { $arguments += '--setup-smoke' }
 if ($Observe) { $arguments += '--observe' }
 if ($Bots) { $arguments += "--bots=$($Bots -join ',')" }
 if ($Speed) { $arguments += "--speed=$Speed" }
