@@ -97,5 +97,23 @@ static class CloseCombatChecks
         }
         Console.WriteLine($"FAR_PURSUIT struck={struck} longest_stand={longest}");
         check(struck>0 && longest<=10,"a wide body ordered to attack an enemy 65 m away walks there without stopping and strikes");
+
+        // Off its own graph (build-43): a wide body left on a node its graph refuses (here beside a wall, in matches
+        // beside a building it razed) found nothing connected to it, so every combat search failed and it waited for good.
+        var walled=Enumerable.Repeat(true,3200).ToArray(); for(int z=0;z<40;z++) if(z is < 28 or > 31) walled[z*80+12]=false;
+        var stranded=new SimWorld(new(80,40,1000,walled,new int[81*41]));
+        var castaway=stranded.Spawn(0,20*80+5,swordsman); var foe=stranded.Spawn(1,20*80+40,swordsman);
+        // Its body clears the wall, but the centre of its cell is too close to it.
+        castaway.X=11100; castaway.Z=20500; castaway.Node=20*80+11;
+        bool offGraph=!stranded.Navigation.ForBody(570,1800).CanStand(castaway.Node);
+        stranded.Enqueue(1,[foe.Id],OrderKind.HoldGround); stranded.Enqueue(0,[castaway.Id],OrderKind.Attack,target:foe.Id);
+        int strandedHit=-1;
+        for(int tick=0;tick<1600 && strandedHit<0;tick++)
+        {
+            stranded.Step();
+            if(stranded.CombatEvents.Any(e=>e.Kind==CombatEventKind.Hit && e.Unit==castaway.Id)) strandedHit=stranded.Tick;
+        }
+        Console.WriteLine($"OFF_GRAPH_PURSUIT off_graph={offGraph} struck={strandedHit}");
+        check(offGraph && strandedHit>0,"a wide body standing on a node its graph refuses still walks around the wall to its target and strikes");
     }
 }

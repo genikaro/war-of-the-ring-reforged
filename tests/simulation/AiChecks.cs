@@ -166,6 +166,16 @@ public static class AiChecks
         check(guards.All(id => defence.Units[id].Order == OrderKind.AttackMove || defence.Units[id].Target == raider.Id),"enemies near the base draw the home army");
         check(defence.AiPlayers[1].Party.Count == 0,"no assault leaves while the base is under threat");
 
+        // Spread attacks (build-43): a whole army sent at one enemy left all but the few that fit around it standing.
+        var spreadOut = Fixture();
+        var answering = Enumerable.Range(0,8).Select(i => spreadOut.Spawn(1,Cell(50+(i%4)*2,12+(i/4)*4),soldier).Id).ToArray();
+        var raidParty = Enumerable.Range(0,3).Select(i => spreadOut.Spawn(0,Cell(44,12+3*i),soldier)).ToArray();
+        foreach (var unit in raidParty) unit.Order = OrderKind.HoldGround;
+        Step(spreadOut,25);
+        var split = raidParty.Select(r => answering.Count(id => spreadOut.Units[id].Target == r.Id || spreadOut.Units[id].OrderTarget == r.Id)).ToArray();
+        check(split.Order().SequenceEqual([2,3,3]),
+            "the home army spreads its attacks evenly over the raiders: "+string.Join('/',split));
+
         // Surrender: no units left and no money for any unit.
         var beaten = Fixture();
         foreach (var unit in beaten.Units.Where(u => u.Team == 1)) unit.Health = 0;

@@ -1869,3 +1869,50 @@ check refuses a Camp inside a well's radius and accepts it just outside, and
 `-MinimapSmoke` gains `buildings_drawn_at_footprint_size` (17 checks). On Bilbo's
 Bluffs the home pile and well are 12-13 m from the Citadel, so `-PlacementSmoke`
 now looks for its three spots up to 25 m out instead of 19 m.
+
+## Build-43: no more frozen fighters
+
+Owner report after build-41: unit groups still froze at random. Traced bot matches
+on Bilbo's Bluffs (every party member logged every 10 ticks) sorted the remaining
+freezes into three causes:
+
+- **Off the unit's own graph.** A unit can stand on a node its body's graph
+  refuses: its body clears the obstacle, but the centre of its cell does not
+  (beside a building it razed, at a work spot on a footprint). Nothing is connected
+  to such a node, so every combat search from it (attack positions, the build-41
+  pursuit, choosing an opponent) failed and the unit waited for good, up to four
+  minutes. This was about half of the frozen fighters. Combat now plans from the
+  nearest node within 4 cells the unit can stand on (`SimWorld.PlanningNode`),
+  where its route leads it first; the pursuit route starts there too.
+- **A whole army on one enemy.** The home army, expansion guards and a party
+  fighting off defenders all got one explicit Attack on the same enemy. Only a few
+  fit around it, and the rest stood waiting 6-12 m away. Bots now spread the
+  attacks (`AiAttackSpread`) evenly over every enemy in range not given up on, at
+  most four on each (`AiAttackersPerEnemy`), the nearest to each soldier first and
+  enemy soldiers before workers. Every enemy in range is now timed for the 30 s
+  give-up, not only those up to the first one still valid. When every enemy has
+  its share, the rest join the nearest.
+- **A march held by one siege.** One Axethrower whose attack-move passed in range
+  of the party's target building started razing it alone. The build-41 regroup
+  treated any siege as a fight and held the march, so 37 soldiers waited 14
+  minutes at a waypoint. Now a member razing the target takes the whole party in,
+  and buildings razed in passing no longer hold the march (fights still do).
+
+Same seeds, build-42 against build-43 (party members ordered to move or attack,
+not striking):
+
+| Match | Standing still | Freezes of 3 s or more | Longest |
+|---|---|---|---|
+| Saruman vs Aragorn | 33% -> 8% | 28 -> 1 | 240 s -> 16 s |
+| Gimli vs Aragorn | 34% -> 7% | 75 -> 2 | 195 s -> 51 s |
+| Aragorn vs Gimli | 19% -> 9% | 18 -> 4 | 69 s -> 33 s |
+
+Saruman beats Aragorn at 22:42 (tick 27234), Gimli beats Aragorn at 13:47 (tick
+16534) and Aragorn beats Gimli at 12:36 (tick 15121). Still open: a regrouped
+party of 30 or more can jam in a narrow pass on its final approach (about 40 s
+in one Aragorn match); that is crowd traffic, not a stuck order.
+
+Validation: `SimulationTests` passes all 803 checks (2 new). A wide body left
+where its cell centre is too close to a wall walks around it to its target and
+strikes (with `PlanningNode` disabled it never moves), and eight home soldiers
+answer three raiders 3/3/2.

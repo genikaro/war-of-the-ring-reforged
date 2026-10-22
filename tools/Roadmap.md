@@ -30,6 +30,15 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-43 (Oct 23):** no more frozen fighters. Units standing where their cell
+centre is too close to a building (after razing it, at work spots) found nothing
+connected to them and waited for good; combat now plans from the nearest cell they
+can stand on. Bots spread attacks over the enemies in range, at most four on each,
+instead of sending a whole army at one, and a party member razing the target takes
+the party in instead of holding the march. Freezes of 3 s or more in traced bot
+matches fell from 18-75 per match to 1-4.
+See [skirmish notes](../prototype/SKIRMISH.md#build-43-no-more-frozen-fighters).
+
 **Build-41 (Oct 23):** bot armies regroup and keep walking. Saruman's army
 stopped and started because its Swordsmen and Axethrowers, ordered to attack a
 defender more than about 18 m away, never found an attack position within the

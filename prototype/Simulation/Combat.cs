@@ -12,6 +12,19 @@ public sealed partial class SimWorld
         }
     }
 
+    // A unit can stand on a node its own body's graph refuses: beside a building it
+    // razed, or at a work spot on a footprint. Nothing is connected to such a node, so
+    // every position search, pursuit and opponent test from it failed and the unit
+    // waited for good (about half the frozen fighters in a build-41 trace). Combat
+    // plans from the nearest node it can stand on, where its route leads it first.
+    private int PlanningNode(SimUnit unit)
+    {
+        var nav = Nav(unit);
+        if (unit.Node >= Navigation.GroundCount || nav.CanStand(unit.Node)) return unit.Node;
+        int near = nav.Nearest(unit.Node,radius: 4);
+        return near >= 0 ? near : unit.Node;
+    }
+
     private bool AttackReach(SimUnit attacker,int node, int x, int y, int z, SimUnit target)
     {
         if (!attacker.Definition.IsRanged) return MeleeReach(attacker,node,x,y,z,target);
@@ -99,12 +112,13 @@ public sealed partial class SimWorld
         int minimum = Math.Max(1100,BodySeparation(unit,target));
         int outer = Math.Max(4500,AttackRange(unit,target)+2000);
         var blockers = CombatBlockers(unit,target,outer);
+        int from = PlanningNode(unit);
         while (queue.TryDequeue(out var item))
         {
             var (x,z) = Navigation.Center(item.Node); int y = Navigation.NodeHeight(item.Node);
             long range = DistanceSquared(x,z,target.X,target.Z)+(long)(y-target.Y)*(y-target.Y);
             if (range >= (long)minimum*minimum && range <= (long)outer*outer
-                && Nav(unit).IsConnected(unit.Node,item.Node) && CombatPositionFree(unit,target,item.Node,blockers))
+                && Nav(unit).IsConnected(from,item.Node) && CombatPositionFree(unit,target,item.Node,blockers))
             {
                 bool waiting = !AttackReach(unit,item.Node,x,y,z,target);
                 candidates.Add((item.Node,waiting,DistanceSquared(x,z,unit.X,unit.Z)+(long)(y-unit.Y)*(y-unit.Y)));
@@ -121,8 +135,8 @@ public sealed partial class SimWorld
         using var time = SimProfiler.Time("CombatPosition");
         List<(int Node,bool Waiting,long Cost)> candidates;
         using (SimProfiler.Time("CombatCandidates")) candidates=CombatCandidates(unit,target);
-        var blocked = OccupiedNodes(unit.Id); blocked.Remove(unit.Node);
-        int start = unit.TransitNode >= 0 && !unit.GroundSegment ? unit.TransitNode : unit.Node;
+        int start = unit.TransitNode >= 0 && !unit.GroundSegment ? unit.TransitNode : PlanningNode(unit);
+        var blocked = OccupiedNodes(unit.Id); blocked.Remove(unit.Node); blocked.Remove(start);
         if (unit.Definition.BodyRadiusMm > 350)
         {
             using var wide = SimProfiler.Time("CombatPosition wide");
@@ -160,8 +174,10 @@ public sealed partial class SimWorld
 
     private (int Node,List<int> Path,bool Waiting) Pursuit(SimUnit unit,SimUnit target)
     {
-        int goal = Nav(unit).Nearest(target.Node,connectedTo: unit.Node);
-        var path = goal < 0 ? [] : PathFromCurrentPosition(unit,goal,maxVisited: BlockedReplanBudget);
+        int from = PlanningNode(unit),goal = Nav(unit).Nearest(target.Node,connectedTo: from);
+        // Off its graph, the ground-position route search found no start either.
+        var path = goal < 0 ? [] : from == unit.Node ? PathFromCurrentPosition(unit,goal,maxVisited: BlockedReplanBudget)
+            : Nav(unit).FindPath(from,goal,maxVisited: BlockedReplanBudget);
         return path.Count > 0 ? (goal,path,false) : (-1,[],true);
     }
 

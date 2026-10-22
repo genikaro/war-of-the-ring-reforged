@@ -36,10 +36,11 @@ public sealed partial class SimWorld
             && SeparationSquared(unit,u)<=(long)shareRadius*shareRadius).Select(u=>u.Target).ToHashSet();
         // Nearby enemies and the targets allies share; the order below is total, so the pool's order is irrelevant.
         var pool=NearUnits(unit.X,unit.Z,Math.Max(10000,unit.Definition.ReachMm));
+        int from=PlanningNode(unit);
         pool.AddRange(shared.Where(id => pool.All(u => u.Id != id)).Select(id => Units[id]));
         return pool.Where(u => u.Id != exclude && u.Team != unit.Team && u.Present
                 && (SeparationSquared(unit,u) <= (long)Math.Max(10000,unit.Definition.ReachMm)*Math.Max(10000,unit.Definition.ReachMm) || shared.Contains(u.Id)) && MayAcquire(unit,u)
-                && ((unit.Definition.IsRanged && AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u)) || Nav(unit).IsConnected(unit.Node,u.Node))
+                && ((unit.Definition.IsRanged && AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u)) || Nav(unit).IsConnected(from,u.Node))
                 && (!HoldsPosition(unit) || AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u)))
             .Select(u => (Unit:u,Assigned:AssignedAttackers(unit,u),Capacity:ApproachCapacity(unit,u)))
             .Where(c => !requireSpace || c.Assigned < c.Capacity)
@@ -63,7 +64,7 @@ public sealed partial class SimWorld
 
     private SimUnit? ChooseOpponent(SimUnit unit) => unit.Definition.BodyRadiusMm > 350 || unit.Definition.IsRanged ? Opponents(unit).FirstOrDefault()
         : NearestUnit(unit,NearUnits(unit.X,unit.Z,10_000),u => u.Team != unit.Team && u.Present && SeparationSquared(unit,u)<=10_000L*10_000
-            && Nav(unit).IsConnected(unit.Node,u.Node) && MayAcquire(unit,u)
+            && Nav(unit).IsConnected(PlanningNode(unit),u.Node) && MayAcquire(unit,u)
             && (!HoldsPosition(unit) || AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u)));
 
     private SimUnit? ImmediateOpponent(SimUnit unit) => NearestUnit(unit,NearUnits(unit.X,unit.Z,ReachBound(unit)),u => u.Team != unit.Team && u.Present
