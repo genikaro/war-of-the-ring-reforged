@@ -37,6 +37,7 @@ public sealed partial class SimWorld
 
     private bool ClearGroundStep(SimUnit unit, int x, int y, int z)
     {
+        using var time = SimProfiler.Time("ClearGroundStep");
         if (!ClearCombatStep(unit,x,y,z)) return false;
         foreach (var other in Units.Where(u => u.Id != unit.Id && u.Present))
         {
@@ -61,6 +62,7 @@ public sealed partial class SimWorld
 
     private void SmoothGroundRoute(SimUnit unit)
     {
+        using var time = SimProfiler.Time("SmoothGroundRoute");
         if (StableArrival(unit) && unit.Waypoint == 0 && unit.Path.Count > 1 && unit.Path[0] == unit.Node)
             unit.Waypoint=1;
         var occupied = OccupiedNodes(unit.Id);
@@ -82,6 +84,7 @@ public sealed partial class SimWorld
 
     private bool SteerGround(SimUnit unit, int x, int z, ref long budget)
     {
+        using var time = SimProfiler.Time("SteerGround");
         int dx = x-unit.X, dz = z-unit.Z;
         // Relative headings retain the exact route direction; these are local
         // avoidance choices, not a fixed set of world-space movement angles.

@@ -1235,3 +1235,45 @@ Validation: the observer smoke gains a corpse check (10 cases): every removed bo
 is hidden and disabled and was dead for at least 60 s, and no body outstays its
 minute and sinking. 760 simulation and 34 worker-cache checks and all skirmish and
 Helm's Deep smokes pass.
+
+## Build-32: swept-body tests and exact scan trims
+
+Third performance pass. Every change keeps the simulation bit-identical: the Gimli
+against Aragorn observer match ends at tick 33895 with build-30's digest
+(61CA70AC...).
+
+The profiler now splits movement and combat into their helpers, which found the
+biggest remaining cost: route smoothing. A moving unit tests whether its body can
+go straight to a waypoint far down its route, and the swept-body test listed the
+cells under that path by scanning the path's whole bounding box. For a long
+diagonal that box holds thousands of cells around about a hundred real ones, and
+the footprint check after it scanned the same box again. The swept band's test is
+linear along each row, so each row's cells are now solved as one interval (same
+cells, same order; a temporary check compared both methods on every call of a full
+match and all test suites). The traversal test also reuses one buffer and stops at
+the first blocked cell.
+
+Smaller exact trims: combat position searches only test bodies and claimed attack
+spots that can reach the search area (within its outer range plus spacing); the
+nearest-opponent pickers find the minimum instead of sorting every enemy and skip
+the acquisition rules for farther units; the occupied-cell set is built with plain
+loops in its old insertion order.
+
+| Two-minute window (observer, 16x) | build-31 step | build-32 step | movement before -> after |
+|---|---:|---:|---:|
+| 10:00 | 2.22 ms | 1.70 ms | 0.89 -> 0.52 ms |
+| 12:00 | 2.79 ms | 2.03 ms | 1.39 -> 0.64 ms |
+| 14:00 | 2.62 ms | 2.22 ms | 0.97 -> 0.58 ms |
+| 20:00 | 1.58 ms | 1.13 ms | 1.08 -> 0.62 ms |
+| 28:00 (final siege) | 4.12 ms | 3.27 ms | 3.79 -> 2.90 ms |
+
+Combat stays at 0.8-1.3 ms per tick in the big fights. Most of it is the bounded
+search for an attack position (`FindPathToAny`) running into its 2,048-node
+budget, and threat scanning (`combat engage`). The final siege is dominated by
+blocked replanning. A tried shortcut, proving a goal unreachable by flooding
+back from it, was dropped: once in the match the backward flood called a goal
+sealed that A* then reached, so the open-edge relation is not exactly symmetric
+somewhere, and only 14 of 224 failed floods were that kind anyway.
+
+Validation: 777 synthetic, 844 Helm's Deep and 34 worker-cache checks pass; the
+observer smoke passes with the unchanged digest.

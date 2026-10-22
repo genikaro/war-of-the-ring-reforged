@@ -34,10 +34,10 @@ public sealed partial class GridNavigation
         => _obstacles.TryGetValue(obstacle,out var item) && item.Footprints is { Length: > 0 } footprints
             && footprints.Any(f => FootprintBlocks(f,x,z,x,z,reachMm));
 
-    private bool FootprintsBlock(int ax,int ay,int az,int bx,int by,int bz,int? obstacle = null)
+    private bool FootprintsBlock(int ax,int ay,int az,int bx,int by,int bz,int? obstacle = null,IReadOnlyList<int>? swept = null)
     {
         var seen = new HashSet<int>();
-        foreach (int cell in SweptColumns(ax,az,bx,bz))
+        foreach (int cell in swept ?? SweptColumns(ax,az,bx,bz))
         {
             if (!_geometryCells.TryGetValue(cell,out var candidates)) continue;
             foreach (int index in candidates)

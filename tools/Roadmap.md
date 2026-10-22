@@ -30,6 +30,12 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-32 (Oct 22):** third performance pass, no change in play. Route smoothing's
+swept-body test solved each row's cells directly instead of scanning a long
+path's bounding box, which halves mid-game unit movement; combat position and
+opponent scans skip units that cannot matter. Mid-game ticks fall 10-27% and the
+observer match keeps its digest. See [skirmish notes](../prototype/SKIRMISH.md#build-32-swept-body-tests-and-exact-scan-trims).
+
 **Build-31 (Oct 22):** corpse removal and stuck-unit replanning. Bodies sink away
 60 s after death (owner's choice; the original fades them after 10 s) and their
 models stop rendering and animating. A stuck unit's route fallback no longer
@@ -692,15 +698,25 @@ window 4.2 ms per tick, 16x at 17-26 fps.
   down to under 1 s per worst two-minute window); each stuck unit still floods once
   per retry. Options: remember that a goal was unreachable for a few ticks, bound a
   blocked replan by distance or visited nodes and fall back to waiting, or search
-  to the nearest free cell beside the goal.
-- [ ] Unit movement step (about 1 ms per tick mid-game after build-31): each
+  to the nearest free cell beside the goal. Build-32 finding: only about 6% of the
+  failed floods have a goal sealed in a small pocket (most are two large regions
+  split by a plug of bodies), and a backward flood from the goal once disagreed
+  with A*, so the open-edge relation is not exactly symmetric; find out why (edge
+  cache invalidation?) before relying on symmetry.
+- [x] Route smoothing (build-32): the swept-body test scanned a long path's whole
+  bounding box (0.9 ms per tick at 12:00); rows are now solved as intervals.
+- [ ] Unit movement step (0.5-0.65 ms per tick mid-game after build-32): each
   moving unit checks body overlap against every unit per step and reserves cells
   against every unit; a per-tick spatial grid would make both local.
-- [ ] Combat targeting (`UpdateCombat`, 0.5-0.9 ms per tick mid-game): candidate
-  enemies are scanned across all units; a coarse spatial grid rebuilt once per tick
-  would limit each scan to nearby cells.
+- [ ] Combat targeting (`UpdateCombat`, 0.8-1.3 ms per tick in big fights): about
+  half is `CombatPosition`, mostly `FindPathToAny` failing at its 2,048-node budget
+  (twice per plan for wide bodies); the rest is threat scanning (`combat engage`,
+  0.2-0.5 ms), which looks for the nearest enemy across the whole map. A coarse
+  spatial grid rebuilt once per tick would limit the scans; failed position searches
+  need a design change (smaller budget, or remembering a failure for a few ticks).
 - [ ] Occupancy: `OccupiedNodes` and `CanReserveMovement` scan every unit, several
-  times per unit per tick (about 0.2 ms per tick now, quadratic in unit count). Keep
+  times per unit per tick (0.2-0.27 ms per tick after build-32's LINQ-free rewrite,
+  quadratic in unit count). Keep
   an occupancy count per node updated as units move, or a per-tick spatial grid.
 - [ ] Route rebase after a map change re-plans every moving unit at once
   (0.1-0.15 ms per tick averaged); re-plan only units whose path crosses the

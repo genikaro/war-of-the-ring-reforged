@@ -35,15 +35,26 @@ public sealed partial class SimWorld
             .ThenBy(c => c.Unit.Id).Select(c => c.Unit);
     }
 
-    private SimUnit? ChooseOpponent(SimUnit unit) => unit.Definition.BodyRadiusMm > 350 || unit.Definition.IsRanged ? Opponents(unit).FirstOrDefault()
-        : Units.Where(u => u.Team != unit.Team && u.Present && SeparationSquared(unit,u)<=10_000L*10_000
-            && Nav(unit).IsConnected(unit.Node,u.Node) && MayAcquire(unit,u)
-            && (!HoldsPosition(unit) || AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u)))
-            .OrderBy(u=>SeparationSquared(unit,u)).ThenBy(u=>u.Id).FirstOrDefault();
+    // The nearest unit that passes the filter, the lower id on ties. Units are in
+    // id order, so a farther or equally near unit never needs the filter at all.
+    private SimUnit? NearestUnit(SimUnit unit,Func<SimUnit,bool> filter)
+    {
+        SimUnit? best = null; long nearest = 0;
+        foreach (var u in Units)
+        {
+            long distance = SeparationSquared(unit,u);
+            if ((best == null || distance < nearest) && filter(u)) { best = u; nearest = distance; }
+        }
+        return best;
+    }
 
-    private SimUnit? ImmediateOpponent(SimUnit unit) => Units.Where(u => u.Team != unit.Team && u.Present
-        && AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u) && MayAcquire(unit,u) && AttackerSlotForCandidate(unit,u))
-        .OrderBy(u => SeparationSquared(unit,u)).ThenBy(u => u.Id).FirstOrDefault();
+    private SimUnit? ChooseOpponent(SimUnit unit) => unit.Definition.BodyRadiusMm > 350 || unit.Definition.IsRanged ? Opponents(unit).FirstOrDefault()
+        : NearestUnit(unit,u => u.Team != unit.Team && u.Present && SeparationSquared(unit,u)<=10_000L*10_000
+            && Nav(unit).IsConnected(unit.Node,u.Node) && MayAcquire(unit,u)
+            && (!HoldsPosition(unit) || AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u)));
+
+    private SimUnit? ImmediateOpponent(SimUnit unit) => NearestUnit(unit,u => u.Team != unit.Team && u.Present
+        && AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u) && MayAcquire(unit,u) && AttackerSlotForCandidate(unit,u));
 
     // A candidate is not yet assigned; count only fighters already in reach.
     private bool AttackerSlotForCandidate(SimUnit unit,SimUnit target) => UsesMissile(unit,target) || target.Definition.MaxAttackers == 0
@@ -54,9 +65,8 @@ public sealed partial class SimWorld
     {
         if (!unit.Definition.HasMelee || unit.Order is OrderKind.Move or OrderKind.ForceAttack) return;
         if (unit.Target >= 0 && Units[unit.Target].Present && !UsesMissile(unit,Units[unit.Target])) return;
-        var threat = Units.Where(u => u.Team != unit.Team && u.Present
-            && !UsesMissile(unit,u) && MayAcquire(unit,u))
-            .OrderBy(u => SeparationSquared(unit,u)).ThenBy(u => u.Id).FirstOrDefault();
+        var threat = NearestUnit(unit,u => u.Team != unit.Team && u.Present
+            && !UsesMissile(unit,u) && MayAcquire(unit,u));
         if (threat == null) return;
         ReleaseCombat(unit); unit.Target = threat.Id; unit.AttackMoveReturning = false;
         BeginAttackMoveEncounter(unit);

@@ -180,6 +180,24 @@ public sealed partial class GridNavigation
         }
     }
 
+    /// <summary>Adds the NearbyNodes of a body, in their order, whose centers lie closer than separation to it and
+    /// whose height band of the given height overlaps the body's.</summary>
+    public void AddBodyNodes(HashSet<int> nodes,int x,int y,int z,int bodyHeight,int separation,int height)
+    {
+        long limit = (long)separation*separation;
+        void Consider(int node)
+        {
+            var (cx,cz) = Center(node); int cy = NodeHeight(node);
+            if (cy+height > y && y+bodyHeight > cy && (long)(cx-x)*(cx-x)+(long)(cz-z)*(cz-z) < limit) nodes.Add(node);
+        }
+        for (int row = Math.Max(0,(z-separation)/CellSize); row <= Math.Min(Height-1,(z+separation)/CellSize); row++)
+        for (int col = Math.Max(0,(x-separation)/CellSize); col <= Math.Min(Width-1,(x+separation)/CellSize); col++)
+        {
+            int cell = row*Width+col; Consider(cell);
+            if (_surfaceColumns.TryGetValue(cell,out var layers)) foreach (int n in layers) Consider(n);
+        }
+    }
+
     public bool IsObstacleActive(int id) => _activeObstacles.Contains(id);
     public bool ObstacleCovers(int id, int node) => _obstacles[id].Nodes.Contains(node);
     public bool ObstacleCoversEdge(int id, int a, int b)
@@ -492,18 +510,34 @@ public sealed partial class GridNavigation
 
     private int[] SweptColumns(int ax, int az, int bx, int bz)
     {
-        long dx = bx-ax, dz = bz-az;
         var cells = new List<int>();
-        int xmin = Math.Max(0,Math.Min(ax,bx)-BodyRadiusMm)/CellSize, xmax = Math.Min(Width-1,(Math.Max(ax,bx)+BodyRadiusMm)/CellSize);
-        int zmin = Math.Max(0,Math.Min(az,bz)-BodyRadiusMm)/CellSize, zmax = Math.Min(Height-1,(Math.Max(az,bz)+BodyRadiusMm)/CellSize);
-        for (int z = zmin; z <= zmax; z++)
-        for (int x = xmin; x <= xmax; x++)
-        {
-            long cross = (2*x*(long)CellSize+CellSize-2L*ax)*dz-(2*z*(long)CellSize+CellSize-2L*az)*dx;
-            if (Math.Abs(cross) <= (CellSize+2L*BodyRadiusMm)*(Math.Abs(dx)+Math.Abs(dz))) cells.Add(z*Width+x);
-        }
+        AddSweptColumns(cells,ax,az,bx,bz);
         return cells.ToArray();
     }
+
+    // The band test is linear in the column, so each row holds one interval of
+    // swept cells. Solving for it row by row avoids scanning the whole bounding
+    // box, which for a long diagonal is mostly empty; cells keep row-major order.
+    private void AddSweptColumns(List<int> cells, int ax, int az, int bx, int bz)
+    {
+        long dx = bx-ax, dz = bz-az;
+        int xmin = Math.Max(0,Math.Min(ax,bx)-BodyRadiusMm)/CellSize, xmax = Math.Min(Width-1,(Math.Max(ax,bx)+BodyRadiusMm)/CellSize);
+        int zmin = Math.Max(0,Math.Min(az,bz)-BodyRadiusMm)/CellSize, zmax = Math.Min(Height-1,(Math.Max(az,bz)+BodyRadiusMm)/CellSize);
+        long limit = (CellSize+2L*BodyRadiusMm)*(Math.Abs(dx)+Math.Abs(dz)), slope = 2L*CellSize*dz;
+        for (int z = zmin; z <= zmax; z++)
+        {
+            // cross(x) = slope*x + offset must stay within +-limit.
+            long offset = (CellSize-2L*ax)*dz-(2*z*(long)CellSize+CellSize-2L*az)*dx;
+            long from = xmin, to = xmax;
+            if (slope == 0) { if (Math.Abs(offset) > limit) continue; }
+            else if (slope > 0) { from = Math.Max(from,CeilDiv(-limit-offset,slope)); to = Math.Min(to,FloorDiv(limit-offset,slope)); }
+            else { from = Math.Max(from,CeilDiv(limit-offset,slope)); to = Math.Min(to,FloorDiv(-limit-offset,slope)); }
+            for (long x = from; x <= to; x++) cells.Add(z*Width+(int)x);
+        }
+    }
+
+    private static long FloorDiv(long a, long b) => a/b-(a%b != 0 && (a < 0) != (b < 0) ? 1 : 0);
+    private static long CeilDiv(long a, long b) => a/b+(a%b != 0 && (a < 0) == (b < 0) ? 1 : 0);
 
     public bool ObstacleCoversMovement(int id, int a, int b)
     {
@@ -543,12 +577,15 @@ public sealed partial class GridNavigation
 
     public bool CanTraverseGroundPoints(int ax, int az, int bx, int bz, IReadOnlySet<int>? occupied = null)
     {
+        using var time = SimProfiler.Time("CanTraverseGroundPoints");
         if (Math.Min(ax,bx) < BodyRadiusMm || Math.Min(az,bz) < BodyRadiusMm
             || Math.Max(ax,bx)+(long)BodyRadiusMm > Width*(long)CellSize || Math.Max(az,bz)+(long)BodyRadiusMm > Height*(long)CellSize) return false;
         int from = Cell(ax,az);
-        var cells = SweptColumns(ax,az,bx,bz).ToHashSet();
+        var cells = _sweptCells; cells.Clear();
+        AddSweptColumns(cells,ax,az,bx,bz);
         bool physical = TypedBody || UsesPreciseFootprints;
-        if (cells.Any(n => !(physical ? Allowed[n] : CanStand(n)) || (!physical && n != from && occupied?.Contains(n) == true))) return false;
+        foreach (int n in cells)
+            if (!(physical ? Allowed[n] : CanStand(n)) || (!physical && n != from && occupied?.Contains(n) == true)) return false;
         if (physical)
         {
             // Legacy masks already include body and cell padding. Exact footprints
@@ -561,14 +598,21 @@ public sealed partial class GridNavigation
                     || (cell != from && occupied?.Contains(cell) == true)) return false;
             }
         }
-        if (UsesPreciseFootprints && FootprintsBlock(ax,GroundHeight(ax,az),az,bx,GroundHeight(bx,bz),bz)) return false;
+        if (UsesPreciseFootprints && FootprintsBlock(ax,GroundHeight(ax,az),az,bx,GroundHeight(bx,bz),bz,swept: cells)) return false;
         if (_legacyBlockedEdges.Count > 0)
-            foreach (int a in cells)
+        {
+            var swept = cells.ToHashSet();
+            foreach (int a in swept)
                 if (_obstacleEdgeNeighbors.TryGetValue(a,out var neighbors))
                     foreach (int b in neighbors)
-                        if (cells.Contains(b) && _legacyBlockedEdges.ContainsKey((a,b))) return false;
+                        if (swept.Contains(b) && _legacyBlockedEdges.ContainsKey((a,b))) return false;
+        }
         return true;
     }
+
+    // Reused by CanTraverseGroundPoints, which is called for every smoothing and
+    // steering probe; nothing it calls fills this buffer.
+    private readonly List<int> _sweptCells = [];
 
     private IEnumerable<int> TopologyNeighbors(int id)
     {
@@ -671,6 +715,7 @@ public sealed partial class GridNavigation
         using var time = SimProfiler.Time("FindPathToAny");
         var goals=destinations.Where(n => CanStand(n) && blocked?.Contains(n) != true && IsConnected(start,n)).ToHashSet();
         if (goals.Count == 0) return [];
+        long began = SimProfiler.Start();
         BeginSearch();
         int stamp=_searchStamp,closedCount=0; var neighbors=new List<int>(8);
         var open=new PriorityQueue<int,(int Cost,int Id)>(); open.Enqueue(start,(0,start));
@@ -689,6 +734,7 @@ public sealed partial class GridNavigation
                 _searchSeen[next]=stamp; _searchCost[next]=score; _searchPrevious[next]=node; open.Enqueue(next,(score,next));
             }
         }
+        SimProfiler.Record(closedCount < maxVisited ? "FindPathToAny exhausted" : "FindPathToAny budget",began);
         return [];
     }
 

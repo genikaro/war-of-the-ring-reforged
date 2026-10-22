@@ -467,23 +467,20 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     private HashSet<int> OccupiedNodes(int except)
     {
         using var time = SimProfiler.Time("OccupiedNodes");
-        int radius = except >= 0 && except < Units.Count ? Units[except].Definition.BodyRadiusMm : 350;
-        int height = except >= 0 && except < Units.Count ? Units[except].Definition.BodyHeightMm : 700;
-        if (radius == 350 && Units.All(u => u.Definition.BodyRadiusMm == 350))
-            return Units.Where(u => u.Id != except && u.Present)
-                .SelectMany(u => u.TransitNode >= 0 && !u.GroundSegment ? new[] {u.Node,u.TransitNode} : new[] {u.Node}).ToHashSet();
+        var self = except >= 0 && except < Units.Count ? Units[except] : null;
+        int radius = self?.Definition.BodyRadiusMm ?? 350, height = self?.Definition.BodyHeightMm ?? 700;
+        bool uniform = radius == 350;
+        foreach (var u in Units) if (uniform && u.Definition.BodyRadiusMm != 350) uniform = false;
+        // Plain loops in the order the set was always filled: callers may enumerate it.
         var nodes = new HashSet<int>();
-        foreach (var other in Units.Where(u => u.Id != except && u.Present))
+        foreach (var other in Units)
         {
+            if (other.Id == except || !other.Present) continue;
             nodes.Add(other.Node);
             if (other.TransitNode >= 0 && !other.GroundSegment) nodes.Add(other.TransitNode);
-            int separation = except >= 0 ? BodySeparation(Units[except],other) : radius+other.Definition.BodyRadiusMm;
-            foreach (int n in Navigation.NearbyNodes(other.X,other.Z,separation))
-            {
-                var (x,z) = Navigation.Center(n);
-                if (VerticalOverlap(Navigation.NodeHeight(n),height,other.Y,other.Definition.BodyHeightMm)
-                    && DistanceSquared(x,z,other.X,other.Z) < (long)separation*separation) nodes.Add(n);
-            }
+            if (uniform) continue;
+            int separation = self != null ? BodySeparation(self,other) : radius+other.Definition.BodyRadiusMm;
+            Navigation.AddBodyNodes(nodes,other.X,other.Y,other.Z,other.Definition.BodyHeightMm,separation,height);
         }
         return nodes;
     }
@@ -506,6 +503,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
 
     private void SmoothWaypoint(SimUnit unit)
     {
+        using var time = SimProfiler.Time("SmoothWaypoint");
         if (unit.Target >= 0 || unit.Node >= Navigation.GroundCount || unit.Waypoint >= unit.Path.Count) return;
         var (ax,az) = Navigation.Center(unit.Node); var (bx,bz) = Navigation.Center(unit.Path[unit.Waypoint]);
         int firstX = bx-ax, firstZ = bz-az, best = unit.Waypoint;
@@ -696,7 +694,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 if (unit.Node < Navigation.GroundCount && transit < Navigation.GroundCount)
                     ny = Navigation.GroundHeight(nx, nz);
                 if (!ClearCombatStep(unit,nx,ny,nz)) break;
-                if (Units.Any(other => other.Id != unit.Id && other.Present
+                using (SimProfiler.Time("body overlap")) if (Units.Any(other => other.Id != unit.Id && other.Present
                     && BodyOverlapAt(unit,nx,ny,nz,other))) break;
                 unit.TransitNode = transit; unit.TravelProgress = progress;
                 unit.X = nx; unit.Z = nz; unit.Y = ny; unit.Moving = true; budget -= movement;
