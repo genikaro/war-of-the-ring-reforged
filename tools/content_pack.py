@@ -22,6 +22,7 @@ import skirmish_economy
 import skirmish_map
 import skirmish_production
 import skirmish_research
+import places_of_power
 import wor
 
 PACK = wor.ROOT / 'converted/content/good'
@@ -78,6 +79,7 @@ def build(output=PACK, install=None):
                          'building_files': building_files, 'economy': skirmish_economy.economy_data(resolver),
                          'construction': construction, 'production': production,
                          'research': skirmish_research.research_data(resolver),
+                         'places_of_power': places_of_power.export(resolver),
                          'ai': skirmish_ai.export(resolver, skirmish_construction.CONSTRUCTION_ORDER, list(production['units']))},
             'files': {p.relative_to(output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}}
     (output / 'content.json').write_text(json.dumps(pack, indent=2) + '\n')

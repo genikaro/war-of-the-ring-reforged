@@ -177,6 +177,7 @@ public sealed partial class SimWorld
             if (site.Health <= 0 || SiegeTarget(unit) != site.Id) continue;
             long rate = Math.Max(0,(long)unit.MeleeDamageRate-SiteRules(site).ArmorMilli);
             long damage = rate*attack.DurationTicks*attack.Hits[index].Scale/(TicksPerSecond*attack.Hits.Sum(h => (long)h.Scale));
+            damage = PlaceDamage(unit,damage,unit.Definition.FiresProjectile(unit.AttackVariant),building: true);
             if (unit.Definition.FiresProjectile(unit.AttackVariant)) ReleaseSiegeProjectile(unit,site,index,damage);
             else DamageSite(unit,site,unit.AttackVariant,index,damage,unit.AttackStartTick);
         }

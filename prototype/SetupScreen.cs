@@ -4,8 +4,9 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 
 /// <summary>The match chosen on the setup screen: the map's cache, the human's slot (-1 to watch), each slot's bot
-/// personality with its traits ("Gimli+Defender"; "" for the human and closed slots), the closed slots, and the start speed.</summary>
-public sealed record SkirmishSetup(string Cache,string Map,int Human,string[] Bots,int[] Closed,int Speed);
+/// personality with its traits ("Gimli+Defender"; "" for the human and closed slots), the closed slots, the start speed,
+/// and the seed that draws its random places of power (build-54), new for every Start.</summary>
+public sealed record SkirmishSetup(string Cache,string Map,int Human,string[] Bots,int[] Closed,int Speed,int Seed = 0);
 
 /// <summary>The skirmish setup screen, a lobby in the manner of Warcraft III and StarCraft II: every multiplayer map
 /// with its player count and a preview of its start positions, one row per start position (you, a bot personality or
@@ -287,7 +288,7 @@ public partial class SetupScreen : Control
         var choices = Enumerable.Range(0,map.Players).Select(Choice).ToArray();
         var bots = choices.Select((c,slot) => c >= FirstBot ? new AiBotChoice(map.Personalities[c-FirstBot].Id,[.. _traits[slot]]).ToString() : "").ToArray();
         Started?.Invoke(new(cache,map.Title,Array.IndexOf(choices,You),bots,
-            Enumerable.Range(0,map.Players).Where(s => choices[s] == Closed).ToArray(),Speeds[_speed.Index]));
+            Enumerable.Range(0,map.Players).Where(s => choices[s] == Closed).ToArray(),Speeds[_speed.Index],Random.Shared.Next()));
     }
 
     /// <summary>Freezes the screen while the chosen map loads.</summary>

@@ -154,6 +154,8 @@ public partial class Main
                     armies = world.AiPlayers.Values.ToDictionary(BotKey,a => string.Join(",",world.Units.Where(u => u.Team == a.Team && !world.Workers.ContainsKey(u.Definition.Name))
                         .GroupBy(u => u.Definition.DisplayName).OrderBy(g => g.Key,StringComparer.Ordinal).Select(g => g.Key+" "+g.Count()))),
                     research = world.AiPlayers.Values.ToDictionary(BotKey,a => string.Join(",",(world.Researched.GetValueOrDefault(a.Team) ?? []).Order(StringComparer.Ordinal))),
+                    // Places of power (build-54): who took which, when, and the squads each bot sent.
+                    places = _placeLog,place_squads = world.AiPlayers.Values.ToDictionary(BotKey,a => a.PlaceSquadsSent),
                     corpses_buried = _corpsesBuried,winner = world.Winner,outcome_tick = world.OutcomeTick,ticks_per_frame_at_16x = _observerBurst,
                     bots = world.AiPlayers.Values.Select(a => $"{a.Personality.Id}: {a.Status}").ToArray(),
                     ticks = world.Tick,status = _status.Text,digest = world.StateDigest() };

@@ -1,5 +1,5 @@
 public static class BuildInfo
 {
-    public const int Number = 53;
+    public const int Number = 54;
     public static string Label => $"build-{Number}";
 }

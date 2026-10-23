@@ -75,6 +75,15 @@ public sealed class AiPlayer(int team,AiPersonality personality,AiStyle? style =
     public int RaidSite { get; internal set; } = -1;
     public int RaidsSent { get; internal set; }
     public int NextRaidTick { get; internal set; }
+    /// <summary>The squad taking a place of power (build-54): its members, its size when it left, the place and the cell in
+    /// its zone it walks to, when it set out for it, squads sent, and when the next may leave after one ran home.</summary>
+    public List<int> PlaceSquad { get; } = [];
+    public int PlaceSquadStart { get; internal set; }
+    public int PlaceTarget { get; internal set; } = -1;
+    public int PlaceCell { get; internal set; } = -1;
+    public int PlaceSince { get; internal set; }
+    public int PlaceSquadsSent { get; internal set; }
+    public int NextPlaceTick { get; internal set; }
     /// <summary>Party members a Hard bot has rolled for once wounded, and whether they retreat (build-50); a member
     /// leaving the party (home, or the party over) is forgotten and rolls again in its next party.</summary>
     public SortedDictionary<int,bool> WoundedRolls { get; } = [];
@@ -124,8 +133,8 @@ public sealed class AiPlayer(int team,AiPersonality personality,AiStyle? style =
 /// into a pocket never join an assault, home soldiers stop chasing enemies far from every building, and a full party's
 /// worth of idle soldiers reinforces a party still out. Owner request (build-41): a party marches in legs, mustering
 /// on its route first and regrouping on open ground every 25 m, instead of filing through narrow places. Owner request
-/// (build-47): bots climb the technology tree, see AiTech.cs. Not simulated: scouting, raids, flanking, harassment, heroes and
-/// special abilities.</summary>
+/// (build-47): bots climb the technology tree, see AiTech.cs; raids (build-53) are in AiRaids.cs and places of power
+/// (build-54) in AiPlaces.cs. Not simulated: scouting, flanking, heroes and special abilities.</summary>
 public sealed partial class SimWorld
 {
     public SortedDictionary<int,AiPlayer> AiPlayers { get; } = [];
@@ -202,7 +211,8 @@ public sealed partial class SimWorld
         // An enemy given up on that has lost health since was reachable after all.
         foreach (int id in ai.Unreachable.Where(p => Units[p.Key].HealthMilli < p.Value).Select(p => p.Key).ToArray()) ai.Unreachable.Remove(id);
         var expansions = AiExpansions(ai);
-        var home = mine.Where(u => IsAiSoldier(u) && !ai.Party.Contains(u.Id) && !ai.Raid.Contains(u.Id) && !ai.Guards.Values.Any(g => g.Units.Contains(u.Id))).ToArray();
+        var home = mine.Where(u => IsAiSoldier(u) && !ai.Party.Contains(u.Id) && !ai.Raid.Contains(u.Id) && !ai.PlaceSquad.Contains(u.Id)
+            && !ai.Guards.Values.Any(g => g.Units.Contains(u.Id))).ToArray();
         var (bx,bz) = AiBase(ai);
         bool threatened = AiDefend(ai,home);
         if (strategic)
@@ -218,12 +228,15 @@ public sealed partial class SimWorld
         home = AiGuard(ai,expansions,home,threatened);
         AiAssault(ai,home,bx,bz,threatened);
         home = AiRaid(ai,[.. home.Where(u => !ai.Party.Contains(u.Id))],bx,bz,threatened);
+        home = AiCapturePlaces(ai,home,bx,bz,threatened);
         AiRally(ai,home,bx,bz);
         int guards = ai.Guards.Values.Sum(g => g.Units.Count),gate = ai.Profile.AssaultFromTicks/TicksPerSecond;
         string march = ai.Party.Count > 0 && ai.Leg < ai.Legs.Count ? $" · regrouping {ai.Leg+1}/{ai.Legs.Count}" : "";
         string waits = ai.PartiesSent == 0 && Tick < ai.Profile.AssaultFromTicks ? $" · attacks from {gate/60}:{gate%60:00}" : "";
         string raid = ai.Raid.Count > 0 ? $" · raid {ai.Raid.Count}/{ai.RaidStart}" : "";
-        ai.Status = $"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)}{march}{waits}{raid}{(guards > 0 ? $" · guards {guards}" : "")} · {ai.Plan}{(ai.TechPlan != "" ? " · "+ai.TechPlan : "")} · parties {ai.PartiesSent}{(ai.RaidsSent > 0 ? $" · raids {ai.RaidsSent}" : "")}";
+        int held = PlacesOfPower.Count(p => p.Owner == ai.Team);
+        string places = (ai.PlaceSquad.Count > 0 ? $" · to a place {ai.PlaceSquad.Count}/{ai.PlaceSquadStart}" : "")+(held > 0 ? $" · places {held}" : "");
+        ai.Status = $"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)}{march}{waits}{raid}{places}{(guards > 0 ? $" · guards {guards}" : "")} · {ai.Plan}{(ai.TechPlan != "" ? " · "+ai.TechPlan : "")} · parties {ai.PartiesSent}{(ai.RaidsSent > 0 ? $" · raids {ai.RaidsSent}" : "")}";
     }
 
     /// <summary>The bot's Citadels away from its start (foundations too), with the guards of fallen ones released and
@@ -991,5 +1004,6 @@ public sealed partial class SimWorld
         $"{a.Team},{a.Personality.Id}+{string.Join('+',a.Traits)},{a.Profile.Style.Aggression}/{a.Profile.Style.Expansion}/{a.Profile.Style.Tech},{a.Thinks},{a.PartyTarget},{a.PartiesSent},{a.Project},{a.ProjectProgress},{a.ProjectMovedTick},{a.Chase},{a.ChaseSince},{a.Intruder},{a.IntruderSince},"
         +$"{a.LastArmyTick},{a.AllIn},{a.CitadelSite.X},{a.CitadelSite.Z},{a.CrewDistance},{string.Join('/',a.IntruderSeen)},{string.Join('/',a.ChaseSeen)}:{string.Join(',',a.Unreachable)}:{string.Join(',',a.Party)}:{string.Join(',',a.RefusedCells.Order())}"
         +":guards:"+string.Join('|',a.Guards.Select(g => $"{g.Key}@{g.Value.Cell}={string.Join(',',g.Value.Units)}/{string.Join('/',g.Value.Seen)}"))
-        +$":legs:{a.Leg},{a.LegMovedTick},{a.LegGap}:{string.Join(',',a.Legs)}:wounded:{string.Join('/',a.WoundedRolls)}:recovering:{string.Join(',',a.Recovering)}:raid:{a.RaidStart},{a.RaidCell},{a.RaidSite},{a.RaidsSent},{a.NextRaidTick}:{string.Join(',',a.Raid)}:stray:{string.Join('/',a.StraySince)}"));
+        +$":legs:{a.Leg},{a.LegMovedTick},{a.LegGap}:{string.Join(',',a.Legs)}:wounded:{string.Join('/',a.WoundedRolls)}:recovering:{string.Join(',',a.Recovering)}:raid:{a.RaidStart},{a.RaidCell},{a.RaidSite},{a.RaidsSent},{a.NextRaidTick}:{string.Join(',',a.Raid)}:stray:{string.Join('/',a.StraySince)}"
+        +$":place:{a.PlaceSquadStart},{a.PlaceTarget},{a.PlaceCell},{a.PlaceSince},{a.PlaceSquadsSent},{a.NextPlaceTick}:{string.Join(',',a.PlaceSquad)}"));
 }

@@ -29,6 +29,7 @@ public partial class Main
             var root = _obstacleViews.GetValueOrDefault(id) ?? Descendants(this).OfType<Node3D>()
                 .First(n => n.Name.ToString() == item.GetProperty("name").GetString());
             RegisterStructure(id,-1,item.GetProperty("type").GetString()!,root,_world!.Resources.ContainsKey(id) ? id : -1);
+            if (item.GetProperty("type").GetString()!.StartsWith("OBJECT_PLACE_OF_POWER")) AddPlaceOfPower(id,item.GetProperty("type").GetString()!,root);
             _minimapMarkers.Add((item.GetProperty("type").GetString()!,-root.GlobalPosition.X*1000,root.GlobalPosition.Z*1000));
         }
         _commands.SetMinimapMarkers(_minimapMarkers);
@@ -178,14 +179,18 @@ public partial class Main
         var definition = _structureDefinitions[site?.Building ?? entry.Type]; int max = definition.GetProperty("max_health").GetInt32();
         int progress = site == null || site.Complete ? 100 : (int)(site.ProgressMicroTicks*100/(world.SiteRules(site).DurationTicks*1_000_000L));
         string resource = entry.Resource < 0 ? "" : $"{world.Resources[entry.Resource].Kind} remaining: {(world.Resources[entry.Resource].RemainingMilli+999)/1000}";
-        return new(id,entry.Team,definition.GetProperty("display_name").GetString()!,definition.GetProperty("portrait").GetString()!,site?.Health ?? max,max,
-            definition.GetProperty("armor").GetDouble().ToString("0.##",System.Globalization.CultureInfo.InvariantCulture),progress,resource,entry.Resource,
-            !definition.TryGetProperty("has_health",out var hasHealth) || hasHealth.GetBoolean(),site?.Id ?? -1);
+        var place = PlaceAt(id);
+        return new(id,entry.Team,place?.Name ?? definition.GetProperty("display_name").GetString()!,definition.GetProperty("portrait").GetString()!,site?.Health ?? max,max,
+            definition.GetProperty("armor").GetDouble().ToString("0.##",System.Globalization.CultureInfo.InvariantCulture),progress,place == null ? resource : PlaceSummary(place),entry.Resource,
+            !definition.TryGetProperty("has_health",out var hasHealth) || hasHealth.GetBoolean(),site?.Id ?? -1,
+            place == null ? "" : place.Owner == PlayerTeam && !_observing ? "Place of power · yours until an enemy stands alone in its zone"
+                : $"Place of power · stand alone within {place.RadiusMm/1000} m to take it");
     }
 
     private void PresentStructureSelection()
     {
         var details = SelectedStructureDetails(); _commands.RefreshStructure(details);
         foreach (var entry in _structureViews.Values) entry.Ring.Visible = details?.Id == entry.Id;
+        PresentPlaceZones(details?.Id);
     }
 }

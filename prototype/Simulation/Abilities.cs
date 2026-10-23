@@ -102,7 +102,8 @@ public sealed partial class SimWorld
         {
             RebaseCombatGround(unit); unit.Path.Clear(); unit.Goal = -1; unit.Moving = false;
             unit.CastStartTick = Tick; unit.CastApplied = false; unit.CastSerial++;
-            unit.AbilityReadyAt[ability.Slot] = Tick+ability.RechargeTicks;
+            // A place of power's COOL_DOWN modifier scales the recharge (Ancient Fountain Battle Gear Cooldown: 0.5).
+            unit.AbilityReadyAt[ability.Slot] = Tick+(int)((long)ability.RechargeTicks*unit.PlaceCooldownPpm/1_000_000);
             unit.Facing = UnitFacing.FromDirection(target.X-unit.X,target.Z-unit.Z);
             AbilityEvents.Add(new(Tick,AbilityEventKind.Start,unit.Id,target.Id,ability.Slot));
             return true;

@@ -61,6 +61,9 @@ public partial class BattleMinimap : Control
         DrawTextureRect(_terrain,new(Vector2.Zero,Size),false);
         foreach (var (icon,x,z) in _markers)
             DrawTextureRect(icon,new(MapPoint(x,z)-Vector2.One*MarkerSize/2,Vector2.One*MarkerSize),false);
+        // A held place of power is ringed in its holder's colour (build-54).
+        foreach (var place in _world.PlacesOfPower.Where(p => p.Owner >= 0 && p.Owner < TeamColors.Length))
+            DrawArc(MapPoint(place.X,place.Z),MarkerSize/2+1.5f,0,MathF.Tau,24,TeamColors[place.Owner],2);
         // Buildings at their footprint's size, over the resource markers so a claimed well or pile shows its owner;
         // foundations are paler until complete.
         foreach (var (team,complete,outline) in Buildings())

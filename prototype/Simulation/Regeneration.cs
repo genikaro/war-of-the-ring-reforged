@@ -22,8 +22,8 @@ public sealed record RegenerationRates(int IdleMilli,int IdleHeroMilli,int WalkM
 /// <summary>Every tick a living unit regains its state's rate times its source HealthRegenerationMultiplier (heroes 2.25),
 /// never above its maximum health; nothing while the One Ring is on (its OnActivate action disables regeneration),
 /// inside a Mill or Foundry, or dead. Adapters: the rates read as HP per second (the base constant is in Rings.exe),
-/// the mapping of simulation states to animation states, and whole milli-HP per tick. Places of power, which raise the
-/// rate (Ancient Fountain +1 HP/s), are not simulated.</summary>
+/// the mapping of simulation states to animation states, and whole milli-HP per tick. A held place of power adds its
+/// bonus to the rate (Ancient Fountain +1 HP/s, build-54).</summary>
 public sealed partial class SimWorld
 {
     private void UpdateRegeneration()
@@ -35,7 +35,8 @@ public sealed partial class SimWorld
             if (unit.Health <= 0 || unit.InsideSite >= 0 || unit.RingActive) continue;
             long most = (long)unit.MaxHealth*1000;
             if (unit.HealthMilli >= most) continue;
-            long gain = (long)RegenerationRate(unit)*unit.Definition.RegenerationPpm/1_000_000/TicksPerSecond;
+            // A place of power's bonus adds to the state's rate (the source modifier "increases the HP/second health regen rate").
+            long gain = (long)(RegenerationRate(unit)+unit.PlaceRegenMilli)*unit.Definition.RegenerationPpm/1_000_000/TicksPerSecond;
             if (gain > 0) unit.HealthMilli = Math.Min(most,unit.HealthMilli+gain);
         }
     }

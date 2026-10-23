@@ -31,6 +31,7 @@ param(
     [switch]$Observe,
     [string[]]$Bots,
     [int]$Speed,
+    [int]$Seed,
     [switch]$Profile,
     [switch]$NoAi,
     [string]$AiPersonality,
@@ -108,6 +109,7 @@ if ($SetupSmoke) { $arguments += '--setup-smoke' }
 if ($Observe) { $arguments += '--observe' }
 if ($Bots) { $arguments += "--bots=$($Bots -join ',')" }
 if ($Speed) { $arguments += "--speed=$Speed" }
+if ($Seed) { $arguments += "--seed=$Seed" }
 if ($Profile) { $arguments += '--profile' }
 if ($NoAi) { $arguments += '--no-ai' }
 if ($AiPersonality) { $arguments += "--ai-personality=$AiPersonality" }

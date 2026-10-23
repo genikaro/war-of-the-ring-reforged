@@ -30,6 +30,8 @@ public partial class Main
         var assault = ai.GetProperty("war_parties").GetProperty("ASSAULT");
         if (ai.GetProperty("war_parties").TryGetProperty("RAIDING",out var raiding))
             world.AiRaidParty = new(raiding.GetProperty("min_size").GetInt32(),raiding.GetProperty("max_size").GetInt32(),0);
+        if (ai.GetProperty("war_parties").TryGetProperty("PLACEOFPOWERSCOUT",out var scout))
+            world.AiPlaceParty = new(scout.GetProperty("min_size").GetInt32(),scout.GetProperty("max_size").GetInt32(),0);
         world.AiAssaultParty = new(assault.GetProperty("min_size").GetInt32(),assault.GetProperty("max_size").GetInt32(),
             assault.GetProperty("members").EnumerateArray().Where(m => m.GetProperty("kind").GetString() == "melee").Sum(m => m.GetProperty("share_ppm").GetInt32()));
         // Every side without a person at the keyboard pursues the enemies its idle units notice, unless a bot runs it:

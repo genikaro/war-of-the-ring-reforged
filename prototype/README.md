@@ -278,7 +278,7 @@ has a Traits menu (build-51): Rusher, Expansionist, Defender, Relentless, Marksm
 Demolisher or Raider (build-53), combined freely except Rusher with Defender or Expansionist. It also sets the start speed. Restart on
 the result panel replays the same setup; its Setup button, or the debug menu's
 Skirmish setup button, goes back to the screen. Any flag that chooses the match
-(`-Map`, `-Observe`, `-Bots`, `-Speed`, `-NoAi`, `-AiPersonality`, the smokes) skips the screen.
+(`-Map`, `-Observe`, `-Bots`, `-Speed`, `-Seed`, `-NoAi`, `-AiPersonality`, the smokes) skips the screen.
 
 The skirmish plays against the enemy bot (build-27). Since build-49 a bot's difficulty
 sets how well it plays (Easy decides every 3 s with one builder and marches straight;
@@ -310,6 +310,14 @@ command, shows the map, the game clock and the speed controls.
 ```
 
 A bot slot takes traits after a `+` (build-51), on `-Bots` and `-AiPersonality` alike.
+
+Places of power work (build-54): a side whose units stand alone in a place's 13 m
+zone takes it, and every unit of that side carries its benefit (Wretched Sentinel +1
+armor, Ancient Fountain +1 HP a second, Elven Temple +18% health, ...) until another
+side takes it. Selecting a place shows what it gives, who holds it and its zone; bots
+send squads of five to take them. A random place draws its kind from the match seed:
+the setup screen draws one per match (Restart keeps it), and `-Seed 5` sets it for a
+launch ([skirmish notes](SKIRMISH.md#build-54-places-of-power)).
 
 Any of the 32 multiplayer maps imports into its own cache (build-35), with a Good
 Citadel and four workers on every start point and one colour per player slot. A

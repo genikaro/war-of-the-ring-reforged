@@ -18,7 +18,7 @@ public partial class Main
     private void ApplySetup(SkirmishSetup setup)
     {
         _cache = setup.Cache; _observing = setup.Human < 0; _humanTeam = Math.Max(0,setup.Human);
-        _bots = setup.Bots; _speed = setup.Speed;
+        _bots = setup.Bots; _speed = setup.Speed; _matchSeed = setup.Seed;
         _closedTeams.Clear(); _closedTeams.UnionWith(setup.Closed);
     }
 

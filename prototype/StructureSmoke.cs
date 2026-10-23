@@ -194,8 +194,13 @@ public partial class Main
             case 1970: Choose(521); break;
             case 1973:
                 _structureChecks["other_interactable_selected"] = _selectedStructure == 521 && _selected.Count == 0
-                    && SelectedStructureDetails() is {Name: "Random Place of Power",HasHealth: false} && _commands.StructurePortraitButton.Icon != null
+                    && SelectedStructureDetails() is {HasHealth: false} && _commands.StructurePortraitButton.Icon != null
                     && _commands.CommandPaletteEmpty;
+                // Build-54: the random place draws one source place by the match seed (0 here), shows what it gives and its zone.
+                _structureChecks["random_place_of_power_drawn"] = PlaceAt(521) is { Rules.Length: 1 } drawn && drawn.Rules[0].Random
+                    && SelectedStructureDetails() is { } power && power.Name == drawn.Name && power.Name.StartsWith("Random Place of Power: ")
+                    && power.Place.StartsWith("Place of power · ") && power.Resource.Contains(PlaceBenefit(drawn.Rules[0]))
+                    && _placeZones[521].Visible && !_placeZones.Values.Except([_placeZones[521]]).Any(z => z.Visible);
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-power.png"); break;
             case 1980: RecallWorkers(); break;
             case 1983:
@@ -242,7 +247,7 @@ public partial class Main
                 _structureChecks["shift_empty_box_preserves_structure"] = _selectedStructure == 3 && _selected.Count == 0;
                 break;
             case 2070:
-                var report = new {build = BuildInfo.Label,checks = _structureChecks,passed = _structureChecks.Count == 61 && _structureChecks.Values.All(v => v),
+                var report = new {build = BuildInfo.Label,checks = _structureChecks,passed = _structureChecks.Count == 62 && _structureChecks.Values.All(v => v),
                     selected = _selectedStructure,details = SelectedStructureDetails(),worker = new {world.Units[0].X,world.Units[0].Z},gap_deviation_mm = _structureGapDeviation};
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"structure-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("STRUCTURE_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;

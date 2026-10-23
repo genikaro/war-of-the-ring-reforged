@@ -2603,3 +2603,95 @@ next waits; no raid without an assault out, nor while the assault is still on it
 way; a guarded or tower-covered Mill is no target; a Raider's assault picks the Mill
 where a plain bot picks the nearer barracks); the Python AI export test covers the
 raiding party. All 16 Bilbo smokes and the setup smoke pass.
+
+## Build-54: places of power
+
+Owner request. Every multiplayer map but Freedom! and Shadowed Forest places one to
+four places of power (Bilbo's Bluffs one Random Place of Power in the middle; River
+Raid, Wasteland and Crazy Corners four random ones; Boneyard four fixed ones); until
+now they were only selectable scenery.
+
+**Source.** The manual: "To gain control over a Place of Power, you must move your
+units into the control zone AND be the only faction present within the zone. Enemies
+in the zone must be destroyed before your forces can control the location", after
+which "all units in that army gain a benefit". The tables:
+- `PlacesOfPower`, 28 places: a control `Radius` (13 m; the Catapult 17 m),
+  `MustCapture` (all of them), `MustBeInRadius` (none: the benefit is not limited to
+  the zone), `AllowRandomPlacement` (19), `AffectsAllUnitTypes`, `AffectsHeroesOnly`
+  or up to six `AffectedUnitType`s, and a `ModifierType` from
+  `PlaceOfPowerModifiers` with a float and a long parameter. `PlayAlert` asks for an
+  alert when one "switches hands".
+- `Objects`: 24 place-of-power objects, each naming up to three places
+  (`DefaultPlaceOfPower1-3`); `OBJECT_PLACE_OF_POWER_RANDOM` names none.
+- `tools/places_of_power.py` exports both into the content pack's
+  `skirmish.places_of_power` (`python tools/content_pack.py`; no map needs
+  re-importing, the maps' caches already list the objects).
+
+**Simulation** (`Simulation/PlacesOfPower.cs`):
+- **Capture:** every tick, a place whose zone holds living units of one side only,
+  workers and heroes included, goes to that side; an empty or contested zone changes
+  nothing, and control stays after the units leave.
+- **Benefit:** every unit of the holder carries the bonuses of every place it holds,
+  wherever it stands, units trained later included, and loses them with the place.
+  Simulated modifiers: `ARMOR_CLASS` (Wretched Sentinel and Monument of Narsil +1
+  armor), `HEALTH_REGENERATION_RATE` (Ancient Fountain +1 HP a second, on top of the
+  build-52 rate), `MAX_HEALTH` (Elven Temple +18%, Statue of Eorl +50% for heroes;
+  current health keeps its share, as a wounded unit's bar does), `DAMAGE_ADDITIVE`
+  (Orc Mask +3 attack, applied as damage per second like a technique's +1),
+  `MELEE_DAMAGE`, `RANGED_DAMAGE`, `DAMAGE`, `SIEGE_DAMAGE` (Spires of Siege +25%
+  against buildings) and `COOL_DOWN` (the Ancient Fountain's second place: hero
+  abilities recharge in half the time).
+- **Not simulated yet,** and said so on the panel: running speed (the Orc Mask's
+  second place, Steed of Rohan), sight (Silent Watcher), Fate gathering (Radiant
+  Monolith), costs (Dragon Skull -35%; the Orb of Hasty Summoning's hero costs), hero
+  experience (Globe of Mastery), damage against some units (Mallorn of Galadriel) and
+  the places with no modifier, whose effect lies elsewhere (Sentinel Tree, Enchanting
+  Willow, Radagast's Aviary, the Dark Orbs).
+- **Random place:** one of the 19 places allowed random placement, simulated or not,
+  as the source allows, drawn from the match seed and the object's id; a place without
+  a title takes its object's name ("Random Place of Power: Orb of Hasty Summoning").
+  The setup screen draws a new seed for every Start and Restart keeps it; launches
+  take `--seed=N` (`-Seed N`), default 0.
+
+**In the game** (`Main.Places.cs`): selecting a place shows the drawn place in its
+name, who holds it and what it gives, and its 13 m zone as a ring in the holder's
+colour (on Bilbo's Bluffs the ring runs along the circle of pillars). A notice says
+when one changes hands ("The enemy took the ... from you"), and the minimap rings a
+held place in its holder's colour.
+
+**Bots** (`Simulation/AiPlaces.cs`, adapter). The source sends
+`AIWARPARTY_PLACEOFPOWERSCOUT` parties (5 to 12 "Place of Power Scout Primary"
+units) to take places and `AIWARPARTY_PLACEOFPOWERDEFENSE` parties to hold them; the
+decisions are in Rings.exe. Here, once the `.rai` Scouting gate passes ((100 -
+Scouting) x 6 s: Smaug at once, Aragorn 2:30, Default and Gimli 5:00, Farmer Maggot
+9:00), a squad of the scout party's five idle home soldiers attack-moves on the
+nearest place the bot does not hold that it can walk into, out of every enemy tower's
+reach and with fewer enemy soldiers within 30 m than the squad (each counting as
+15 m farther). It attacks whatever enemy stands in the zone, workers too, and once
+the place is the bot's it moves on to the next such place or walks home. It runs home
+when more enemy soldiers than members are within 12 m, half of it is lost or it has
+been out 2 minutes; the next squad then waits a minute. Assaults marching through a
+zone take it as well. Not simulated: the defence parties that stay to hold a place.
+
+**Matches** (observer, 16x). Bilbo's Bluffs, seed 5 (the Wretched Sentinel, +1
+armor), Gimli against Aragorn: Aragorn, whose squads may leave from 2:30, took it
+first at 4:10; it changed hands 14 times in 20 minutes, mostly as assaults marched
+through the middle of the map, and Aragorn surrendered at 20:18 (tick 24364). River
+Raid, four random places (seed 3: Ancient Fountain twice, Steed of Rohan, Orb of
+Hasty Summoning), Gimli, Aragorn, Saruman and Legolas: every bot sent squads from
+3:36 and the places changed hands often.
+
+**Open issue:** that River Raid match stops advancing at tick 13343 (11:07): one tick
+never ends, calling `FindPath` again and again (a temporary watchdog on the profiler's
+sections showed nothing else). Whether places of power cause it, or only lead the
+match to a state that triggers an older pathing loop, is not known yet.
+
+Validation: `SimulationTests` 888 checks (6 in the new `PlacesOfPowerChecks`: capture
+alone, holding, contesting and retaking; armor for every unit including later ones
+and its loss; maximum health keeping the share and the Statue for heroes only;
+regeneration; the Orc Mask, Spires and an unsimulated modifier; the random draw; 2
+new in `AiChecks`: a squad of five takes a place past an enemy in its zone and the
+army wears the armor; no squad for a place held by five soldiers nor before the
+Scouting gate); new Python tests for the export and the scout war party (186 pass). The structure
+smoke checks the drawn place, its panel text and its zone ring, and the Bilbo
+observer smoke passes; the other Bilbo smokes were not rerun for this build.

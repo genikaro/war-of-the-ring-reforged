@@ -60,6 +60,7 @@ public partial class Main
         LoadSkirmishEconomy(data);
         LoadSkirmishConstruction(data);
         RegisterStartBuildings();
+        LoadPlacesOfPower(data);
         LoadNeutralStructures(data);
         LoadSkirmishProduction(data);
         LoadSkirmishResearch(data);

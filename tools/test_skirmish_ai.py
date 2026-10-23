@@ -40,6 +40,8 @@ class SkirmishAiTests(unittest.TestCase):
         raiding = data['war_parties']['RAIDING']
         self.assertEqual((raiding['min_size'], raiding['max_size'], [m['share_ppm'] for m in raiding['members']]), (3, 6, [400000, 400000, 200000]))
         self.assertEqual(units['UNIT_G_GONDOR_SWORDSMAN']['raiding'], 50)
+        scout = data['war_parties']['PLACEOFPOWERSCOUT']
+        self.assertEqual((scout['min_size'], scout['max_size'], [m['class'] for m in scout['members']]), (5, 12, ['Place of Power Scout Primary']))
 
 
 if __name__ == '__main__':

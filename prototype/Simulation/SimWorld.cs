@@ -22,12 +22,22 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int Health { get => (int)((_healthMilli+999)/1000); internal set => _healthMilli = Math.Max(0,(long)value*1000); }
     public long HealthMilli { get => _healthMilli; internal set => _healthMilli = Math.Max(0,value); }
     public UnitDefinition Definition { get => _definition; internal set { _definition = value; Grid?.Measure(value); } }
-    public int MaxHealth => Definition.MaxHealth;
+    public int MaxHealth => (int)((long)Definition.MaxHealth*PlaceMaxHealthPpm/1_000_000);
     public int KillCount { get; internal set; }
     /// <summary>Researched bonuses (source TechniqueUnitModifiers) added to weapon DPS and armor.</summary>
     public int TechniqueDpsMilli { get; internal set; }
     public int TechniqueArmorMilli { get; internal set; }
-    public int ArmorMilli => Definition.ArmorMilli+TechniqueArmorMilli;
+    /// <summary>The bonuses of the places of power its team controls (build-54), recomputed when one changes hands.</summary>
+    public int PlaceDpsMilli { get; internal set; }
+    public int PlaceArmorMilli { get; internal set; }
+    public int PlaceRegenMilli { get; internal set; }
+    public int PlaceMaxHealthPpm { get; internal set; } = 1_000_000;
+    public int PlaceDamagePpm { get; internal set; } = 1_000_000;
+    public int PlaceMeleePpm { get; internal set; } = 1_000_000;
+    public int PlaceRangedPpm { get; internal set; } = 1_000_000;
+    public int PlaceSiegePpm { get; internal set; } = 1_000_000;
+    public int PlaceCooldownPpm { get; internal set; } = 1_000_000;
+    public int ArmorMilli => Definition.ArmorMilli+TechniqueArmorMilli+PlaceArmorMilli;
     public bool Walking { get; internal set; }
     public int[] AbilityReadyAt { get; } = new int[4];
     /// <summary>Thousandths of a tick of extra recharge gained under a recharge aura.</summary>
@@ -42,7 +52,7 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public StatusProtection Immunities => (Definition.Abilities ?? []).Where(a => a.Passive)
         .Aggregate(StatusProtection.None,(flags,a) => flags | a.Immunities);
     public int MeleeDamageRate => (Definition.Abilities?.FirstOrDefault(a => a.Passive && a.Kind == AbilityKind.Fury)?.DpsMilli
-        ?? Definition.DpsMilli)+TechniqueDpsMilli;
+        ?? Definition.DpsMilli)+TechniqueDpsMilli+PlaceDpsMilli;
     public int AbilityDamageScale(int targetType) => Definition.Abilities?.FirstOrDefault(a => a.Passive && a.Kind is AbilityKind.Fury or AbilityKind.Bane
         && a.BonusTargets?.Contains(targetType) == true)?.BonusScale ?? 1_000_000;
     public int Facing { get; internal set; }
@@ -158,6 +168,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         Units.Add(candidate);
         if (_grid.Count == Units.Count-1) _grid.Add(candidate);
         ApplyTechniques(candidate);
+        ApplyPlaceBonuses(candidate);
         return candidate;
     }
 
@@ -562,6 +573,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         DestroyedSites.Clear();
         FoundationFailures.Clear();
         NewlyDefeated.Clear();
+        PlaceCaptures.Clear();
         var actions = Commands.Where(c => c.Tick == Tick).Select(c => (c.Sequence, Action: (Action)(() => Dispatch(c))))
             .Concat(ObstacleCommands.Where(c => c.Tick == Tick)
                 .Select(c => (c.Sequence, Action: (Action)(() => ApplyObstacle(c)))));
@@ -764,6 +776,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         }
         using (SimProfiler.Time("facing")) FaceMovement();
         using (SimProfiler.Time("projectiles")) AdvanceProjectiles();
+        using (SimProfiler.Time("places of power")) UpdatePlacesOfPower();
         using (SimProfiler.Time("regeneration")) UpdateRegeneration();
         using (SimProfiler.Time("outcome")) UpdateOutcome();
         Tick++;
@@ -790,6 +803,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         text += PlacementDigest();
         text += UpgradeDigest();
         text += ResearchDigest();
+        text += PlacesDigest();
         text += SiegeDigest();
         text += DefenseDigest();
         text += OutcomeDigest();

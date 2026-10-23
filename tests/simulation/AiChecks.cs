@@ -743,5 +743,39 @@ public static class AiChecks
         var toweredRaid = Raided(tower: true); Step(toweredRaid,25);
         check(guardedRaid.AiPlayers[1].RaidSite != Well+10 && toweredRaid.AiPlayers[1].RaidSite != Well+10,
             "a raid avoids a Mill guarded by as many soldiers or covered by a tower");
+
+        // Build-54: places of power. A squad of the scout war party's five idle home soldiers takes the Wretched Sentinel
+        // halfway across the map once the Scouting gate passes, fights an enemy standing in its zone, and walks home.
+        AiPlayer Scout(int scouting)
+        {
+            var b = new AiPlayer(1,new("test","Test",1,50,50,scouting,50,true,true),new(50,25,25));
+            b.Profile = b.Profile with { AssaultFromTicks = 0 };
+            return b;
+        }
+        (SimWorld World,PlaceOfPower Place) Placed(int scouting = 100,int defenders = 0)
+        {
+            var w = Fixture(); w.Units[2].Health = 0; w.AiPlayers[1] = Scout(scouting);
+            w.PlaceRules.Add(1,new(1,"PLACE_OF_POWER_WRETCHED_SENTINEL","Wretched Sentinel",13000,true,true,false,[],SimWorld.ArmorModifier,1_000_000,1));
+            w.PlaceObjects.Add("OBJECT_PLACE_OF_POWER_WRETCHED_SENTINEL",("Wretched Sentinel",[1]));
+            var place = w.AddPlaceOfPower(900,"OBJECT_PLACE_OF_POWER_WRETCHED_SENTINEL",32500,15500);
+            foreach (int i in Enumerable.Range(0,5)) w.Spawn(1,Cell(55+(i%3)*2,4+(i/3)*2),soldier);
+            foreach (int i in Enumerable.Range(0,defenders)) w.Spawn(0,Cell(30+i*2,17),soldier).Order = OrderKind.HoldGround;
+            return (w,place);
+        }
+        var (taking,sentinel) = Placed(defenders: 1);
+        var scoutBot = taking.AiPlayers[1]; int takenAt = -1; bool sent = false;
+        for (int i = 0; i < 2400 && takenAt < 0; i++)
+        {
+            taking.Step(); sent |= scoutBot.PlaceSquad.Count == 5;
+            if (sentinel.Owner == 1) takenAt = taking.Tick;
+        }
+        Step(taking,40);
+        check(sent && takenAt > 0 && scoutBot.PlaceSquadsSent == 1 && scoutBot.PlaceSquad.Count == 0 && taking.Units.Where(u => u.Team == 0).All(u => u.Health <= 0)
+            && taking.Units.Where(u => u.Team == 1 && u.Health > 0).All(u => u.ArmorMilli == 1000),
+            $"a bot sends five soldiers to an unheld place of power, kills the enemy in its zone, takes it (tick {takenAt}) and its army wears the armor: {scoutBot.Status}");
+        var (guardedPlace,_) = Placed(defenders: 5); Step(guardedPlace,100);
+        var (gated,_) = Placed(scouting: 50); Step(gated,100);
+        check(guardedPlace.AiPlayers[1].PlaceSquadsSent == 0 && gated.AiPlayers[1].PlaceSquadsSent == 0 && SimWorld.AiPlaceFromTicks(gated.AiPlayers[1]) == 300*20,
+            "no squad goes for a place held by as many enemy soldiers, nor before the Scouting gate (5:00 at Scouting 50)");
     }
 }

@@ -62,11 +62,12 @@ public sealed partial class SimWorld
             if (!target.Present || unit.Target != target.Id || !AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,target)) continue;
             var pair = Rules.Pair(unit.Definition.Id,target.Definition.Id);
             int typeScale = Rules.TypeScale(unit.Definition.DamageType,target.Definition.DamageType);
-            int dps = melee ? unit.Definition.MeleeDpsMilli+unit.TechniqueDpsMilli : unit.MeleeDamageRate;
+            int dps = melee ? unit.Definition.MeleeDpsMilli+unit.TechniqueDpsMilli+unit.PlaceDpsMilli : unit.MeleeDamageRate;
             long typedDps = (long)dps*typeScale/1_000_000;
             typedDps = typedDps*unit.AbilityDamageScale(target.Definition.Id)/1_000_000;
             long rate = Math.Max(0,typedDps*pair.Scale/1_000_000-target.ArmorMilli);
             long damage = pair.Invincible ? 0 : rate*attack.DurationTicks*attack.Hits[index].Scale/(TicksPerSecond*attack.Hits.Sum(h => (long)h.Scale));
+            damage = PlaceDamage(unit,damage,unit.Definition.FiresProjectile(unit.AttackVariant),building: false);
             if (unit.Definition.FiresProjectile(unit.AttackVariant)) ReleaseProjectile(unit,target,index,damage);
             else ApplyHit(unit,target,unit.AttackVariant,index,damage,unit.AttackStartTick);
         }

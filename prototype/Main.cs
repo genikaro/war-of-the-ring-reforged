@@ -100,6 +100,7 @@ public partial class Main : Node3D
             if (arg == "--profile") SimProfiler.Enabled = true;
             if (arg.StartsWith("--bots=")) _bots = arg[7..].Split(',');
             if (arg.StartsWith("--speed=")) _speed = int.Parse(arg[8..]);
+            if (arg.StartsWith("--seed=")) _matchSeed = int.Parse(arg[7..]);
             if (arg.StartsWith("--ai-personality=")) _aiPersonality = arg[17..];
             if (arg == "--ai-smoke") _aiSmoke = true;
             if (arg == "--observer-smoke") _observerSmoke = true;
@@ -667,6 +668,7 @@ public partial class Main : Node3D
             PresentCombatEvents();
             PresentAbilityEvents();
             PresentFoundationFailures();
+            if (_skirmish) PresentPlaceCaptures();
             PresentOutcome();
         }
         if (_pendingObstacle >= 0)

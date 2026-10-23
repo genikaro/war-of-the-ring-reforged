@@ -96,10 +96,11 @@ def export(resolver, buildings, units):
             'max_per_party': record['AIMaxUnitsOfTypePerWarParty'], 'max_per_party_easy': record['AIMaxUnitsOfTypePerWarPartyEasy']}
     return {'format_version': 1, 'personalities': personalities(), 'default_personality': DEFAULT_PERSONALITY['id'],
             'buildings': building_rules, 'units': unit_rules,
-            'war_parties': {'ASSAULT': war_party(resolver, 'AIWARPARTY_ASSAULT'), 'RAIDING': war_party(resolver, 'AIWARPARTY_RAIDING')},
+            'war_parties': {'ASSAULT': war_party(resolver, 'AIWARPARTY_ASSAULT'), 'RAIDING': war_party(resolver, 'AIWARPARTY_RAIDING'),
+                            'PLACEOFPOWERSCOUT': war_party(resolver, 'AIWARPARTY_PLACEOFPOWERSCOUT')},
             'policy': 'Source data: .rai knobs, Buildings AI columns, Units AIAssaultEffectiveness/AIRaidingEffectiveness/AINeverAddUnit and '
-                      'the AIWARPARTY_ASSAULT and AIWARPARTY_RAIDING sizes and member shares. Decision logic is an adapter; see '
-                      'prototype/SKIRMISH.md build-27 and build-53.'}
+                      'the AIWARPARTY_ASSAULT, AIWARPARTY_RAIDING and AIWARPARTY_PLACEOFPOWERSCOUT sizes and member shares. Decision '
+                      'logic is an adapter; see prototype/SKIRMISH.md build-27, build-53 and build-54.'}
 
 
 def refresh(output):

@@ -30,6 +30,14 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-54 (Oct 23):** places of power. A side alone in a place's 13 m zone takes
+it and keeps it until another side does; every unit of the holder carries its
+source modifier (armor, regeneration, maximum health, attack, siege damage, ability
+cooldown; speed, sight, costs, Fate and experience are shown but not simulated yet).
+A random place draws one of the 19 random-eligible places from the match seed.
+Bots send the source scout war party's five soldiers after their `.rai` Scouting
+gate. See [skirmish notes](../prototype/SKIRMISH.md#build-54-places-of-power).
+
 **Build-53 (Oct 23):** the Raider trait. A Raider's assaults go for Mills and Foundries
 first, and while an assault fights at the enemy base it sends a small raid, 3 to 6
 soldiers by its `.rai` Harassment (source `AIWARPARTY_RAIDING`), at enemy workers
@@ -1057,7 +1065,7 @@ against continuous source-game evidence before claiming fidelity. Powers, econom
 and production remain later work.
 
 - [ ] Load unit, weapon, building, spell and technique stats from the JSON tables (`Units`, `Weapons`, `Buildings`, `Spells`, `Techniques`, `UnitToUnitModifiers`, `BattleGear`, `HeroExperiences`); three demo units' base melee definitions and pair-rule support are implemented.
-- [ ] Economy: resources, workers, building and training queues, places of power (builds 5-8 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds, independent structure selection and worker clearance fixes; build-12 adds Citadel worker training with population reservation, cancellation and rally points; build-13 places every Tier 1 building with source passability and proximity; build-14 trains the Gondor Swordsman at the Barracks; build-15 the Dwarf Axethrower at the Dwarf Hall; build-17 replaces source gather rates with owner-defined Warcraft-style trips; build-19 trains Frodo, the last Tier 1 unit; build-20 narrows work ranges to the target's own footprint; build-44 adds the Citadel 2 and War Camp upgrades and the Tier 2 buildings with source prerequisites); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
+- [ ] Economy: resources, workers, building and training queues, places of power (build-54 captures them and applies the armor, regeneration, health, damage, siege and cooldown modifiers; speed, sight, cost, Fate and experience modifiers remain; builds 5-8 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds, independent structure selection and worker clearance fixes; build-12 adds Citadel worker training with population reservation, cancellation and rally points; build-13 places every Tier 1 building with source passability and proximity; build-14 trains the Gondor Swordsman at the Barracks; build-15 the Dwarf Axethrower at the Dwarf Hall; build-17 replaces source gather rates with owner-defined Warcraft-style trips; build-19 trains Frodo, the last Tier 1 unit; build-20 narrows work ranges to the target's own footprint; build-44 adds the Citadel 2 and War Camp upgrades and the Tier 2 buildings with source prerequisites); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
 - [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them; build-21 adds damage to buildings, their destruction and worker repair, without damage types for buildings or a win condition; build-25 adds Watchtower defenses at the base rate of fire, without garrisons; build-26 adds the Razing win condition
 - [ ] Heroes, fate powers and spells (`SpellAndEventAndActions` chains events to actions)
 - [ ] Open `Rings.exe` in Ghidra to recover the formulas the tables only feed: damage, hit chance, experience, upgrade effects

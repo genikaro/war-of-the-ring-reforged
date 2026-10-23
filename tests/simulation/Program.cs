@@ -62,6 +62,7 @@ SelectionChecks.Run(Check);
 AbilityChecks.Run(Check);
 FrodoChecks.Run(Check);
 RegenerationChecks.Run(Check);
+PlacesOfPowerChecks.Run(Check);
 HealingPlaybackChecks.Run(Check);
 EconomyChecks.Run(Check);
 ConstructionChecks.Run(Check);
