@@ -4,7 +4,7 @@ using System.Text.Json;
 
 /// <summary>Observer mode end to end: on Bilbo's Bluffs Gimli's bot against Aragorn's (--observe --bots=Gimli,Aragorn),
 /// or a free-for-all of one bot per start point on any imported map (-Map MP04_Wasteland -Bots a,b,c,d), watched by
-/// nobody's side. Checks the spectator HUD (the top-right overview's tabs, fold, unit counts and player names, and
+/// nobody's side. Checks the spectator HUD (the top-right overview's tabs, fold, unit counts, end-of-match stats and player names, and
 /// the console's match panel with its speed slider and pause button), read-only inspection of another side, that no
 /// player command is ever issued, the speed keys, and a fast-forwarded match to its result.</summary>
 public partial class Main
@@ -13,7 +13,7 @@ public partial class Main
     private readonly Dictionary<string,bool> _observerChecks = [];
     private int _observerPhase,_observerStep,_observerTickMark,_observerFrameMark,_observerBurst,_observerInspected = -1,_observerSnapshotTick,_observerCaptures;
     private bool _observerOk = true; // the running result of a check spread over several frames
-    private const int ObserverSmokeChecks = 15;
+    private const int ObserverSmokeChecks = 16;
     private readonly List<string> _observerTimeline = [];
     /// <summary>A report key per bot: the player as well as the bot, so a mirror match (Gimli against Gimli) keeps both.</summary>
     private static string BotKey(AiPlayer bot) => $"Player {bot.Team+1} {bot.Personality.Id}";
@@ -59,7 +59,7 @@ public partial class Main
                     _observerInspected = unit.Id; Click(_camera.UnprojectPosition(UnitPosition(unit)+Vector3.Up));
                 }
                 if (_observerStep == 3) Click(_camera.UnprojectPosition(PositionOf(world.StartStructures[1].X+8000,world.StartStructures[1].Z+8000)),MouseButton.Right);
-                if (_observerStep == 4) PushKey(Key.S);
+                if (_observerStep == 4) PushKey(Key.H); // Hold ground; S opens the Stats tab while observing.
                 if (_observerStep < 6) break;
                 _observerChecks["observer_inspects_either_side_read_only"] = _selected.SetEquals([_observerInspected])
                     && !_commands.ButtonFor(OrderKind.Attack).Visible && _commands.DisplayedOrder.StartsWith("Player 2 unit");
@@ -121,14 +121,18 @@ public partial class Main
                 if (!world.MatchOver && world.Tick < 48000+24000*(world.Contenders.Count-2))
                 {
                     if (++_observerStep == 2 && _capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-observer.png");
-                    // Mid-game frames of both tabs, for reviewing the spectator HUD with armies on the field.
-                    if (_capture != "" && _observerCaptures < 2 && world.Tick >= (10+2*_observerCaptures)*60*SimWorld.TicksPerSecond)
+                    // Mid-game frames of every tab, for reviewing the spectator HUD with armies on the field.
+                    if (_capture != "" && _observerCaptures < 3 && world.Tick >= (10+2*_observerCaptures)*60*SimWorld.TicksPerSecond)
                     {
-                        if (_observerCaptures == 1) _observerHud.Choose(ObserverHud.Page.Units);
-                        _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+(_observerCaptures++ == 0 ? "-economy.png" : "-units.png"));
+                        _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+new[] {"-economy.png","-units.png","-stats.png"}[_observerCaptures++]);
+                        // The next capture's tab, chosen now: the overview redraws a frame after a switch.
+                        if (_observerCaptures < 3) _observerHud.Choose(_observerCaptures == 1 ? ObserverHud.Page.Units : ObserverHud.Page.Stats);
                     }
                     break;
                 }
+                // The Stats tab, checked once the match has its kills and losses (a capture may have left it open already).
+                if (_observerHud.Tab == ObserverHud.Page.Stats && !_observerHud.Collapsed) _observerHud.Choose(ObserverHud.Page.Economy);
+                PushKey(Key.S);
                 _observerChecks["fast_forward_reaches_a_result"] = world.MatchOver && world.Winner >= 0 && _speed == 16;
                 _observerChecks["observer_result_names_the_winner"] = _outcome.Visible && _outcomeTitle.Text == $"Player {world.Winner+1} wins!"
                     && _commands.DisplayedMatchState == $"Paused · Player {world.Winner+1} · {world.AiPlayers[world.Winner].Personality.Id} wins";
@@ -146,6 +150,14 @@ public partial class Main
                 _observerPhase = 5; _observerStep = 0; break;
             case 5:
                 if (++_observerStep < 4) break; // Let the capture finish writing.
+                // Build-55: each row shows its side's gathered totals and record; every fallen unit is someone's loss.
+                var contenders = world.Contenders.ToArray();
+                var records = contenders.Select(t => world.Records.GetValueOrDefault(t) ?? MatchRecord.Empty).ToArray();
+                _observerChecks["stats_tab_totals_gathering_kills_and_losses"] = _observerHud.Tab == ObserverHud.Page.Stats && _observerHud.BodyVisible
+                    && contenders.Select((team,i) => _observerHud.DisplayedStats(i).SequenceEqual([(int)(world.Economies[team].GatheredFoodMilli/1000),
+                        (int)(world.Economies[team].GatheredOreMilli/1000),records[i].UnitKills.Values.Sum(),records[i].UnitLosses.Values.Sum()])).All(v => v)
+                    && world.Records.Values.Sum(r => r.UnitLosses.Values.Sum()) == world.Units.Count(u => u.Health <= 0)
+                    && world.Records.Values.Sum(r => r.UnitKills.Values.Sum()) is int kills && kills > 0 && kills <= world.Units.Count(u => u.Health <= 0);
                 var report = new { build = BuildInfo.Label,checks = _observerChecks,
                     passed = _observerChecks.Count == ObserverSmokeChecks && _observerChecks.Values.All(v => v),
                     fixture = $"{System.IO.Path.GetFileName(_cache)} --observe --bots={string.Join(',',_bots)}; the match runs at 16x after the speed checks",
@@ -156,6 +168,12 @@ public partial class Main
                     research = world.AiPlayers.Values.ToDictionary(BotKey,a => string.Join(",",(world.Researched.GetValueOrDefault(a.Team) ?? []).Order(StringComparer.Ordinal))),
                     // Places of power (build-54): who took which, when, and the squads each bot sent.
                     places = _placeLog,place_squads = world.AiPlayers.Values.ToDictionary(BotKey,a => a.PlaceSquadsSent),
+                    // The Stats tab's numbers (build-55).
+                    stats = world.AiPlayers.Values.ToDictionary(BotKey,a => {
+                        var r = world.Records.GetValueOrDefault(a.Team) ?? MatchRecord.Empty; var bank = world.Economies[a.Team];
+                        return $"gathered food {bank.GatheredFoodMilli/1000} ore {bank.GatheredOreMilli/1000} · units killed {r.UnitKills.Values.Sum()} lost {r.UnitLosses.Values.Sum()}"
+                            +$" · buildings razed {r.BuildingKills.Values.Sum()} lost {r.BuildingLosses.Values.Sum()}";
+                    }),
                     corpses_buried = _corpsesBuried,winner = world.Winner,outcome_tick = world.OutcomeTick,ticks_per_frame_at_16x = _observerBurst,
                     bots = world.AiPlayers.Values.Select(a => $"{a.Personality.Id}: {a.Status}").ToArray(),
                     ticks = world.Tick,status = _status.Text,digest = world.StateDigest() };

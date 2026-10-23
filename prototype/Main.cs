@@ -372,7 +372,9 @@ public partial class Main : Node3D
 
     public override void _UnhandledInput(InputEvent input)
     {
-        if (_world is null || _loadFailed || _outcome.Visible) return;
+        if (_world is null || _loadFailed) return;
+        // The result stops play, but an observer can still page the overview, the Stats tab above all.
+        if (_outcome.Visible) { if (_observing && input is InputEventKey { Pressed: true,Echo: false } pressed) ObserverHotkey(pressed); return; }
         if (input is InputEventMouseButton mouse)
         {
             if (mouse.ButtonIndex == MouseButton.WheelUp && mouse.Pressed) _distance = Math.Max(12, _distance * 0.88f);

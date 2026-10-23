@@ -2695,3 +2695,39 @@ army wears the armor; no squad for a place held by five soldiers nor before the
 Scouting gate); new Python tests for the export and the scout war party (186 pass). The structure
 smoke checks the drawn place, its panel text and its zone ring, and the Bilbo
 observer smoke passes; the other Bilbo smokes were not rerun for this build.
+
+## Build-55: observer Stats tab
+
+The owner asked for a Stats tab in observer mode: the total resources gathered and
+the total kills and losses.
+
+**Stats tab (S).** The spectator overview gets a third tab next to Economy and
+Units. Each player's row shows:
+
+- **Food** and **Ore** gathered over the whole match: everything workers have
+  delivered (the build-36 `GatheredFoodMilli` / `GatheredOreMilli` totals that feed
+  the income column). Starting resources, cheats and refunds are not included.
+- **Kills:** enemy units slain by the player's units and Watchtowers.
+- **Losses:** the player's own units slain.
+
+The Kills tooltip lists the slain units by type, then the enemy buildings razed;
+the Losses tooltip lists the units lost by type, then the buildings lost
+(foundations are marked). S opens the tab, and pressing S again folds the overview,
+as E and U do. The tab keys now also work on the result screen, so an observer can
+read the final stats without closing the result.
+
+**Counting.** `SimWorld.Records` keeps a `MatchRecord` per side, by display name,
+updated at the lethal hit (the same hit that credits a unit's victories) and when a
+building is razed. Rules:
+
+- A Watchtower arrow credits the tower's side, as long as the tower is still
+  standing when the arrow lands.
+- A kill by a friend (force attack) counts as a loss, without a kill.
+- A surrendering bot's own demolition of its buildings is not a building loss.
+- Kills count units only. A unit's victory count (shown in the unit panel) also
+  includes the buildings it razed.
+
+The tally is derived from the fight and only the HUD reads it, so like the
+gathered totals it stays out of the state digest.
+
+Validation: `SimulationTests` 893 checks (6 new: a lethal hit adds one kill and one loss, rivals add one kill, a friendly kill is a loss only, the tally stays out of the digest, a tower kill counts for its side, a razed building counts for both sides but not as a unit kill). The observer smoke grows to 16 cases: at the result it presses S and checks that each row matches the gathered totals and records, that the losses add up to every fallen unit, and that kills > 0. It now captures `-stats.png` at 14:00, and its captures pick the tab a frame early (since build-36, `-units.png` had shown the Economy tab). Gimli against Aragorn: Gimli wins at 18:19, 79 kills to 27, 10 buildings razed.

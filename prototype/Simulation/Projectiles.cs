@@ -46,6 +46,8 @@ public sealed partial class SimWorld
         {
             CancelAbility(target);
             if (unit != null && damage > 0 && target.Team != unit.Team) unit.KillCount++;
+            // A tower's arrow credits the tower's side, while the tower stands.
+            if (damage > 0) RecordDeath(unit?.Team ?? (ConstructionSites.TryGetValue(source,out var tower) ? tower.Team : -1),target);
             CancelStrike(target);
         }
         if (unit == null) RetaliateAgainstSite(target,source);

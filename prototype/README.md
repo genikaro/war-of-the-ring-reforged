@@ -300,9 +300,11 @@ shipped `.rai` personality and `-NoAi` keeps the enemy passive. To watch two bot
 fight instead (build-28), observe: nobody plays and any unit can be inspected but not
 commanded. The spectator HUD (build-36) follows other RTS observer modes: a foldable
 overview at the top right lists every player under an Economy tab (food, ore,
-income per minute, population, workers, army, buildings) or a Units tab (a portrait
-per unit type with its count), and the console's action grid, which has nothing to
-command, shows the map, the game clock and the speed controls.
+income per minute, population, workers, army, buildings), a Units tab (a portrait
+per unit type with its count) or a Stats tab (build-55: food and ore gathered over
+the match, units killed and lost; the tooltips list them by type with the buildings
+razed and lost), and the console's action grid, which has nothing to command, shows
+the map, the game clock and the speed controls.
 
 ```powershell
 ./prototype/run.ps1 -Observe -Bots Gimli,Aragorn -Speed 4
@@ -398,7 +400,7 @@ caches and Helm's Deep.
 | Mouse wheel | Zoom |
 | Space | Pause/resume simulation and unit animation |
 | - / + | Game speed down / up (1x, 2x, 4x, 8x, 16x) |
-| Observing: E / U | Open the overview's Economy / Units tab; the open tab's key folds the overview |
+| Observing: E / U / S | Open the overview's Economy / Units / Stats tab; the open tab's key folds the overview |
 | Observing: Tab or the overview's chevron | Fold or unfold the overview |
 | Observing: a player's name in the overview | Center the camera on that player's base |
 | Observing: speed slider / pause button | Choose the game speed / pause and resume |

@@ -35,6 +35,8 @@ public static class SiegeChecks
             "the attack-move strikes the building without becoming a separate siege order");
         StepUntil(march,() => !march.ConstructionSites.ContainsKey(Hall),1000);
         check(!march.ConstructionSites.ContainsKey(Hall) && raider.KillCount == 1,"the building is razed");
+        check(march.Records[0].BuildingKills.GetValueOrDefault("Hall") == 1 && march.Records[1].BuildingLosses.GetValueOrDefault("Hall") == 1
+            && march.Records[0].UnitKills.Count == 0,"a razed building counts for both sides in the observer stats, not as a unit kill");
         StepUntil(march,() => raider.Order == OrderKind.Idle,600);
         check(raider.Node == Cell(35,13) && raider.SiteTarget == -1,"the march resumes to its destination once the building falls");
         var replay = Fixture(); replay.Spawn(0,Cell(5,13)); replay.Commands.AddRange(march.Commands); Step(replay,march.Tick);

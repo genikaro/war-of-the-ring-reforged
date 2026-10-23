@@ -281,7 +281,7 @@ public partial class CommandPanel : Control
             : observing ? "Click any unit or building to inspect it" : "Select your forces";
         _order.Text = available ? string.Join(" · ",units.GroupBy(u => u.Order).Select(g => $"{OrderName(g.Key)} ({g.Count()})"))
             + (units.Sum(u => u.OrderQueue.Count) > 0 ? $"   +{units.Sum(u => u.OrderQueue.Count)} queued" : "")
-            : observing ? "Observer · E economy · U units · Tab folds the overview" : "Ctrl + number: assign group · Shift + number: add units";
+            : observing ? "Observer · E economy · U units · S stats · Tab folds the overview" : "Ctrl + number: assign group · Shift + number: add units";
         _armies.Text = $"Allies {allies}    Enemies {enemies}";
         _walkRun.SetPressedNoSignal(walking);
         string pace = walking ? "Walking" : "Running";

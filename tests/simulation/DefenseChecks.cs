@@ -49,6 +49,8 @@ public static class DefenseChecks
         Step(shot,80);
         check(target.Health == 0 && !shot.Projectiles.Any(p => p.Target == target.Id) && shot.ConstructionSites[Tower].DefenseTarget == -1,
             "the tower kills its target and goes quiet with nobody left in range");
+        check(shot.Records[0].UnitKills.GetValueOrDefault("Probe") == 1 && shot.Records[1].UnitLosses.GetValueOrDefault("Probe") == 1,
+            "a tower's kill counts for its side in the observer stats");
 
         var armor = Fixture();
         var plate = armor.Spawn(1,Cell(22,15),armored); plate.Order = OrderKind.HoldGround;

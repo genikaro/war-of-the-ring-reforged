@@ -3,12 +3,13 @@ using Reforged.Simulation;
 
 /// <summary>The spectator's overview at the top right, laid out like the observer panels of StarCraft II and
 /// Age of Empires II: one row per player in its colour, under an Economy tab (bank, income per minute,
-/// population, workers, army, buildings) or a Units tab (a portrait per unit type with its count). E and U
-/// open a tab; the open tab's key or button, the chevron or Tab folds the panel down to its tab strip. A click
-/// on a player's name centres the camera on that player's base.</summary>
+/// population, workers, army, buildings), a Units tab (a portrait per unit type with its count) or a Stats tab
+/// (food and ore gathered over the match, units killed and lost). E, U and S open a tab; the open tab's key or
+/// button, the chevron or Tab folds the panel down to its tab strip. A click on a player's name centres the
+/// camera on that player's base.</summary>
 public partial class ObserverHud : Control
 {
-    public enum Page { Economy,Units }
+    public enum Page { Economy,Units,Stats }
     public event Action<int>? PlayerChosen;
     public Page Tab { get; private set; }
     public bool Collapsed { get; private set; }
@@ -18,12 +19,15 @@ public partial class ObserverHud : Control
     private static readonly (string Tip,float Width)[] EconomyColumns = [
         ("Food in the bank",44),("Ore in the bank",44),("Income · food and ore delivered per game minute",46),
         ("Population · used / capacity",48),("Workers",28),("Army · every unit that is not a worker",28),("Buildings, including foundations",26)];
+    private static readonly (string Tip,float Width)[] StatsColumns = [
+        ("Food gathered · everything workers delivered this match",64),("Ore gathered · everything workers delivered this match",64),
+        ("Kills · enemy units slain by this player's units and towers",64),("Losses · this player's units slain",64)];
     private PanelContainer _frame = null!;
-    private Button _economyTab = null!,_unitsTab = null!,_fold = null!;
+    private Button _economyTab = null!,_unitsTab = null!,_statsTab = null!,_fold = null!;
     private Control _foldGlyph = null!;
-    private VBoxContainer _economy = null!,_units = null!;
-    private readonly TextureRect[] _headerIcons = new TextureRect[EconomyColumns.Length];
-    private readonly List<(Control Row,ColorRect Swatch,Label Name,Label[] Values)> _economyRows = [];
+    private VBoxContainer _economy = null!,_units = null!,_stats = null!;
+    private readonly TextureRect[] _headerIcons = new TextureRect[EconomyColumns.Length],_statsIcons = new TextureRect[2];
+    private readonly List<(Control Row,ColorRect Swatch,Label Name,Label[] Values)> _economyRows = [],_statsRows = [];
     private readonly List<(Control Row,ColorRect Swatch,Label Name,HBoxContainer Portraits,Label Empty)> _unitRows = [];
     private readonly List<int> _teams = [];
     private bool _foldShown;
@@ -41,6 +45,7 @@ public partial class ObserverHud : Control
         var header = new HBoxContainer(); header.AddThemeConstantOverride("separation",2); root.AddChild(header);
         _economyTab = TabButton("Economy","Economy [E] · bank, income, population, workers, army and buildings",Page.Economy); header.AddChild(_economyTab);
         _unitsTab = TabButton("Units","Units [U] · each player's living units by type",Page.Units); header.AddChild(_unitsTab);
+        _statsTab = TabButton("Stats","Stats [S] · food and ore gathered over the match, units killed and lost",Page.Stats); header.AddChild(_statsTab);
         header.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill,MouseFilter = MouseFilterEnum.Ignore });
         _fold = new Button { CustomMinimumSize = new(24,22),FocusMode = FocusModeEnum.None,TooltipText = "Fold or unfold the overview [Tab]" };
         Style(_fold,false); _fold.Pressed += () => Toggle(); header.AddChild(_fold);
@@ -53,12 +58,27 @@ public partial class ObserverHud : Control
         for (int column = 0; column < EconomyColumns.Length; column++)
         {
             var (tip,width) = EconomyColumns[column];
-            if (column == 2) { var income = Cell("/min",width,11); income.MouseFilter = MouseFilterEnum.Stop; income.TooltipText = tip; columns.AddChild(income); continue; }
-            var icon = new TextureRect { CustomMinimumSize = new(width,18),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,TooltipText = tip };
-            _headerIcons[column] = icon; columns.AddChild(icon);
+            if (column == 2) { columns.AddChild(Heading("/min",width,tip)); continue; }
+            columns.AddChild(_headerIcons[column] = HeaderIcon(width,tip));
         }
         _units = new VBoxContainer { CustomMinimumSize = new(BodyWidth,0) }; _units.AddThemeConstantOverride("separation",2); root.AddChild(_units);
+        _stats = new VBoxContainer { CustomMinimumSize = new(BodyWidth,0) }; _stats.AddThemeConstantOverride("separation",1); root.AddChild(_stats);
+        var statsColumns = Row(); _stats.AddChild(statsColumns);
+        statsColumns.AddChild(new Control { CustomMinimumSize = new(NameWidth+8,18),MouseFilter = MouseFilterEnum.Ignore });
+        for (int column = 0; column < StatsColumns.Length; column++)
+        {
+            var (tip,width) = StatsColumns[column];
+            if (column < _statsIcons.Length) statsColumns.AddChild(_statsIcons[column] = HeaderIcon(width,tip));
+            else statsColumns.AddChild(Heading(column == 2 ? "Kills" : "Losses",width,tip));
+        }
+    }
+
+    private static TextureRect HeaderIcon(float width,string tip) => new() { CustomMinimumSize = new(width,18),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+        StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,TooltipText = tip };
+
+    private static Label Heading(string text,float width,string tip)
+    {
+        var heading = Cell(text,width,11); heading.MouseFilter = MouseFilterEnum.Stop; heading.TooltipText = tip; return heading;
     }
 
     private Button TabButton(string text,string tip,Page page)
@@ -107,7 +127,7 @@ public partial class ObserverHud : Control
         row.AddChild(swatch); row.AddChild(name); return (swatch,name);
     }
 
-    /// <summary>E or U: open that tab, or fold the panel when it is already open.</summary>
+    /// <summary>E, U or S: open that tab, or fold the panel when it is already open.</summary>
     public void Choose(Page page)
     {
         if (Tab == page && !Collapsed) Collapsed = true;
@@ -126,12 +146,15 @@ public partial class ObserverHud : Control
         if (_headerIcons[0].Texture == null)
             foreach (var (column,name) in new[] {(0,"console_g_resourcefood"),(1,"console_g_resourcewater"),(3,"console_g_resourcepopulation"),
                 (4,"Portrait_G_Human_Worker"),(5,"Portrait_G_Gondor_Swordsman"),(6,"Building_G_Keep_1")}) _headerIcons[column].Texture = art(name);
+        _statsIcons[0].Texture ??= _headerIcons[0].Texture; _statsIcons[1].Texture ??= _headerIcons[1].Texture;
         _teams.Clear(); _teams.AddRange(world.Contenders);
         _economyTab.SetPressedNoSignal(!Collapsed && Tab == Page.Economy); _unitsTab.SetPressedNoSignal(!Collapsed && Tab == Page.Units);
-        _economy.Visible = !Collapsed && Tab == Page.Economy; _units.Visible = !Collapsed && Tab == Page.Units;
+        _statsTab.SetPressedNoSignal(!Collapsed && Tab == Page.Stats);
+        _economy.Visible = !Collapsed && Tab == Page.Economy; _units.Visible = !Collapsed && Tab == Page.Units; _stats.Visible = !Collapsed && Tab == Page.Stats;
         if (_foldShown != Collapsed) { _foldShown = Collapsed; _foldGlyph.QueueRedraw(); }
         if (_economy.Visible) RefreshEconomy(world,color);
         if (_units.Visible) RefreshUnits(world,color,art);
+        if (_stats.Visible) RefreshStats(world,color);
         // The build label (BuildOverlay) keeps the top-right corner; the panel hangs just below it.
         var viewport = GetViewportRect().Size; float overlay = Math.Clamp(viewport.Y/800f,.75f,3);
         _frame.Scale = new(scale,scale); _frame.ResetSize();
@@ -149,17 +172,20 @@ public partial class ObserverHud : Control
         return $"Player {team+1} · {PlayerName(world,team)}{style}\n{state}\nClick to centre the camera on this base.";
     }
 
+    /// <summary>A player row of the Economy or Stats table: the player cell, then a value cell per column.</summary>
+    private (Control Row,ColorRect Swatch,Label Name,Label[] Values) TableRow(VBoxContainer table,(string Tip,float Width)[] columns,int index)
+    {
+        var row = Row(); table.AddChild(row);
+        var (swatch,name) = PlayerCell(row,index);
+        var values = columns.Select(c => {
+            var cell = Cell("",c.Width); cell.MouseFilter = MouseFilterEnum.Stop; cell.TooltipText = c.Tip; row.AddChild(cell); return cell;
+        }).ToArray();
+        return (row,swatch,name,values);
+    }
+
     private void RefreshEconomy(SimWorld world,Func<int,Color> color)
     {
-        while (_economyRows.Count < _teams.Count)
-        {
-            var row = Row(); _economy.AddChild(row);
-            var (swatch,name) = PlayerCell(row,_economyRows.Count);
-            var values = EconomyColumns.Select(c => {
-                var cell = Cell("",c.Width); cell.MouseFilter = MouseFilterEnum.Stop; cell.TooltipText = c.Tip; row.AddChild(cell); return cell;
-            }).ToArray();
-            _economyRows.Add((row,swatch,name,values));
-        }
+        while (_economyRows.Count < _teams.Count) _economyRows.Add(TableRow(_economy,EconomyColumns,_economyRows.Count));
         var living = world.Units.Where(u => u.Health > 0).ToLookup(u => u.Team);
         for (int index = 0; index < _economyRows.Count; index++)
         {
@@ -184,6 +210,30 @@ public partial class ObserverHud : Control
                 .OrderBy(g => g.Key,StringComparer.Ordinal).Select(g => $"{g.Count()} {g.Key}"));
         }
     }
+
+    private void RefreshStats(SimWorld world,Func<int,Color> color)
+    {
+        while (_statsRows.Count < _teams.Count) _statsRows.Add(TableRow(_stats,StatsColumns,_statsRows.Count));
+        for (int index = 0; index < _statsRows.Count; index++)
+        {
+            var (row,swatch,name,values) = _statsRows[index];
+            row.Visible = index < _teams.Count;
+            if (!row.Visible) continue;
+            int team = _teams[index];
+            var bank = world.Economies.GetValueOrDefault(team);
+            var record = world.Records.GetValueOrDefault(team) ?? MatchRecord.Empty;
+            swatch.Color = color(team); name.Text = PlayerName(world,team); name.TooltipText = PlayerTip(world,team);
+            row.Modulate = world.DefeatedTeams.Contains(team) ? new Color(1,1,1,.4f) : Colors.White;
+            values[0].Text = ((bank?.GatheredFoodMilli ?? 0)/1000).ToString(); values[1].Text = ((bank?.GatheredOreMilli ?? 0)/1000).ToString();
+            values[2].Text = record.UnitKills.Values.Sum().ToString(); values[3].Text = record.UnitLosses.Values.Sum().ToString();
+            values[2].TooltipText = Tally("Enemy units slain",record.UnitKills)+"\n"+Tally("Enemy buildings razed",record.BuildingKills);
+            values[3].TooltipText = Tally("Units lost",record.UnitLosses)+"\n"+Tally("Buildings lost",record.BuildingLosses);
+        }
+    }
+
+    /// <summary>"Units lost: 3", then a line per type.</summary>
+    private static string Tally(string title,SortedDictionary<string,int> tally)
+        => string.Join("\n",tally.Select(p => $"  {p.Value} {p.Key}").Prepend($"{title}: {tally.Values.Sum()}"));
 
     private void RefreshUnits(SimWorld world,Func<int,Color> color,Func<string,Texture2D?> art)
     {
@@ -229,11 +279,13 @@ public partial class ObserverHud : Control
     }
 
     public int RowCount => _teams.Count;
-    public string RowName(int index) => (Tab == Page.Units ? _unitRows[index].Name : _economyRows[index].Name).Text;
-    public bool BodyVisible => _economy.IsVisibleInTree() || _units.IsVisibleInTree();
-    public Button TabFor(Page page) => page == Page.Economy ? _economyTab : _unitsTab;
+    public string RowName(int index) => NameCell(index).Text;
+    public bool BodyVisible => _economy.IsVisibleInTree() || _units.IsVisibleInTree() || _stats.IsVisibleInTree();
+    public Button TabFor(Page page) => page switch { Page.Units => _unitsTab,Page.Stats => _statsTab,_ => _economyTab };
     public Button FoldButton => _fold;
-    public Control NameCell(int index) => Tab == Page.Units ? _unitRows[index].Name : _economyRows[index].Name;
+    public Label NameCell(int index) => Tab switch { Page.Units => _unitRows[index].Name,Page.Stats => _statsRows[index].Name,_ => _economyRows[index].Name };
+    /// <summary>The Stats tab's numbers for a row: food and ore gathered, kills, losses.</summary>
+    public int[] DisplayedStats(int index) => _statsRows[index].Values.Select(v => int.Parse(v.Text)).ToArray();
     /// <summary>The counts the Units tab shows for a row, in portrait order.</summary>
     public int[] DisplayedUnitCounts(int index) => _unitRows[index].Portraits.GetChildren().OfType<TextureRect>().Where(p => p.Visible)
         .Select(p => int.Parse(p.GetChild<Label>(0).Text)).ToArray();

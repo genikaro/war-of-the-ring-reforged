@@ -4,7 +4,7 @@ using Reforged.Simulation;
 /// <summary>Watching bots fight. With --observe every start base is run by a bot (--bots=Gimli,Aragorn picks each
 /// side's personality, missing entries use the default) and nobody plays: PlayerTeam is -1, so every command path
 /// finds no units of its own and selection inspects any side. The spectator HUD follows other RTS observer modes:
-/// a foldable overview at the top right (Economy and Units tabs, E and U) and, in the console's action grid, the
+/// a foldable overview at the top right (Economy, Units and Stats tabs, E, U and S) and, in the console's action grid, the
 /// map, the game clock and the speed controls. Game speed (pause, 1x to 16x, with - and + in any mode) steps the
 /// fixed-tick simulation several times per physics frame, so a fast-forwarded match is the same match, tick for tick.</summary>
 public partial class Main
@@ -48,13 +48,14 @@ public partial class Main
         _commands.PauseChosen += () => SetPaused(!_paused);
     }
 
-    /// <summary>E and U open the overview's tabs and Tab folds it; nothing else uses them while nobody plays.</summary>
+    /// <summary>E, U and S open the overview's tabs and Tab folds it; nothing else uses them while nobody plays.</summary>
     private bool ObserverHotkey(InputEventKey key)
     {
         if (key.CtrlPressed || key.AltPressed || key.MetaPressed) return false;
         bool Is(Key letter) => key.Keycode == letter || key.PhysicalKeycode == letter;
         if (Is(Key.E)) _observerHud.Choose(ObserverHud.Page.Economy);
         else if (Is(Key.U)) _observerHud.Choose(ObserverHud.Page.Units);
+        else if (Is(Key.S)) _observerHud.Choose(ObserverHud.Page.Stats);
         else if (key.Keycode == Key.Tab) _observerHud.Toggle();
         else return false;
         return true;

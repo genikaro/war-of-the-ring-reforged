@@ -207,6 +207,7 @@ public sealed partial class SimWorld
         DropOffs.RemoveAll(d => d.Obstacle == site.Obstacle && d.Team == site.Team);
         Navigation.SetObstacle(site.Obstacle,false);
         if (killer != null && killer.Team != site.Team) killer.KillCount++;
+        if (killer != null) RecordRazed(killer.Team,site); // A surrendering bot's own demolition is no battle loss.
         DestroyedSites.Add(site.Id);
         // A ruined start building stops providing its population and prerequisites.
         if (site.Prebuilt && StartBuildings.TryGetValue(site.Team,out var starts)) starts.Remove(site.Building!);

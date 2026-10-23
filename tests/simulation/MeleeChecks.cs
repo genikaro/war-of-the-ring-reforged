@@ -97,6 +97,12 @@ static class MeleeChecks
         check(friendly.Units[1].Health == 0 && friendly.Units[0].KillCount == 0,"friendly force attacks do not award victories");
         string beforeKillChange = killing.StateDigest(); killing.Units[0].KillCount++;
         check(beforeKillChange != killing.StateDigest(),"victories are included in replay state"); killing.Units[0].KillCount--;
+        check(killing.Records[0].UnitKills.GetValueOrDefault("Probe") == 1 && killing.Records[2].UnitLosses.GetValueOrDefault("Probe") == 1
+            && killing.Records[0].UnitLosses.Count == 0 && killing.Records[2].UnitKills.Count == 0,"the observer stats credit one kill and one loss despite later hits");
+        check(rival.Records[0].UnitKills.Values.Sum() == 1 && rival.Records[1].UnitLosses.Values.Sum() == 1,"simultaneous attackers add one kill to their side");
+        check(friendly.Records[0].UnitLosses.Values.Sum() == 1 && friendly.Records[0].UnitKills.Count == 0,"a friendly kill is a loss without a kill");
+        killing.Records[0].UnitKills["Probe"]++;
+        check(beforeKillChange == killing.StateDigest(),"the observer stats stay out of replay state"); killing.Records[0].UnitKills["Probe"]--;
         var stats = UnitHudStats.From(killing.Units[0],Rules());
         check(stats.Attack == "20" && stats.Armor == "0" && stats.Victories == "1" && stats.Health == "100/100","unit HUD reflects live simulation stats and kills");
         check(UnitHudStats.From(world.Units[0],Rules()).Icon == "","unclassified profiles never borrow a weapon icon");
