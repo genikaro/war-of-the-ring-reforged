@@ -30,6 +30,13 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-46 (Oct 23):** Forge and Wilderness Outpost research. The Forge
+researches Iron Blades (+1 attack) and Iron Plating (+1 armor) for the Swordsman,
+Rider, Axethrower and Shieldbreaker, the Outpost Etched Blades and Improved
+Leather for the Ranger: 75 food, 75 ore, 90 s each, applied to units already
+trained. The +1 comes from the source per-unit modifiers; whether the technique's
+x1.2 also applies needs one in-game capture. See [skirmish notes](../prototype/SKIRMISH.md#build-46-forge-and-wilderness-outpost-research).
+
 **Build-45 (Oct 23):** the Tier 2 units. The Barracks trains the Rohan Rider once
 Citadel 2 stands, the Dwarf Hall the Dwarf Shieldbreaker once a Forge stands, and
 the Ranger Post the Ranger, all with the captured costs and stats. Units trained to

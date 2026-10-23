@@ -334,6 +334,7 @@ checked before loading. Never distribute the local cache with the project.
 | Citadel selected: training portrait / Backspace | Cancel that unit / the last queued unit, with a full refund |
 | Citadel selected: right-click terrain | Set the rally point for trained units |
 | Citadel or Camp selected: upgrade [Z] | Upgrade in place to Citadel 2 / War Camp; the upgrade heads the queue and its portrait (or Backspace once the queue is empty) cancels it for a 75% refund |
+| Forge or Wilderness Outpost selected: Q / W | Research the blades / armor upgrade; its portrait in the queue (or Backspace) cancels it for a full refund |
 | 1 / 2 / 3 | Select the corresponding blue squad |
 | Ctrl + 1–9 / 0 | Assign the selection to a control group (1–3 start with the demo squads) |
 | Shift + 1–9 / 0 | Add the selection to that stored group |
@@ -407,6 +408,7 @@ a normal viewport capture with `-CapturePath`.
 ./prototype/run.ps1 -FrodoSmoke
 ./prototype/run.ps1 -TechSmoke
 ./prototype/run.ps1 -Tier2Smoke
+./prototype/run.ps1 -ResearchSmoke
 ./prototype/run.ps1 -SiegeSmoke
 ./prototype/run.ps1 -DefenseSmoke
 ./prototype/run.ps1 -VictorySmoke

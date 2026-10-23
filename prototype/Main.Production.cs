@@ -72,9 +72,16 @@ public partial class Main
     /// heads the panel's queue and is cancelled last by Backspace.</summary>
     private void CancelTraining(int index)
     {
-        if (SelectedOwnSite() is { Upgrading: true } site && (index == 0 || index < 0 && SelectedProducer() is not { Queue.Count: > 0 }))
-        { _world!.Enqueue(PlayerTeam,[],OrderKind.CancelUpgrade,target: site.Id); _status.Text = "Upgrade cancellation queued"; return; }
-        if (SelectedOwnSite() is { Upgrading: true } && index > 0) index--;
+        // An upgrade or a research in progress heads the panel's queue.
+        if (SelectedOwnSite() is { } site && (site.Upgrading || site.Research != null))
+        {
+            if (index == 0 || index < 0 && SelectedProducer() is not { Queue.Count: > 0 })
+            {
+                _world!.Enqueue(PlayerTeam,[],site.Upgrading ? OrderKind.CancelUpgrade : OrderKind.CancelResearch,target: site.Id);
+                _status.Text = (site.Upgrading ? "Upgrade" : "Research")+" cancellation queued"; return;
+            }
+            if (index > 0) index--;
+        }
         if (SelectedProducer() is not { Queue.Count: > 0 } producer) return;
         _world!.Enqueue(PlayerTeam,[],OrderKind.CancelTraining,index,producer.Id);
         _status.Text = "Training cancellation queued";
@@ -104,7 +111,9 @@ public partial class Main
     private void PresentProduction()
     {
         var producer = SelectedProducer();
-        _commands.RefreshProduction(_world!,producer,SelectedOwnSite(),UpgradePortrait());
+        var site = SelectedOwnSite();
+        _commands.RefreshProduction(_world!,producer,site,UpgradePortrait(),site?.Research is { } research ? _techniquePortraits.GetValueOrDefault(research) : null);
+        _commands.RefreshResearch(_world!,site,name => _techniquePortraits.GetValueOrDefault(name));
         if (_rallyBanner == null) return;
         _rallyBanner.Visible = producer is { RallyCell: >= 0 };
         if (!_rallyBanner.Visible) return;

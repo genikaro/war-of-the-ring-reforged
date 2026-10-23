@@ -56,7 +56,7 @@ public sealed partial class SimWorld
     {
         int x = site.X+defense.OriginXMm,z = site.Z+defense.OriginZMm,y = Navigation.GroundHeight(site.X,site.Z)+defense.OriginYMm;
         int targetY = target.Y+target.Definition.BodyHeightMm/2;
-        long damage = Math.Max(0,(long)defense.DpsMilli-target.Definition.ArmorMilli)*interval/TicksPerSecond;
+        long damage = Math.Max(0,(long)defense.DpsMilli-target.ArmorMilli)*interval/TicksPerSecond;
         long distance = IntegerMotion.SqrtCeiling(DistanceSquared(x,z,target.X,target.Z)+(long)(y-targetY)*(y-targetY));
         int travel = (int)Math.Max(1,(distance*TicksPerSecond+defense.ProjectileSpeedMmPerSecond-1)/defense.ProjectileSpeedMmPerSecond);
         Projectiles.Add(new(_projectileSequence++,-1,target.Id,0,0,damage,Tick,Tick,Tick+travel,x,y,z,target.X,targetY,target.Z,Source: site.Id));

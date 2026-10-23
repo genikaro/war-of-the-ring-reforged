@@ -24,6 +24,10 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public UnitDefinition Definition { get => _definition; internal set { _definition = value; Grid?.Measure(value); } }
     public int MaxHealth => Definition.MaxHealth;
     public int KillCount { get; internal set; }
+    /// <summary>Researched bonuses (source TechniqueUnitModifiers) added to weapon DPS and armor.</summary>
+    public int TechniqueDpsMilli { get; internal set; }
+    public int TechniqueArmorMilli { get; internal set; }
+    public int ArmorMilli => Definition.ArmorMilli+TechniqueArmorMilli;
     public bool Walking { get; internal set; }
     public int[] AbilityReadyAt { get; } = new int[4];
     /// <summary>Thousandths of a tick of extra recharge gained under a recharge aura.</summary>
@@ -37,8 +41,8 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public AbilityDefinition? Ability(int slot) => Definition.Abilities?.FirstOrDefault(a => a.Slot == slot);
     public StatusProtection Immunities => (Definition.Abilities ?? []).Where(a => a.Passive)
         .Aggregate(StatusProtection.None,(flags,a) => flags | a.Immunities);
-    public int MeleeDamageRate => Definition.Abilities?.FirstOrDefault(a => a.Passive && a.Kind == AbilityKind.Fury)?.DpsMilli
-        ?? Definition.DpsMilli;
+    public int MeleeDamageRate => (Definition.Abilities?.FirstOrDefault(a => a.Passive && a.Kind == AbilityKind.Fury)?.DpsMilli
+        ?? Definition.DpsMilli)+TechniqueDpsMilli;
     public int AbilityDamageScale(int targetType) => Definition.Abilities?.FirstOrDefault(a => a.Passive && a.Kind is AbilityKind.Fury or AbilityKind.Bane
         && a.BonusTargets?.Contains(targetType) == true)?.BonusScale ?? 1_000_000;
     public int Facing { get; internal set; }
@@ -148,6 +152,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         if (!CanPlace(candidate)) throw new ArgumentException("Spawn cell occupied");
         Units.Add(candidate);
         if (_grid.Count == Units.Count-1) _grid.Add(candidate);
+        ApplyTechniques(candidate);
         return candidate;
     }
 
@@ -200,6 +205,8 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         if (command.Kind == OrderKind.CancelTraining) { CancelTraining(command); return; }
         if (command.Kind == OrderKind.Upgrade) { BeginUpgrade(command); return; }
         if (command.Kind == OrderKind.CancelUpgrade) { CancelUpgrade(command); return; }
+        if (command.Kind == OrderKind.Research) { BeginResearch(command); return; }
+        if (command.Kind == OrderKind.CancelResearch) { CancelResearch(command); return; }
         if (command.Kind is OrderKind.SetRallyPoint or OrderKind.SetRallyResource) { SetRallyPoint(command); return; }
         if (command.Kind == OrderKind.Gather) { BeginGather(command,activating); return; }
         if (command.Kind == OrderKind.AttackStructure) { BeginSiege(command,activating); return; }
@@ -562,7 +569,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         using (SimProfiler.Time("ai")) UpdateAi();
         using (SimProfiler.Time("construction")) { UpdateConstruction(); UpdateRepairs(); }
         using (SimProfiler.Time("defenses")) UpdateDefenses();
-        using (SimProfiler.Time("production")) { UpdateUpgrades(); UpdateProduction(); }
+        using (SimProfiler.Time("production")) { UpdateUpgrades(); UpdateResearch(); UpdateProduction(); }
         UpdateHeroAbilities();
         using (SimProfiler.Time("route rebase")) if (_navigationRevision != Navigation.Revision)
         {
@@ -776,6 +783,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         text += ProductionDigest();
         text += PlacementDigest();
         text += UpgradeDigest();
+        text += ResearchDigest();
         text += SiegeDigest();
         text += DefenseDigest();
         text += OutcomeDigest();

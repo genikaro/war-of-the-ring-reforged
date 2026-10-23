@@ -53,11 +53,11 @@ public partial class CommandPanel
 
     /// <summary>Training buttons, the upgrade button and the queue of the player's selected building. An upgrade in
     /// progress heads the queue, as in the original (local skirmish-003), and its portrait cancels it.</summary>
-    public void RefreshProduction(SimWorld world,ProductionBuilding? producer,ConstructionSite? site = null,string? upgradePortrait = null)
+    public void RefreshProduction(SimWorld world,ProductionBuilding? producer,ConstructionSite? site = null,string? upgradePortrait = null,
+        string? researchPortrait = null)
     {
         var upgrade = site is { Complete: true } && site.Team == PlayerTeam ? world.UpgradeRules(site) : null;
         bool upgrading = upgrade != null && site!.Upgrading;
-        _training.Visible = producer is { Queue.Count: > 0 } || upgrading;
         for (int slot = 0; slot < _trainButtons.Length; slot++)
         {
             var button = _trainButtons[slot];
@@ -84,28 +84,34 @@ public partial class CommandPanel
                 + $"\nTraining waits while the upgrade runs. Click its portrait to cancel for a {upgrade.FoodRefundPpm/10000}% refund."
                 + (_upgradeButton.Disabled ? "\n"+reason : "");
         }
-        if (producer == null && !upgrading) return;
+        // An upgrade or a research in progress heads the queue (local skirmish-003): its own portrait, progress and refund.
+        var research = site is { Research: { } name } && site.Team == PlayerTeam ? world.Techniques.First(t => t.Name == name) : null;
+        (string Label,string? Portrait,int Done,int Duration,int Food,int Ore)? head = upgrading
+            ? ($"Upgrading to {upgrade!.DisplayName}",upgradePortrait,site!.UpgradeTicks,upgrade.DurationTicks,
+                upgrade.FoodCost*upgrade.FoodRefundPpm/1_000_000,upgrade.OreCost*upgrade.OreRefundPpm/1_000_000)
+            : research != null ? ($"Researching {research.DisplayName}",researchPortrait,site!.ResearchTicks,research.DurationTicks,research.FoodCost,research.OreCost) : null;
+        _training.Visible = producer is { Queue.Count: > 0 } || head != null;
+        if (producer == null && head == null) return;
         string rally = producer == null ? "" : " · "+(producer.RallyResource >= 0 ? $"New workers gather {world.Resources[producer.RallyResource].Kind.ToString().ToLowerInvariant()} · right-click to move the rally point"
             : producer.RallyCell >= 0 ? "Rally point set · right-click to move it" : "Right-click the battlefield, or a Mill or Foundry, to set a rally point");
         var queue = producer?.Queue ?? [];
-        if (!upgrading && queue.Count == 0) { _order.Text = "Your structure"+rally; return; }
-        int done = upgrading ? site!.UpgradeTicks : producer!.ProgressTicks;
-        int duration = upgrading ? upgrade!.DurationTicks : world.ProductionRules[queue[0].Unit].DurationTicks;
-        int percent = done*100/duration,waiting = queue.Count-(upgrading ? 0 : 1);
-        _order.Text = (upgrading ? $"Upgrading to {upgrade!.DisplayName} {percent}%" : $"Training {world.ProductionRules[queue[0].Unit].DisplayName} {percent}%")
+        if (head == null && queue.Count == 0) { _order.Text = "Your structure"+rally; return; }
+        int done = head?.Done ?? producer!.ProgressTicks;
+        int duration = head?.Duration ?? world.ProductionRules[queue[0].Unit].DurationTicks;
+        int percent = done*100/duration,waiting = queue.Count-(head != null ? 0 : 1);
+        _order.Text = (head != null ? $"{head.Value.Label} {percent}%" : $"Training {world.ProductionRules[queue[0].Unit].DisplayName} {percent}%")
             + (waiting > 0 ? $" · {waiting} queued" : "")+rally;
         _trainingBar.Texture ??= _art.GetValueOrDefault("console_g_progressbar");
         _trainingProgress.Size = new(185f*done/duration,6);
-        int offset = upgrading ? 1 : 0;
+        int offset = head != null ? 1 : 0;
         for (int index = 0; index < _queueButtons.Length; index++)
         {
             var button = _queueButtons[index]; button.Visible = index < queue.Count+offset;
             if (!button.Visible) continue;
             if (index < offset)
             {
-                button.Icon = upgradePortrait == null ? null : _art.GetValueOrDefault(upgradePortrait);
-                button.TooltipText = $"Upgrading to {upgrade!.DisplayName} · {percent}%\nClick to cancel and receive "
-                    + $"{upgrade.FoodCost*upgrade.FoodRefundPpm/1_000_000} food and {upgrade.OreCost*upgrade.OreRefundPpm/1_000_000} ore";
+                button.Icon = head!.Value.Portrait == null ? null : _art.GetValueOrDefault(head.Value.Portrait);
+                button.TooltipText = $"{head.Value.Label} · {percent}%\nClick to cancel and receive {head.Value.Food} food and {head.Value.Ore} ore";
                 continue;
             }
             var rules = world.ProductionRules[queue[index-offset].Unit];

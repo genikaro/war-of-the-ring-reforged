@@ -62,6 +62,7 @@ public partial class Main
         RegisterStartBuildings();
         LoadNeutralStructures(data);
         LoadSkirmishProduction(data);
+        LoadSkirmishResearch(data);
         LoadSkirmishAi(data);
         ApplySkirmishHud(_commands);
     }

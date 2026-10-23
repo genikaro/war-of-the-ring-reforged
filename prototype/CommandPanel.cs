@@ -146,6 +146,7 @@ public partial class CommandPanel : Control
         CreateConstructionButtons();
         CreateStructureDetails();
         CreateProductionControls();
+        CreateResearchControls();
         CreateMatchControls();
         _hint = Text("",new(260,-27),new(760,24),13); _content.AddChild(_hint);
         var config = new ConfigFile();
@@ -403,12 +404,14 @@ public partial class CommandPanel : Control
     public TextureButton MenuButton => _menu;
     public bool CommandsAvailable => _buttons.Values.All(b => !b.Disabled);
     public bool CommandPaletteEmpty => !_buttons.Values.Concat(_abilities).Concat(_constructionButtons).Concat(_trainButtons)
-        .Concat([_buildButton,_backButton,_cancelConstructionButton,_upgradeButton]).Any(b => b.Visible);
+        .Concat([_buildButton,_backButton,_cancelConstructionButton,_upgradeButton]).Concat(_researchButtons).Any(b => b.Visible);
     public bool HealthCounterCentered => Math.Abs(_singleHealthText.GetRect().GetCenter().Y-_singleHealth.GetRect().GetCenter().Y) < .01f;
     public bool ResourceCountersCentered => new[] {(_populationIcon,_populationText),(_foodIcon,_foodText),(_oreIcon,_oreText)}
         .All(p => Math.Abs(p.Item1.GetRect().GetCenter().Y-p.Item2.GetRect().GetCenter().Y) < .01f);
     public bool SingleUnitDetailsVisible => _single.Visible;
     public string DisplayedVictories => _victoriesValue.Text;
+    public string DisplayedAttack => _attackValue.Text;
+    public string DisplayedArmor => _armorValue.Text;
     public string DisplayedName => _title.Text;
     public string DisplayedOrder => _order.Text;
     public string DisplayedHealth => _structureDetails.Visible ? _structureHealthText.Text : _singleHealthText.Text;

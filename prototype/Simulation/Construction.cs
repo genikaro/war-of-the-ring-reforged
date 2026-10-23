@@ -29,6 +29,9 @@ public sealed class ConstructionSite(int id,int obstacle,int radiusMm,string? bu
     /// <summary>An upgrade in progress and its fixed-tick progress toward the promoted building.</summary>
     public bool Upgrading { get; internal set; }
     public int UpgradeTicks { get; internal set; }
+    /// <summary>The technique being researched here, or null, and its fixed-tick progress.</summary>
+    public string? Research { get; internal set; }
+    public int ResearchTicks { get; internal set; }
 }
 
 /// <summary>Foundations, integer cooperative construction and owned gathering improvements.</summary>
@@ -201,6 +204,6 @@ public sealed partial class SimWorld
     }
 
     private string ConstructionDigest() => ":construction-rules:"+string.Join(';',ConstructionRules.OrderBy(p => p.Key).Select(p => p.Value+":"+string.Join(',',p.Value.Prerequisites)))
-        + ":sites:"+string.Join(';',ConstructionSites.Values.Select(s => $"{s.Id},{s.Building},{s.X},{s.Z},{s.Obstacle},{s.RadiusMm},{s.Team},{s.ProgressMicroTicks},{s.Health},{s.Complete},{s.Upgrading},{s.UpgradeTicks}"))
+        + ":sites:"+string.Join(';',ConstructionSites.Values.Select(s => $"{s.Id},{s.Building},{s.X},{s.Z},{s.Obstacle},{s.RadiusMm},{s.Team},{s.ProgressMicroTicks},{s.Health},{s.Complete},{s.Upgrading},{s.UpgradeTicks},{s.Research},{s.ResearchTicks}"))
         + ":start-buildings:"+string.Join(';',StartBuildings.OrderBy(p => p.Key).Select(p => p.Key+":"+string.Join(',',p.Value.Order(StringComparer.Ordinal))));
 }

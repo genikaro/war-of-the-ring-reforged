@@ -9,7 +9,7 @@ public partial class Main
     private readonly List<(string Type,float X,float Z)> _minimapMarkers = [];
 
     // Rendered automation must not consume live desktop input between its scripted events.
-    private bool BlocksDesktopInput => (_constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _tier2Smoke)
+    private bool BlocksDesktopInput => (_constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _tier2Smoke || _researchSmoke)
         && !_injectingConstructionInput;
 
     private void WatchPointer()

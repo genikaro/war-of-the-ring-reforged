@@ -21,6 +21,7 @@ python tools/skirmish_economy.py --cache converted/skirmish       # build-17 gat
 ./prototype/run.ps1 -FrodoSmoke                # Frodo training, hero portraits and the One Ring (credits a test bank first)
 ./prototype/run.ps1 -TechSmoke                 # Citadel 2 and War Camp upgrades, Tier 2 locks and a Forge (credits a test bank first)
 ./prototype/run.ps1 -Tier2Smoke                # Rider, Shieldbreaker and Ranger: locks, training, rally and strikes (test bank + instant build)
+./prototype/run.ps1 -ResearchSmoke             # Forge and Outpost research, cancel, a full Iron Blades and Attack 10 -> 11
 ```
 
 The cache is separate from `converted/prototype` (Helm's Deep), so both sandboxes
@@ -2028,3 +2029,52 @@ and the capture window layout (they pick different building spots).
 on different cells; it fails without the fix). `-PlacementSmoke` and
 `-DwarfHallSmoke` now expect the second, locked unit at the Barracks and Dwarf Hall;
 every other Bilbo smoke passes unchanged.
+
+## Build-46: Forge and Wilderness Outpost research
+
+Research from the source `Techniques` table (`tools/skirmish_research.py`, manifest
+`research`). A technique is offered when its building is in the skirmish set, its
+`BuildingRequired` is too, and its whole effect is a unit damage or armor bonus:
+
+| Building | Q | W | Cost | Time |
+|---|---|---|---|---|
+| Forge | Iron Blades: +1 attack | Iron Plating: +1 armor | 75 food, 75 ore each | 90 s |
+| Wilderness Outpost | Etched Blades: +1 attack | Improved Leather: +1 armor | 75 food, 75 ore each | 90 s |
+
+Iron Blades and Iron Plating cover the Gondor Swordsman, Rohan Rider, Dwarf
+Axethrower and Dwarf Shieldbreaker (the four units the captured tooltip names,
+skirmish-017/018); Etched Blades and Improved Leather the Ranger (and the Elven
+Archer, not yet in the skirmish roster). Names follow the shipped English manual's
+hotkey table (PDF page 21), which also gives the grid positions: the source
+`SpecificIndexForPurchasing` (Q = blades chain, W = armor chain). The capture's
+"Iron Weapons"/"Iron Armor" translate the Russian interface.
+
+- **Bonus values (adapter, verify in game):** each affected unit has a source
+  `TechniqueUnitModifiers` row with `DamageAddifier` 1 or `ArmorAddifier` 1, added
+  here to its weapon DPS and armor, so a Swordsman shows Attack 11 and an
+  upgraded Rider Armor 2. The technique row itself also carries
+  `DamageModifier` 1.2 (x1.2 would make Attack 12); how the two combine is not
+  recovered. A capture of a Swordsman's panel after Iron Blades settles it.
+- Research is paid on request, takes the source `BuildTime`, one technique at a
+  time per building (not while it upgrades), and applies to the team's living
+  units and every unit trained later (`SimUnit.TechniqueDpsMilli`/`TechniqueArmorMilli`,
+  `SimWorld.Researched`). Cancelling refunds the full cost (no source refund field).
+- The research heads the building's queue with its purchase icon and the purple
+  bar, like the Citadel upgrade; its portrait (or Backspace) cancels it.
+- Next steps of each chain (Steel, Mithril; Mystic, Runic; Hard and Studded
+  Leather) need Citadel 3 or 5 and stay unavailable. Not yet simulated: Shield
+  Break and Camouflage (abilities), Dwarven Engineering and Lookout Tower
+  (buildings), Eagle Eye and Eagle Fletching (sight and range), Razored Edge and
+  Flaming Axe (weapon changes). Bots do not research.
+
+Refresh an existing cache with `python tools/skirmish_research.py --cache <cache>`
+(it also exports the purchase icons).
+
+Validation: `-ResearchSmoke` (6 cases; credited bank, instant build until the base
+and a Swordsman stand, then real time): the Outpost offers Etched Blades and
+Improved Leather, the Forge Iron Blades (Q) and Iron Plating (W) with source
+costs; Q starts Iron Blades and pays, the queue shows it and W waits; cancel
+refunds; a second Q completes after exactly 1800 ticks, and the Swordsman trained
+before it shows Attack 11. `SimulationTests` 827 checks (13 new in
+`ResearchChecks`, including a duel where the researched bonus raises melee
+damage). Python tests check the exported techniques.

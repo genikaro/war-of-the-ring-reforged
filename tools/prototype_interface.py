@@ -35,6 +35,7 @@ def export(output, resolver=None):
     paths += [source / 'Console/UnitPortraits/Evil/Portrait_E_Uruk_Hai.uva']
     paths += list((source / 'Console/UnitPortraits/Good').glob('*.uva'))
     paths += list((source / 'Console/BuildingPortraits/Good').glob('*.uva'))
+    paths += list((source / 'Console/Unit Abilities/Border').glob('Purchase_*.uva'))
     paths += list((source / 'Console/ObjectPortraits').glob('*.uva'))
     paths += [source / ('Console/Minimap/console_minimap_' + name + '.uva') for name in ['ore', 'well', 'place_of_power']]
     paths += [p for p in (source / 'Cursors/Good').glob('*.uva')

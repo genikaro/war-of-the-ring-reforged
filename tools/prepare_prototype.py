@@ -20,6 +20,7 @@ import skirmish_economy
 import skirmish_ai
 import skirmish_construction
 import skirmish_production
+import skirmish_research
 import prototype_navigation
 import prototype_obstacles
 import prototype_interface
@@ -386,6 +387,7 @@ def prepare_skirmish(output, install=None, map_name=None):
                              'economy': skirmish_economy.economy_data(resolver),
                              'construction': construction,
                              'production': production,
+                             'research': skirmish_research.research_data(resolver),
                              'ai': skirmish_ai.export(resolver, skirmish_construction.CONSTRUCTION_ORDER, list(production['units'])),
                              'bases': [{'team': b['team'], 'start_point': b['start_point'], 'position': b['position'],
                                         'building': skirmish_map.CITADEL, 'footprint_object': b['footprint']['object_id'],

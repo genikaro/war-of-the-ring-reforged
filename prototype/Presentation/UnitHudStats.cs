@@ -14,7 +14,7 @@ public sealed record UnitHudStats(string Type,string Icon,string Matchups,string
             $"{rules.TypeScale(type,target)/10_000m:0.##}% vs {TypeName(target)}"));
         return new(TypeName(type),icon == "" ? "" : "counter_marker_G_"+icon,matchups,
             (unit.MeleeDamageRate/1000m).ToString("0.###",CultureInfo.InvariantCulture),
-            (unit.Definition.ArmorMilli/1000m).ToString("0.###",CultureInfo.InvariantCulture),
+            (unit.ArmorMilli/1000m).ToString("0.###",CultureInfo.InvariantCulture),
             unit.KillCount.ToString(CultureInfo.InvariantCulture),$"{unit.Health}/{unit.MaxHealth}");
     }
 }

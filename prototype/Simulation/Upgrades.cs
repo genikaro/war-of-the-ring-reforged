@@ -32,6 +32,7 @@ public sealed partial class SimWorld
             || !Economies.TryGetValue(team,out var bank)) return false;
         if (!site.Complete || site.Health <= 0) { reason = "Finish construction first"; return false; }
         if (site.Upgrading) { reason = "Upgrade in progress"; return false; }
+        if (site.Research != null) { reason = "Research in progress"; return false; }
         if (MissingPrerequisite(team,rules.Prerequisites) is { } missing) { reason = RequirementReason(missing); return false; }
         if (bank.FoodMilli < rules.FoodCost*1000L || bank.OreMilli < rules.OreCost*1000L) { reason = "Insufficient resources"; return false; }
         reason = "Ready to upgrade"; return true;
