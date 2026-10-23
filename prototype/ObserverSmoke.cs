@@ -34,12 +34,14 @@ public partial class Main
         {
             case 0:
                 _observerChecks["every_side_runs_its_bot"] = world.Contenders.Count >= 2 && world.AiPlayers.Keys.SequenceEqual(world.Contenders)
-                    && world.AiPlayers.Values.All(a => _bots.ElementAtOrDefault(a.Team) is not { Length: > 0 } bot || string.Equals(a.Personality.Id,bot,StringComparison.OrdinalIgnoreCase));
+                    && world.AiPlayers.Values.All(a => _bots.ElementAtOrDefault(a.Team) is not { Length: > 0 } bot
+                        || AiRoster.Parse(bot) is var choice && string.Equals(a.Personality.Id,choice.Id,StringComparison.OrdinalIgnoreCase) && a.Traits.SequenceEqual(choice.Traits));
                 _observerChecks["nobody_plays"] = PlayerTeam == ObserverTeam && _commands.PlayerTeam == ObserverTeam && FriendlyHeroes().Count == 0;
                 // Build-49: each name's tooltip gives the bot's difficulty and style.
                 _observerChecks["observer_panel_lists_every_player"] = _observerHud.Visible && _observerHud.BodyVisible && _observerHud.RowCount == world.Contenders.Count
                     && world.AiPlayers.Values.Select((a,i) => _observerHud.RowName(i) == a.Personality.Id
-                        && _observerHud.NameCell(i).TooltipText.Contains(AiRoster.Summary(a.Personality.Difficulty,a.Profile.Style))).All(v => v);
+                        && _observerHud.NameCell(i).TooltipText.Contains(AiRoster.Summary(a.Personality.Difficulty,a.Profile.Style))
+                        && (a.Traits.Length == 0 || _observerHud.NameCell(i).TooltipText.Contains("Traits: "+AiRoster.TraitList(a.Traits)))).All(v => v);
                 // The action grid shows the match: the map without the mode suffix, the clock, no groups or pace button.
                 int seconds = world.Tick/SimWorld.TicksPerSecond;
                 _observerChecks["match_panel_replaces_the_commands"] = _commands.MatchVisible && _mapName != "" && _commands.DisplayedMap == _mapName

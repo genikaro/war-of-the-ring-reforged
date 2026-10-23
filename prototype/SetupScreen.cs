@@ -4,14 +4,14 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 
 /// <summary>The match chosen on the setup screen: the map's cache, the human's slot (-1 to watch), each slot's bot
-/// personality ("" for the human and closed slots), the closed slots, and the start speed.</summary>
+/// personality with its traits ("Gimli+Defender"; "" for the human and closed slots), the closed slots, and the start speed.</summary>
 public sealed record SkirmishSetup(string Cache,string Map,int Human,string[] Bots,int[] Closed,int Speed);
 
 /// <summary>The skirmish setup screen, a lobby in the manner of Warcraft III and StarCraft II: every multiplayer map
 /// with its player count and a preview of its start positions, one row per start position (you, a bot personality or
-/// closed; with nobody playing, you watch), a card describing the bot last chosen or clicked (its difficulty, its
-/// style in the Aggression / Expansion / Tech triangle and how it plays; build-49), the start speed, and Start. Maps
-/// not imported yet are listed with the command that imports them.</summary>
+/// closed; with nobody playing, you watch) with the bot's traits (build-51), a card describing the bot last chosen or
+/// clicked (its difficulty, its style in the Aggression / Expansion / Tech triangle, its traits and how it plays;
+/// build-49), the start speed, and Start. Maps not imported yet are listed with the command that imports them.</summary>
 public partial class SetupScreen : Control
 {
     public sealed record Personality(string Id,int Difficulty);
@@ -38,11 +38,13 @@ public partial class SetupScreen : Control
     private Control _frame = null!;
     private ScrollContainer _scroll = null!;
     private Label _mapTitle = null!,_mapDetail = null!,_status = null!;
-    private readonly (Control Row,ColorRect Swatch,Label Name,OptionButton Choice)[] _slots = new (Control,ColorRect,Label,OptionButton)[Slots];
+    private readonly (Control Row,ColorRect Swatch,Label Name,OptionButton Choice,MenuButton Traits)[] _slots = new (Control,ColorRect,Label,OptionButton,MenuButton)[Slots];
+    /// <summary>Each slot's bot traits, kept while the slot stays a bot.</summary>
+    private readonly SortedSet<AiTrait>[] _traits = [.. Enumerable.Range(0,Slots).Select(_ => new SortedSet<AiTrait>())];
     private MapPreview _preview = null!;
     private Control _card = null!;
     private StyleTriangle _triangle = null!;
-    private Label _cardTitle = null!,_cardDetail = null!,_cardDescription = null!;
+    private Label _cardTitle = null!,_cardDetail = null!,_cardTraits = null!,_cardDescription = null!;
     /// <summary>The slot the bot card describes: the last one changed or clicked (-1: the first bot slot).</summary>
     private int _cardSlot = -1;
     private SpeedSlider _speed = null!;
@@ -87,11 +89,22 @@ public partial class SetupScreen : Control
             int index = slot;
             var row = new HBoxContainer(); row.AddThemeConstantOverride("separation",10); info.AddChild(row);
             var swatch = new ColorRect { CustomMinimumSize = new(14,14),SizeFlagsVertical = SizeFlags.ShrinkCenter }; row.AddChild(swatch);
-            var name = Caption($"Player {slot+1}",15,Ink); name.CustomMinimumSize = new(80,0); row.AddChild(name);
-            var choice = new OptionButton { CustomMinimumSize = new(250,30),FocusMode = FocusModeEnum.None };
-            StyleChoice(choice); choice.ItemSelected += item => ChooseSlot(index,(int)item); row.AddChild(choice);
+            var name = Caption($"Player {slot+1}",15,Ink); name.CustomMinimumSize = new(66,0); row.AddChild(name);
+            var choice = new OptionButton { CustomMinimumSize = new(214,30),FocusMode = FocusModeEnum.None };
+            StyleDropDown(choice,choice.GetPopup()); choice.ItemSelected += item => ChooseSlot(index,(int)item); row.AddChild(choice);
             choice.Pressed += () => { _cardSlot = index; Refresh(); };
-            _slots[slot] = (row,swatch,name,choice);
+            // Traits (build-51): check items that stay open, so several can be ticked in one go.
+            var traits = new MenuButton { Text = "Traits",CustomMinimumSize = new(80,30),FocusMode = FocusModeEnum.None,Flat = false };
+            var menu = traits.GetPopup(); menu.HideOnCheckableItemSelection = false;
+            foreach (var trait in AiRoster.Traits)
+            {
+                menu.AddCheckItem(trait.Name,(int)trait.Trait);
+                menu.SetItemTooltip(menu.ItemCount-1,trait.Description+(trait.Excludes.Length > 0 ? $"\nNot with {AiRoster.TraitList(trait.Excludes)}." : ""));
+            }
+            StyleDropDown(traits,menu); menu.IdPressed += id => ToggleTrait(index,(AiTrait)id);
+            traits.Pressed += () => { _cardSlot = index; Refresh(); };
+            row.AddChild(traits);
+            _slots[slot] = (row,swatch,name,choice,traits);
         }
         var card = new PanelContainer(); _card = card;
         var cardBox = Box(new Color(0,0,0,.3f),Edge); cardBox.ContentMarginTop = cardBox.ContentMarginBottom = 6;
@@ -104,6 +117,7 @@ public partial class SetupScreen : Control
         cardText.AddThemeConstantOverride("separation",2); cardRow.AddChild(cardText);
         _cardTitle = Caption("",17,Gold); cardText.AddChild(_cardTitle);
         _cardDetail = Caption("",13,Ink); cardText.AddChild(_cardDetail);
+        _cardTraits = Caption("",13,Gold); cardText.AddChild(_cardTraits);
         _cardDescription = Caption("",14,Dim); _cardDescription.AutowrapMode = TextServer.AutowrapMode.WordSmart; cardText.AddChild(_cardDescription);
         var speedRow = new HBoxContainer(); speedRow.AddThemeConstantOverride("separation",14); right.AddChild(speedRow);
         var speedLabel = Caption("Start speed",15,Ink); speedLabel.SizeFlagsVertical = SizeFlags.ShrinkCenter; speedRow.AddChild(speedLabel);
@@ -155,7 +169,8 @@ public partial class SetupScreen : Control
         _mapDetail.Text = map.Imported ? $"{map.Players} start positions · {map.WidthMm/1000} × {map.HeightMm/1000} m" : $"{map.Players} start positions · not imported";
         for (int slot = 0; slot < Slots; slot++)
         {
-            var (row,swatch,name,choice) = _slots[slot];
+            var (row,swatch,name,choice,_) = _slots[slot];
+            _traits[slot].Clear();
             row.Visible = map.Imported && slot < map.Players;
             if (!row.Visible) continue;
             swatch.Color = slot < map.Colors.Length ? map.Colors[slot] : Dim;
@@ -169,8 +184,12 @@ public partial class SetupScreen : Control
             }
             int pick = slot == 0 ? You : DefaultBot(map);
             if (previous != null && previous.Cache == map.Cache)
+            {
+                var last = previous.Bots.ElementAtOrDefault(slot) is { Length: > 0 } text ? AiRoster.Parse(text) : null;
                 pick = previous.Human == slot ? You : previous.Closed.Contains(slot) ? Closed
-                    : Array.FindIndex(map.Personalities,p => p.Id == previous.Bots.ElementAtOrDefault(slot)) is int bot and >= 0 ? FirstBot+bot : DefaultBot(map);
+                    : Array.FindIndex(map.Personalities,p => p.Id == last?.Id) is int bot and >= 0 ? FirstBot+bot : DefaultBot(map);
+                if (pick >= FirstBot && last != null) _traits[slot].UnionWith(last.Traits);
+            }
             choice.Select(pick);
         }
         if (map.Imported && map.Cache != null && !_terrain.ContainsKey(map.Cache)) _terrain[map.Cache] = Terrain(map.Cache);
@@ -193,8 +212,34 @@ public partial class SetupScreen : Control
         if (item == You)
             for (int other = 0; other < _selected.Players; other++)
                 if (other != slot && _slots[other].Choice.Selected == You) _slots[other].Choice.Select(DefaultBot(_selected));
+        if (item < FirstBot) _traits[slot].Clear();
         _cardSlot = slot;
         Refresh();
+    }
+
+    /// <summary>Ticks or clears a trait; ticking one drops the traits it cannot be combined with.</summary>
+    private void ToggleTrait(int slot,AiTrait trait)
+    {
+        if (Choice(slot) < FirstBot) return;
+        var chosen = _traits[slot];
+        if (!chosen.Remove(trait))
+        {
+            chosen.RemoveWhere(other => AiRoster.Trait(trait).Excludes.Contains(other) || AiRoster.Trait(other).Excludes.Contains(trait));
+            chosen.Add(trait);
+        }
+        _cardSlot = slot;
+        Refresh();
+    }
+
+    /// <summary>A slot's trait button: its ticks, its caption (Traits, the one trait, or a count) and whether a bot holds the slot.</summary>
+    private void RefreshTraits(int slot)
+    {
+        var (_,_,_,_,button) = _slots[slot];
+        var chosen = _traits[slot]; var menu = button.GetPopup();
+        for (int item = 0; item < menu.ItemCount; item++) menu.SetItemChecked(item,chosen.Contains((AiTrait)menu.GetItemId(item)));
+        button.Disabled = Choice(slot) < FirstBot;
+        button.Text = chosen.Count == 0 ? "Traits" : chosen.Count == 1 ? chosen.Min.ToString() : $"{chosen.Count} traits";
+        button.TooltipText = button.Disabled ? "Traits are for bots" : chosen.Count == 0 ? "Pick traits for this bot" : "Traits: "+AiRoster.TraitList(chosen);
     }
 
     /// <summary>The bot card shows the focused slot's bot, else the first bot slot's.</summary>
@@ -206,12 +251,14 @@ public partial class SetupScreen : Control
             : Enumerable.Range(0,players).FirstOrDefault(s => Choice(s) >= FirstBot,-1);
         if (slot < 0)
         {
-            _cardTitle.Text = "No bots"; _cardDetail.Text = ""; _cardDescription.Text = "Choose a bot for a start position to see how it plays.";
+            _cardTitle.Text = "No bots"; _cardDetail.Text = _cardTraits.Text = ""; _cardTraits.Visible = false;
+            _cardDescription.Text = "Choose a bot for a start position to see how it plays.";
             _triangle.Display(null,Dim); return;
         }
         var bot = map.Personalities[Choice(slot)-FirstBot]; var entry = AiRoster.Entry(bot.Id); var style = entry.Style;
         _cardTitle.Text = $"{entry.Name} · {AiRoster.Difficulty(bot.Difficulty)} · {style.Label}";
         _cardDetail.Text = $"Player {slot+1} · Aggression {style.Aggression} · Expansion {style.Expansion} · Tech {style.Tech}";
+        _cardTraits.Text = _traits[slot].Count == 0 ? "" : "Traits: "+AiRoster.TraitList(_traits[slot]); _cardTraits.Visible = _traits[slot].Count > 0;
         _cardDescription.Text = entry.Description;
         _triangle.Display(style,slot < map.Colors.Length ? map.Colors[slot] : Ink);
     }
@@ -225,6 +272,7 @@ public partial class SetupScreen : Control
         int open = Enumerable.Range(0,players).Count(s => Choice(s) != Closed);
         int human = Enumerable.Range(0,players).FirstOrDefault(s => Choice(s) == You,-1);
         _preview.Display(map,map?.Cache is { } cache ? _terrain.GetValueOrDefault(cache) : null,Enumerable.Range(0,players).Select(Choice).ToArray());
+        for (int slot = 0; slot < players; slot++) RefreshTraits(slot);
         RefreshCard(map,players);
         _start.Disabled = _loading || map is not { Imported: true } || open < 2;
         _status.Text = map == null ? "No multiplayer maps found." : !map.Imported ? $"Not imported yet. Run: python tools/prepare_prototype.py --skirmish --map {map.Stem}"
@@ -237,7 +285,7 @@ public partial class SetupScreen : Control
     {
         if (_start.Disabled || _selected is not { Cache: { } cache } map) return;
         var choices = Enumerable.Range(0,map.Players).Select(Choice).ToArray();
-        var bots = choices.Select(c => c >= FirstBot ? map.Personalities[c-FirstBot].Id : "").ToArray();
+        var bots = choices.Select((c,slot) => c >= FirstBot ? new AiBotChoice(map.Personalities[c-FirstBot].Id,[.. _traits[slot]]).ToString() : "").ToArray();
         Started?.Invoke(new(cache,map.Title,Array.IndexOf(choices,You),bots,
             Enumerable.Range(0,map.Players).Where(s => choices[s] == Closed).ToArray(),Speeds[_speed.Index]));
     }
@@ -336,14 +384,15 @@ public partial class SetupScreen : Control
         foreach (string state in new[] {"font_hover_color","font_pressed_color","font_hover_pressed_color"}) button.AddThemeColorOverride(state,enabled ? Gold : Dim);
     }
 
-    private static void StyleChoice(OptionButton choice)
+    private static void StyleDropDown(Button choice,PopupMenu popup)
     {
         choice.AddThemeStyleboxOverride("normal",Box(new Color(0,0,0,.35f),Edge));
         choice.AddThemeStyleboxOverride("hover",Box(new Color(1,.9f,.5f,.1f),Gold));
         choice.AddThemeStyleboxOverride("pressed",Box(new Color(1,.8f,.2f,.2f),Gold));
+        choice.AddThemeStyleboxOverride("disabled",Box(new Color(0,0,0,.2f),new Color(Edge,.5f)));
         choice.AddThemeFontSizeOverride("font_size",14);
         choice.AddThemeColorOverride("font_color",Ink); choice.AddThemeColorOverride("font_hover_color",Gold);
-        var popup = choice.GetPopup();
+        choice.AddThemeColorOverride("font_disabled_color",Edge);
         popup.AddThemeStyleboxOverride("panel",Box(new Color(.06f,.05f,.03f,.98f),Gold));
         popup.AddThemeStyleboxOverride("hover",Box(new Color(1,.8f,.2f,.22f),new Color(0,0,0,0),0));
         popup.AddThemeColorOverride("font_color",Ink); popup.AddThemeColorOverride("font_hover_color",Gold);
@@ -374,7 +423,9 @@ public partial class SetupScreen : Control
     public Button StartButton => _start;
     public string StatusText => _status.Text;
     public bool PreviewDrawn => _preview.Drawn;
-    public string CardText => _card.Visible ? $"{_cardTitle.Text}\n{_cardDetail.Text}\n{_cardDescription.Text}" : "";
+    public string CardText => _card.Visible ? $"{_cardTitle.Text}\n{_cardDetail.Text}\n{(_cardTraits.Visible ? _cardTraits.Text+"\n" : "")}{_cardDescription.Text}" : "";
+    public MenuButton TraitButton(int slot) => _slots[slot].Traits;
+    public IReadOnlyCollection<AiTrait> SlotTraits(int slot) => _traits[slot];
     public AiStyle? CardStyle => _triangle.Style;
     public string BotTooltip(int slot,int item) => _slots[slot].Choice.GetItemTooltip(item);
 }

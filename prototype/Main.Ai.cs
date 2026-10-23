@@ -3,8 +3,9 @@ using System.Text.Json;
 
 /// <summary>The skirmish bots: source rules and personalities from the cache, a bot on every start base but the
 /// player's (every base while observing). --bots=Gimli,Aragorn,... names each side's personality by player slot,
-/// --ai-personality=&lt;file stem&gt; sets the rest (default the medium adapter). --no-ai keeps the enemies passive,
-/// as do the smokes written for a passive enemy.</summary>
+/// --ai-personality=&lt;file stem&gt; sets the rest (default the medium adapter); either may add traits,
+/// --bots=Gimli+Defender,Aragorn+Rusher+Marksman (build-51). --no-ai keeps the enemies passive, as do the smokes
+/// written for a passive enemy.</summary>
 public partial class Main
 {
     private bool _noAi;
@@ -48,11 +49,14 @@ public partial class Main
         foreach (int team in world.Contenders.Where(t => t != PlayerTeam))
         {
             string wanted = _bots.ElementAtOrDefault(team) is { Length: > 0 } bot ? bot : _aiPersonality == "" ? fallback : _aiPersonality;
-            world.AiPlayers.Add(team,new(team,Personality(wanted)));
+            var choice = AiRoster.Parse(wanted);
+            world.AiPlayers.Add(team,new(team,Personality(choice.Id),traits: choice.Traits));
         }
     }
 
     private string AiSummary() => _world?.AiPlayers.Values.ToArray() is not { Length: > 0 } bots ? "Enemy AI off"
-        : bots.Length == 1 ? $"Enemy AI · {AiRoster.Entry(bots[0].Personality.Id).Name} · {AiRoster.Summary(bots[0].Personality.Difficulty,bots[0].Profile.Style)} · {bots[0].Status}"
-        : string.Join('\n',bots.Select(ai => $"Player {ai.Team+1} AI · {AiRoster.Entry(ai.Personality.Id).Name} · {ai.Status}"));
+        : bots.Length == 1 ? $"Enemy AI · {AiRoster.Entry(bots[0].Personality.Id).Name}{TraitSuffix(bots[0])} · {AiRoster.Summary(bots[0].Personality.Difficulty,bots[0].Profile.Style)} · {bots[0].Status}"
+        : string.Join('\n',bots.Select(ai => $"Player {ai.Team+1} AI · {AiRoster.Entry(ai.Personality.Id).Name}{TraitSuffix(ai)} · {ai.Status}"));
+
+    private static string TraitSuffix(AiPlayer ai) => ai.Traits.Length == 0 ? "" : $" ({AiRoster.TraitList(ai.Traits)})";
 }

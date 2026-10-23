@@ -273,7 +273,9 @@ multiplayer map with its player count and a preview of its start positions, and 
 row per start position set to You, a bot personality (with its difficulty) or
 Closed. With no slot set to You, you watch. Each bot item's tooltip, and a card below
 the slots for the bot last chosen or clicked, give its difficulty, its style in the
-Aggression / Expansion / Tech triangle and how it plays (build-49). It also sets the start speed. Restart on
+Aggression / Expansion / Tech triangle and how it plays (build-49). Each bot slot also
+has a Traits menu (build-51): Rusher, Expansionist, Defender, Relentless, Marksman or
+Demolisher, combined freely except Rusher with Defender or Expansionist. It also sets the start speed. Restart on
 the result panel replays the same setup; its Setup button, or the debug menu's
 Skirmish setup button, goes back to the screen. Any flag that chooses the match
 (`-Map`, `-Observe`, `-Bots`, `-Speed`, `-NoAi`, `-AiPersonality`, the smokes) skips the screen.
@@ -304,7 +306,10 @@ command, shows the map, the game clock and the speed controls.
 
 ```powershell
 ./prototype/run.ps1 -Observe -Bots Gimli,Aragorn -Speed 4
+./prototype/run.ps1 -Observe -Bots Gimli+Defender,Aragorn+Rusher+Marksman -Speed 8
 ```
+
+A bot slot takes traits after a `+` (build-51), on `-Bots` and `-AiPersonality` alike.
 
 Any of the 32 multiplayer maps imports into its own cache (build-35), with a Good
 Citadel and four workers on every start point and one colour per player slot. A

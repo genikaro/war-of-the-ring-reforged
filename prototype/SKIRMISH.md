@@ -2411,3 +2411,73 @@ from its centre; a party under a tower's arrows razes the tower first; Hard retr
 below half health; a party picks a barracks over a nearer keep; stragglers join the
 party out, or walk home with none out). All 16 Bilbo smokes and the setup smoke
 pass; the observer reference is now Aragorn wins at tick 16656 (digest E6844779...).
+
+## Build-51: bot traits
+
+The third layer of the owner's bot model (build-49): traits the player picks for each
+bot slot, applied after the bot's style. All of it is adapter data in
+`Simulation/AiRoster.cs` (`AiTrait`, `AiRoster.Traits`, `AiProfile.For`); no cache
+needs refreshing.
+
+| Trait | Effect |
+|---|---|
+| Rusher | Parties of the war party's smallest size (5) with no assault gate; trains the cheapest soldier and never saves for a better one; more Barracks once every producer is busy; no research and no expansion before 15:00; 2 fewer workers; no tower first |
+| Expansionist | First expansion at 4:00, then every 3:00, up to 5 Citadels; 4 more workers |
+| Defender | A tower first and two by every Citadel (counted within 42 m, placed by the Citadel with fewest); expansion guards of a full party; no assault before 20:00 unless 3 towers stand and the army holds 12 soldiers |
+| Relentless | Parties never fall back and the wounded never retreat; half a party idle at home reinforces the party out |
+| Marksman | An army of 60% ranged units instead of 20% |
+| Demolisher | Parties ignore the soldiers and towers hitting them (`ThreatsFirst` off) and raze military, then research, then economy buildings, towers last |
+
+Rusher excludes Defender and Expansionist (it waits until 15:00 to expand).
+Demolisher is the owner's "a party may raze buildings under fire, but only as a
+strategy" from build-50. Raider, Scout and hero use need new behaviour and come
+later.
+
+**Picking traits.**
+- Command line: a bot slot reads `Id+Trait+Trait`, for example
+  `-Bots Gimli+Defender,Aragorn+Rusher+Marksman` or `-AiPersonality Gimli+Marksman`.
+  `AiRoster.Parse` is the only parser; an unknown trait or an excluded pair stops the
+  launch with a message naming the known traits.
+- Lobby: every slot row has a Traits menu (greyed out unless a bot holds the slot)
+  whose check items stay open, so several can be ticked; each has a tooltip with its
+  effect and what it excludes, and ticking one drops the traits it excludes. The
+  button shows Traits, the one trait, or a count. The bot card lists the traits;
+  the choice is written as `Gimli+Defender` into the setup, so Restart and the
+  return to setup keep it. The dropdown narrowed to 214 px to fit.
+- The observer overview's name tooltip and the debug menu's AI line list the traits.
+
+**Freeze found on the way.** In a Gimli+Defender against Aragorn match, one of
+Aragorn's party members kept an explicit attack on Gimli's last worker, out of its
+reach, and stood there for 18 minutes; since build-41 any member on an attack held
+a regrouping march, so a party of 17 froze with it and the match never ended. Now a
+member on an attack while the party has no threat to answer is called back to the
+waypoint (or sent at the target on the final approach), and only a fight on the
+spot (a member swinging, or one whose target is within 12 m) holds the march.
+Aragorn now wins that match at 21:45.
+
+**Trait matches** on Bilbo's Bluffs (observer, 16x): Default in slot 1, which wins the
+plain mirror, against Default with one trait in slot 2. Single matches swing on small
+things, so read them as "the trait changes the game", not as balance:
+
+| Slot 2 | Winner, time | What showed |
+|---|---|---|
+| Default | slot 1, 22:53 | the mirror |
+| Default+Rusher | **Rusher**, 23:19 | 92 soldiers fielded, 73 of them Swordsmen; parties of five, six sent |
+| Default+Expansionist | slot 1, 24:11 | the Expansionist loses every worker spread over its bases |
+| Default+Defender | **Defender**, 25:26 | one party sent, behind its towers, while slot 1 spends its army against them |
+| Default+Relentless | slot 1, 23:14 | its parties fight to the end |
+| Default+Marksman | slot 1, 24:59 | 32 Axethrowers and 6 Rangers against 22 Swordsmen |
+| Default+Demolisher | **Demolisher**, 22:16 | slot 1 loses its production first |
+
+Also: Gimli+Defender against Aragorn, Aragorn wins at 21:45 (the freeze above).
+
+Validation: `SimulationTests` 863 checks (9 new: `Id+Trait` parsing and order; an
+unknown trait, an excluded pair and a missing personality refused; each trait's
+profile values and none without traits; a Rusher sends five at once and trains the
+cheaper soldier; a Defender keeps two towers by its keep; a Relentless party of two
+does not fall back; a Demolisher party keeps razing while hit; a regrouping party
+calls back a member chasing a non-threat). `-SetupSmoke` 14 cases (2 new: traits
+ticked in the lobby, Rusher dropping Defender, reach the bot and come back with the
+setup); `-ObserverSmoke -Bots Gimli+Defender,Aragorn` passes, its tooltip check
+covering the traits. All 16 Bilbo smokes pass; the regroup fix moves the observer
+reference (Gimli against Aragorn) to Aragorn winning at tick 20180, 16:49 (digest 6E2A8FEB...).

@@ -13,9 +13,9 @@ public static class AiChecks
         var soldier = UnitDefinition.Probe with { Name = "soldier" };
         // A test bot of an Aggression (Expansion and Tech share the rest) or an explicit style. Its assault gate is off
         // unless asked for, so a party leaves as soon as the army is ready.
-        AiPlayer Bot(int team,int aggression,int difficulty = 1,AiStyle? style = null,bool gate = false)
+        AiPlayer Bot(int team,int aggression,int difficulty = 1,AiStyle? style = null,bool gate = false,AiTrait[]? traits = null)
         {
-            var bot = new AiPlayer(team,new("test","Test",difficulty,50,50,50,50,true,true),style ?? new(aggression,(100-aggression)/2,100-aggression-(100-aggression)/2));
+            var bot = new AiPlayer(team,new("test","Test",difficulty,50,50,50,50,true,true),style ?? new(aggression,(100-aggression)/2,100-aggression-(100-aggression)/2),traits);
             if (!gate) bot.Profile = bot.Profile with { AssaultFromTicks = 0 };
             return bot;
         }
@@ -579,5 +579,83 @@ public static class AiChecks
         Step(walled,25);
         check(walled.Navigation.ComponentSize(walled.Units[stuck[0]].Node) < SimWorld.OpenRegionCells && walled.AiPlayers[1].Party.Order().SequenceEqual(fit)
             && walled.AiPlayers[1].PartiesSent == 1,"soldiers walled into a pocket stay out of the assault party");
+
+        // Build-51: traits. A bot slot reads "Id+Trait+Trait"; unknown traits and excluded pairs are refused.
+        var parsed = AiRoster.Parse("gimli+marksman+Defender");
+        check(parsed.Id == "gimli" && parsed.Traits.SequenceEqual([AiTrait.Defender,AiTrait.Marksman])
+            && AiRoster.Parse("Gimli+Defender+Marksman").ToString() == "Gimli+Defender+Marksman" && AiRoster.Parse("Aragorn").Traits.Length == 0,
+            "a bot slot reads as a personality and its traits, in their order: "+parsed);
+        string[] refused = [.. new[] {"Gimli+Berserker","Gimli+Rusher+Defender","Gimli+Expansionist+Rusher","+Rusher"}.Where(text =>
+        {
+            try { AiRoster.Parse(text); return false; } catch (ArgumentException) { return true; }
+        })];
+        check(refused.Length == 4,"an unknown trait, an excluded pair and a missing personality are refused: "+string.Join(", ",refused));
+        AiProfile With(params AiTrait[] traits) => AiProfile.For(tests,AiStyle.Balanced,traits);
+        var plain = With();
+        check(With(AiTrait.Rusher) is { SmallestParties: true,AssaultFromTicks: 0,CheapSoldiers: true,ResearchFromTicks: 18000,FreeMilitary: true,TowerFirst: false,
+                ExpansionTicks: 18000 } rusher && rusher.Workers == plain.Workers-2
+            && With(AiTrait.Expansionist) is { ExpansionTicks: 4800,ExpansionIntervalTicks: 3600,MaxCitadels: 5 } expansionist && expansionist.Workers == plain.Workers+4
+            && With(AiTrait.Defender) is { TowerFirst: true,TowersPerCitadel: 2,FullGuards: true,AssaultFromTicks: 24000,EarlyAssaultTowers: 3,EarlyAssaultArmy: 12 }
+            && With(AiTrait.Relentless) is { Skill.FallBackPercent: 0,Skill.PullsWounded: false,ReinforcePercent: 50 }
+            && With(AiTrait.Marksman).MeleeSharePpm == 400_000
+            && With(AiTrait.Demolisher) is { ThreatsFirst: false } demolisher && demolisher.TargetOrder[0] == AiTargetClass.Military
+            && plain is { SmallestParties: false,CheapSoldiers: false,ResearchFromTicks: 0,TowersPerCitadel: 0,FullGuards: false,ReinforcePercent: 100,MeleeSharePpm: -1,
+                ThreatsFirst: true },
+            "each trait sets its profile values, and without traits the style plays as before");
+
+        // Rusher: a party of the smallest size leaves with no gate, and the cheaper soldier is trained over the knight.
+        var rush = Fixture(); rush.AiPlayers[1] = Bot(1,50,gate: true,traits: [AiTrait.Rusher]);
+        foreach (int i in Enumerable.Range(0,5)) rush.Spawn(1,Cell(48+(i%4)*2,8+(i/4)*14),soldier);
+        Step(rush,25);
+        check(rush.AiPlayers[1].PartiesSent == 1 && rush.AiPlayers[1].Party.Count == 5,$"a Rusher sends five soldiers at once: {rush.AiPlayers[1].Status}");
+        var cheap = Fixture(); cheap.AiPlayers[1] = Bot(1,50,traits: [AiTrait.Rusher]); cheap.Economies[1] = new(5000,5000);
+        cheap.BuildingRules.Add("keep2",new("keep2","keep2",null,115,105,100,600,750000,750000,100000,50000,["keep"]));
+        cheap.Upgrades.Add("keep","keep2"); cheap.ConstructionSites[Keep1].Building = "keep2"; cheap.StartBuildings[1] = ["keep2"];
+        cheap.Rules.Units.TryAdd("knight",soldier with { Name = "knight",MaxHealth = 235 });
+        cheap.ProductionRules.Add("knight",new("knight","Knight",85,30,3,60,Prerequisites: ["keep2"]));
+        cheap.AiUnits.Add("knight",new(false,70)); cheap.ProducedUnits["barracks"] = ["soldier","knight"];
+        for (int i = 0; i < 6000 && !cheap.Units.Any(u => u.Team == 1 && u.Definition.Name is "soldier" or "knight"); i++) cheap.Step();
+        check(cheap.Units.FirstOrDefault(u => u.Team == 1 && u.Definition.Name is "soldier" or "knight")?.Definition.Name == "soldier",
+            "a Rusher trains the cheaper soldier where the others train the knight: "+cheap.AiPlayers[1].Status);
+
+        // Defender: two towers by its keep, and no third.
+        var walls = Fixture(); walls.AiPlayers[1] = Bot(1,50,traits: [AiTrait.Defender]); walls.Economies[1] = new(5000,5000);
+        walls.PlaceableBuildings.Add("tower");
+        walls.BuildingRules.Add("tower",new("tower","tower",null,0,60,60,300,750000,750000,100000,50000,["keep"]));
+        walls.Placements.Add("tower",new(Square(1500),-400,400,(int)Math.Ceiling(1500*1.4143)+1350,true,false)); walls.PlacementRadiusMm.Add("tower",15000);
+        walls.AiBuildings.Add("tower",new("DEFENSIVE",true,-1,true));
+        Step(walls,9000);
+        int towers = walls.ConstructionSites.Values.Count(s => s.Team == 1 && s.Building == "tower" && s.Health > 0);
+        check(towers == 2,$"a Defender keeps two towers by its keep: {towers} ({walls.AiPlayers[1].Status})");
+
+        // Relentless: a party of two in eight does not fall back.
+        var stubborn = Fixture(); stubborn.AiPlayers[1] = Bot(1,50,traits: [AiTrait.Relentless]);
+        var pair = Enumerable.Range(0,2).Select(i => stubborn.Spawn(1,Cell(30,13+2*i),soldier)).ToArray();
+        foreach (var unit in pair) { unit.Order = OrderKind.HoldGround; stubborn.AiPlayers[1].Party.Add(unit.Id); }
+        stubborn.AiPlayers[1].PartyTarget = Keep0;
+        Step(stubborn,25);
+        check(stubborn.AiPlayers[1].Party.Count == 2 && pair.All(u => u.Order != OrderKind.Move),"a Relentless party of two in eight does not fall back");
+
+        // Demolisher: a party razing a keep ignores an enemy hitting a member.
+        var wrecking = Assault();
+        wrecking.AiPlayers[1].Profile = AiProfile.For(tests,new(50,25,25),[AiTrait.Demolisher]) with { AssaultFromTicks = 0 };
+        var lone = wrecking.Spawn(1,Cell(36,20),soldier); wrecking.AiPlayers[1].Party.Add(lone.Id);
+        var hitter = wrecking.Spawn(0,Cell(37,20),soldier with { Name = "hitter",MaxHealth = 20000 }); hitter.Order = OrderKind.HoldGround;
+        Step(wrecking,30);
+        int turned = wrecking.AiPlayers[1].Party.Count(id => wrecking.Units[id].OrderTarget == hitter.Id || wrecking.Units[id].HeldOrder?.Target == hitter.Id);
+        check(turned == 0 && wrecking.AiPlayers[1].Party.Where(id => id != lone.Id).All(id => SimWorld.SiegeTarget(wrecking.Units[id]) == Keep0),
+            $"a Demolisher party keeps razing while an enemy hits a member: {turned} turned");
+
+        // Build-51 bug: one member chasing an enemy that was no longer a threat (Gimli's last worker, beyond its reach)
+        // held a regrouping party of 17 for 18 minutes; it is called back to the waypoint now.
+        var chaseHold = Fixture();
+        var marchers2 = Enumerable.Range(0,8).Select(i => chaseHold.Spawn(1,Cell(48+(i%4)*2,8+(i/4)*14),soldier).Id).ToArray();
+        Step(chaseHold,25);
+        var holdBot = chaseHold.AiPlayers[1];
+        bool mustering = holdBot.PartiesSent == 1 && holdBot.Leg == 0 && holdBot.Legs.Count > 0;
+        chaseHold.Enqueue(1,[marchers2[0]],OrderKind.Attack,chaseHold.Units[2].Node,2);
+        Step(chaseHold,25);
+        check(mustering && chaseHold.Units[marchers2[0]].Order == OrderKind.AttackMove && chaseHold.Units[marchers2[0]].OrderCell == holdBot.Legs[0],
+            "a regrouping party calls back a member chasing an enemy that is no longer a threat");
     }
 }

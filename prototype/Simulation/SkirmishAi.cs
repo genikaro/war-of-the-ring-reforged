@@ -23,13 +23,15 @@ public sealed class AiGuardPost(int cell)
     public SortedDictionary<int,AiSighting> Seen { get; } = [];
 }
 
-/// <summary>A bot side. The personality gives its id and difficulty; its style is the roster's unless given (build-49).</summary>
-public sealed class AiPlayer(int team,AiPersonality personality,AiStyle? style = null)
+/// <summary>A bot side. The personality gives its id and difficulty; its style is the roster's unless given (build-49),
+/// and the player may add traits (build-51).</summary>
+public sealed class AiPlayer(int team,AiPersonality personality,AiStyle? style = null,IReadOnlyList<AiTrait>? traits = null)
 {
     public int Team { get; } = team;
     public AiPersonality Personality { get; } = personality;
+    public AiTrait[] Traits { get; } = AiRoster.Validate(traits ?? []);
     /// <summary>Every number the decisions read; settable so tests can adjust one.</summary>
-    public AiProfile Profile { get; set; } = AiProfile.For(personality,style ?? AiRoster.Entry(personality.Id).Style);
+    public AiProfile Profile { get; set; } = AiProfile.For(personality,style ?? AiRoster.Entry(personality.Id).Style,traits);
     /// <summary>Thinks so far; every Profile.Skill.StrategicEvery-th one also builds, trains and researches.</summary>
     public int Thinks { get; internal set; }
     /// <summary>What the last strategic think decided for building and for tech, kept for the status between them.</summary>
@@ -124,7 +126,7 @@ public sealed partial class SimWorld
     public AiWarParty AiAssaultParty { get; set; } = new(5,12,800_000);
     public const int AiDefenseRadiusMm = 30000,AiEngageRadiusMm = 12000,AiStallTicks = 30*TicksPerSecond,AiFoodPerMill = 6,
         AiResourceClearanceMm = 10000,AiStagnationTicks = 180*TicksPerSecond,
-        AiGuardSlackMm = 8000,AiClaimWaitMm = 15000,AiAttackersPerEnemy = 4,AiTargetRankMm = 12000,AiPullOutPercent = 25,AiPullOutChance = 33,
+        AiGuardSlackMm = 8000,AiClaimWaitMm = 15000,AiAttackersPerEnemy = 4,AiTargetRankMm = 12000,AiPullOutPercent = 25,AiTowerReachMm = 42000,AiPullOutChance = 33,
         AiStrayMm = 40000,AiStrayTicks = 10*TicksPerSecond,AiMusterMm = 15000,AiLegMm = 25000,AiRegroupMm = 12000,AiLegPatienceTicks = 10*TicksPerSecond;
     /// <summary>AiPlayer.Project while its crew walks to a foundation not laid yet.</summary>
     private const int AiWalkingCrew = -2;
@@ -225,7 +227,7 @@ public sealed partial class SimWorld
     }
 
     /// <summary>Half an assault party, rounded up: from six for the most defensive personality to three for the most aggressive.</summary>
-    public int AiGuardSize(AiPlayer ai) => (AiPartySize(ai)+1)/2;
+    public int AiGuardSize(AiPlayer ai) => ai.Profile.FullGuards ? AiPartySize(ai) : (AiPartySize(ai)+1)/2;
 
     /// <summary>Expansion guards (owner rule, build-40): every expansion Citadel keeps AiGuardSize soldiers on a cell
     /// beside it, recruited from the idle home army (nearest first) while the base is not under threat, before an
@@ -260,6 +262,24 @@ public sealed partial class SimWorld
         }
         return home.Where(u => !ai.Guards.Values.Any(g => g.Units.Contains(u.Id))).ToArray();
     }
+
+    /// <summary>A Defender's Citadel with fewer than Profile.TowersPerCitadel towers within 42 m (placement rings reach 40 m), the one with the fewest
+    /// (then the oldest), or null when every Citadel has its towers.</summary>
+    private ConstructionSite? AiTowerCitadel(AiPlayer ai)
+    {
+        var start = StartStructures.FirstOrDefault(s => s.Team == ai.Team);
+        if (start == null || ai.Profile.TowersPerCitadel <= 0) return null;
+        var towers = ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Health > 0 && AiBuildings.GetValueOrDefault(SiteRules(s).Name)?.Class == "DEFENSIVE")
+            .Select(SitePosition).ToArray();
+        int Near(ConstructionSite keep) => towers.Count(t => DistanceSquared(t.X,t.Z,SitePosition(keep).X,SitePosition(keep).Z) <= (long)AiTowerReachMm*AiTowerReachMm);
+        return ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Complete && s.Health > 0 && s.Building != null && Satisfies(s.Building,start.Building))
+            .Where(s => Near(s) < ai.Profile.TowersPerCitadel).OrderBy(Near).ThenBy(s => s.Id).FirstOrDefault();
+    }
+
+    /// <summary>A Defender attacks before its gate once enough towers stand and its army is big enough.</summary>
+    private bool AiEarlyAssault(AiPlayer ai) => ai.Profile.EarlyAssaultTowers > 0
+        && ConstructionSites.Values.Count(s => s.Team == ai.Team && s.Complete && s.Health > 0 && SiteDefense(s) != null) >= ai.Profile.EarlyAssaultTowers
+        && Units.Count(u => u.Team == ai.Team && u.Health > 0 && IsAiSoldier(u)) >= ai.Profile.EarlyAssaultArmy;
 
     /// <summary>Where an expansion's guard stands: 12-24 m from the Citadel toward the nearest enemy building, alternating
     /// either side of that direction, on ground the first recruit can walk to and 10 m clear of resources, so the guard
@@ -403,7 +423,8 @@ public sealed partial class SimWorld
         +2*ConstructionSites.Values.Count(s => s.Team == ai.Team && s.Complete && s.Building == null && Resources[s.Resource].Kind == ResourceKind.Food);
 
     /// <summary>From MaxSize at Aggression 0 down to MinSize at 100.</summary>
-    public int AiPartySize(AiPlayer ai) => AiAssaultParty.MaxSize-((AiAssaultParty.MaxSize-AiAssaultParty.MinSize)*ai.Profile.Style.Aggression+50)/100;
+    public int AiPartySize(AiPlayer ai) => ai.Profile.SmallestParties ? AiAssaultParty.MinSize
+        : AiAssaultParty.MaxSize-((AiAssaultParty.MaxSize-AiAssaultParty.MinSize)*ai.Profile.Style.Aggression+50)/100;
 
     private int AiCount(int team,string building) => ConstructionSites.Values.Count(s => s.Team == team && s.Health > 0 && Satisfies(SiteRules(s).Name,building));
 
@@ -456,7 +477,8 @@ public sealed partial class SimWorld
         if (bank.FoodMilli < rules.FoodCost*1000L || bank.OreMilli < rules.OreCost*1000L || workers.Length == 0)
             return ("saving for "+rules.DisplayName,rules.FoodCost,rules.OreCost);
         bool citadel = next == StartStructures.FirstOrDefault(s => s.Team == ai.Team)?.Building;
-        var (px,pz) = citadel ? ai.CitadelSite : (bx,bz);
+        var (px,pz) = citadel ? ai.CitadelSite
+            : AiBuildings.GetValueOrDefault(next)?.Class == "DEFENSIVE" && AiTowerCitadel(ai) is { } keep ? SitePosition(keep) : (bx,bz);
         var crewIds = workers.Where(w => w.CargoMilli == 0 && w.Order is OrderKind.Idle or OrderKind.Gather)
             .OrderBy(w => DistanceSquared(w.X,w.Z,px,pz)).ThenBy(w => w.Id).Take(ai.Profile.Skill.Builders).Select(w => w.Id).ToArray();
         if (crewIds.Length == 0) return ("waiting for builders",rules.FoodCost,rules.OreCost);
@@ -502,6 +524,8 @@ public sealed partial class SimWorld
             .Concat(order.Where(n => AiBuildings[n].MustHaveFirstPass));
         foreach (var name in firstCopies.Distinct())
             if (AiCount(team,name) == 0 && Can(name)) return name;
+        // A Defender (build-51) keeps towers by every Citadel; AiConstruction places them by the one with the fewest.
+        if (ai.Profile.TowersPerCitadel > 0 && Pass("DEFENSIVE",true).FirstOrDefault() is { } tower && Can(tower) && AiTowerCitadel(ai) != null) return tower;
         // Expansion (owner rule): a Citadel by unclaimed resources once the time comes, then one more every interval.
         if (citadel != null && citadels < ai.Profile.MaxCitadels && Tick >= AiExpansionTick(ai)+(citadels-1)*ai.Profile.ExpansionIntervalTicks
             && Can(citadel) && AiCitadelSite(ai,citadel,rebuild: false)) return citadel;
@@ -652,7 +676,8 @@ public sealed partial class SimWorld
             {
                 // Toward the Assault shares: the class furthest below its share first, then Assault effectiveness.
                 // A producer of the unwanted class waits while a producer of the wanted class exists.
-                bool wantMelee = total == 0 || melee*1_000_000 < total*(long)AiAssaultParty.MeleeSharePpm;
+                int meleeShare = ai.Profile.MeleeSharePpm >= 0 ? ai.Profile.MeleeSharePpm : AiAssaultParty.MeleeSharePpm;
+                bool wantMelee = total == 0 || melee*1_000_000 < total*(long)meleeShare;
                 var soldiers = Soldiers(producer).ToHashSet();
                 // Build-47: equal Assault effectiveness goes to the dearer, stronger unit (the Rider over the Swordsman).
                 // While the army is short of a party the best affordable one is trained; once it has one, the producer
@@ -660,9 +685,10 @@ public sealed partial class SimWorld
                 var ranked = Enumerable.Range(0,producer.Units.Length)
                     .Where(i => soldiers.Contains(producer.Units[i]) && (Rules.Units[producer.Units[i]].IsRanged != wantMelee || !offered.Contains(!wantMelee)))
                     .OrderBy(i => Rules.Units[producer.Units[i]].IsRanged == wantMelee ? 1 : 0)
-                    .ThenByDescending(i => AiUnits[producer.Units[i]].Assault)
-                    .ThenByDescending(i => ProductionRules[producer.Units[i]].FoodCost+ProductionRules[producer.Units[i]].OreCost).ThenBy(i => i).ToArray();
-                slot = (armyReady ? ranked.Take(1) : ranked).Where(i => Affordable(ProductionRules[producer.Units[i]],false)).DefaultIfEmpty(-1).First();
+                    .ThenByDescending(i => ai.Profile.CheapSoldiers ? 0 : AiUnits[producer.Units[i]].Assault)
+                    .ThenBy(i => (ai.Profile.CheapSoldiers ? 1 : -1)*(ProductionRules[producer.Units[i]].FoodCost+ProductionRules[producer.Units[i]].OreCost)).ThenBy(i => i).ToArray();
+                // A Rusher (build-51) never saves for a better soldier.
+                slot = (armyReady && !ai.Profile.CheapSoldiers ? ranked.Take(1) : ranked).Where(i => Affordable(ProductionRules[producer.Units[i]],false)).DefaultIfEmpty(-1).First();
             }
             if (slot < 0 || !CanTrain(ai.Team,producer.Id,slot,out _)) continue;
             AiOrder(ai,[producer.Id],OrderKind.Train,slot,producer.Id);
@@ -734,8 +760,9 @@ public sealed partial class SimWorld
             var ready = home.Where(u => AiIdle(u) && !AiTrapped(u) && !ai.Recovering.Contains(u.Id)).OrderBy(u => u.Id).Take(AiAssaultParty.MaxSize).ToArray();
             if (ai.Party.Count == 0)
             {
-                // The style's patience (build-49): no assault before (100 - Aggression) x 6 s.
-                if (Tick < ai.Profile.AssaultFromTicks) return;
+                // The style's patience (build-49): no assault before (100 - Aggression) x 6 s; a Defender (build-51) waits
+                // for 20:00 unless its towers and army are ready sooner.
+                if (Tick < ai.Profile.AssaultFromTicks && !AiEarlyAssault(ai)) return;
                 // A spent bot (no soldier trained or sent for 3 minutes, none affordable now) throws in whatever it has left.
                 bool spent = ready.Length > 0 && Tick-ai.LastArmyTick >= AiStagnationTicks && !AiAffordsSoldier(ai);
                 if (ready.Length < AiPartySize(ai) && !spent || enemyBuildings.Length == 0) return;
@@ -744,7 +771,7 @@ public sealed partial class SimWorld
             // Reinforcements (build-40): a full party's worth idle at home while one is out joins it and marches on its
             // target, so a remnant held up for good (two units for 36 minutes on Wasteland) no longer keeps every later
             // assault at home.
-            else if (ready.Length >= AiPartySize(ai)) reinforcements = [.. ready.Select(u => u.Id)];
+            else if (ready.Length*100 >= AiPartySize(ai)*ai.Profile.ReinforcePercent) reinforcements = [.. ready.Select(u => u.Id)];
         }
         if (ai.Party.Count == 0) return;
         var party = ai.Party.Select(id => Units[id]).ToArray();
@@ -772,9 +799,11 @@ public sealed partial class SimWorld
         AiOrder(ai,reinforcements,OrderKind.AttackMove,AiLegCell(ai,target));
         if (ai.Profile.ThreatsFirst && AiAnswerThreats(ai,party,widest,enemyBuildings,target)) return;
         if (ai.Leg < ai.Legs.Count) { AiRegroup(ai,ai.Party.Select(id => Units[id]).ToArray(),target); return; }
+        // Members still on an explicit attack chase an enemy that is no longer a threat (none was found above, or the
+        // party ignores threats): they go for the target too (build-51).
         var arrived = party.Where(u => AiIdle(u) || u.Order == OrderKind.AttackMove && u.Goal < 0 && u.Target < 0
             && DistanceSquared(u.X,u.Z,x,z) <= 25000L*25000
-            || ai.Unreachable.ContainsKey(u.Target) || u.Order == OrderKind.Attack && ai.Unreachable.ContainsKey(u.OrderTarget)).Select(u => u.Id).ToArray();
+            || ai.Unreachable.ContainsKey(u.Target) || u.Order == OrderKind.Attack).Select(u => u.Id).ToArray();
         if (arrived.Length > 0) AiOrder(ai,arrived,OrderKind.AttackStructure,target: target.Id);
     }
 
@@ -906,14 +935,17 @@ public sealed partial class SimWorld
     }
 
     /// <summary>On the way to a waypoint: the party moves on once every member is within 12 m of it, or once the member
-    /// farthest from it has not got closer for 10 s (one boxed in, or that cannot reach it). A fight holds the march
-    /// (a building razed in passing does not), and a member razing the target itself takes the party in. Members that
-    /// stopped short walk on to the waypoint.</summary>
+    /// farthest from it has not got closer for 10 s (one boxed in, or that cannot reach it). A fight on the spot holds
+    /// the march (a building razed in passing does not), members chasing an enemy that is no longer a threat are called
+    /// back (build-51), and a member razing the target itself takes the party in. Members that stopped short walk on to
+    /// the waypoint.</summary>
     private void AiRegroup(AiPlayer ai,SimUnit[] party,ConstructionSite target)
     {
         int cell = ai.Legs[ai.Leg]; var (wx,wz) = Navigation.Center(cell);
         long Gap(SimUnit u) => (long)Math.Sqrt(DistanceSquared(u.X,u.Z,wx,wz));
-        AiOrder(ai,party.Where(u => ai.Unreachable.ContainsKey(u.Target) || u.Order == OrderKind.Attack && ai.Unreachable.ContainsKey(u.OrderTarget)).Select(u => u.Id),
+        // Members on an explicit attack chase an enemy that is no longer a threat (AiAnswerThreats found none): back to
+        // the waypoint. One chasing Gimli's last worker beyond its reach held a party of 17 for 18 minutes (build-51).
+        AiOrder(ai,party.Where(u => ai.Unreachable.ContainsKey(u.Target) || u.Order == OrderKind.Attack).Select(u => u.Id),
             OrderKind.AttackMove,cell);
         // A member already razing the target (an Axethrower's attack-move passing in range of it) takes the whole party
         // in: holding the march for its siege kept 37 soldiers waiting for 14 minutes (build-43).
@@ -923,7 +955,10 @@ public sealed partial class SimWorld
             AiOrder(ai,party.Where(u => SiegeTarget(u) != target.Id).Select(u => u.Id),OrderKind.AttackMove,AiLegCell(ai,target));
             return;
         }
-        if (party.Any(u => u.Target >= 0 || u.Order == OrderKind.Attack)) { ai.LegGap = long.MaxValue; ai.LegMovedTick = Tick; return; }
+        // Only a fight on the spot holds the march: a member swinging, or one whose target is within 12 m.
+        if (party.Any(u => u.Attacking || u.StrikeActive || u.Target >= 0 && Units[u.Target].Present
+                && DistanceSquared(u.X,u.Z,Units[u.Target].X,Units[u.Target].Z) <= (long)AiEngageRadiusMm*AiEngageRadiusMm))
+        { ai.LegGap = long.MaxValue; ai.LegMovedTick = Tick; return; }
         long gap = party.Max(Gap);
         if (gap > AiRegroupMm)
         {
@@ -939,7 +974,7 @@ public sealed partial class SimWorld
     }
 
     private string AiDigest() => ":ai:"+string.Join(';',AiPlayers.Values.Select(a =>
-        $"{a.Team},{a.Personality.Id},{a.Profile.Style.Aggression}/{a.Profile.Style.Expansion}/{a.Profile.Style.Tech},{a.Thinks},{a.PartyTarget},{a.PartiesSent},{a.Project},{a.ProjectProgress},{a.ProjectMovedTick},{a.Chase},{a.ChaseSince},{a.Intruder},{a.IntruderSince},"
+        $"{a.Team},{a.Personality.Id}+{string.Join('+',a.Traits)},{a.Profile.Style.Aggression}/{a.Profile.Style.Expansion}/{a.Profile.Style.Tech},{a.Thinks},{a.PartyTarget},{a.PartiesSent},{a.Project},{a.ProjectProgress},{a.ProjectMovedTick},{a.Chase},{a.ChaseSince},{a.Intruder},{a.IntruderSince},"
         +$"{a.LastArmyTick},{a.AllIn},{a.CitadelSite.X},{a.CitadelSite.Z},{a.CrewDistance},{string.Join('/',a.IntruderSeen)},{string.Join('/',a.ChaseSeen)}:{string.Join(',',a.Unreachable)}:{string.Join(',',a.Party)}:{string.Join(',',a.RefusedCells.Order())}"
         +":guards:"+string.Join('|',a.Guards.Select(g => $"{g.Key}@{g.Value.Cell}={string.Join(',',g.Value.Units)}/{string.Join('/',g.Value.Seen)}"))
         +$":legs:{a.Leg},{a.LegMovedTick},{a.LegGap}:{string.Join(',',a.Legs)}:wounded:{string.Join('/',a.WoundedRolls)}:recovering:{string.Join(',',a.Recovering)}:stray:{string.Join('/',a.StraySince)}"));

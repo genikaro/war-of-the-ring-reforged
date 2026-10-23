@@ -4,7 +4,8 @@ using System.Text.Json;
 
 /// <summary>The setup screen end to end, across the scene reloads it causes. On the 8-player Boneyard it puts you in
 /// slot 3, closes slots 6-8, names two bots and starts at 2x: the match must load exactly that. The bot items' tooltips
-/// and the bot card must describe the bots chosen (build-49). The debug menu's
+/// and the bot card must describe the bots chosen (build-49), and Gimli's traits, ticked in the lobby (Defender, then
+/// Marksman, then Rusher, which drops Defender), must reach the match and come back with the setup (build-51). The debug menu's
 /// Skirmish setup button then returns to the screen, which keeps those choices, and an observer match of Gimli
 /// against Aragorn on Bilbo's Bluffs at 16x must load as chosen. Clicks press and release on separate frames.</summary>
 public partial class Main
@@ -13,7 +14,7 @@ public partial class Main
     /// <summary>Which screen or match the smoke is in; static, like the checks, because each start reloads the scene.</summary>
     private static int _setupPhase;
     private static readonly Dictionary<string,bool> SetupChecks = [];
-    private const int SetupSmokeChecks = 12;
+    private const int SetupSmokeChecks = 14;
     private const string SetupBigMap = "MP08_Boneyard",SetupSmallMap = "MP02_Bilbos_Bluffs";
     private static string _setupBigTitle = "";
     private static bool _setupCardOk;
@@ -25,6 +26,9 @@ public partial class Main
     }
 
     private int BotItem(string id) => 2+Array.FindIndex(_setupScreen!.SelectedMap!.Personalities,p => p.Id == id);
+
+    /// <summary>Ticks a trait in a slot's trait menu, as a click on its check item does.</summary>
+    private void TickTrait(int slot,AiTrait trait) => _setupScreen!.TraitButton(slot).GetPopup().EmitSignal(PopupMenu.SignalName.IdPressed,(long)(int)trait);
 
     private void SetupSmokeInput()
     {
@@ -51,19 +55,26 @@ public partial class Main
                     SetupChecks["map_choice_shows_its_slots"] = screen.SelectedMap?.Stem == SetupBigMap
                         && Enumerable.Range(0,8).All(screen.SlotShown) && screen.PreviewDrawn;
                     PickSlot(2,0); PickSlot(0,BotItem("Gimli")); PickSlot(1,BotItem("Aragorn"));
+                    TickTrait(0,AiTrait.Defender); TickTrait(0,AiTrait.Marksman); TickTrait(0,AiTrait.Rusher);
                     foreach (int slot in new[] {5,6,7}) PickSlot(slot,1);
                     Press(screen.SpeedSlider.NotchGlobal(1));
                 }
-                if (_frames == 9) Release(screen.SpeedSlider.NotchGlobal(1));
+                if (_frames == 9)
+                {
+                    Release(screen.SpeedSlider.NotchGlobal(1));
+                    // Gimli's card with his traits, before Aragorn is picked again below.
+                    if (_capture != "") _ = CaptureScreen(System.IO.Path.ChangeExtension(_capture,null)+"-setup.png");
+                }
                 if (_frames == 10)
                 {
-                    if (_capture != "") _ = CaptureScreen(System.IO.Path.ChangeExtension(_capture,null)+"-setup.png");
                     // Build-49: each bot item's tooltip and the bot card describe the bot. The last slot changed was closed,
                     // so the card falls back to the first bot slot, Gimli's.
                     SetupChecks["bot_tooltip_describes_the_bot"] = screen.BotTooltip(0,BotItem("Gimli")) == "Gimli · Normal · Tech-Aggression (30/20/50)\n"
                         +"Stubborn: a tower first, upgrades early, attacks with heavy parties." && screen.SlotChoice(0).GetItemText(BotItem("Smaug")) == "Bot · Smaug (Hard)";
-                    _setupCardOk = screen.CardText.StartsWith("Gimli · Normal · Tech-Aggression\nPlayer 1 · Aggression 30 · Expansion 20 · Tech 50\nStubborn")
-                        && screen.CardStyle == new AiStyle(30,20,50);
+                    _setupCardOk = screen.CardText.StartsWith("Gimli · Normal · Tech-Aggression\nPlayer 1 · Aggression 30 · Expansion 20 · Tech 50\n"
+                            +"Traits: Rusher, Marksman\nStubborn") && screen.CardStyle == new AiStyle(30,20,50)
+                        && screen.SlotTraits(0).SequenceEqual([AiTrait.Rusher,AiTrait.Marksman]) && screen.TraitButton(0).Text == "2 traits"
+                        && screen.TraitButton(2).Disabled && !screen.TraitButton(1).Disabled;
                     PickSlot(1,BotItem("Aragorn"));
                 }
                 if (_frames == 11)
@@ -88,6 +99,8 @@ public partial class Main
                     SetupChecks["bots_hold_the_other_slots"] = world.AiPlayers.Keys.SequenceEqual([0,1,3,4])
                         && world.AiPlayers[0].Personality.Id == "Gimli" && world.AiPlayers[1].Personality.Id == "Aragorn";
                     SetupChecks["start_speed_applies"] = _speed == 2;
+                    SetupChecks["lobby_traits_reach_the_bot"] = world.AiPlayers[0].Traits.SequenceEqual([AiTrait.Rusher,AiTrait.Marksman])
+                        && world.AiPlayers[0].Profile.SmallestParties && world.AiPlayers[1].Traits.Length == 0;
                     ToggleDebugMenu();
                 }
                 if (_frames == 7) Press(_setupButton.GetGlobalRect().GetCenter());
@@ -98,6 +111,8 @@ public partial class Main
                 {
                     SetupChecks["setup_returns_with_the_last_choices"] = screen.SelectedMap?.Stem == SetupBigMap && screen.SlotChoice(2).Selected == 0
                         && screen.SlotChoice(5).Selected == 1 && screen.SlotChoice(0).Selected == BotItem("Gimli") && screen.SpeedSlider.Index == 1;
+                    SetupChecks["lobby_traits_survive_the_return"] = screen.SlotTraits(0).SequenceEqual([AiTrait.Rusher,AiTrait.Marksman])
+                        && screen.SlotTraits(1).Count == 0;
                     screen.RevealMap(SetupSmallMap);
                 }
                 if (_frames == 5) Press(screen.MapButton(SetupSmallMap).GetGlobalRect().GetCenter());

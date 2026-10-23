@@ -37,6 +37,8 @@ public sealed partial class SimWorld
         var research = ai.Profile.Research;
         var fielded = Units.Where(u => u.Team == ai.Team && u.Health > 0).Select(u => u.Definition.Name).ToHashSet();
         bool reserved = false;
+        // A Rusher (build-51) researches nothing before 15:00.
+        if (Tick < ai.Profile.ResearchFromTicks) return (plan,saving.Food,saving.Ore);
         foreach (var site in ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Complete && s.Health > 0 && s.Research == null && !s.Upgrading))
             foreach (var technique in ResearchOptions(site).Where(t => research == AiResearch.Eager || t.Bonuses.Keys.Any(fielded.Contains)))
             {

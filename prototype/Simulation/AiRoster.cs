@@ -42,7 +42,22 @@ public enum AiResearch { Thrifty,Fielded,Eager }
 /// producers, research buildings, the rest (Citadels, Mills, Foundries, Camps), and workers.</summary>
 public enum AiTargetClass { Army,Defenses,Military,Tech,Economy,Workers }
 
-/// <summary>Every number the bot's decisions read, derived once from its difficulty and style with integer maths.</summary>
+/// <summary>A trait the player picks for a bot slot (owner model, build-51), applied after the style, in this order.</summary>
+public enum AiTrait { Rusher,Expansionist,Defender,Relentless,Marksman,Demolisher }
+
+/// <summary>A trait's lobby text and the traits it cannot be combined with.</summary>
+public sealed record AiTraitInfo(AiTrait Trait,string Description,AiTrait[] Excludes)
+{
+    public string Name => Trait.ToString();
+}
+
+/// <summary>A bot slot's choice: a personality and its traits, written "Gimli" or "Gimli+Defender+Marksman".</summary>
+public sealed record AiBotChoice(string Id,AiTrait[] Traits)
+{
+    public override string ToString() => string.Join('+',Traits.Select(t => t.ToString()).Prepend(Id));
+}
+
+/// <summary>Every number the bot's decisions read, derived once from its difficulty, style and traits with integer maths.</summary>
 public sealed record AiProfile
 {
     public static readonly IReadOnlyList<AiTargetClass> DefaultTargetOrder =
@@ -68,13 +83,32 @@ public sealed record AiProfile
     /// it; a later trait may send a party at buildings regardless.</summary>
     public IReadOnlyList<AiTargetClass> TargetOrder { get; init; } = DefaultTargetOrder;
     public bool ThreatsFirst { get; init; } = true;
+    // Set by traits (build-51); the defaults leave the style's play unchanged.
+    /// <summary>Parties of the war party's smallest size (Rusher).</summary>
+    public bool SmallestParties { get; init; }
+    /// <summary>The cheapest soldier a producer offers, never saving for a better one (Rusher).</summary>
+    public bool CheapSoldiers { get; init; }
+    /// <summary>No research before this tick (Rusher: 15:00).</summary>
+    public int ResearchFromTicks { get; init; }
+    /// <summary>Watchtowers each Citadel keeps around it, 0 for just the first-pass one (Defender: 2).</summary>
+    public int TowersPerCitadel { get; init; }
+    /// <summary>Expansion guards of a full party instead of half (Defender).</summary>
+    public bool FullGuards { get; init; }
+    /// <summary>Before AssaultFromTicks an assault may still leave once this many towers stand and the army holds this
+    /// many soldiers; 0 for never (Defender: 3 towers, 12 soldiers).</summary>
+    public int EarlyAssaultTowers { get; init; }
+    public int EarlyAssaultArmy { get; init; }
+    /// <summary>The share of a party's size idle at home that reinforces the party out (Relentless: half).</summary>
+    public int ReinforcePercent { get; init; } = 100;
+    /// <summary>The army's melee share in millionths, or -1 for the war party's (Marksman: 40%).</summary>
+    public int MeleeSharePpm { get; init; } = -1;
 
-    public static AiProfile For(AiPersonality personality,AiStyle style)
+    public static AiProfile For(AiPersonality personality,AiStyle style,IReadOnlyList<AiTrait>? traits = null)
     {
         if (!style.Valid) throw new ArgumentException($"A style's values must be 0 or more and sum to 100: {style}");
         int a = style.Aggression,e = style.Expansion,t = style.Tech,second = SimWorld.TicksPerSecond;
         var skill = AiSkill.For(personality.Difficulty);
-        return new() { Skill = skill,Style = style,
+        var profile = new AiProfile { Skill = skill,Style = style,
             AssaultFromTicks = (100-a)*6*second,
             Workers = skill.BaseWorkers+e*6/100,
             ExpansionTicks = (900-6*e)*second,
@@ -84,6 +118,19 @@ public sealed record AiProfile
             Research = t >= 50 ? AiResearch.Eager : t >= 20 ? AiResearch.Fielded : AiResearch.Thrifty,
             TowerFirst = a <= 30,
             FreeMilitary = a >= 50 };
+        foreach (var trait in AiRoster.Validate(traits ?? []))
+            profile = trait switch {
+                AiTrait.Rusher => profile with { SmallestParties = true,AssaultFromTicks = 0,CheapSoldiers = true,ResearchFromTicks = 900*second,
+                    ExpansionTicks = Math.Max(profile.ExpansionTicks,900*second),Workers = profile.Workers-2,FreeMilitary = true,TowerFirst = false },
+                AiTrait.Expansionist => profile with { ExpansionTicks = 240*second,ExpansionIntervalTicks = 180*second,MaxCitadels = 5,Workers = profile.Workers+4 },
+                AiTrait.Defender => profile with { TowerFirst = true,TowersPerCitadel = 2,FullGuards = true,AssaultFromTicks = 1200*second,
+                    EarlyAssaultTowers = 3,EarlyAssaultArmy = 12 },
+                AiTrait.Relentless => profile with { Skill = profile.Skill with { FallBackPercent = 0,PullsWounded = false },ReinforcePercent = 50 },
+                AiTrait.Marksman => profile with { MeleeSharePpm = 400_000 },
+                AiTrait.Demolisher => profile with { ThreatsFirst = false,
+                    TargetOrder = [AiTargetClass.Military,AiTargetClass.Tech,AiTargetClass.Economy,AiTargetClass.Defenses,AiTargetClass.Army,AiTargetClass.Workers] },
+                _ => profile };
+        return profile;
     }
 }
 
@@ -112,6 +159,43 @@ public static class AiRoster
 
     public static AiBotEntry Entry(string id) => Bots.FirstOrDefault(b => string.Equals(b.Id,id,StringComparison.OrdinalIgnoreCase))
         ?? new(id,id,AiStyle.Balanced,"No description yet.");
+
+    /// <summary>The traits a player may give a bot (build-51). Raider, Scout and hero use need new behaviour and come later.</summary>
+    public static IReadOnlyList<AiTraitInfo> Traits { get; } = [
+        new(AiTrait.Rusher,"Small parties from the first soldiers, the cheapest units, more Barracks; no research or expansion before 15:00, fewer workers.",
+            [AiTrait.Expansionist,AiTrait.Defender]),
+        new(AiTrait.Expansionist,"A new Citadel from 4:00 and every 3:00 after, up to five, and more workers.",[AiTrait.Rusher]),
+        new(AiTrait.Defender,"A tower first and two by every Citadel, guards of a full party; attacks only with three towers and twelve soldiers, or from 20:00.",
+            [AiTrait.Rusher]),
+        new(AiTrait.Relentless,"Parties never fall back and the wounded never retreat; half a party at home joins the one out.",[]),
+        new(AiTrait.Marksman,"An army of 60% ranged units instead of 20%.",[]),
+        new(AiTrait.Demolisher,"Parties raze buildings, military first, and ignore the soldiers and towers hitting them.",[])];
+
+    public static AiTraitInfo Trait(AiTrait trait) => Traits.First(t => t.Trait == trait);
+
+    /// <summary>Distinct traits in their application order; throws on a pair that excludes each other.</summary>
+    public static AiTrait[] Validate(IEnumerable<AiTrait> traits)
+    {
+        var chosen = traits.Distinct().Order().ToArray();
+        foreach (var trait in chosen)
+            foreach (var other in Trait(trait).Excludes.Where(chosen.Contains))
+                throw new ArgumentException($"{trait} and {other} cannot be combined");
+        return chosen;
+    }
+
+    /// <summary>Reads a bot slot, "Gimli" or "Gimli+Defender+Marksman": the only parser of trait names. Throws on an
+    /// unknown trait or a pair that excludes each other; the personality id is checked by whoever loads it.</summary>
+    public static AiBotChoice Parse(string text)
+    {
+        var parts = text.Split('+',StringSplitOptions.TrimEntries);
+        if (parts[0].Length == 0) throw new ArgumentException("A bot needs a personality: "+text);
+        var traits = parts.Skip(1).Select(name => Traits.FirstOrDefault(t => string.Equals(t.Name,name,StringComparison.OrdinalIgnoreCase))?.Trait
+            ?? throw new ArgumentException($"Unknown bot trait \"{name}\" in \"{text}\" (known: {string.Join(", ",Traits.Select(t => t.Name))})"));
+        return new(parts[0],Validate(traits));
+    }
+
+    /// <summary>"Defender, Marksman", or "" without traits.</summary>
+    public static string TraitList(IEnumerable<AiTrait> traits) => string.Join(", ",traits.Select(t => t.ToString()));
 
     public static string Difficulty(int level) => AiSkill.For(level).Name;
 
