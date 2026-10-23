@@ -114,6 +114,39 @@ public static class AiChecks
         var replay = Fixture(); Step(replay,war.Tick);
         check(replay.StateDigest() == war.StateDigest(),"an AI match replays identically");
 
+        // Build-47: a rich bot climbs the tree. Its keep upgrades no earlier than the tech time (4:00 at aggressiveness 0),
+        // the research building follows, its technique is researched, and the barracks trains the dearer knight.
+        var tech = Fixture(aggressiveness: 0); tech.Economies[1] = new(5000,5000);
+        tech.BuildingRules.Add("keep2",new("keep2","keep2",null,115,105,100,600,750000,750000,100000,50000,["keep"]));
+        tech.Upgrades.Add("keep","keep2"); tech.Placements.Add("keep2",tech.Placements["keep"]); tech.ProducedUnits.Add("keep2",["worker"]);
+        tech.PlaceableBuildings.Add("forge");
+        tech.BuildingRules.Add("forge",new("forge","forge",null,75,100,60,300,750000,750000,100000,50000,["keep2"]));
+        tech.Placements.Add("forge",new(Square(2000),-400,400,4180,true,false)); tech.PlacementRadiusMm.Add("forge",15000);
+        tech.AiBuildings.Add("forge",new("UPGRADE",false,2,true));
+        tech.Techniques.Add(new("edge","Edge","forge",0,75,75,100,null,null,new Dictionary<string,(int,int)> { ["soldier"] = (1000,0) }));
+        tech.Rules.Units.Add("knight",soldier with { Name = "knight",MaxHealth = 235 });
+        tech.ProductionRules.Add("knight",new("knight","Knight",85,30,3,60,Prerequisites: ["keep2"]));
+        tech.AiUnits.Add("knight",new(false,70)); tech.ProducedUnits["barracks"] = ["soldier","knight"];
+        int upgradedAt = -1;
+        for (int i = 0; i < 12000 && !tech.HasResearched(1,"edge"); i++)
+        {
+            tech.Step();
+            if (upgradedAt < 0 && tech.ConstructionSites[Keep1].Upgrading) upgradedAt = tech.Tick;
+        }
+        check(upgradedAt >= SimWorld.AiTechTick(tech.AiPlayers[1]) && tech.ConstructionSites[Keep1].Building == "keep2","the bot upgrades its keep once the tech time comes");
+        check(tech.ConstructionSites.Values.Any(s => s.Team == 1 && s.Building == "forge" && s.Complete) && tech.HasResearched(1,"edge"),
+            "the bot builds the research building and researches for the units it fields: "+tech.AiPlayers[1].Status);
+        // Its keep already at level 2, the bot's first barracks soldier is the knight: equal Assault worth, dearer unit.
+        var choice = Fixture(); choice.Economies[1] = new(5000,5000);
+        choice.BuildingRules.Add("keep2",new("keep2","keep2",null,115,105,100,600,750000,750000,100000,50000,["keep"]));
+        choice.Upgrades.Add("keep","keep2"); choice.ConstructionSites[Keep1].Building = "keep2"; choice.StartBuildings[1] = ["keep2"];
+        choice.Rules.Units.TryAdd("knight",soldier with { Name = "knight",MaxHealth = 235 });
+        choice.ProductionRules.Add("knight",new("knight","Knight",85,30,3,60,Prerequisites: ["keep2"]));
+        choice.AiUnits.Add("knight",new(false,70)); choice.ProducedUnits["barracks"] = ["soldier","knight"];
+        for (int i = 0; i < 6000 && !choice.Units.Any(u => u.Team == 1 && u.Definition.Name is "soldier" or "knight"); i++) choice.Step();
+        check(choice.Units.FirstOrDefault(u => u.Team == 1 && u.Definition.Name is "soldier" or "knight")?.Definition.Name == "knight",
+            "the bot trains the dearer unit the upgrade opens: "+choice.AiPlayers[1].Status);
+
         var duel = Fixture(mirror: true);
         for (int i = 0; i < 30000 && !duel.MatchOver; i++) duel.Step();
         check(duel.MatchOver && duel.Winner >= 0 && duel.AiPlayers[duel.Winner].PartiesSent > 0,

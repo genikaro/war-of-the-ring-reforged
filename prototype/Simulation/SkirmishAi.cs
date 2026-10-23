@@ -87,7 +87,8 @@ public sealed class AiPlayer(int team,AiPersonality personality)
 /// Foundry may go on the pile the bot's own miners stand on (they wait beside it for the foundation). Soldiers walled
 /// into a pocket never join an assault, home soldiers stop chasing enemies far from every building, and a full party's
 /// worth of idle soldiers reinforces a party still out. Owner request (build-41): a party marches in legs, mustering
-/// on its route first and regrouping on open ground every 25 m, instead of filing through narrow places. Not simulated: scouting, raids, flanking, harassment, heroes and
+/// on its route first and regrouping on open ground every 25 m, instead of filing through narrow places. Owner request
+/// (build-47): bots climb the technology tree, see AiTech.cs. Not simulated: scouting, raids, flanking, harassment, heroes and
 /// special abilities.</summary>
 public sealed partial class SimWorld
 {
@@ -148,12 +149,14 @@ public sealed partial class SimWorld
         if (!threatened) AiRepair(ai,workers);
         var (plan,reserveFood,reserveOre) = AiConstruction(ai,workers,bx,bz);
         AiAssignWorkers(ai,workers);
-        AiTrain(ai,living,reserveFood,reserveOre);
+        bool armyReady = home.Length+ai.Party.Count >= AiPartySize(ai);
+        var (tech,techFood,techOre) = AiTech(ai,reserveFood,reserveOre,armyReady);
+        AiTrain(ai,living,reserveFood+techFood,reserveOre+techOre,armyReady);
         home = AiGuard(ai,expansions,home,threatened);
         AiAssault(ai,home,bx,bz,threatened);
         int guards = ai.Guards.Values.Sum(g => g.Units.Count);
         string march = ai.Party.Count > 0 && ai.Leg < ai.Legs.Count ? $" · regrouping {ai.Leg+1}/{ai.Legs.Count}" : "";
-        ai.Status = $"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)}{march}{(guards > 0 ? $" · guards {guards}" : "")} · {plan} · parties {ai.PartiesSent}";
+        ai.Status = $"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)}{march}{(guards > 0 ? $" · guards {guards}" : "")} · {plan}{(tech != "" ? " · "+tech : "")} · parties {ai.PartiesSent}";
     }
 
     /// <summary>The bot's Citadels away from its start (foundations too), with the guards of fallen ones released and
@@ -426,7 +429,9 @@ public sealed partial class SimWorld
         string[] Pass(string cls,bool first) => order.Where(n => AiBuildings[n].Class == cls && AiBuildings[n].MustHaveFirstPass == first).ToArray();
         bool defensive = ai.Personality.Aggressiveness < 40;
         var firstCopies = Pass("ECONOMY",true).Concat(defensive ? Pass("DEFENSIVE",true) : [])
-            .Concat(order.Where(n => AiBuildings[n].Class == "MILITARY")).Concat(defensive ? [] : Pass("DEFENSIVE",true))
+            .Concat(order.Where(n => AiBuildings[n].Class == "MILITARY"))
+            // Build-47: one research building of each kind once the tech level allows it.
+            .Concat(order.Where(n => AiBuildings[n].Class == "UPGRADE")).Concat(defensive ? [] : Pass("DEFENSIVE",true))
             .Concat(order.Where(n => AiBuildings[n].MustHaveFirstPass));
         foreach (var name in firstCopies.Distinct())
             if (AiCount(team,name) == 0 && Can(name)) return name;
@@ -555,7 +560,7 @@ public sealed partial class SimWorld
     private int FoodGatherers(AiPlayer ai) => Units.Count(w => w.Team == ai.Team && w.Health > 0 && w.Order == OrderKind.Gather
         && Resources.TryGetValue(w.OrderTarget,out var r) && r.Kind == ResourceKind.Food);
 
-    private void AiTrain(AiPlayer ai,int workers,int reserveFood,int reserveOre)
+    private void AiTrain(AiPlayer ai,int workers,int reserveFood,int reserveOre,bool armyReady = false)
     {
         var bank = Economies[ai.Team];
         bool Affordable(ProductionDefinition rules,bool urgent) => bank.FoodMilli >= (rules.FoodCost+(urgent ? 0 : reserveFood))*1000L
@@ -579,11 +584,15 @@ public sealed partial class SimWorld
                 // A producer of the unwanted class waits while a producer of the wanted class exists.
                 bool wantMelee = total == 0 || melee*1_000_000 < total*(long)AiAssaultParty.MeleeSharePpm;
                 var soldiers = Soldiers(producer).ToHashSet();
-                slot = Enumerable.Range(0,producer.Units.Length)
+                // Build-47: equal Assault effectiveness goes to the dearer, stronger unit (the Rider over the Swordsman).
+                // While the army is short of a party the best affordable one is trained; once it has one, the producer
+                // saves for its best unit rather than spending the food on a weaker one.
+                var ranked = Enumerable.Range(0,producer.Units.Length)
                     .Where(i => soldiers.Contains(producer.Units[i]) && (Rules.Units[producer.Units[i]].IsRanged != wantMelee || !offered.Contains(!wantMelee)))
                     .OrderBy(i => Rules.Units[producer.Units[i]].IsRanged == wantMelee ? 1 : 0)
-                    .ThenByDescending(i => AiUnits[producer.Units[i]].Assault).ThenBy(i => i).DefaultIfEmpty(-1).First();
-                if (slot >= 0 && !Affordable(ProductionRules[producer.Units[slot]],false)) slot = -1;
+                    .ThenByDescending(i => AiUnits[producer.Units[i]].Assault)
+                    .ThenByDescending(i => ProductionRules[producer.Units[i]].FoodCost+ProductionRules[producer.Units[i]].OreCost).ThenBy(i => i).ToArray();
+                slot = (armyReady ? ranked.Take(1) : ranked).Where(i => Affordable(ProductionRules[producer.Units[i]],false)).DefaultIfEmpty(-1).First();
             }
             if (slot < 0 || !CanTrain(ai.Team,producer.Id,slot,out _)) continue;
             AiOrder(ai,[producer.Id],OrderKind.Train,slot,producer.Id);

@@ -30,6 +30,13 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-47 (Oct 23):** bots climb the tree. A bot upgrades its Citadel after
+4:00-10:40 depending on aggressiveness, builds the Ranger Post, Forge and
+Wilderness Outpost, prefers the Rider and Shieldbreaker once its army is a full
+party, and researches for the units it has. In the reference match Gimli reaches
+Citadel 2 at 7:05 and fields Riders, Shieldbreakers and Rangers with all four
+researches, and wins at 17:46. See [skirmish notes](../prototype/SKIRMISH.md#build-47-bots-climb-the-tree).
+
 **Build-46 (Oct 23):** Forge and Wilderness Outpost research. The Forge
 researches Iron Blades (+1 attack) and Iron Plating (+1 armor) for the Swordsman,
 Rider, Axethrower and Shieldbreaker, the Outpost Etched Blades and Improved

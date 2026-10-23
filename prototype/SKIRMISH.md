@@ -2078,3 +2078,47 @@ refunds; a second Q completes after exactly 1800 ticks, and the Swordsman traine
 before it shows Attack 11. `SimulationTests` 827 checks (13 new in
 `ResearchChecks`, including a duel where the researched bonus raises melee
 damage). Python tests check the exported techniques.
+
+## Build-47: bots climb the tree
+
+Owner request: bots upgrade the Citadel, build Tier 2, train the new units and
+research. The source has no decision code for any of it (the `.rai` files hold
+only the 0-100 knobs), so these are adapter rules in `Simulation/AiTech.cs`:
+
+- **Citadel 2:** once a military producer stands and the clock passes
+  4:00 + 4 s per point of aggressiveness (Gimli 6:20, Aragorn 8:40, Saruman
+  10:00), the home Citadel upgrades as soon as the bank pays beyond the
+  construction reserve. Once the bot fields a full assault party it also
+  reserves the cost; earlier it does not, because food is the bots' bottleneck
+  and an early reserve starved their training (Aragorn's army shrank and he lost).
+- **Tier 2 buildings:** the Ranger Post is a military building and the Forge and
+  Wilderness Outpost (source AI class UPGRADE) now follow the military buildings in
+  the first-copy pass, so each comes once Citadel 2 stands.
+- **Units:** equal Assault effectiveness (Rider and Swordsman are both 70) now goes
+  to the dearer unit. While the army is short of a party, a producer trains the
+  best unit it can pay for; once the army has a party, it saves for its best unit
+  instead of spending the food on a weaker one.
+- **Research:** an idle Forge or Outpost researches the first technique, in grid
+  order, that helps a unit type the bot has alive, from money nothing else has
+  reserved.
+- Bug found on the way: bot orders with no units were dropped by `AiOrder`, so the
+  first version never upgraded although its status said so. Building commands pass
+  the building's id, as training already did.
+
+Reference matches on Bilbo's Bluffs (observer smoke, 16x):
+
+| Match | Winner, time | Tier 2 fielded |
+|---|---|---|
+| Gimli vs Aragorn | Gimli 17:46 (tick 21333) | Gimli: Citadel 2 at 7:05, 5 Riders, 2 Shieldbreakers, 12 Rangers, all four researches |
+| Aragorn vs Gimli | Aragorn 14:47 (tick 17735) | Aragorn: 2 Riders, 3 Rangers |
+| Saruman vs Aragorn | Saruman 24:26 (tick 29333) | both: Riders and Rangers; Aragorn: Etched Blades |
+
+The observer report now lists every soldier each bot fielded and its research
+(`armies`, `research`). The corpse check no longer counts a unit killed on the
+final tick, whose death the view has not presented yet; the new reference match
+ends on such a kill.
+
+Validation: `SimulationTests` 830 checks (3 new in `AiChecks`: a rich bot upgrades
+its keep no earlier than the tech time, builds the research building and
+researches; with level 2 its first barracks soldier is the dearer knight). Every
+Bilbo smoke passes.

@@ -133,7 +133,9 @@ public partial class Main
                 _observerChecks["corpses_leave_after_a_minute"] = gone.Length > 0
                     && gone.All(p => !p.Value.Root.Visible && p.Value.Root.ProcessMode == Node.ProcessModeEnum.Disabled && world.Units[p.Key].Health <= 0
                         && world.Tick-p.Value.DeathTick >= CorpseTicks)
-                    && _views.Where(p => !p.Value.Buried && world.Units[p.Key].Health <= 0).All(p => world.Tick-p.Value.DeathTick < CorpseTicks+CorpseSinkTicks+SimWorld.TicksPerSecond);
+                    // A unit killed on the final tick has no presented death yet (DeathTick -1).
+                    && _views.Where(p => !p.Value.Buried && world.Units[p.Key].Health <= 0 && p.Value.DeathTick >= 0)
+                        .All(p => world.Tick-p.Value.DeathTick < CorpseTicks+CorpseSinkTicks+SimWorld.TicksPerSecond);
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-result.png");
                 _observerPhase = 5; _observerStep = 0; break;
             case 5:
@@ -141,7 +143,12 @@ public partial class Main
                 var report = new { build = BuildInfo.Label,checks = _observerChecks,
                     passed = _observerChecks.Count == ObserverSmokeChecks && _observerChecks.Values.All(v => v),
                     fixture = $"{System.IO.Path.GetFileName(_cache)} --observe --bots={string.Join(',',_bots)}; the match runs at 16x after the speed checks",
-                    timeline = _observerTimeline,corpses_buried = _corpsesBuried,winner = world.Winner,outcome_tick = world.OutcomeTick,ticks_per_frame_at_16x = _observerBurst,
+                    timeline = _observerTimeline,
+                    // Every unit each bot fielded, fallen included, and its research: how far up the tree it climbed (build-47).
+                    armies = world.AiPlayers.Values.ToDictionary(a => a.Personality.Id,a => string.Join(",",world.Units.Where(u => u.Team == a.Team && !world.Workers.ContainsKey(u.Definition.Name))
+                        .GroupBy(u => u.Definition.DisplayName).OrderBy(g => g.Key,StringComparer.Ordinal).Select(g => g.Key+" "+g.Count()))),
+                    research = world.AiPlayers.Values.ToDictionary(a => a.Personality.Id,a => string.Join(",",(world.Researched.GetValueOrDefault(a.Team) ?? []).Order(StringComparer.Ordinal))),
+                    corpses_buried = _corpsesBuried,winner = world.Winner,outcome_tick = world.OutcomeTick,ticks_per_frame_at_16x = _observerBurst,
                     bots = world.AiPlayers.Values.Select(a => $"{a.Personality.Id}: {a.Status}").ToArray(),
                     ticks = world.Tick,status = _status.Text,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"observer-smoke-report.json"),
