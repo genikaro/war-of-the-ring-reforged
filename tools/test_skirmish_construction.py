@@ -47,8 +47,21 @@ class ConstructionImportTests(unittest.TestCase):
     def test_original_open_ground_placement(self):
         data = skirmish_construction.placement_data(Resolver())
         self.assertEqual(data['order'][:3], ['BUILDING_G_TOWN_CENTER_LEVEL_1', 'BUILDING_G_FOOD_STRUCTURE', 'BUILDING_G_BLACKSMITH'])
-        self.assertEqual(sorted(data['placeable']), ['BUILDING_G_DWARF_BARRACKS', 'BUILDING_G_GONDORIAN_BARRACKS',
-                         'BUILDING_G_TOWER', 'BUILDING_G_TOWN_CENTER_LEVEL_1', 'BUILDING_G_WORKER_STRUCTURE'])
+        self.assertEqual(sorted(data['placeable']), ['BUILDING_G_ARMORY', 'BUILDING_G_DWARF_BARRACKS', 'BUILDING_G_GONDORIAN_BARRACKS',
+                         'BUILDING_G_RANGER_BARRACKS', 'BUILDING_G_SKILLS_STRUCTURE', 'BUILDING_G_TOWER', 'BUILDING_G_TOWN_CENTER_LEVEL_1',
+                         'BUILDING_G_WORKER_STRUCTURE'])
+        # Tier 2 needs Citadel level 2; captured Forge 75/100 (skirmish-010) and Ranger Post 95/100 (skirmish-014).
+        forge, post = data['placeable']['BUILDING_G_SKILLS_STRUCTURE'], data['placeable']['BUILDING_G_RANGER_BARRACKS']
+        self.assertEqual((forge['food_cost'], forge['ore_cost'], forge['max_health'], forge['prerequisites']),
+                         (75, 100, 590, ['BUILDING_G_TOWN_CENTER_LEVEL_2']))
+        self.assertEqual((post['food_cost'], post['ore_cost'], post['max_health']), (95, 100, 675))
+        self.assertEqual(sorted(data['upgrades']), ['BUILDING_G_TOWN_CENTER_LEVEL_1', 'BUILDING_G_WORKER_STRUCTURE'])
+        citadel2, war_camp = data['upgrades']['BUILDING_G_TOWN_CENTER_LEVEL_1'], data['upgrades']['BUILDING_G_WORKER_STRUCTURE']
+        self.assertEqual((citadel2['name'], citadel2['display_name'], citadel2['food_cost'], citadel2['ore_cost'],
+                          citadel2['duration_ticks'], citadel2['max_health']),
+                         ('BUILDING_G_TOWN_CENTER_LEVEL_2', 'Citadel 2', 115, 105, 1000, 1000))
+        self.assertEqual((war_camp['name'], war_camp['food_cost'], war_camp['ore_cost'], war_camp['duration_ticks'], war_camp['prerequisites']),
+                         ('BUILDING_G_POPULATION_STRUCTURE_UPGRADE', 0, 55, 800, ['BUILDING_G_TOWN_CENTER_LEVEL_2']))
         camp, citadel = data['placeable']['BUILDING_G_WORKER_STRUCTURE'], data['placeable']['BUILDING_G_TOWN_CENTER_LEVEL_1']
         self.assertEqual((camp['ore_cost'], camp['duration_ticks'], camp['max_health'], camp['must_be_near'], camp['drop_off']),
                          (80, 600, 400, True, False))

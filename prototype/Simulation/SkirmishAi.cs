@@ -161,7 +161,7 @@ public sealed partial class SimWorld
     private ConstructionSite[] AiExpansions(AiPlayer ai)
     {
         var start = StartStructures.FirstOrDefault(s => s.Team == ai.Team);
-        var expansions = start == null ? [] : ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Health > 0 && s.Building == start.Building
+        var expansions = start == null ? [] : ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Health > 0 && s.Building != null && Satisfies(s.Building,start.Building)
             && DistanceSquared(s.X,s.Z,start.X,start.Z) > (long)AiDefenseRadiusMm*AiDefenseRadiusMm).ToArray();
         foreach (int id in ai.Guards.Keys.Where(id => !expansions.Any(s => s.Id == id)).ToArray()) ai.Guards.Remove(id);
         foreach (var post in ai.Guards.Values) post.Units.RemoveAll(id => !Units[id].Present);
@@ -335,7 +335,7 @@ public sealed partial class SimWorld
     /// <summary>From MaxSize for the most defensive personality down to MinSize for the most aggressive.</summary>
     public int AiPartySize(AiPlayer ai) => AiAssaultParty.MaxSize-((AiAssaultParty.MaxSize-AiAssaultParty.MinSize)*ai.Personality.Aggressiveness+50)/100;
 
-    private int AiCount(int team,string building) => ConstructionSites.Values.Count(s => s.Team == team && s.Health > 0 && SiteRules(s).Name == building);
+    private int AiCount(int team,string building) => ConstructionSites.Values.Count(s => s.Team == team && s.Health > 0 && Satisfies(SiteRules(s).Name,building));
 
     /// <summary>The next building the plan wants, its cost reserved, and the order to lay it when affordable.</summary>
     private (string Plan,int Food,int Ore) AiConstruction(AiPlayer ai,SimUnit[] workers,int bx,int bz)
@@ -566,7 +566,7 @@ public sealed partial class SimWorld
                 .Select(q => Rules.Units[q.Unit])).ToArray();
         long melee = army.Count(d => !d.IsRanged),total = army.Length;
         IEnumerable<string> Soldiers(ProductionBuilding p) => p.Units.Where(u => AiUnits.TryGetValue(u,out var rule) && !rule.NeverAdd
-            && Rules.Units.TryGetValue(u,out var d) && !d.Hero);
+            && Rules.Units.TryGetValue(u,out var d) && !d.Hero && MissingPrerequisite(ai.Team,ProductionRules[u].Prerequisites ?? []) == null);
         var offered = Producers.Values.Where(p => p.Team == ai.Team).SelectMany(Soldiers).Select(u => Rules.Units[u].IsRanged).ToHashSet();
         foreach (var producer in Producers.Values.Where(p => p.Team == ai.Team && p.Queue.Count == 0))
         {

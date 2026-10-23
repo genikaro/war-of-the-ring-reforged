@@ -402,7 +402,7 @@ public partial class CommandPanel : Control
     public TextureButton MenuButton => _menu;
     public bool CommandsAvailable => _buttons.Values.All(b => !b.Disabled);
     public bool CommandPaletteEmpty => !_buttons.Values.Concat(_abilities).Concat(_constructionButtons).Concat(_trainButtons)
-        .Concat([_buildButton,_backButton,_cancelConstructionButton]).Any(b => b.Visible);
+        .Concat([_buildButton,_backButton,_cancelConstructionButton,_upgradeButton]).Any(b => b.Visible);
     public bool HealthCounterCentered => Math.Abs(_singleHealthText.GetRect().GetCenter().Y-_singleHealth.GetRect().GetCenter().Y) < .01f;
     public bool ResourceCountersCentered => new[] {(_populationIcon,_populationText),(_foodIcon,_foodText),(_oreIcon,_oreText)}
         .All(p => Math.Abs(p.Item1.GetRect().GetCenter().Y-p.Item2.GetRect().GetCenter().Y) < .01f);

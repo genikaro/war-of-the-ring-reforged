@@ -30,6 +30,15 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-44 (Oct 23):** Citadel 2 and the Tier 2 buildings, from the October 22
+captures. The Citadel upgrades in place to level 2 (115 food, 105 ore, 50 s, 1000
+health) and the Camp to the War Camp (+4 population); the upgrade heads the
+building's queue as in the original and pauses its training. Citadel 2 opens the
+Wilderness Outpost, Ranger Post and Forge on the Build page; every building and
+unit now checks its source prerequisites and locked buttons name what is missing.
+Next: the Tier 2 units (Rider, Shieldbreaker, Ranger), then Forge research.
+See [skirmish notes](../prototype/SKIRMISH.md#build-44-citadel-2-and-the-tier-2-buildings).
+
 **Build-43 (Oct 23):** no more frozen fighters. Units standing where their cell
 centre is too close to a building (after razing it, at work spots) found nothing
 connected to them and waited for good; combat now plans from the nearest cell they
@@ -973,7 +982,7 @@ against continuous source-game evidence before claiming fidelity. Powers, econom
 and production remain later work.
 
 - [ ] Load unit, weapon, building, spell and technique stats from the JSON tables (`Units`, `Weapons`, `Buildings`, `Spells`, `Techniques`, `UnitToUnitModifiers`, `BattleGear`, `HeroExperiences`); three demo units' base melee definitions and pair-rule support are implemented.
-- [ ] Economy: resources, workers, building and training queues, places of power (builds 5-8 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds, independent structure selection and worker clearance fixes; build-12 adds Citadel worker training with population reservation, cancellation and rally points; build-13 places every Tier 1 building with source passability and proximity; build-14 trains the Gondor Swordsman at the Barracks; build-15 the Dwarf Axethrower at the Dwarf Hall; build-17 replaces source gather rates with owner-defined Warcraft-style trips; build-19 trains Frodo, the last Tier 1 unit; build-20 narrows work ranges to the target's own footprint); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
+- [ ] Economy: resources, workers, building and training queues, places of power (builds 5-8 add carried ore/food, Citadel delivery, Mill/Foundry construction and refunds, independent structure selection and worker clearance fixes; build-12 adds Citadel worker training with population reservation, cancellation and rally points; build-13 places every Tier 1 building with source passability and proximity; build-14 trains the Gondor Swordsman at the Barracks; build-15 the Dwarf Axethrower at the Dwarf Hall; build-17 replaces source gather rates with owner-defined Warcraft-style trips; build-19 trains Frodo, the last Tier 1 unit; build-20 narrows work ranges to the target's own footprint; build-44 adds the Citadel 2 and War Camp upgrades and the Tier 2 buildings with source prerequisites); use captured construction/recruitment cases and source-backed costs/prerequisites, including population reservation and cancellation/refund validation
 - [ ] Combat: attack preparation/hit/recovery and interruption, damage types, armour, unit-to-unit modifiers, projectiles, morale or knockback where the original has them; build-21 adds damage to buildings, their destruction and worker repair, without damage types for buildings or a win condition; build-25 adds Watchtower defenses at the base rate of fire, without garrisons; build-26 adds the Razing win condition
 - [ ] Heroes, fate powers and spells (`SpellAndEventAndActions` chains events to actions)
 - [ ] Open `Rings.exe` in Ghidra to recover the formulas the tables only feed: damage, hit chance, experience, upgrade effects

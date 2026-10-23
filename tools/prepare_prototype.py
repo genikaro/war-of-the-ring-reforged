@@ -368,16 +368,7 @@ def prepare_skirmish(output, install=None, map_name=None):
     near = skirmish_map.assign_resources(nodes, points)
     for node in nodes:
         node['start_team'] = next((team for team, ids in enumerate(near) if node['id'] in ids.values()), None)
-    building_dir = output / 'buildings'
-    building_dir.mkdir(exist_ok=True)
-    building_files = {}
-    for name in skirmish_map.TIER1_BUILDINGS:
-        model = resolver.db['Models'].get(resolver.db['Buildings'].get(name)['Model'])
-        target = building_dir / (model.name + '.glb')
-        convert_model(resolver, model.name, str(target))
-        # Scaffold stages and the healthy state are selected at runtime for every Tier 1 building.
-        prototype_assets.restore_building(target)
-        building_files[name] = 'buildings/' + target.name
+    building_files = skirmish_construction.export_buildings(output, resolver)
     production = skirmish_production.export(output, resolver, roster)
     variables = resolver.db['WorldVariables'].records[0]
     citadel = resolver.db['Buildings'].get(skirmish_map.CITADEL)
@@ -400,7 +391,7 @@ def prepare_skirmish(output, install=None, map_name=None):
                                         'building': skirmish_map.CITADEL, 'footprint_object': b['footprint']['object_id'],
                                         'worker_cells': b['worker_cells']} for b in bases]},
                 'source_sha256': metadata['sha256']}
-    finish_cache(output, resolver, manifest, models, sorted(building_files.values()) + [skirmish_production.RALLY_BANNER_FILE])
+    finish_cache(output, resolver, manifest, models, sorted(set(building_files.values())) + [skirmish_production.RALLY_BANNER_FILE])
     return manifest
 
 

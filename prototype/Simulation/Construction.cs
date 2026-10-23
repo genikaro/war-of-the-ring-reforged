@@ -9,7 +9,8 @@ public sealed class ConstructionSite(int id,int obstacle,int radiusMm,string? bu
     public int Id { get; } = id;
     /// <summary>The resource under a Mill or Foundry; -1 for a building placed on open ground.</summary>
     public int Resource => Building == null ? Id : -1;
-    public string? Building { get; } = building;
+    /// <summary>The building's current type; an upgrade (Citadel 1 to 2, Camp to War Camp) replaces it in place.</summary>
+    public string? Building { get; internal set; } = building;
     public int X { get; } = x;
     public int Z { get; } = z;
     public int Obstacle { get; } = obstacle;
@@ -25,6 +26,9 @@ public sealed class ConstructionSite(int id,int obstacle,int radiusMm,string? bu
     /// <summary>Ticks until a defending building's next arrow, and the unit it is shooting (-1 for none).</summary>
     public int DefenseCooldown { get; internal set; }
     public int DefenseTarget { get; internal set; } = -1;
+    /// <summary>An upgrade in progress and its fixed-tick progress toward the promoted building.</summary>
+    public bool Upgrading { get; internal set; }
+    public int UpgradeTicks { get; internal set; }
 }
 
 /// <summary>Foundations, integer cooperative construction and owned gathering improvements.</summary>
@@ -46,8 +50,9 @@ public sealed partial class SimWorld
             : new(x,z,Math.Max(site.RadiusMm,Resources[site.Resource].RadiusMm),site.Obstacle,site.Resource);
     }
 
-    private bool HasBuilding(int team,string name) => StartBuildings.TryGetValue(team,out var starts) && starts.Contains(name)
-        || ConstructionSites.Values.Any(s => s.Team == team && s.Complete && SiteRules(s).Name == name);
+    /// <summary>A completed building of the team that is, or was upgraded from, the named one.</summary>
+    private bool HasBuilding(int team,string name) => StartBuildings.TryGetValue(team,out var starts) && starts.Any(s => Satisfies(s,name))
+        || ConstructionSites.Values.Any(s => s.Team == team && s.Complete && Satisfies(SiteRules(s).Name,name));
 
     public bool CanStartConstruction(int team,int resource,out string reason)
     {
@@ -56,7 +61,7 @@ public sealed partial class SimWorld
             || !ConstructionRules.TryGetValue(source.Kind,out var rules) || !Economies.TryGetValue(team,out var bank)) return false;
         if (site.Team >= 0) { reason = site.Team != team ? "Enemy resource building" : site.Complete ? "Already completed" : "Already under construction"; return false; }
         if (source.RemainingMilli <= 0) { reason = "Resource exhausted"; return false; }
-        if (rules.Prerequisites.Any(name => !HasBuilding(team,name))) { reason = "Required building missing"; return false; }
+        if (MissingPrerequisite(team,rules.Prerequisites) is { } missing) { reason = RequirementReason(missing); return false; }
         if (bank.FoodMilli < rules.FoodCost*1000L || bank.OreMilli < rules.OreCost*1000L) { reason = "Insufficient resources"; return false; }
         foreach (var unit in Units.Where(u => u.Present))
         {
@@ -196,6 +201,6 @@ public sealed partial class SimWorld
     }
 
     private string ConstructionDigest() => ":construction-rules:"+string.Join(';',ConstructionRules.OrderBy(p => p.Key).Select(p => p.Value+":"+string.Join(',',p.Value.Prerequisites)))
-        + ":sites:"+string.Join(';',ConstructionSites.Values.Select(s => $"{s.Id},{s.Building},{s.X},{s.Z},{s.Obstacle},{s.RadiusMm},{s.Team},{s.ProgressMicroTicks},{s.Health},{s.Complete}"))
+        + ":sites:"+string.Join(';',ConstructionSites.Values.Select(s => $"{s.Id},{s.Building},{s.X},{s.Z},{s.Obstacle},{s.RadiusMm},{s.Team},{s.ProgressMicroTicks},{s.Health},{s.Complete},{s.Upgrading},{s.UpgradeTicks}"))
         + ":start-buildings:"+string.Join(';',StartBuildings.OrderBy(p => p.Key).Select(p => p.Key+":"+string.Join(',',p.Value.Order(StringComparer.Ordinal))));
 }

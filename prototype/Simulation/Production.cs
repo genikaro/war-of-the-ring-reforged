@@ -1,6 +1,10 @@
 namespace Reforged.Simulation;
 
-public sealed record ProductionDefinition(string Unit,string DisplayName,int FoodCost,int OreCost,int Population,int DurationTicks,bool Unique = false);
+public sealed record ProductionDefinition(string Unit,string DisplayName,int FoodCost,int OreCost,int Population,int DurationTicks,bool Unique = false,
+    string[]? Prerequisites = null)
+{
+    public override string ToString() => $"{Unit},{DisplayName},{FoodCost},{OreCost},{Population},{DurationTicks},{Unique},{string.Join('/',Prerequisites ?? [])}";
+}
 public sealed record QueuedUnit(string Unit,int Sequence);
 
 public sealed class ProductionBuilding(int id,int team,int x,int z,int exitAnchor,string[] units)
@@ -10,7 +14,8 @@ public sealed class ProductionBuilding(int id,int team,int x,int z,int exitAncho
     public int X { get; } = x;
     public int Z { get; } = z;
     public int ExitAnchor { get; } = exitAnchor;
-    public string[] Units { get; } = units;
+    /// <summary>Source UnitProduced list; an upgrade swaps in the promoted building's list.</summary>
+    public string[] Units { get; internal set; } = units;
     public List<QueuedUnit> Queue { get; } = [];
     public int ProgressTicks { get; internal set; }
     public int RallyCell { get; internal set; } = -1;
@@ -47,6 +52,7 @@ public sealed partial class SimWorld
         reason = "Unknown producer";
         if (!Producers.TryGetValue(building,out var producer) || producer.Team != team || slot < 0 || slot >= producer.Units.Length
             || !ProductionRules.TryGetValue(producer.Units[slot],out var rules) || !Economies.TryGetValue(team,out var bank)) return false;
+        if (MissingPrerequisite(team,rules.Prerequisites ?? []) is { } missing) { reason = RequirementReason(missing); return false; }
         if (producer.Queue.Count >= ProductionQueueLimit) { reason = "Training queue full"; return false; }
         if (rules.Unique && (Units.Any(u => u.Team == team && u.Health > 0 && u.Definition.Name == rules.Unit)
             || Producers.Values.Any(p => p.Team == team && p.Queue.Any(q => q.Unit == rules.Unit))))
@@ -91,7 +97,8 @@ public sealed partial class SimWorld
 
     private void UpdateProduction()
     {
-        foreach (var producer in Producers.Values.Where(p => p.Queue.Count > 0))
+        // ponytail: an upgrade pauses the building's training; the original shows it at the head of the queue (local skirmish-003).
+        foreach (var producer in Producers.Values.Where(p => p.Queue.Count > 0 && !(ConstructionSites.TryGetValue(p.Id,out var site) && site.Upgrading)))
         {
             var rules = ProductionRules[producer.Queue[0].Unit];
             if (InstantBuildTeams.Contains(producer.Team)) producer.ProgressTicks = rules.DurationTicks;

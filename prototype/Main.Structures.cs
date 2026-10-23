@@ -173,8 +173,9 @@ public partial class Main
         if (_selectedStructure is not int id || !_structureViews.TryGetValue(id,out var entry)) return null;
         if (!StructureVisible(entry)) { _selectedStructure = null; return null; }
         var world = _world!;
-        var definition = _structureDefinitions[entry.Type]; int max = definition.GetProperty("max_health").GetInt32();
         var site = entry.Team >= 0 ? world.ConstructionSites.Values.FirstOrDefault(s => s.Obstacle == id && s.Team == entry.Team) : null;
+        // An upgrade changes the building's type under the same view.
+        var definition = _structureDefinitions[site?.Building ?? entry.Type]; int max = definition.GetProperty("max_health").GetInt32();
         int progress = site == null || site.Complete ? 100 : (int)(site.ProgressMicroTicks*100/(world.SiteRules(site).DurationTicks*1_000_000L));
         string resource = entry.Resource < 0 ? "" : $"{world.Resources[entry.Resource].Kind} remaining: {(world.Resources[entry.Resource].RemainingMilli+999)/1000}";
         return new(id,entry.Team,definition.GetProperty("display_name").GetString()!,definition.GetProperty("portrait").GetString()!,site?.Health ?? max,max,

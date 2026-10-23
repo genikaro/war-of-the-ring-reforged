@@ -14,20 +14,21 @@ RALLY_BANNER_FILE = 'objects/' + RALLY_BANNER + '.glb'
 
 
 def production_data(resolver, roster):
-    """Source UnitProduced order per Tier 1 producer. Units beyond Tier 1, fate-point calls and units outside the
-    exported roster are listed as unavailable with the reason."""
+    """Source UnitProduced order per skirmish producer, with each unit's source BuildingRequired list. Units needing
+    a building beyond the skirmish set, fate-point calls and units outside the exported roster are listed as
+    unavailable with the reason."""
     units, buildings = resolver.db['Units'], resolver.db['Buildings']
     variables = resolver.db['WorldVariables'].records[0]
     producers, rules = {}, {}
-    for name in skirmish_map.TIER1_BUILDINGS:
+    for name in skirmish_map.SKIRMISH_BUILDINGS:
         record = buildings.get(name)
         if not record['IsUnitProducer']:
             continue
         producers[name] = {'units': [], 'unavailable': {}}
         for unit in [units.get(record['UnitProduced%d' % i]).name for i in range(1, 7) if record['UnitProduced%d' % i] >= 0]:
             source = units.get(unit)
-            missing = [buildings.get(source['BuildingRequired%d' % i]).name for i in range(1, 5)
-                       if source['BuildingRequired%d' % i] >= 0 and buildings.get(source['BuildingRequired%d' % i]).name not in skirmish_map.TIER1_BUILDINGS]
+            required = [buildings.get(source['BuildingRequired%d' % i]).name for i in range(1, 5) if source['BuildingRequired%d' % i] >= 0]
+            missing = [building for building in required if building not in skirmish_map.SKIRMISH_BUILDINGS]
             reason = ('requires ' + ', '.join(missing) if missing else 'requires fate points' if source['PowerCost']
                       else None if unit in roster else 'model and rules not exported')
             if reason:
@@ -36,9 +37,9 @@ def production_data(resolver, roster):
             producers[name]['units'].append(unit)
             rules[unit] = {'display_name': source['Name'], 'food_cost': source['FoodCost'], 'ore_cost': source['OreCost'],
                            'population': source['PopulationCost'], 'duration_ticks': (source['UnitTrainingTime']+49)//50,
-                           'unique': bool(source['IsUnique'])}
+                           'unique': bool(source['IsUnique']), 'prerequisites': required}
     return {'format_version': 1, 'ticks_per_second': 20, 'producers': producers, 'units': rules,
-            'population_provided': {name: buildings.get(name)['AdditionalPopAdded'] for name in skirmish_map.TIER1_BUILDINGS},
+            'population_provided': {name: buildings.get(name)['AdditionalPopAdded'] for name in skirmish_map.SKIRMISH_BUILDINGS},
             'initial_population_capacity': variables['DefaultInitialPopulationCapacity'],
             'max_population': variables['MaxPopulationCap'], 'rally_banner': RALLY_BANNER_FILE,
             'adapter': 'UnitTrainingTime milliseconds round up to 20 Hz ticks. Cost is paid and population reserved when a unit is queued. '

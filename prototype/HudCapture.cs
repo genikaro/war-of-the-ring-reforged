@@ -41,7 +41,7 @@ public partial class Main
         {
             hud.RefreshConstruction(_world,selected,_constructionTargeting,_constructionBuilding,_constructionChoices,SelectedStructureDetails());
             hud.RefreshStructure(SelectedStructureDetails());
-            hud.RefreshProduction(_world,SelectedProducer());
+            hud.RefreshProduction(_world,SelectedProducer(),SelectedOwnSite(),UpgradePortrait());
         }
         await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
         await ToSignal(RenderingServer.Singleton,RenderingServer.SignalName.FramePostDraw);

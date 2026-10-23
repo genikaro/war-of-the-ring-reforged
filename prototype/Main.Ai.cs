@@ -13,7 +13,7 @@ public partial class Main
     private const int AiTeam = 1;
 
     private bool PassiveEnemyFixture => _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke
-        || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke;
+        || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke;
 
     private void LoadSkirmishAi(JsonElement data)
     {

@@ -63,7 +63,7 @@ public static class PlacementChecks
             "the other worker bound for the same spot joins the foundation");
         check(!camp.Navigation.CanStand(Cell(22,15)) && camp.Navigation.CanStand(Cell(25,15)) && !camp.Navigation.ForBody(1100,700).CanStand(Cell(25,15))
             && !camp.Navigation.ForBody(1200,700).CanStand(Cell(25,15)),"the runtime footprint is rasterized for each body, including graphs created later");
-        check(!camp.CanPlaceBuilding(0,"barracks",Cell(28,9),out string reason) && reason == "Required building missing","Barracks require a completed Camp");
+        check(!camp.CanPlaceBuilding(0,"barracks",Cell(28,9),out string reason) && reason == "Requires camp","Barracks require a completed Camp, named in the refusal");
         Step(camp,200);
         check(site!.Complete && site.Health == 400 && camp.Units.Take(2).All(u => u.Order == OrderKind.Idle) && camp.PopulationCapacity(0) == 21,
             "a completed Camp adds its population and releases the workers");

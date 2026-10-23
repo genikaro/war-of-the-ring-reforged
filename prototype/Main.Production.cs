@@ -19,7 +19,10 @@ public partial class Main
             var rules = unit.Value;
             world.ProductionRules.Add(unit.Name,new(unit.Name,rules.GetProperty("display_name").GetString()!,rules.GetProperty("food_cost").GetInt32(),
                 rules.GetProperty("ore_cost").GetInt32(),rules.GetProperty("population").GetInt32(),rules.GetProperty("duration_ticks").GetInt32(),
-                rules.TryGetProperty("unique",out var unique) && unique.GetBoolean()));
+                rules.TryGetProperty("unique",out var unique) && unique.GetBoolean(),
+                // Build-44 exports each unit's source BuildingRequired list.
+                rules.TryGetProperty("prerequisites",out var required) ? required.EnumerateArray().Select(p => p.GetString()!).ToArray()
+                    : throw new InvalidOperationException("Refresh production: python tools/skirmish_production.py --cache converted/skirmish")));
         }
         foreach (var building in production.GetProperty("population_provided").EnumerateObject()) world.PopulationProvided.Add(building.Name,building.Value.GetInt32());
         world.InitialPopulationCapacity = production.GetProperty("initial_population_capacity").GetInt32();
@@ -42,6 +45,21 @@ public partial class Main
 
     private ProductionBuilding? SelectedProducer() => _selectedStructure is int id && _world!.Producers.TryGetValue(id,out var producer) && producer.Team == PlayerTeam ? producer : null;
 
+    /// <summary>The player's own selected building, finished or not.</summary>
+    private ConstructionSite? SelectedOwnSite() => _selectedStructure is int id
+        ? _world!.ConstructionSites.Values.FirstOrDefault(s => s.Obstacle == id && s.Team == PlayerTeam) : null;
+
+    private string? UpgradePortrait() => SelectedOwnSite() is { } site && _world!.UpgradeRules(site) is { } rules
+        ? _structureDefinitions[rules.Name].GetProperty("portrait").GetString() : null;
+
+    private void ChooseUpgrade()
+    {
+        if (SelectedOwnSite() is not { } site || _world!.UpgradeRules(site) is not { } rules) return;
+        if (!_world.CanUpgrade(PlayerTeam,site.Id,out string reason)) { Notify(reason); return; }
+        _world.Enqueue(PlayerTeam,[],OrderKind.Upgrade,target: site.Id);
+        _status.Text = "Upgrade to "+rules.DisplayName+(_paused ? " queued (paused)" : " order issued");
+    }
+
     private void ChooseTraining(int slot)
     {
         if (SelectedProducer() is not { } producer) return;
@@ -50,9 +68,13 @@ public partial class Main
         _status.Text = "Train "+_world.ProductionRules[producer.Units[slot]].DisplayName+(_paused ? " queued (paused)" : " order issued");
     }
 
-    /// <summary>Queue index from the selection panel, or -1 for Backspace (the last queued unit).</summary>
+    /// <summary>Queue index from the selection panel, or -1 for Backspace (the last queued unit). An upgrade in progress
+    /// heads the panel's queue and is cancelled last by Backspace.</summary>
     private void CancelTraining(int index)
     {
+        if (SelectedOwnSite() is { Upgrading: true } site && (index == 0 || index < 0 && SelectedProducer() is not { Queue.Count: > 0 }))
+        { _world!.Enqueue(PlayerTeam,[],OrderKind.CancelUpgrade,target: site.Id); _status.Text = "Upgrade cancellation queued"; return; }
+        if (SelectedOwnSite() is { Upgrading: true } && index > 0) index--;
         if (SelectedProducer() is not { Queue.Count: > 0 } producer) return;
         _world!.Enqueue(PlayerTeam,[],OrderKind.CancelTraining,index,producer.Id);
         _status.Text = "Training cancellation queued";
@@ -82,7 +104,7 @@ public partial class Main
     private void PresentProduction()
     {
         var producer = SelectedProducer();
-        _commands.RefreshProduction(_world!,producer);
+        _commands.RefreshProduction(_world!,producer,SelectedOwnSite(),UpgradePortrait());
         if (_rallyBanner == null) return;
         _rallyBanner.Visible = producer is { RallyCell: >= 0 };
         if (!_rallyBanner.Visible) return;

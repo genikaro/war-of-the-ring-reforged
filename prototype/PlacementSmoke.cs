@@ -54,8 +54,10 @@ public partial class Main
                 _placementCells = VisiblePlacementCells(SmokeCamp,SmokeBarracks,SmokeCamp);
                 _placementChecks["build_page_replaces_unit_commands"] = _buildMenu && !_commands.BuildButton.Visible && _commands.BuildBackButton.Visible
                     && !_commands.ButtonFor(OrderKind.Attack).Visible && !_commands.ButtonFor(OrderKind.Patrol).Visible;
-                _placementChecks["seven_buildings_in_original_order"] = _constructionChoices.Length == 7 && _constructionChoices.All(c => _commands.ConstructionButton(c.Building) is { Visible: true,Icon: not null })
-                    && !_commands.CancelConstructionButton.Visible && _constructionChoices[3].Building == "BUILDING_G_TOWER";
+                // Seven Tier 1 buildings in the original panel order, then the three Tier 2 buildings (build-44).
+                _placementChecks["tier1_then_tier2_in_original_order"] = _constructionChoices.Length == 10 && _constructionChoices.All(c => _commands.ConstructionButton(c.Building) is { Visible: true,Icon: not null })
+                    && !_commands.CancelConstructionButton.Visible && _constructionChoices[3].Building == "BUILDING_G_TOWER"
+                    && _constructionChoices[9].Building == "BUILDING_G_SKILLS_STRUCTURE" && _commands.ConstructionButton("BUILDING_G_SKILLS_STRUCTURE").Disabled;
                 _placementChecks["unaffordable_citadel_disabled"] = _commands.ConstructionButton("BUILDING_G_TOWN_CENTER_LEVEL_1") is { Disabled: true } citadelButton
                     && citadelButton.TooltipText.Contains("Insufficient resources") && !_commands.ConstructionButton(SmokeCamp).Disabled;
                 Press(_commands.ConstructionButton(SmokeCamp).GetGlobalRect().GetCenter()); break;

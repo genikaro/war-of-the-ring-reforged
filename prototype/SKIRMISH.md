@@ -19,6 +19,7 @@ python tools/skirmish_economy.py --cache converted/skirmish       # build-17 gat
 ./prototype/run.ps1 -PlacementSmoke            # placement, Camp population, queued Barracks, Swordsman training, resume and cancel
 ./prototype/run.ps1 -DwarfHallSmoke            # Dwarf Hall, Axethrower training and thrown axes (credits a test bank first)
 ./prototype/run.ps1 -FrodoSmoke                # Frodo training, hero portraits and the One Ring (credits a test bank first)
+./prototype/run.ps1 -TechSmoke                 # Citadel 2 and War Camp upgrades, Tier 2 locks and a Forge (credits a test bank first)
 ```
 
 The cache is separate from `converted/prototype` (Helm's Deep), so both sandboxes
@@ -1916,3 +1917,62 @@ Validation: `SimulationTests` passes all 803 checks (2 new). A wide body left
 where its cell centre is too close to a wall walks around it to its target and
 strikes (with `PlanningNode` disabled it never moves), and eight home soldiers
 answer three raiders 3/3/2.
+
+## Build-44: Citadel 2 and the Tier 2 buildings
+
+Owner request: carry on with the Good technology tree from the October 22
+original-game captures. This build opens Tier 2; its units come next.
+
+| Item | Source / capture |
+|---|---|
+| Citadel 1 to 2 | `Buildings.PromotesTo`; Citadel 2 costs 115 food / 105 ore, `UpgradeTime` 50 s, 1000 health, armor 4 (capture 011) |
+| Camp to War Camp | 0 food / 55 ore, 40 s, 500 health, population 15 instead of 11 (capture 015: 21 to 25) |
+| Wilderness Outpost, Ranger Post, Forge | Placed by workers, each `BuildingRequired1` = Citadel 2: 85/110, 95/100 (capture 014), 75/100 (capture 010) |
+| Prerequisites | Every building's and unit's source `BuildingRequired` list; an upgraded building still counts as what it was built as, so Citadel 2 satisfies "Citadel 1" |
+| Upgrade panel | The next building's portrait in the bottom-left action slot (Z), as the original shows Citadel 3 there (capture 011); during the upgrade its portrait heads the queue with the purple bar (capture 003) |
+
+- `SimWorld.Upgrades` maps a building to the one it becomes. `OrderKind.Upgrade`
+  pays the promoted building's cost; `CancelUpgrade` refunds its source
+  `RefundFoodPct`/`RefundOrePct` (75%). On completion the site's `Building`
+  changes in place: health rises by the difference of the maxima (damage carries
+  over), a start building's `StartBuildings` entry follows, and a producer takes
+  the new building's unit list.
+- Training waits while the building upgrades; queued units stay queued. The
+  original shows the upgrade at the head of the queue, so this is an adapter.
+- The upgraded building keeps its footprint. The source boxes match: the Citadel
+  levels share one, the War Camp is 1 cm wider than the Camp.
+- Locked buttons say what is missing ("Requires Citadel 2"), on the Build page,
+  the training buttons and the upgrade.
+- The view swaps to the promoted model (`MODEL_G_KEEP_LEVEL_2`,
+  `MODEL_G_CAMP_UPGRADE`), and picking follows the new geometry. Citadel 2 has
+  no source construction state 18; a missing state shows the healthy one.
+- Importer: `skirmish_map.TIER2_BUILDINGS`/`SKIRMISH_BUILDINGS`,
+  `skirmish_construction.upgrade_data` (`construction.upgrades`) and
+  `export_buildings`, which converts every skirmish building model (twelve now)
+  on a refresh. Production exports each unit's `prerequisites`. The interface
+  export takes every Good building and unit portrait.
+- The Build page now holds ten buildings plus Back, 11 of the 4x3 grid's 12
+  slots. Tier 3 adds three more (House of Lore, Elven Sanctuary, Nature Haven), so
+  it needs the paging or categories the owner deferred at build-16.
+- Not yet: Citadel 3-5, Ballista Tower, Forge and Outpost research, the Rider,
+  Shieldbreaker and Ranger, and bots using any of it (they skip what they cannot
+  build). Aragorn and the other heroes at the Citadel need fate points in the
+  source and stay unavailable.
+
+Refresh an existing cache with
+`python tools/skirmish_construction.py --cache <cache>` (it also refreshes the
+interface art and production data) and `python tools/skirmish_ai.py --cache <cache>`.
+Owner rule (Oct 23): tech-tree builds are developed on Bilbo's Bluffs only and the
+other map caches are refreshed once when the series is done; until then other maps
+in the setup screen may ask for this refresh.
+
+Validation: `-TechSmoke` (15 cases, credited test bank) drives it all through the
+UI: Tier 2 buttons locked, the Citadel upgrade with its tooltip and cost, the
+worker queued behind it, cancel and the 75% refund, the Z hotkey, training paused
+for the upgrade, Citadel 2 with 1000/1000 health and its own model, training
+resuming, the War Camp upgrade taking capacity from 21 to 25, and a Forge laid for
+75/100. `-PlacementSmoke` now expects the ten-building page. `SimulationTests`
+passes 813 checks (10 new in `UpgradeChecks`: cost, paused training, 75% refund,
+promotion keeping damage, prerequisite lineage, replay and digest). Python tests
+check the exported upgrades, Tier 2 costs and population. Bot matches are
+unchanged: the observer smoke still ends with Gimli winning at tick 16534.

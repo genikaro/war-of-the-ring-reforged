@@ -7,8 +7,8 @@ public partial class CommandPanel
 {
     public event Action<string?>? ConstructionChosen;
     public event Action<bool>? BuildMenuChosen;
-    // Seven Tier 1 buildings in the original worker panel order fill the action grid row by row.
-    private readonly Button[] _constructionButtons = new Button[7];
+    // Tier 1 buildings in the original worker panel order, then Tier 2, fill the action grid row by row up to Back.
+    private readonly Button[] _constructionButtons = new Button[BackSlot];
     private Button _buildButton = null!,_backButton = null!,_cancelConstructionButton = null!;
     private string[] _constructionNames = [];
     private readonly Dictionary<ResourceKind,int> _resourceSlots = [];

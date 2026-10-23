@@ -56,7 +56,7 @@ public sealed partial class SimWorld
     {
         reason = "Unknown building";
         if (!BuildingRules.TryGetValue(building,out var rules) || !Placements.ContainsKey(building) || !Economies.TryGetValue(team,out var bank)) return false;
-        if (rules.Prerequisites.Any(name => !HasBuilding(team,name))) { reason = "Required building missing"; return false; }
+        if (MissingPrerequisite(team,rules.Prerequisites) is { } missing) { reason = RequirementReason(missing); return false; }
         if (bank.FoodMilli < rules.FoodCost*1000L || bank.OreMilli < rules.OreCost*1000L) { reason = "Insufficient resources"; return false; }
         reason = "Ready to build"; return true;
     }

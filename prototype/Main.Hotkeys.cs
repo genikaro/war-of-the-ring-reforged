@@ -20,6 +20,7 @@ public partial class Main
             }
             return true;
         }
+        if (slot == CommandPanel.UpgradeSlot && _commands.UpgradeButton.Visible) { ChooseUpgrade(); return true; }
         if (SelectedProducer() is { } producer)
         {
             if (slot >= producer.Units.Length) return false;

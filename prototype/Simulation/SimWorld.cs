@@ -198,6 +198,8 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         if (command.Kind == OrderKind.CancelConstruction) { CancelConstruction(command); return; }
         if (command.Kind == OrderKind.Train) { BeginTraining(command); return; }
         if (command.Kind == OrderKind.CancelTraining) { CancelTraining(command); return; }
+        if (command.Kind == OrderKind.Upgrade) { BeginUpgrade(command); return; }
+        if (command.Kind == OrderKind.CancelUpgrade) { CancelUpgrade(command); return; }
         if (command.Kind is OrderKind.SetRallyPoint or OrderKind.SetRallyResource) { SetRallyPoint(command); return; }
         if (command.Kind == OrderKind.Gather) { BeginGather(command,activating); return; }
         if (command.Kind == OrderKind.AttackStructure) { BeginSiege(command,activating); return; }
@@ -560,7 +562,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         using (SimProfiler.Time("ai")) UpdateAi();
         using (SimProfiler.Time("construction")) { UpdateConstruction(); UpdateRepairs(); }
         using (SimProfiler.Time("defenses")) UpdateDefenses();
-        using (SimProfiler.Time("production")) UpdateProduction();
+        using (SimProfiler.Time("production")) { UpdateUpgrades(); UpdateProduction(); }
         UpdateHeroAbilities();
         using (SimProfiler.Time("route rebase")) if (_navigationRevision != Navigation.Revision)
         {
@@ -773,6 +775,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         text += ConstructionDigest();
         text += ProductionDigest();
         text += PlacementDigest();
+        text += UpgradeDigest();
         text += SiegeDigest();
         text += DefenseDigest();
         text += OutcomeDigest();

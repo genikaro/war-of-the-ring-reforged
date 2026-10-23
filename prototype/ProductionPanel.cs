@@ -5,6 +5,11 @@ public partial class CommandPanel
 {
     public event Action<int>? TrainingChosen;
     public event Action<int>? TrainingCancelled;
+    public event Action? UpgradeChosen;
+    /// <summary>Bottom-left grid position, where the original shows the next Citadel level (local skirmish-011).</summary>
+    public const int UpgradeSlot = 8;
+    private Button _upgradeButton = null!;
+    public Button UpgradeButton => _upgradeButton;
     private readonly Button[] _trainButtons = new Button[4];
     private readonly Button[] _queueButtons = new Button[SimWorld.ProductionQueueLimit];
     private Control _training = null!,_trainingProgress = null!;
@@ -14,6 +19,7 @@ public partial class CommandPanel
     public bool TrainingVisible => _training.IsVisibleInTree();
     public float TrainingProgressWidth => _trainingProgress.Size.X;
     public bool TrainingBarLoaded => _trainingBar.Texture != null;
+    /// <summary>Only building actions on show: training, plus the upgrade where the building has one.</summary>
     public bool PaletteOnlyTraining => _trainButtons.Any(b => b.Visible) && !_buttons.Values.Concat(_abilities).Concat(_constructionButtons)
         .Concat([_buildButton,_backButton,_cancelConstructionButton]).Any(b => b.Visible);
 
@@ -26,6 +32,7 @@ public partial class CommandPanel
             Skin(button); AddHotkey(button,GridKeys[slot].ToString()); button.Pressed += () => TrainingChosen?.Invoke(chosen);
             _trainButtons[slot] = button; _content.AddChild(button);
         }
+        _upgradeButton = ActionButton(UpgradeSlot); _upgradeButton.Pressed += () => UpgradeChosen?.Invoke();
         // Original selection panel: the unit in training with the purple bar, followed by the queue.
         _training = new Control { Position = new(270,58),Size = new(235,46),Visible = false,MouseFilter = MouseFilterEnum.Ignore };
         _structureDetails.AddChild(_training);
@@ -44,9 +51,13 @@ public partial class CommandPanel
         _trainingProgress.AddChild(_trainingBar);
     }
 
-    public void RefreshProduction(SimWorld world,ProductionBuilding? producer)
+    /// <summary>Training buttons, the upgrade button and the queue of the player's selected building. An upgrade in
+    /// progress heads the queue, as in the original (local skirmish-003), and its portrait cancels it.</summary>
+    public void RefreshProduction(SimWorld world,ProductionBuilding? producer,ConstructionSite? site = null,string? upgradePortrait = null)
     {
-        _training.Visible = producer is { Queue.Count: > 0 };
+        var upgrade = site is { Complete: true } && site.Team == PlayerTeam ? world.UpgradeRules(site) : null;
+        bool upgrading = upgrade != null && site!.Upgrading;
+        _training.Visible = producer is { Queue.Count: > 0 } || upgrading;
         for (int slot = 0; slot < _trainButtons.Length; slot++)
         {
             var button = _trainButtons[slot];
@@ -59,20 +70,45 @@ public partial class CommandPanel
                 + $"\nClick again to queue up to {SimWorld.ProductionQueueLimit}. Click a portrait in training or press Backspace to cancel for a full refund."
                 + (button.Disabled ? "\n"+reason : "");
         }
-        if (producer == null) return;
-        string rally = producer.RallyResource >= 0 ? $"New workers gather {world.Resources[producer.RallyResource].Kind.ToString().ToLowerInvariant()} · right-click to move the rally point"
-            : producer.RallyCell >= 0 ? "Rally point set · right-click to move it" : "Right-click the battlefield, or a Mill or Foundry, to set a rally point";
-        if (producer.Queue.Count == 0) { _order.Text = "Your structure · "+rally; return; }
-        var active = world.ProductionRules[producer.Queue[0].Unit];
-        int percent = producer.ProgressTicks*100/active.DurationTicks;
-        _order.Text = $"Training {active.DisplayName} {percent}%"+(producer.Queue.Count > 1 ? $" · {producer.Queue.Count-1} queued" : "")+" · "+rally;
+        _upgradeButton.Visible = upgrade != null;
+        if (upgrade != null)
+        {
+            _upgradeButton.Disabled = !world.CanUpgrade(PlayerTeam,site!.Id,out string reason);
+            _upgradeButton.Icon = upgradePortrait == null ? null : _art.GetValueOrDefault(upgradePortrait);
+            var opens = world.BuildingRules.Values.Where(r => r.Prerequisites.Contains(upgrade.Name)).Select(r => r.DisplayName)
+                .Concat(world.ProductionRules.Values.Where(r => r.Prerequisites?.Contains(upgrade.Name) == true).Select(r => r.DisplayName)).ToArray();
+            int population = world.PopulationProvided.GetValueOrDefault(upgrade.Name)-world.PopulationProvided.GetValueOrDefault(site.Building!);
+            _upgradeButton.TooltipText = $"Upgrade to {upgrade.DisplayName} [{GridKeys[UpgradeSlot]}]\n{upgrade.FoodCost} food · {upgrade.OreCost} ore · {upgrade.DurationTicks/20}s · {upgrade.MaxHealth} health"
+                + (population > 0 ? $" · +{population} population" : "")
+                + (opens.Length > 0 ? "\nOpens "+string.Join(", ",opens) : "")
+                + $"\nTraining waits while the upgrade runs. Click its portrait to cancel for a {upgrade.FoodRefundPpm/10000}% refund."
+                + (_upgradeButton.Disabled ? "\n"+reason : "");
+        }
+        if (producer == null && !upgrading) return;
+        string rally = producer == null ? "" : " · "+(producer.RallyResource >= 0 ? $"New workers gather {world.Resources[producer.RallyResource].Kind.ToString().ToLowerInvariant()} · right-click to move the rally point"
+            : producer.RallyCell >= 0 ? "Rally point set · right-click to move it" : "Right-click the battlefield, or a Mill or Foundry, to set a rally point");
+        var queue = producer?.Queue ?? [];
+        if (!upgrading && queue.Count == 0) { _order.Text = "Your structure"+rally; return; }
+        int done = upgrading ? site!.UpgradeTicks : producer!.ProgressTicks;
+        int duration = upgrading ? upgrade!.DurationTicks : world.ProductionRules[queue[0].Unit].DurationTicks;
+        int percent = done*100/duration,waiting = queue.Count-(upgrading ? 0 : 1);
+        _order.Text = (upgrading ? $"Upgrading to {upgrade!.DisplayName} {percent}%" : $"Training {world.ProductionRules[queue[0].Unit].DisplayName} {percent}%")
+            + (waiting > 0 ? $" · {waiting} queued" : "")+rally;
         _trainingBar.Texture ??= _art.GetValueOrDefault("console_g_progressbar");
-        _trainingProgress.Size = new(185f*producer.ProgressTicks/active.DurationTicks,6);
+        _trainingProgress.Size = new(185f*done/duration,6);
+        int offset = upgrading ? 1 : 0;
         for (int index = 0; index < _queueButtons.Length; index++)
         {
-            var button = _queueButtons[index]; button.Visible = index < producer.Queue.Count;
+            var button = _queueButtons[index]; button.Visible = index < queue.Count+offset;
             if (!button.Visible) continue;
-            var rules = world.ProductionRules[producer.Queue[index].Unit];
+            if (index < offset)
+            {
+                button.Icon = upgradePortrait == null ? null : _art.GetValueOrDefault(upgradePortrait);
+                button.TooltipText = $"Upgrading to {upgrade!.DisplayName} · {percent}%\nClick to cancel and receive "
+                    + $"{upgrade.FoodCost*upgrade.FoodRefundPpm/1_000_000} food and {upgrade.OreCost*upgrade.OreRefundPpm/1_000_000} ore";
+                continue;
+            }
+            var rules = world.ProductionRules[queue[index-offset].Unit];
             button.Icon = _art.GetValueOrDefault(PortraitName(rules.DisplayName));
             button.TooltipText = (index == 0 ? $"Training {rules.DisplayName} · {percent}%" : $"Queued {rules.DisplayName}")
                 + $"\nClick to cancel and receive {rules.FoodCost} food and {rules.OreCost} ore";

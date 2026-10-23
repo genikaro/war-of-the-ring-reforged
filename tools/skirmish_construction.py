@@ -1,4 +1,4 @@
-"""Tier 1 construction rules, resource-site collision layers and open-ground placement footprints.
+"""Tier 1 and 2 construction rules, building upgrades, resource-site collision layers and open-ground placement footprints.
 
 python tools/skirmish_construction.py --cache converted/skirmish
 """
@@ -15,11 +15,14 @@ BUILDINGS = {'food': 'BUILDING_G_FOOD_STRUCTURE', 'ore': 'BUILDING_G_BLACKSMITH'
 OBSTACLE_BASE = 20000
 # Good worker construction panel order observed in local-009 (original 1.01.0011).
 CONSTRUCTION_ORDER = [skirmish_map.CITADEL, BUILDINGS['food'], BUILDINGS['ore'], 'BUILDING_G_TOWER',
-                      'BUILDING_G_WORKER_STRUCTURE', 'BUILDING_G_GONDORIAN_BARRACKS', 'BUILDING_G_DWARF_BARRACKS']
+                      'BUILDING_G_WORKER_STRUCTURE', 'BUILDING_G_GONDORIAN_BARRACKS', 'BUILDING_G_DWARF_BARRACKS',
+                      # Tier 2, left to right as the captured building tree (local skirmish-013) draws them.
+                      'BUILDING_G_ARMORY', 'BUILDING_G_RANGER_BARRACKS', 'BUILDING_G_SKILLS_STRUCTURE']
 
 
 def display_name(name, record):
-    return 'Citadel 1' if name == skirmish_map.CITADEL else record['Name']
+    """The source names the Citadel levels "Stronghold Level N"; the game's tree and panels say Citadel N."""
+    return 'Citadel ' + name[-1] if name.startswith('BUILDING_G_TOWN_CENTER_LEVEL_') else record['Name']
 
 
 def building_rules(resolver, name):
@@ -35,6 +38,20 @@ def building_rules(resolver, name):
                               for i in range(1, 4) if record['BuildingRequired%d' % i] >= 0]}
 
 
+def upgrade_data(resolver):
+    """Buildings that turn into another in place (source PromotesTo: Citadel 1 to 2, Camp to War Camp), keyed by the
+    building upgraded: the promoted building's rules, with its source UpgradeTime as the duration."""
+    upgrades = {}
+    for name in skirmish_map.SKIRMISH_BUILDINGS:
+        record = resolver.db['Buildings'].get(name)
+        if record['PromotesTo'] < 0:
+            continue
+        promoted = resolver.db['Buildings'].get(record['PromotesTo'])
+        if promoted.name in skirmish_map.SKIRMISH_BUILDINGS:
+            upgrades[name] = {**building_rules(resolver, promoted.name), 'duration_ticks': (promoted['UpgradeTime']+49)//50}
+    return upgrades
+
+
 def placement_data(resolver):
     """Open-ground Tier 1 buildings: source rules plus the oriented-collision footprint relative to the origin."""
     placeable = {}
@@ -47,12 +64,14 @@ def placement_data(resolver):
             'footprint': {'polygon_mm': [[round(x*1000), round(z*1000)] for x, z in footprint['polygon']],
                           'min_height_mm': round(footprint['y_min']*1000), 'max_height_mm': round(footprint['y_max']*1000)},
             'must_be_near': bool(record['MustBePlacedNearOtherBuildings']), 'drop_off': bool(record['IsResourceDropOffBuilding'])}
-    return {'order': CONSTRUCTION_ORDER, 'placeable': placeable,
+    return {'order': CONSTRUCTION_ORDER, 'placeable': placeable, 'upgrades': upgrade_data(resolver),
             'placement_radius_mm': {name: round(resolver.db['Buildings'].get(name)['MaxRadiusAllowingNewBuildings']*1000)
-                                    for name in skirmish_map.TIER1_BUILDINGS},
+                                    for name in skirmish_map.SKIRMISH_BUILDINGS},
             'placement_adapter': 'Footprints use source building passability (PATHING_CATEGORY_BUILDING) and current walker '
                                  'clearance under the oriented-collision box, no rotation. MustBePlacedNearOtherBuildings uses '
-                                 'center distance to completed buildings within their MaxRadiusAllowingNewBuildings.'}
+                                 'center distance to completed buildings within their MaxRadiusAllowingNewBuildings. '
+                                 'An upgraded building keeps the footprint it was placed with (Citadel levels share one box; '
+                                 'the War Camp box is 1 cm wider than the Camp).'}
 
 
 def projectile_joint_mm(resolver, building, flag):
@@ -105,7 +124,7 @@ def construction_data(resolver, resources):
         footprints.append(footprint)
         sites.append({'resource': node['id'], 'kind': node['kind'], 'obstacle': obstacle})
     buildings = {}
-    for name in skirmish_map.TIER1_BUILDINGS:
+    for name in skirmish_map.SKIRMISH_BUILDINGS:
         record = resolver.db['Buildings'].get(name)
         portrait = resolver.db['UVAs'].get(record['Portrait'])
         buildings[name] = {'display_name': display_name(name, record),
@@ -115,11 +134,27 @@ def construction_data(resolver, resources):
     return {'definitions': definitions, 'sites': sites, 'buildings': buildings}, footprints
 
 
+def export_buildings(output, resolver):
+    """Every skirmish building model, restored with its scaffold stages; returns building name to cache file."""
+    from lms2gltf import convert_model
+    import prototype_assets
+    building_dir = output / 'buildings'
+    building_dir.mkdir(exist_ok=True)
+    files = {}
+    for name in skirmish_map.SKIRMISH_BUILDINGS:
+        model = resolver.db['Models'].get(resolver.db['Buildings'].get(name)['Model'])
+        target = building_dir / (model.name + '.glb')
+        convert_model(resolver, model.name, str(target))
+        # Scaffold stages and the healthy state are selected at runtime.
+        prototype_assets.restore_building(target)
+        files[name] = 'buildings/' + target.name
+    return files
+
+
 def refresh(output):
     import prepare_prototype
     import prototype_clearance
     import prototype_interface
-    import prototype_assets
     import world_scene
     output = output.resolve()
     if any(output.is_relative_to(wor.ROOT / p) for p in ['extracted', 'TLOTR - War of the Ring']):
@@ -130,9 +165,8 @@ def refresh(output):
     if manifest.get('mode') != 'skirmish':
         raise ValueError('construction refresh requires a skirmish cache')
     data = manifest['skirmish']
-    building_paths = [output / data['building_files'][name] for name in skirmish_map.TIER1_BUILDINGS]
-    for building_path in building_paths:
-        prototype_assets.restore_building(building_path)
+    data['building_files'] = export_buildings(output, resolver)
+    building_paths = [output / file for file in sorted(set(data['building_files'].values()))]
     construction, footprints = construction_data(resolver, data['resources'])
     bases = [skirmish_map.building_footprint(resolver, skirmish_map.CITADEL, base['position'], base['footprint_object'])[0]
              for base in data['bases']]

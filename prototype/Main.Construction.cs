@@ -17,8 +17,10 @@ public partial class Main
     private StandardMaterial3D? _previewMaterial,_ghostMaterial;
     private readonly Dictionary<(string Building,int X,int Z),Node3D> _foundationGhosts = [];
     private bool _previewValid;
-    private sealed class BuildingVisual(Node3D root,UnitAppearance appearance,AnimationPlayer? player,string[] clips,HealthBar bar)
+    private sealed class BuildingVisual(Node3D root,Node3D model,UnitAppearance appearance,AnimationPlayer? player,string[] clips,HealthBar bar,string building)
     {
+        public string Building = building;
+        public Node3D Model = model;
         public Node3D Root = root;
         public UnitAppearance Appearance = appearance;
         public AnimationPlayer? Player = player;
@@ -34,9 +36,9 @@ public partial class Main
 
     private void LoadSkirmishConstruction(JsonElement data)
     {
-        // build-25 adds the Watchtower's source defenses.
+        // build-25 adds the Watchtower's source defenses, build-44 the upgrades.
         if (!data.TryGetProperty("construction",out var construction) || !construction.TryGetProperty("placeable",out var placeable)
-            || !construction.TryGetProperty("defenses",out var defenses))
+            || !construction.TryGetProperty("defenses",out var defenses) || !construction.TryGetProperty("upgrades",out var upgrades))
             throw new InvalidOperationException("Refresh construction: python tools/skirmish_construction.py --cache converted/skirmish");
         var world = _world!;
         foreach (var start in OpenBases(data))
@@ -69,6 +71,14 @@ public partial class Main
             world.Placements.Add(item.Name,new(polygon,footprint.GetProperty("min_height_mm").GetInt32(),footprint.GetProperty("max_height_mm").GetInt32(),
                 InteractionRadius(polygon.Select(p => Math.Sqrt((double)p.X*p.X+(double)p.Z*p.Z)).Max()),
                 item.Value.GetProperty("must_be_near").GetBoolean(),item.Value.GetProperty("drop_off").GetBoolean()));
+        }
+        foreach (var item in upgrades.EnumerateObject())
+        {
+            string promoted = item.Value.GetProperty("name").GetString()!;
+            world.BuildingRules.Add(promoted,Rules(item.Value,null));
+            world.Upgrades.Add(item.Name,promoted);
+            // ponytail: the upgraded building keeps the footprint it was placed with (the source boxes match).
+            world.Placements.Add(promoted,world.Placements[item.Name]);
         }
         foreach (var item in defenses.EnumerateObject())
         {
@@ -201,12 +211,14 @@ public partial class Main
         }
     }
 
-    /// <summary>Source construction thirds (states 19/17/18) followed by the healthy state 0 of a restored building model.</summary>
+    /// <summary>Source construction thirds (states 19/17/18) followed by the healthy state 0 of a restored building model.
+    /// A building only ever reached by upgrade may lack a construction state (Citadel 2 has no 18); it shows the healthy one.</summary>
     private static string[] BuildingStateClips(JsonElement data)
     {
-        var states = data.GetProperty("models")[0].GetProperty("states");
-        return new[] {19,17,18,0}.Select(id => states.EnumerateArray().First(s => s.GetProperty("id").GetInt32() == id)
-            .GetProperty("choices")[0].GetProperty("clip").GetString()!).ToArray();
+        var states = data.GetProperty("models")[0].GetProperty("states").EnumerateArray().ToArray();
+        string Clip(int id) => (states.FirstOrDefault(s => s.GetProperty("id").GetInt32() == id) is { ValueKind: JsonValueKind.Object } state ? state
+            : states.First(s => s.GetProperty("id").GetInt32() == 0)).GetProperty("choices")[0].GetProperty("clip").GetString()!;
+        return new[] {19,17,18,0}.Select(Clip).ToArray();
     }
 
     private void ClearConstructionTargeting()
@@ -266,6 +278,20 @@ public partial class Main
         _previewMaterial!.AlbedoColor = _previewValid ? new Color(.3f,1,.3f,.45f) : new Color(1,.15f,.1f,.5f);
     }
 
+    /// <summary>An upgraded building takes its new model; picking follows the new geometry.</summary>
+    private void SwapBuildingModel(ConstructionSite site,BuildingVisual view,string building)
+    {
+        view.Model.QueueFree();
+        var model = LoadGlb(_constructionFiles[building],_teamColors[site.Team]); view.Root.AddChild(model);
+        var data = UnitAppearance.Read(System.IO.Path.Combine(_cache,_constructionFiles[building]));
+        view.Model = model; view.Appearance = new UnitAppearance(model,data); view.Clips = BuildingStateClips(data);
+        view.Player = Descendants(model).OfType<AnimationPlayer>().FirstOrDefault();
+        view.Building = building; view.Stage = -1;
+        var entry = _structureViews[site.Obstacle];
+        _structureViews[site.Obstacle] = entry with { Type = building,
+            Meshes = Descendants(model).OfType<MeshInstance3D>().Where(m => m.Mesh != null).Select(m => (Mesh: m,Faces: m.Mesh!.GetFaces())).ToArray() };
+    }
+
     private void PresentConstruction()
     {
         foreach (int id in _constructionViews.Keys.Where(id => !_world!.ConstructionSites.TryGetValue(id,out var s) || s.Team < 0).ToArray())
@@ -288,12 +314,13 @@ public partial class Main
                 var clips = BuildingStateClips(appearanceData);
                 var (barWidth,barHeight) = SiteBarSize(site);
                 var bar = new HealthBar(barWidth,barHeight) { Position = new(0,.14f,0) };
-                view = new(root,new UnitAppearance(model,appearanceData),Descendants(model).OfType<AnimationPlayer>().FirstOrDefault(),clips,bar);
+                view = new(root,model,new UnitAppearance(model,appearanceData),Descendants(model).OfType<AnimationPlayer>().FirstOrDefault(),clips,bar,rules.Name);
                 _constructionViews.Add(site.Id,view);
                 RegisterStructure(site.Obstacle,site.Team,rules.Name,root,site.Resource);
                 // Added after registration so the strip is not picked as the structure's own geometry.
                 root.AddChild(bar);
             }
+            if (view.Building != rules.Name) SwapBuildingModel(site,view,rules.Name);
             int stage = site.Complete ? 3 : (int)Math.Min(2,site.ProgressMicroTicks*3/(rules.DurationTicks*1_000_000L));
             if (stage != view.Stage)
             {
