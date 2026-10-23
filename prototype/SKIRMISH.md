@@ -48,7 +48,7 @@ no behavior and no AI; nothing in build-4 changes unit rules.
 
 - All seven Tier 1 buildings can be built; gathering, selection and the
   Worker, Gondor Swordsman, Dwarf Axethrower and Frodo training work. Hero
-  experience and levels, regeneration, Sting's glow and the aura effect, the
+  experience and levels, Sting's glow and the aura effect, the
   Axethrower's second (right-hand) throw, Watchtower defenses and garrisons,
   building rotation, repair and combat against buildings remain open.
 - Worker gathering and hammering sounds, the ore-mining effect, repair, exact
@@ -2337,7 +2337,7 @@ every one, and the owner's playtest found the wounded impossible to finish. The 
 is a stateless hash of unit, tick and team, like a unit's choice of swing, so
 replays stay identical. A soldier that retreated defends the base but joins no
 party or guard until it is above half its health again (owner rule). Nothing
-regenerates yet, so for now it stays home; regeneration is planned.
+regenerates yet, so for now it stays home; regeneration is planned (build-52 adds it).
 
 **Stragglers rally** (owner request). Soldiers left idle in the field, outside the
 party and more than 40 m from every own building, were still counted as the home
@@ -2481,3 +2481,54 @@ ticked in the lobby, Rusher dropping Defender, reach the bot and come back with 
 setup); `-ObserverSmoke -Bots Gimli+Defender,Aragorn` passes, its tooltip check
 covering the traits. All 16 Bilbo smokes pass; the regroup fix moves the observer
 reference (Gimli against Aragorn) to Aragorn winning at tick 20180, 16:49 (digest 6E2A8FEB...).
+
+## Build-52: health regeneration
+
+Owner request, after the build-50 rule that a retreated soldier rejoins parties only
+above half its health. The source has regeneration data, but its base constant is
+in Rings.exe:
+
+- `UnitAnimStates` gives every animation state a `HealthRegenerationRate` and a
+  `HealthRegenerationRateHero`: 1.0 for idle, walking, the attack stance and the
+  special (casting) states; 0 for running, gathering and carrying, mounting and
+  dying; 0 mid-swing (heroes 0.167); 2.0 for repairing and extinguishing.
+- `Units.HealthRegenerationMultiplier` is 1.0 for every soldier and worker and 2.25
+  for the heroes.
+- The place-of-power modifier `HEALTH_REGENERATION_RATE` "increases or decreases
+  the HP/second health regen rate" (Ancient Fountain +1, Balrog Glyph +15 for the
+  Balrog), and Frodo's One Ring disables regeneration on activation and enables it
+  again on deactivation (`SPELL_ACTION_ENABLE_REGENERATION`).
+
+So the state rate reads as HP per second, the place of power adding to it. An idle
+Swordsman (155 HP) heals fully in about 2.5 minutes, Aragorn (485 HP) in about
+3.5; a soldier in a fight heals nothing, and only between fights.
+
+**Simulation** (`Simulation/Regeneration.cs`): every tick after combat a living
+unit regains its state's rate times its multiplier, in whole milli-HP (fractions
+dropped: a hero mid-swing gets 0.36 instead of 0.375 HP a second), never above its
+maximum. States, in order: casting, mid-swing (bounded by the swing's length: a
+unit keeps its last swing's start after a fight), gathering or carrying a load,
+building or repairing on the spot, walking, running, in an attack stance, idle.
+Nothing inside a Mill or Foundry, while the One Ring is on, or when dead.
+
+**Data:** `combat_rules.py` exports each unit's `RegenerationPpm` and a
+`Regeneration` block of the eight state rates for units and heroes (with the source
+state names in `RegenerationSource`); `python tools/content_pack.py` rebuilds the
+pack, and no map needs re-importing. Rules without the block (the Helm's Deep demo
+cache, older packs) leave health alone.
+
+**Bots:** a Hard bot's soldier pulled out wounded (build-50) now heals at home: from
+a quarter to half its health, about 40 s for a Swordsman, after which it joins
+parties again.
+
+Not simulated: places of power. The HP-per-second reading and the state mapping are
+adapters; a timed capture of an idle wounded unit in the original game would settle
+the rate (Roadmap, combat validation).
+
+Validation: `SimulationTests` 873 checks (10 new in `RegenerationChecks`: idle
+soldier and hero rates, the cap at full health, the dead, running against walking,
+mid-swing for a soldier and a hero, regeneration after a fight, gathering, carrying
+and building, the One Ring, rules without rates, and the content pack's rates); a
+new Python test for the export. All 16 Bilbo smokes and the setup smoke pass; the
+observer reference (Gimli against Aragorn) is now Aragorn winning at tick 27344,
+22:47 (digest 0713B2C9...).

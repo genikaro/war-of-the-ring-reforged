@@ -764,6 +764,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         }
         using (SimProfiler.Time("facing")) FaceMovement();
         using (SimProfiler.Time("projectiles")) AdvanceProjectiles();
+        using (SimProfiler.Time("regeneration")) UpdateRegeneration();
         using (SimProfiler.Time("outcome")) UpdateOutcome();
         Tick++;
     }

@@ -30,6 +30,15 @@ class CombatAdapterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             combat_rules.trail_profile({'duration_ms':0,'keys':[]})
 
+    def test_regeneration_reads_both_rate_columns_of_each_state(self):
+        rows = {name: {'HealthRegenerationRate': 1.0,'HealthRegenerationRateHero': 1.0} for name in combat_rules.REGENERATION_STATES.values()}
+        rows['UNIT_ANIM_STATE_RUN'] = {'HealthRegenerationRate': 0.0,'HealthRegenerationRateHero': 0.0}
+        rows['UNIT_ANIM_STATE_ATTACK_MELEE_01'] = {'HealthRegenerationRate': 0.0,'HealthRegenerationRateHero': 0.16699999570846558}
+        rows['UNIT_ANIM_STATE_REPAIR'] = {'HealthRegenerationRate': 2.0,'HealthRegenerationRateHero': 2.0}
+        rates = combat_rules.regeneration(Mock(get=rows.get))
+        self.assertEqual(len(rates),2*len(combat_rules.REGENERATION_STATES))
+        self.assertEqual((rates['IdleMilli'],rates['RunMilli'],rates['AttackMilli'],rates['AttackHeroMilli'],rates['RepairMilli']),(1000,0,0,167,2000))
+
     def test_locomotion_ratio_uses_source_xy_and_state_choices(self):
         skeleton = SimpleNamespace(joints=[SimpleNamespace(name='J_Position ')], clips=[
             SimpleNamespace(name='walk',duration=2,tracks=[SimpleNamespace(positions=[(0,0,0),(0,4,99)])]),

@@ -205,7 +205,8 @@ impact playback. Reports are `melee-smoke-report.json` and
 proportional HUD. Existing command/group, motion, surface and obstacle checks
 remain regressions.
 
-Unsupported rules: upgrades, levels above one, regeneration, height bonuses,
+Unsupported rules: upgrades, levels above one, regeneration in this demo (its cache predates build-52;
+`prepare_prototype.py --rules-only` adds the source rates), height bonuses,
 poison, knockback, other ranged units, critical deaths and the complete
 animation/effect event system. This adapter covers four types, not all 85 units.
 

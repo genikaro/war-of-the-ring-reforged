@@ -30,6 +30,15 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-52 (Oct 23):** health regeneration from the source tables. A unit regains
+its animation state's `HealthRegenerationRate` (1 HP a second idle, walking or in an
+attack stance, nothing running, gathering or mid-swing, 2 while building or
+repairing; heroes 0.167 mid-swing) times its `HealthRegenerationMultiplier` (heroes
+2.25), never while the One Ring is on, as its source actions say. A Hard bot's
+retreated soldiers now heal at home and rejoin parties above half health. The
+HP-per-second reading of the rates is an adapter until the original game is
+measured. See [skirmish notes](../prototype/SKIRMISH.md#build-52-health-regeneration).
+
 **Build-51 (Oct 23):** bot traits. Each bot slot takes traits on top of its style,
 picked in a Traits menu on the setup screen or written `-Bots Gimli+Defender`:
 Rusher, Expansionist, Defender, Relentless, Marksman and Demolisher (parties raze
@@ -772,7 +781,9 @@ valid; they demonstrate our behavior, not equivalence to the original.
    - Use continuous, timestamped recordings or repeatable health traces for
      windup/hit/recovery, interruption, retaliation, retreat and regeneration.
      HP increased between captured samples; isolate healing/regeneration before
-     inferring a rate or cause. Establish armor, range origins and event-scale
+     inferring a rate or cause. (Build-52 regenerates by the source tables, reading
+     the rates as HP per second; a measured idle Swordsman, 155 HP, should regain
+     about 1 HP a second if that reading holds.) Establish armor, range origins and event-scale
      formulas with controlled cases or targeted executable analysis.
    - **Acceptance:** preserve original setup, recording/trace and prototype
      replay with an explicit discrepancy list. Correct only measured rules;
