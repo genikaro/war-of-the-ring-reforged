@@ -99,6 +99,10 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int PlacementCell { get; internal set; } = -1;
     public int PlacementWaitTick { get; internal set; } = -1;
     public List<PendingOrder> OrderQueue { get; } = [];
+    /// <summary>A patient order (a bot's, build-50) waiting for the swing under way to deal its damage, and the cell the
+    /// order in force was given for (its own destination may be a formation slot beside it).</summary>
+    public PendingOrder? HeldOrder { get; internal set; }
+    public int OrderCell { get; internal set; } = -1;
     public int PatrolStart { get; internal set; } = -1;
     public int PatrolEnd { get; internal set; } = -1;
     public bool PatrolForward { get; internal set; }
@@ -119,8 +123,9 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public bool Present => Health > 0 && InsideSite < 0;
 }
 
+/// <summary>An order. A patient one (build-50) waits for each unit's swing to deal its damage before it applies.</summary>
 public sealed record SimCommand(int Tick, int Sequence, int Team, int[] Units, int Cell, int Target = -1,
-    OrderKind Kind = OrderKind.Move, bool Queued = false,int AbilitySlot = 0);
+    OrderKind Kind = OrderKind.Move, bool Queued = false,int AbilitySlot = 0,bool Patient = false);
 public sealed record SimObstacleCommand(int Tick, int Sequence, int Obstacle, bool Active);
 
 /// <summary>20 Hz integer simulation. No renderer, wall clock, random state or Godot APIs.</summary>
@@ -169,10 +174,10 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     public void Enqueue(int team, IEnumerable<int> units, int cell, int target = -1)
         => Enqueue(team, units, target >= 0 ? OrderKind.Attack : OrderKind.Move, cell, target);
 
-    public void Enqueue(int team, IEnumerable<int> units, OrderKind kind, int cell = -1, int target = -1, bool queued = false)
+    public void Enqueue(int team, IEnumerable<int> units, OrderKind kind, int cell = -1, int target = -1, bool queued = false, bool patient = false)
     {
         if (kind is OrderKind.Idle || !Enum.IsDefined(kind)) throw new ArgumentException("Not a player order", nameof(kind));
-        Commands.Add(new(Tick, _sequence++, team, units.Distinct().Order().ToArray(), cell, target, kind, queued));
+        Commands.Add(new(Tick, _sequence++, team, units.Distinct().Order().ToArray(), cell, target, kind, queued, Patient: patient));
     }
 
     public void EnqueueObstacle(int id, bool active)
@@ -273,7 +278,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             unit.FreeMovement = free && unit.TransitNode < 0;
             unit.AvoidanceTicks = 0;
             unit.AvoidanceSide = unit.AvoidanceLockTicks = 0;
-            unit.Order = command.Kind==OrderKind.Stop ? OrderKind.Idle : command.Kind; unit.OrderDestination = -1;
+            unit.Order = command.Kind==OrderKind.Stop ? OrderKind.Idle : command.Kind; unit.OrderDestination = -1; unit.OrderCell = command.Cell;
             unit.LastStopTick=command.Kind==OrderKind.Stop ? Tick : -1;
             unit.IdleGuardOrigin=-1; unit.IdleGuardReturning=false;
             unit.AttackMoveOrigin=unit.AttackMoveForward=unit.AttackMoveRouteStart=-1; unit.AttackMoveReturning=false;
@@ -557,7 +562,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         DestroyedSites.Clear();
         FoundationFailures.Clear();
         NewlyDefeated.Clear();
-        var actions = Commands.Where(c => c.Tick == Tick).Select(c => (c.Sequence, Action: (Action)(() => Apply(c))))
+        var actions = Commands.Where(c => c.Tick == Tick).Select(c => (c.Sequence, Action: (Action)(() => Dispatch(c))))
             .Concat(ObstacleCommands.Where(c => c.Tick == Tick)
                 .Select(c => (c.Sequence, Action: (Action)(() => ApplyObstacle(c)))));
         foreach (var action in actions.OrderBy(a => a.Sequence))
@@ -565,7 +570,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             _sequence = Math.Max(_sequence,action.Sequence+1);
             action.Action();
         }
-        using (SimProfiler.Time("queued orders")) ActivateQueuedOrders();
+        using (SimProfiler.Time("queued orders")) { ReleaseHeldOrders(); ActivateQueuedOrders(); }
         using (SimProfiler.Time("ai")) UpdateAi();
         using (SimProfiler.Time("construction")) { UpdateConstruction(); UpdateRepairs(); }
         using (SimProfiler.Time("defenses")) UpdateDefenses();
@@ -772,7 +777,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     public string StateDigest()
     {
         var text = Rules.Hash + ":" + Tick + ":" + Navigation.Revision + ":" + string.Join(',', Navigation.ObstacleIds.Where(Navigation.IsObstacleActive))
-            + ":" + string.Join(";", Units.Select(u => $"{u.Id},{u.Team},{u.X},{u.Y},{u.Z},{u.Node},{u.TransitNode},{u.TravelProgress},{u.Health},{u.Target},{u.Cooldown},{u.Waypoint},{u.Goal},{u.BlockedTicks},{u.YieldFor},{u.YieldGoal},{u.OrderSequence},{u.ReturningToRest},{u.FreeMovement},{u.GroundSegment},{u.GroundStartX},{u.GroundStartY},{u.GroundStartZ},{u.AvoidanceTicks},{u.AttackNode},{u.CombatTarget},{u.CombatPlanTick},{u.CombatWaiting},{u.AutoEngage},{u.Order},{u.OrderDestination},{u.OrderTarget},{u.PatrolStart},{u.PatrolEnd},{u.PatrolForward},{u.GuardPlanTick},{u.GuardOrigin}:{string.Join(',', u.Path)}:{string.Join('|',u.OrderQueue.Select(o => $"{o.Kind},{o.Cell},{o.Target},{o.Sequence}"))}"));
+            + ":" + string.Join(";", Units.Select(u => $"{u.Id},{u.Team},{u.X},{u.Y},{u.Z},{u.Node},{u.TransitNode},{u.TravelProgress},{u.Health},{u.Target},{u.Cooldown},{u.Waypoint},{u.Goal},{u.BlockedTicks},{u.YieldFor},{u.YieldGoal},{u.OrderSequence},{u.ReturningToRest},{u.FreeMovement},{u.GroundSegment},{u.GroundStartX},{u.GroundStartY},{u.GroundStartZ},{u.AvoidanceTicks},{u.AttackNode},{u.CombatTarget},{u.CombatPlanTick},{u.CombatWaiting},{u.AutoEngage},{u.Order},{u.OrderDestination},{u.OrderTarget},{u.PatrolStart},{u.PatrolEnd},{u.PatrolForward},{u.GuardPlanTick},{u.GuardOrigin}:{string.Join(',', u.Path)}:{string.Join('|',u.OrderQueue.Select(o => $"{o.Kind},{o.Cell},{o.Target},{o.Sequence}"))}:{u.HeldOrder?.Kind},{u.HeldOrder?.Cell},{u.HeldOrder?.Target},{u.HeldOrder?.Sequence},{u.OrderCell}"));
         text += ":"+string.Join(';',Units.Select(u => $"{u.Definition.Id},{u.HealthMilli},{u.KillCount},{u.Walking},{u.AttackStartTick},{u.AttackVictim},{u.AttackVariant},{u.AttackSerial},{u.NextHit},{u.AvoidanceSide},{u.AvoidanceLockTicks},{u.AttackMoveOrigin},{u.AttackMoveForward},{u.AttackMoveRouteStart},{u.AttackMoveReturning},{u.AttackMoveIgnoredTarget},{u.AttackMoveIgnoreUntil},{u.IdleGuardOrigin},{u.IdleGuardReturning},{u.LastStopTick}"));
         text += ":"+string.Join(';',Units.Select(u => $"{u.Facing},{u.PreviousFacing}"));
         text += ":pace:"+string.Join(';',_walkingTeams.OrderBy(p => p.Key).Select(p => $"{p.Key},{p.Value}"));

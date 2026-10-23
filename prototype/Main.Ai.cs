@@ -29,7 +29,8 @@ public partial class Main
         var assault = ai.GetProperty("war_parties").GetProperty("ASSAULT");
         world.AiAssaultParty = new(assault.GetProperty("min_size").GetInt32(),assault.GetProperty("max_size").GetInt32(),
             assault.GetProperty("members").EnumerateArray().Where(m => m.GetProperty("kind").GetString() == "melee").Sum(m => m.GetProperty("share_ppm").GetInt32()));
-        // Every side without a person at the keyboard pursues the enemies its idle units notice, bot or not.
+        // Every side without a person at the keyboard pursues the enemies its idle units notice, unless a bot runs it:
+        // a bot's idle soldiers guard instead (build-50).
         world.AggressiveIdleTeams.Clear();
         world.AggressiveIdleTeams.UnionWith(world.Contenders.Where(t => t != PlayerTeam));
         if (_noAi || PassiveEnemyFixture && !_observing) return;

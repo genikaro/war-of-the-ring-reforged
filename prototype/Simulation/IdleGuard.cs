@@ -2,13 +2,23 @@ namespace Reforged.Simulation;
 
 public sealed partial class SimWorld
 {
-    private const int IdleAwarenessMm=10000,IdleLeashMm=12000;
+    private const int IdleAwarenessMm=10000,IdleLeashMm=12000,BotAssistMm=16000,BotLeashMm=20000;
     /// <summary>Sides whose idle units pursue any enemy they notice: the demo's opponent (team 1) and, in a skirmish,
     /// every side but the player's. Player-controlled idle units guard locally instead of inheriting that unrestricted
-    /// pursuit.</summary>
+    /// pursuit, and so do a bot's (build-50).</summary>
     public HashSet<int> AggressiveIdleTeams { get; } = [1];
 
-    private bool IdleGuardEnabled(SimUnit unit) => unit.Order==OrderKind.Idle && unit.Definition.BodyRadiusMm>350 && !AggressiveIdleTeams.Contains(unit.Team);
+    private bool IdleGuardEnabled(SimUnit unit) => unit.Order==OrderKind.Idle && unit.Definition.BodyRadiusMm>350
+        && (!AggressiveIdleTeams.Contains(unit.Team) || AiPlayers.ContainsKey(unit.Team));
+
+    /// <summary>A bot's idle soldiers guard like a player's and also answer any enemy within 16 m of their spot that is
+    /// fighting one of their units or buildings (build-50): standing by a fight 10-16 m away, they used to watch it.</summary>
+    private bool BotGuard(SimUnit unit) => AiPlayers.ContainsKey(unit.Team) && IdleGuardEnabled(unit);
+    private int IdleLeash(SimUnit unit) => AiPlayers.ContainsKey(unit.Team) ? BotLeashMm : IdleLeashMm;
+    private int AcquireRadius(SimUnit unit) => BotGuard(unit) ? BotAssistMm : IdleAwarenessMm;
+
+    private bool FightingTeam(SimUnit enemy,int team) => enemy.Target >= 0 && Units[enemy.Target].Team == team && (enemy.Attacking || enemy.StrikeActive)
+        || ConstructionSites.TryGetValue(SiegeTarget(enemy),out var site) && site.Team == team;
 
     private bool IdleGuardMayAcquire(SimUnit unit,SimUnit enemy)
     {
@@ -17,6 +27,7 @@ public sealed partial class SimWorld
         var anchor=Navigation.Center(unit.IdleGuardOrigin>=0 ? unit.IdleGuardOrigin : unit.Node);
         long distance=DistanceSquared(anchor.X,anchor.Z,enemy.X,enemy.Z);
         if (distance<= (long)IdleAwarenessMm*IdleAwarenessMm) return true;
+        if (BotGuard(unit) && distance<=(long)BotAssistMm*BotAssistMm && FightingTeam(enemy,unit.Team)) return true;
         if (distance> (long)IdleLeashMm*IdleLeashMm) return false;
         return Units.Any(ally=>ally.Id!=unit.Id && ally.Team==unit.Team && ally.Present
             && SeparationSquared(unit,ally)<=(long)IdleAwarenessMm*IdleAwarenessMm
@@ -38,9 +49,10 @@ public sealed partial class SimWorld
         if (unit.Target>=0)
         {
             var target=Units[unit.Target];
+            long leash=IdleLeash(unit);
             if (target.Present && !AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,target)
-                && (DistanceSquared(anchor.X,anchor.Z,target.X,target.Z)>(long)IdleLeashMm*IdleLeashMm
-                    || DistanceSquared(anchor.X,anchor.Z,unit.X,unit.Z)>(long)IdleLeashMm*IdleLeashMm))
+                && (DistanceSquared(anchor.X,anchor.Z,target.X,target.Z)>leash*leash
+                    || DistanceSquared(anchor.X,anchor.Z,unit.X,unit.Z)>leash*leash))
             { ReleaseCombat(unit); unit.IdleGuardReturning=true; }
             else return;
         }

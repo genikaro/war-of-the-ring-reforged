@@ -20,15 +20,17 @@ public enum AiTargeting { Nearest,Spread,Focus }
 
 /// <summary>How well a difficulty plays, the same for every style (owner model, build-49): how often it decides
 /// (tactics: defence, guards, assault; strategy: building, training, tech, workers, every Nth tactical think), its base
-/// worker count, builders per project, whether parties regroup on the march, its target choice, and the share of a
-/// party below which it falls back. Hard plays fair: no income bonus.</summary>
-public sealed record AiSkill(string Name,int ThinkTicks,int StrategicEvery,int BaseWorkers,int Builders,bool Legs,AiTargeting Targeting,int FallBackPercent)
+/// worker count, builders per project, whether parties regroup on the march, its target choice, the share of a
+/// party below which it falls back, and whether it pulls badly wounded soldiers out of a fight (build-50). Hard plays
+/// fair: no income bonus.</summary>
+public sealed record AiSkill(string Name,int ThinkTicks,int StrategicEvery,int BaseWorkers,int Builders,bool Legs,AiTargeting Targeting,int FallBackPercent,
+    bool PullsWounded = false)
 {
     public static AiSkill For(int difficulty) => difficulty switch {
         <= 0 => new("Easy",3*SimWorld.TicksPerSecond,1,8,1,false,AiTargeting.Nearest,20),
         1 => new("Normal",SimWorld.TicksPerSecond,1,10,2,true,AiTargeting.Spread,33),
         // Hard decides tactics twice a second, but strategy once, so the placement search costs no more than Normal's.
-        _ => new("Hard",SimWorld.TicksPerSecond/2,2,12,3,true,AiTargeting.Focus,50) };
+        _ => new("Hard",SimWorld.TicksPerSecond/2,2,12,3,true,AiTargeting.Focus,50,PullsWounded: true) };
 }
 
 /// <summary>Which techniques a bot researches: those that help a unit type it has alive, only with the bank holding
@@ -36,9 +38,16 @@ public sealed record AiSkill(string Name,int ThinkTicks,int StrategicEvery,int B
 /// reserved before training (50 and more).</summary>
 public enum AiResearch { Thrifty,Fielded,Eager }
 
+/// <summary>What a party attacks, by kind (build-50): enemy soldiers and heroes, armed buildings (towers), military
+/// producers, research buildings, the rest (Citadels, Mills, Foundries, Camps), and workers.</summary>
+public enum AiTargetClass { Army,Defenses,Military,Tech,Economy,Workers }
+
 /// <summary>Every number the bot's decisions read, derived once from its difficulty and style with integer maths.</summary>
 public sealed record AiProfile
 {
+    public static readonly IReadOnlyList<AiTargetClass> DefaultTargetOrder =
+        [AiTargetClass.Army,AiTargetClass.Defenses,AiTargetClass.Military,AiTargetClass.Tech,AiTargetClass.Economy,AiTargetClass.Workers];
+
     public required AiSkill Skill { get; init; }
     public required AiStyle Style { get; init; }
     /// <summary>No assault party forms before this tick: (100 - Aggression) x 6 s.</summary>
@@ -55,6 +64,10 @@ public sealed record AiProfile
     /// <summary>More military buildings once every producer is training, without waiting for a bank that pays twice over
     /// (Aggression 50 or more).</summary>
     public bool FreeMilitary { get; init; }
+    /// <summary>The order a party attacks in (build-50), and whether it first answers the soldiers and towers hurting
+    /// it; a later trait may send a party at buildings regardless.</summary>
+    public IReadOnlyList<AiTargetClass> TargetOrder { get; init; } = DefaultTargetOrder;
+    public bool ThreatsFirst { get; init; } = true;
 
     public static AiProfile For(AiPersonality personality,AiStyle style)
     {

@@ -314,6 +314,153 @@ public static class AiChecks
         Step(forgiven,25);
         check(!forgiven.AiPlayers[1].Unreachable.ContainsKey(pocketed.Id),"an enemy given up on is forgiven once it loses health");
 
+        // Build-50: patient orders. A bot order to a unit whose swing has not dealt its damage waits for the hit and applies
+        // the tick after; an urgent order, like a player's, cancels the swing at once.
+        var swinger = soldier with { Name = "swinger",Attacks = [new("",1,20,[new(12,1_000_000)])] };
+        (bool Held,bool Landed,bool Moved,bool UrgentCancelled) Patience()
+        {
+            var w = Fixture(); w.AiPlayers.Clear(); w.Rules.Units.Add("swinger",swinger);
+            var attacker = w.Spawn(1,Cell(40,15),swinger);
+            var dummy = w.Spawn(0,Cell(39,15),soldier with { Name = "dummy",MaxHealth = 20000,DpsMilli = 0 });
+            dummy.Order = OrderKind.HoldGround;
+            w.Enqueue(1,[attacker.Id],OrderKind.Attack,dummy.Node,dummy.Id);
+            for (int i = 0; i < 200 && !(w.SwingPending(attacker) && w.Tick-attacker.AttackStartTick == 2); i++) w.Step();
+            int away = Cell(40,25);
+            w.Enqueue(1,[attacker.Id],OrderKind.Move,away,patient: true);
+            w.Step();
+            bool held = attacker.HeldOrder is { Kind: OrderKind.Move } && attacker.Order == OrderKind.Attack;
+            bool landed = false,cancelled = false;
+            for (int i = 0; i < 20 && attacker.HeldOrder != null; i++)
+            {
+                w.Step();
+                cancelled |= !landed && w.CombatEvents.Any(e => e.Unit == attacker.Id && e.Kind == CombatEventKind.Cancel);
+                landed |= w.CombatEvents.Any(e => e.Unit == attacker.Id && e.Kind == CombatEventKind.Hit);
+            }
+            w.Step();
+            bool moved = attacker.Order == OrderKind.Move && attacker.OrderCell == away;
+            // Urgent: back at the dummy, an immediate order mid-swing cancels the swing in the same tick.
+            w.Enqueue(1,[attacker.Id],OrderKind.Attack,dummy.Node,dummy.Id);
+            for (int i = 0; i < 400 && !(w.SwingPending(attacker) && w.Tick-attacker.AttackStartTick == 2); i++) w.Step();
+            w.Enqueue(1,[attacker.Id],OrderKind.Move,away);
+            w.Step();
+            return (held,landed && !cancelled,moved,w.CombatEvents.Any(e => e.Unit == attacker.Id && e.Kind == CombatEventKind.Cancel) && attacker.HeldOrder == null);
+        }
+        var patience = Patience();
+        check(patience.Held && patience.Landed && patience.Moved,$"a patient order waits for the swing to land, then applies: {patience}");
+        check(patience.UrgentCancelled,"an urgent order cancels the swing at once");
+
+        // Build-50: a bot's idle soldier guards: it answers an enemy 15 m away hitting one of its own (it used to watch any
+        // fight beyond 10 m).
+        var watch = Fixture();
+        watch.Units[2].Health = 0;
+        var guardian = soldier with { Name = "guardian",BodyRadiusMm = 450 };
+        watch.Rules.Units.Add("guardian",guardian);
+        var sentry = watch.Spawn(1,Cell(42,15),guardian);
+        var victim = watch.Spawn(1,Cell(28,15),soldier with { Name = "victim",MaxHealth = 20000 });
+        var brute = watch.Spawn(0,Cell(27,15),soldier with { Name = "brute",MaxHealth = 20000 });
+        brute.Order = OrderKind.HoldGround; victim.Order = OrderKind.HoldGround;
+        int helpedAt = -1;
+        for (int i = 0; i < 200 && helpedAt < 0; i++) { watch.Step(); if (sentry.Target == brute.Id) helpedAt = watch.Tick; }
+        check(helpedAt >= 0 && sentry.Order == OrderKind.Idle,$"a bot's idle soldier joins a fight 15 m away against one of its own (tick {helpedAt})");
+
+        // Build-50: threats first. A party razing a keep turns on an enemy hitting a member 20 m from the party's centre,
+        // and a party under a tower's arrows razes the tower before the keep.
+        SimWorld Assault(int difficulty = 1)
+        {
+            var w = Fixture(difficulty: difficulty); w.Units[2].Health = 0;
+            var bot = w.AiPlayers[1];
+            foreach (int i in Enumerable.Range(0,8)) bot.Party.Add(w.Spawn(1,Cell(14+(i%4)*2,20+(i/4)*2),soldier).Id);
+            bot.PartyTarget = Keep0; bot.Leg = bot.Legs.Count;
+            w.Enqueue(1,bot.Party,OrderKind.AttackStructure,target: Keep0);
+            return w;
+        }
+        var flank = Assault();
+        var outlier = flank.Spawn(1,Cell(36,20),soldier); flank.AiPlayers[1].Party.Add(outlier.Id);
+        var flanker = flank.Spawn(0,Cell(37,20),soldier with { Name = "flanker",MaxHealth = 20000 }); flanker.Order = OrderKind.HoldGround;
+        Step(flank,30);
+        int answering2 = flank.AiPlayers[1].Party.Count(id => flank.Units[id].Target == flanker.Id || flank.Units[id].OrderTarget == flanker.Id
+            || flank.Units[id].HeldOrder?.Target == flanker.Id);
+        check(answering2 >= 3,$"a party razing a building turns on an enemy hitting a member far from its centre: {answering2} answer");
+        var shot = Assault();
+        shot.BuildingRules.Add("tower",new("tower","tower",null,0,100,60,300,750000,750000,100000,50000,["keep"]));
+        shot.Defenses.Add("tower",new(14000,0,19000,[1000,1200,1400,1600,1750],0,5000,0));
+        shot.ConstructionSites.Add(Outpost,new(Outpost,Outpost,4000,"tower",30000,4000) { Team = 0,Health = 400,Complete = true });
+        Step(shot,30);
+        int onTower = shot.AiPlayers[1].Party.Count(id => SimWorld.SiegeTarget(shot.Units[id]) == Outpost || shot.Units[id].HeldOrder?.Target == Outpost
+            || shot.Units[id].Order == OrderKind.AttackMove);
+        check(shot.AiPlayers[1].PartyTarget == Outpost && onTower == shot.AiPlayers[1].Party.Count,
+            $"a party under a tower's arrows razes the tower before the keep: target {shot.AiPlayers[1].PartyTarget}, {onTower}/{shot.AiPlayers[1].Party.Count} on it");
+
+        // Build-50: Hard rolls once per party for a member below a quarter of its health that is being hit; one in three
+        // retreats home (every wounded soldier slipping away made them impossible to finish). A retreated soldier joins no
+        // party until above half its health; Normal never retreats.
+        (int Retreated,int Fought,bool Recovering,bool Rejoined) Wounded(int difficulty)
+        {
+            var w = Fixture(difficulty: difficulty); w.Units[2].Health = 0;
+            var bot = w.AiPlayers[1];
+            foreach (int i in Enumerable.Range(0,12)) bot.Party.Add(w.Spawn(1,Cell(14+(i%4)*3,16+(i/4)*3),soldier).Id);
+            bot.PartyTarget = Keep0; bot.Leg = bot.Legs.Count;
+            w.Enqueue(1,bot.Party,OrderKind.HoldGround);
+            var members = bot.Party.Select(id => w.Units[id]).ToArray();
+            foreach (var member in members)
+            {
+                member.Health = 20;
+                w.Spawn(0,member.Node-1,soldier with { Name = "biter",MaxHealth = 20000,DpsMilli = 200 }).Order = OrderKind.HoldGround;
+            }
+            Step(w,30);
+            int retreated = members.Count(u => !bot.Party.Contains(u.Id) && u.Order == OrderKind.Move);
+            int fought = members.Count(u => bot.Party.Contains(u.Id));
+            var back = members.FirstOrDefault(u => bot.Recovering.Contains(u.Id));
+            bool recovering = back != null,rejoined = false;
+            if (back != null)
+            {
+                // Home and idle, it stays out of a new party below half its health, and may join one above it.
+                w.Enqueue(1,[back.Id],OrderKind.Stop); bot.Party.Clear(); bot.PartyTarget = -1;
+                Step(w,25);
+                recovering &= !bot.Party.Contains(back.Id);
+                back.Health = 60;
+                Step(w,25);
+                rejoined = !bot.Recovering.Contains(back.Id);
+            }
+            return (retreated,fought,recovering,rejoined);
+        }
+        var normalWounded = Wounded(1); var hardWounded = Wounded(2);
+        check(normalWounded.Retreated == 0 && hardWounded.Retreated is >= 2 and <= 7 && hardWounded.Retreated+hardWounded.Fought == 12,
+            $"Hard retreats about one wounded member in three, Normal none: Hard {hardWounded.Retreated} of 12, Normal {normalWounded.Retreated}");
+        check(hardWounded.Recovering && hardWounded.Rejoined,"a retreated soldier stays out of parties until above half its health");
+
+        // Build-50: stragglers. Soldiers idle for 10 s outside the party and 40 m from every own building join the party
+        // out, or walk home with none out; before, they stood there for the rest of the match.
+        (bool Joined,bool Home) Stragglers(bool partyOut)
+        {
+            var w = Fixture(); w.Units[2].Health = 0;
+            var bot = w.AiPlayers[1];
+            if (partyOut)
+            {
+                foreach (int i in Enumerable.Range(0,8)) bot.Party.Add(w.Spawn(1,Cell(30+(i%4)*2,20+(i/4)*2),soldier).Id);
+                bot.PartyTarget = Keep0; bot.Leg = bot.Legs.Count;
+                w.Enqueue(1,bot.Party,OrderKind.HoldGround);
+            }
+            var lost = Enumerable.Range(0,3).Select(i => w.Spawn(1,Cell(4+i*2,27),soldier)).ToArray();
+            Step(w,SimWorld.AiStrayTicks-60);
+            bool waited = lost.All(u => u.Order == OrderKind.Idle && !bot.Party.Contains(u.Id));
+            Step(w,100);
+            return (waited && lost.All(u => bot.Party.Contains(u.Id) && u.Order == OrderKind.AttackMove),
+                waited && lost.All(u => !bot.Party.Contains(u.Id) && u.Order == OrderKind.AttackMove && u.OrderCell == w.Navigation.Cell(61000,15000)));
+        }
+        check(Stragglers(true).Joined,"idle stragglers far from home join the party out after 10 s");
+        check(Stragglers(false).Home,"idle stragglers far from home walk home with no party out");
+
+        // Build-50: target order. With the keep 10 m away and a barracks 16 m away, a party picks the barracks: each
+        // rank down (Military, Tech, Economy) counts as 12 m farther.
+        var ranked = Fixture(); ranked.Units[2].Health = 0;
+        ranked.ConstructionSites.Add(Outpost,new(Outpost,Outpost,4000,"barracks",30000,4000) { Team = 0,Health = 400,Complete = true });
+        var rankBot = ranked.AiPlayers[1];
+        foreach (int i in Enumerable.Range(0,8)) rankBot.Party.Add(ranked.Spawn(1,Cell(12+(i%4)*2,5+(i/4)*2),soldier).Id);
+        rankBot.PartyTarget = Well;
+        Step(ranked,25);
+        check(rankBot.PartyTarget == Outpost,$"a party picks a military building over a nearer keep (target {rankBot.PartyTarget})");
+
         // Spread attacks (build-43): a whole army sent at one enemy left all but the few that fit around it standing.
         var spreadOut = Fixture();
         var answering = Enumerable.Range(0,8).Select(i => spreadOut.Spawn(1,Cell(50+(i%4)*2,12+(i/4)*4),soldier).Id).ToArray();

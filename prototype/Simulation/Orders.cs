@@ -44,6 +44,48 @@ public sealed partial class SimWorld
         if (unit.Path.Count == 0) { unit.Goal = -1; CompleteTravelOrder(unit); }
     }
 
+    /// <summary>A swing whose damage is still to come: its last hit has not landed and its time has not passed.</summary>
+    public bool SwingPending(SimUnit unit) => unit.StrikeActive && unit.AttackVariant >= 0
+        && unit.Definition.Attacks[unit.AttackVariant].Hits is var hits && unit.NextHit < hits.Length && Tick-unit.AttackStartTick <= hits[^1].Tick;
+
+    private static bool HoldableOrder(OrderKind kind) => kind is OrderKind.Stop or OrderKind.Move or OrderKind.AttackMove or OrderKind.Attack
+        or OrderKind.AttackStructure;
+    private static bool UnitOrder(OrderKind kind) => HoldableOrder(kind) || kind is OrderKind.ForceAttack or OrderKind.Patrol or OrderKind.Guard
+        or OrderKind.HoldGround or OrderKind.Gather or OrderKind.Build or OrderKind.PlaceBuilding or OrderKind.UseAbility;
+
+    /// <summary>Applies an order from outside the simulation step (a player's or a bot's). Bot orders are patient
+    /// (build-50): any order cancels the swing under way, and a bot re-deciding twice a second cancelled swings before
+    /// they landed, so a patient order waits on each unit whose swing has not dealt its damage yet, at most one swing,
+    /// and applies the tick after. Every other order applies at once and drops an order still waiting.</summary>
+    private void Dispatch(SimCommand command)
+    {
+        if (UnitOrder(command.Kind) && !command.Queued)
+        {
+            var now = new List<int>();
+            foreach (int id in command.Units)
+            {
+                if (id < 0 || id >= Units.Count || Units[id].Team != command.Team) { now.Add(id); continue; }
+                var unit = Units[id];
+                if (command.Patient && HoldableOrder(command.Kind) && unit.Present && SwingPending(unit))
+                { unit.HeldOrder = new(command.Kind,command.Cell,command.Target,command.Sequence); continue; }
+                unit.HeldOrder = null; now.Add(id);
+            }
+            if (now.Count == 0) return;
+            if (now.Count < command.Units.Length) command = command with { Units = [.. now] };
+        }
+        Apply(command);
+    }
+
+    private void ReleaseHeldOrders()
+    {
+        foreach (var unit in Units)
+        {
+            if (unit.HeldOrder is not { } held || unit.Present && SwingPending(unit)) continue;
+            unit.HeldOrder = null;
+            if (unit.Present) Apply(new(Tick,held.Sequence,unit.Team,[unit.Id],held.Cell,held.Target,held.Kind));
+        }
+    }
+
     private void ActivateQueuedOrders()
     {
         foreach (var unit in Units.Where(u => u.Present && u.Order == OrderKind.Idle))

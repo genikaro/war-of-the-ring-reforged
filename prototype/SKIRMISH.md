@@ -2306,3 +2306,108 @@ last chosen); the observer smoke's name check includes the tooltip's style. The
 observer reference is now Gimli wins at tick 15903 (digest 437816B8...). All 16
 Bilbo smokes, the setup smoke (all maps), the Helm's Deep smoke and 183 Python
 tests pass.
+
+## Build-50: bot order discipline, idle guard and target priority
+
+Owner requests after the build-49 playtest: a bot should let its units finish what
+they are doing unless something important comes up; its idle units should guard
+(they stood by while a fight went on next to them); and a party should not go on
+razing a Barracks while a Watchtower and the enemy army cut it down, unless a
+strategy says so. Traits move to build-51.
+
+**Order discipline** (`SimWorld.Dispatch`, `AiOrder`). Any order cancels the
+swing under way. A bot re-deciding every think cancelled swings before they
+landed, and a fighting unit is nearly always mid-swing (the next swing starts as
+the last ends), so the bot cannot simply skip busy units.
+- **Patient orders:** a bot's order to a unit whose swing has not dealt its damage
+  yet (its last hit is still to come, at most one swing) is held on the unit
+  (`SimUnit.HeldOrder`) and applies the tick after the hit; then only the
+  follow-through is cut, and the cooldown is kept. `SimCommand.Patient` and
+  `Enqueue(..., patient: true)` carry the flag; player orders stay immediate,
+  as in Warcraft III and StarCraft II, and drop any held order.
+- **No repeats:** a bot skips a unit already carrying out, or holding, the same order
+  (same kind and target, or the same commanded cell, `SimUnit.OrderCell`).
+- **Urgent orders** apply at once: a party falling back and, for Hard, a badly
+  wounded soldier pulled out of the fight.
+
+**Hard may pull out the wounded.** A party member below a quarter of its health that
+an enemy unit or a tower is hitting rolls once per party, the first time: one in
+three walks home at once (urgent); the rest fight on. The first version pulled out
+every one, and the owner's playtest found the wounded impossible to finish. The roll
+is a stateless hash of unit, tick and team, like a unit's choice of swing, so
+replays stay identical. A soldier that retreated defends the base but joins no
+party or guard until it is above half its health again (owner rule). Nothing
+regenerates yet, so for now it stays home; regeneration is planned.
+
+**Stragglers rally** (owner request). Soldiers left idle in the field, outside the
+party and more than 40 m from every own building, were still counted as the home
+army but never gathered, and stood there for the rest of the match: stopped by the
+chase leash, guards of a fallen expansion, a party with nowhere left to go. One idle
+there for 10 s joins the party out (attack-moving to its current waypoint), or
+walks home attack-moving to join the next one. (Enough idle soldiers for a party,
+wherever they stand, already form one.)
+
+**Idle bot units guard.** Bot sides used "aggressive idle": an idle soldier attacked
+any enemy within 10 m and nothing farther, with no leash. They now use the
+player's idle guard (fight what comes within 10 m of their spot, walk back after)
+and also answer any enemy within 16 m of their spot that is fighting one of their
+units or buildings, with a 20 m leash. Sides without a bot (the passive smokes'
+enemy) keep aggressive idle.
+
+**Target priority** (`AiProfile.TargetOrder`, default Army, Defenses, Military,
+Tech, Economy, Workers; `ThreatsFirst`, default on, for a later trait to turn off).
+A unit razing a building ignores whatever hits it, and the party only looked for
+defenders within 12 m of its centre. Now:
+- **Threats first:** every enemy within 12 m of any member, or hitting one from
+  farther away, is fought before any building, soldiers before workers. Members
+  razing a building switch once their swing lands.
+- **Towers next:** with no such enemy left, a Watchtower shooting any member becomes
+  the party's target in place of an unarmed building; members within 30 m attack it
+  and the rest walk over.
+- **Then by kind:** the next building is chosen by the target order, each rank down
+  counting as 12 m farther, among buildings the party can reach. A Barracks 16 m
+  away now goes before a Citadel 10 m away.
+
+**Difficulty now shows on every map.** Hard against Easy with Default's style
+(temporary difficulty override, not committed; observer, 16x):
+
+| Map | Slot 1 vs slot 2 | Build-49 | Build-50 |
+|---|---|---|---|
+| Sorrow | Hard vs Easy | Hard, 15:29 | Hard, 13:02 |
+| Sorrow | Easy vs Hard | Hard, 20:54 | Hard, 23:39 |
+| Dust and Blood | Hard vs Easy | Hard, 10:50 | Hard, 10:41 |
+| Dust and Blood | Easy vs Hard | Hard, 11:57 | Hard, 22:21 |
+| Bilbo's Bluffs | Hard vs Easy | Hard, 21:02 | Hard, 18:14 |
+| Bilbo's Bluffs | Easy vs Hard | Easy, 23:16 | **Hard, 18:06** |
+| Bilbo's Bluffs | Normal vs Normal | slot 1, 22:55 | slot 1, 25:58 |
+
+**Reference matches** on Bilbo's Bluffs (observer smoke, 16x). Small rule changes
+swing these matches a lot (before the retreat roll and the straggler rally, Aragorn
+beat Gimli from both slots), so they track regressions rather than prove balance:
+
+| Match | Winner, time | Notes |
+|---|---|---|
+| Gimli vs Aragorn | Aragorn 13:52 (tick 16656) | was Gimli 13:15; both lose every worker |
+| Aragorn vs Gimli | Gimli 19:28 (tick 23360) | was Aragorn 15:48 |
+| Saruman vs Aragorn | Saruman 23:25 (tick 28103) | Saruman researches everything and fields 13 Riders, 20 Rangers |
+| Smaug vs Shelob | Shelob 18:50 (tick 22600) | Smaug never researches |
+
+`-AiSmoke`: the Default bot still leaves at 6:36 and now razes the passive player's
+Citadel at 8:09 (was 8:05).
+
+**Frame time.** The 8-bot MP08_Rift free-for-all (four Hard bots, `-Speed 16
+-Profile`, 7 minutes of wall time) reaches 16:00 of game time at 13-17 FPS, 12-23 ms
+a tick with 230-290 units, the bots' thinking 1-2.3 ms of it: as in build-49. An
+earlier build-50 run, before the retreat roll and the straggler rally, stopped
+reporting after 08:00 for its last 7 minutes; profiled every 10 s, the final code
+showed no such stall, and the cause of the first was not found (another process
+on the machine is possible).
+
+Validation: `SimulationTests` 854 checks (10 new in `AiChecks`: a patient order waits
+for the swing to land and an urgent one cancels it; a bot's idle soldier joins a
+fight 15 m away; a party razing a building turns on an enemy hitting a member far
+from its centre; a party under a tower's arrows razes the tower first; Hard retreats
+2-7 of 12 wounded members and Normal none; a retreated soldier stays out of parties
+below half health; a party picks a barracks over a nearer keep; stragglers join the
+party out, or walk home with none out). All 16 Bilbo smokes and the setup smoke
+pass; the observer reference is now Aragorn wins at tick 16656 (digest E6844779...).

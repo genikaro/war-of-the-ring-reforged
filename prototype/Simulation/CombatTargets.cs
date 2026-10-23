@@ -35,11 +35,12 @@ public sealed partial class SimWorld
         var shared=NearUnits(unit.X,unit.Z,shareRadius).Where(u => u.Id != unit.Id && u.Team==unit.Team && u.Present && u.Target >= 0
             && SeparationSquared(unit,u)<=(long)shareRadius*shareRadius).Select(u=>u.Target).ToHashSet();
         // Nearby enemies and the targets allies share; the order below is total, so the pool's order is irrelevant.
-        var pool=NearUnits(unit.X,unit.Z,Math.Max(10000,unit.Definition.ReachMm));
+        long radius=Math.Max(AcquireRadius(unit),unit.Definition.ReachMm);
+        var pool=NearUnits(unit.X,unit.Z,(int)radius);
         int from=PlanningNode(unit);
         pool.AddRange(shared.Where(id => pool.All(u => u.Id != id)).Select(id => Units[id]));
         return pool.Where(u => u.Id != exclude && u.Team != unit.Team && u.Present
-                && (SeparationSquared(unit,u) <= (long)Math.Max(10000,unit.Definition.ReachMm)*Math.Max(10000,unit.Definition.ReachMm) || shared.Contains(u.Id)) && MayAcquire(unit,u)
+                && (SeparationSquared(unit,u) <= radius*radius || shared.Contains(u.Id)) && MayAcquire(unit,u)
                 && ((unit.Definition.IsRanged && AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u)) || Nav(unit).IsConnected(from,u.Node))
                 && (!HoldsPosition(unit) || AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u)))
             .Select(u => (Unit:u,Assigned:AssignedAttackers(unit,u),Capacity:ApproachCapacity(unit,u)))

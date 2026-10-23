@@ -284,6 +284,10 @@ Hard decides twice a second with three builders, finishes wounded enemies and fa
 back at half a party; no bot gets extra income) and its style what it plays: when it
 first attacks, its party size, workers, expansions, Citadel upgrade and research. Each
 named bot has its own style (see [skirmish notes](SKIRMISH.md#build-49-bot-difficulty-and-style)).
+Since build-50 a bot lets its units finish a swing before a new order (only falling
+back and pulling out the badly wounded interrupt), its idle soldiers guard and help
+fights within 16 m, soldiers left idle in the field rejoin the party or walk home,
+and a party fights the soldiers and towers hurting it before razing buildings ([skirmish notes](SKIRMISH.md#build-50-bot-order-discipline-idle-guard-and-target-priority)).
 Bots expand with a new Citadel
 between 5 and 15 minutes by style, go all in when their army can no longer grow, and
 surrender when they can never field one again (build-38). Each expansion keeps half an
