@@ -129,8 +129,10 @@ public partial class Main
                 _focus = PositionOf(barracks!.X,barracks.Z); UpdateCamera(); Click(StructureSmokePoint(barracks.Obstacle)); break;
             case 1502:
                 _placementChecks["barracks_offers_swordsman_training"] = SelectedStructureDetails() is { Name: "Barracks",Health: 700,UnderConstruction: false }
-                    && _commands.TrainButton(0) is { Visible: true,Disabled: false,Icon: not null } && !_commands.TrainButton(1).Visible
-                    && world.Producers.Values.Any(p => p.Units.SequenceEqual(["UNIT_G_GONDOR_SWORDSMAN"]));
+                    && _commands.TrainButton(0) is { Visible: true,Disabled: false,Icon: not null }
+                    // Build-45: the Rider waits, locked, until Citadel 2.
+                    && _commands.TrainButton(1) is { Visible: true,Disabled: true } && !_commands.TrainButton(2).Visible
+                    && world.Producers.Values.Any(p => p.Units.SequenceEqual(["UNIT_G_GONDOR_SWORDSMAN","UNIT_G_ROHAN_RIDER"]));
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-barracks.png");
                 break;
             case 1503: Click(_commands.TrainButton(0).GetGlobalRect().GetCenter()); break;

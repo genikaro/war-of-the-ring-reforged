@@ -20,6 +20,7 @@ python tools/skirmish_economy.py --cache converted/skirmish       # build-17 gat
 ./prototype/run.ps1 -DwarfHallSmoke            # Dwarf Hall, Axethrower training and thrown axes (credits a test bank first)
 ./prototype/run.ps1 -FrodoSmoke                # Frodo training, hero portraits and the One Ring (credits a test bank first)
 ./prototype/run.ps1 -TechSmoke                 # Citadel 2 and War Camp upgrades, Tier 2 locks and a Forge (credits a test bank first)
+./prototype/run.ps1 -Tier2Smoke                # Rider, Shieldbreaker and Ranger: locks, training, rally and strikes (test bank + instant build)
 ```
 
 The cache is separate from `converted/prototype` (Helm's Deep), so both sandboxes
@@ -1976,3 +1977,54 @@ passes 813 checks (10 new in `UpgradeChecks`: cost, paused training, 75% refund,
 promotion keeping damage, prerequisite lineage, replay and digest). Python tests
 check the exported upgrades, Tier 2 costs and population. Bot matches are
 unchanged: the observer smoke still ends with Gimli winning at tick 16534.
+
+## Build-45: the Tier 2 units
+
+The Rohan Rider, Dwarf Shieldbreaker and Ranger join the roster
+(`skirmish_map.SKIRMISH_UNITS`), with source models, clips, weapons and portraits.
+
+| Unit | Trained at | Requires | Cost | Health / attack / armor |
+|---|---|---|---|---|
+| Rohan Rider | Barracks | Citadel 2 | 85 food, 30 ore, pop 3, 24 s | 235 / 13 blunt / 1 |
+| Dwarf Shieldbreaker | Dwarf Hall | Forge | 90 food, 65 ore, pop 3, 24 s | 305 / 10 blunt / 1 |
+| Ranger | Ranger Post | - | 50 food, 40 ore, pop 2, 22 s | 200 / 8 cutting / 0 |
+
+All match the October 22 captures (skirmish-006/007, -021/030, -025/028). Locked
+training buttons name the missing building; bots skip units they cannot train yet.
+
+Not yet: the Ranger's Camouflage, Eagle Eye and Tracking, the Rider's knockback
+immunity (there is no knockback), and Forge research (Shield Crushing, Axes of
+Durin). Bots still never upgrade their Citadel, so they train none of these.
+The Rider's collision body is the source bounding circle, 883 mm (a Swordsman's is
+570 mm); a horse is longer than wide, so this is an adapter.
+
+Two fixes found while testing them:
+
+- **Rally points gather units around them.** Every trained unit used to walk to
+  the exact rally cell. The first one parked there and the next waited beside it
+  forever, still on its Move order. A trained unit now takes the free cell nearest
+  the rally point (`SimWorld.RallySpot`), Warcraft style. Bots set no rally points,
+  so bot matches are unchanged by this.
+- **A wide body re-picks a blocked siege spot.** A Rider sent at a building walked
+  to a spot between two fighters already striking it, could not fit, and waited
+  mid-step for good. Once a second, a unit still walking to its siege spot checks
+  whether a standing unit blocks its body there and takes a spot it fits instead
+  (`FitsAmongStanding`). Known limit: a wide body blocked on its route rather than
+  at its spot (squeezing between two fighters on the way) can still stall; the
+  general wide-body movement fix is open.
+  Bots' sieges use the same code, so the reference bot match moves: Gimli still
+  beats Aragorn on Bilbo's Bluffs, now at 17:18 (tick 20773) instead of 13:47
+  (tick 16533; the same with the re-pick disabled). Whether that is better play
+  was not measured.
+
+Validation: `-Tier2Smoke` (11 cases, credited bank and the instant build/train
+cheat as fixture) places Barracks, Dwarf Hall and Camp, checks the Rider ("Requires
+Citadel 2") and Shieldbreaker ("Requires Forge") locked, upgrades to Citadel 2,
+places a Ranger Post and Forge, trains all three with their tooltips and costs,
+rallies them to one point, checks the Rider's panel, box-selects them and
+force-attacks the Citadel until all three strike. It passes in both the headless
+and the capture window layout (they pick different building spots).
+`SimulationTests` 814 checks (one new: two units trained to one rally point stand
+on different cells; it fails without the fix). `-PlacementSmoke` and
+`-DwarfHallSmoke` now expect the second, locked unit at the Barracks and Dwarf Hall;
+every other Bilbo smoke passes unchanged.

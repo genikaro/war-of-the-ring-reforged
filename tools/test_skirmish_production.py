@@ -62,11 +62,18 @@ class ProductionImportTests(unittest.TestCase):
         self.assertEqual(citadel['unavailable']['UNIT_G_HERO_ARAGORN'], 'requires fate points')
         self.assertEqual(data['producers']['BUILDING_G_TOWN_CENTER_LEVEL_2']['units'], citadel['units'])
         barracks = data['producers']['BUILDING_G_GONDORIAN_BARRACKS']
-        self.assertEqual((barracks['units'], barracks['unavailable']), (['UNIT_G_GONDOR_SWORDSMAN'], {'UNIT_G_ROHAN_RIDER': 'model and rules not exported'}))
+        self.assertEqual((barracks['units'], barracks['unavailable']), (['UNIT_G_GONDOR_SWORDSMAN', 'UNIT_G_ROHAN_RIDER'], {}))
+        # Tier 2 recruitment captured on October 22: Rider 85/30/3 (skirmish-007), Shieldbreaker 90/65/3 (-021), Ranger 50/40/2 (-025).
+        self.assertEqual(data['units']['UNIT_G_ROHAN_RIDER'], {'display_name': 'Rohan Rider', 'food_cost': 85, 'ore_cost': 30,
+                         'population': 3, 'duration_ticks': 480, 'unique': False, 'prerequisites': ['BUILDING_G_TOWN_CENTER_LEVEL_2']})
+        self.assertEqual(data['units']['UNIT_G_DWARVEN_SHIELDBREAKER']['prerequisites'], ['BUILDING_G_SKILLS_STRUCTURE'])
+        self.assertEqual((data['units']['UNIT_G_DWARVEN_SHIELDBREAKER']['food_cost'], data['units']['UNIT_G_DWARVEN_SHIELDBREAKER']['ore_cost']), (90, 65))
+        self.assertEqual(data['producers']['BUILDING_G_RANGER_BARRACKS']['units'], ['UNIT_G_RANGER'])
+        self.assertEqual((data['units']['UNIT_G_RANGER']['food_cost'], data['units']['UNIT_G_RANGER']['ore_cost'], data['units']['UNIT_G_RANGER']['population']), (50, 40, 2))
         self.assertEqual(data['units']['UNIT_G_GONDOR_SWORDSMAN'], {'display_name': 'Gondor Swordsman', 'food_cost': 50, 'ore_cost': 0,
                          'population': 2, 'duration_ticks': 280, 'unique': False, 'prerequisites': []})
         hall = data['producers']['BUILDING_G_DWARF_BARRACKS']
-        self.assertEqual((hall['units'], hall['unavailable']), (['UNIT_G_DWARVEN_AXETHROWER'], {'UNIT_G_DWARVEN_SHIELDBREAKER': 'model and rules not exported'}))
+        self.assertEqual((hall['units'], hall['unavailable']), (['UNIT_G_DWARVEN_AXETHROWER', 'UNIT_G_DWARVEN_SHIELDBREAKER'], {}))
         self.assertEqual(data['units']['UNIT_G_DWARVEN_AXETHROWER'], {'display_name': 'Dwarf Axethrower', 'food_cost': 60, 'ore_cost': 10,
                          'population': 2, 'duration_ticks': 340, 'unique': False, 'prerequisites': []})
         self.assertEqual(data['units']['UNIT_G_HUMAN_WORKER'], {'display_name': 'Human Worker', 'food_cost': 35, 'ore_cost': 0,

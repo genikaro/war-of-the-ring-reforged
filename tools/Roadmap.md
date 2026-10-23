@@ -30,6 +30,13 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-45 (Oct 23):** the Tier 2 units. The Barracks trains the Rohan Rider once
+Citadel 2 stands, the Dwarf Hall the Dwarf Shieldbreaker once a Forge stands, and
+the Ranger Post the Ranger, all with the captured costs and stats. Units trained to
+one rally point now gather around it instead of queuing for its cell, and a wide
+body (the Rider) re-picks a siege spot fighters already block. Abilities and Forge
+research remain. See [skirmish notes](../prototype/SKIRMISH.md#build-45-the-tier-2-units).
+
 **Build-44 (Oct 23):** Citadel 2 and the Tier 2 buildings, from the October 22
 captures. The Citadel upgrades in place to level 2 (115 food, 105 ore, 50 s, 1000
 health) and the Camp to the War Camp (+4 population); the upgrade heads the

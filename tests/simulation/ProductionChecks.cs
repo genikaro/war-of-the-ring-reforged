@@ -99,6 +99,13 @@ public static class ProductionChecks
         rally.Enqueue(0,[],OrderKind.SetRallyPoint,-1,Producer); rally.Step();
         check(rally.Producers[Producer].RallyCell == -1,"the rally point can be cleared");
 
+        // Build-45: a second unit trained to the same rally point stands beside the first instead of waiting for its cell.
+        var crowd = Fixture(food: 1000); crowd.InstantBuildTeams.Add(0);
+        crowd.Enqueue(0,[],OrderKind.SetRallyPoint,rallyCell,Producer); Train(crowd); crowd.Step(); Step(crowd,300); Train(crowd); crowd.Step(); Step(crowd,300);
+        check(crowd.Units.Count == 3 && crowd.Units.Skip(1).All(u => u.Order == OrderKind.Idle && u.Goal < 0) && crowd.Units[1].Node == rallyCell
+            && crowd.Units[2].Node != rallyCell && crowd.Navigation.Center(crowd.Units[2].Node) is var (cx,cz) && crowd.Navigation.Center(rallyCell) is var (rx,rz)
+            && SimWorld.DistanceSquared(cx,cz,rx,rz) <= 2000L*2000,"units trained to one rally point gather around it");
+
         var harvest = Fixture(); harvest.Workers.Add("probe",new(10,9));
         harvest.Resources.Add(7,new(7,ResourceKind.Ore,25500,8500,100,500,550000,2000));
         harvest.Enqueue(0,[],OrderKind.SetRallyResource,7,Producer); Train(harvest); Step(harvest,240);

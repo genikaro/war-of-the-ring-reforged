@@ -406,6 +406,7 @@ a normal viewport capture with `-CapturePath`.
 ./prototype/run.ps1 -MinimapSmoke
 ./prototype/run.ps1 -FrodoSmoke
 ./prototype/run.ps1 -TechSmoke
+./prototype/run.ps1 -Tier2Smoke
 ./prototype/run.ps1 -SiegeSmoke
 ./prototype/run.ps1 -DefenseSmoke
 ./prototype/run.ps1 -VictorySmoke

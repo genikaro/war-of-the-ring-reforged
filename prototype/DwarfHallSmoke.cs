@@ -41,7 +41,7 @@ public partial class Main
             case 762:
                 _dwarfChecks["dwarf_hall_offers_axethrower"] = SelectedStructureDetails() is { Name: "Dwarf Hall",Health: 750 }
                     && _commands.TrainButton(0) is { Visible: true,Disabled: false,Icon: not null } && world.Producers.ContainsKey(Hall()!.Id)
-                    && world.Producers[Hall()!.Id].Units.SequenceEqual([SmokeAxethrower]);
+                    && world.Producers[Hall()!.Id].Units.SequenceEqual([SmokeAxethrower,"UNIT_G_DWARVEN_SHIELDBREAKER"]) && _commands.TrainButton(1).Disabled;
                 Click(_commands.TrainButton(0).GetGlobalRect().GetCenter()); break;
             case 763: Click(ProductionRallyPoint(Hall()!.Id),MouseButton.Right); break;
             case 765:

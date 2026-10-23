@@ -112,8 +112,18 @@ public sealed partial class SimWorld
             producer.Queue.RemoveAt(0); producer.ProgressTicks = 0;
             if (producer.RallyResource >= 0 && Workers.ContainsKey(definition.Name) && CanGather(producer.Team,producer.RallyResource))
                 BeginGather(new(Tick,sequence,producer.Team,[unit.Id],-1,producer.RallyResource,OrderKind.Gather),activating: true);
-            else if (producer.RallyCell >= 0) Apply(new(Tick,sequence,producer.Team,[unit.Id],producer.RallyCell,Kind: OrderKind.Move),activating: true);
+            else if (producer.RallyCell >= 0) Apply(new(Tick,sequence,producer.Team,[unit.Id],RallySpot(producer,unit),Kind: OrderKind.Move),activating: true);
         }
+    }
+
+    /// <summary>Warcraft style: units trained to one rally point gather around it. Each takes the free cell nearest to it,
+    /// so a later unit does not wait forever for the cell an earlier one is standing on (build-45).</summary>
+    private int RallySpot(ProductionBuilding producer,SimUnit unit)
+    {
+        var taken = OccupiedNodes(unit.Id);
+        taken.UnionWith(Units.Where(u => u.Id != unit.Id && u.Present && u.Goal >= 0).Select(u => u.Goal));
+        int spot = Nav(unit).Nearest(producer.RallyCell,taken,connectedTo: unit.Node);
+        return spot >= 0 ? spot : producer.RallyCell;
     }
 
     // ponytail: the nearest free standing cell to the building center, not a recovered door position.

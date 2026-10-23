@@ -110,7 +110,18 @@ public sealed partial class SimWorld
         if (unit.Goal >= 0 || unit.TransitNode >= 0 || unit.YieldFor >= 0)
         {
             // Still travelling: let movement finish, but stop short once the building is in reach.
-            if (!Reaches(area,unit.X,unit.Z)) return SiegeStep.Walking;
+            if (!Reaches(area,unit.X,unit.Z))
+            {
+                // A wide body (the Rider) can be held short of its spot for good by fighters already striking beside it:
+                // once a second, a spot such a fighter blocks is traded for one the body fits (build-45).
+                if (unit.Goal >= 0 && unit.YieldFor < 0 && (unit.SiegePlanTick < 0 || Tick-unit.SiegePlanTick >= TicksPerSecond)
+                    && !FitsAmongStanding(unit,unit.Goal))
+                {
+                    unit.SiegePlanTick = Tick;
+                    PlanEconomyRoute(unit,area,keepDestination,n => FitsAmongStanding(unit,n));
+                }
+                return SiegeStep.Walking;
+            }
             RebaseCombatGround(unit); unit.Goal = -1; unit.Path.Clear(); unit.Waypoint = 0; unit.FreeMovement = false;
         }
         if (!Reaches(area,unit.X,unit.Z))
@@ -126,6 +137,13 @@ public sealed partial class SimWorld
         unit.Attacking = true; unit.SiegePlanTick = -1;
         if (FaceForPoint(unit,x,z) || unit.StrikeActive) StrikeSite(unit,site);
         return SiegeStep.Striking;
+    }
+
+    /// <summary>Whether the unit's body fits at the node beside every unit standing still (not walking anywhere).</summary>
+    private bool FitsAmongStanding(SimUnit unit,int node)
+    {
+        var (x,z) = Nav(unit).Center(node); int y = Nav(unit).NodeHeight(node);
+        return !Units.Any(other => other.Id != unit.Id && other.Present && other.Goal < 0 && other.TransitNode < 0 && BodyOverlapAt(unit,x,y,z,other));
     }
 
     /// <summary>The unit's own attack clips and cadence, aimed at a building instead of a unit.</summary>
