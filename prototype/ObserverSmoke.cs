@@ -15,6 +15,8 @@ public partial class Main
     private bool _observerOk = true; // the running result of a check spread over several frames
     private const int ObserverSmokeChecks = 15;
     private readonly List<string> _observerTimeline = [];
+    /// <summary>A report key per bot: the player as well as the bot, so a mirror match (Gimli against Gimli) keeps both.</summary>
+    private static string BotKey(AiPlayer bot) => $"Player {bot.Team+1} {bot.Personality.Id}";
 
     private void ObserverSmokeInput()
     {
@@ -34,8 +36,10 @@ public partial class Main
                 _observerChecks["every_side_runs_its_bot"] = world.Contenders.Count >= 2 && world.AiPlayers.Keys.SequenceEqual(world.Contenders)
                     && world.AiPlayers.Values.All(a => _bots.ElementAtOrDefault(a.Team) is not { Length: > 0 } bot || string.Equals(a.Personality.Id,bot,StringComparison.OrdinalIgnoreCase));
                 _observerChecks["nobody_plays"] = PlayerTeam == ObserverTeam && _commands.PlayerTeam == ObserverTeam && FriendlyHeroes().Count == 0;
+                // Build-49: each name's tooltip gives the bot's difficulty and style.
                 _observerChecks["observer_panel_lists_every_player"] = _observerHud.Visible && _observerHud.BodyVisible && _observerHud.RowCount == world.Contenders.Count
-                    && world.AiPlayers.Values.Select((a,i) => _observerHud.RowName(i) == a.Personality.Id).All(v => v);
+                    && world.AiPlayers.Values.Select((a,i) => _observerHud.RowName(i) == a.Personality.Id
+                        && _observerHud.NameCell(i).TooltipText.Contains(AiRoster.Summary(a.Personality.Difficulty,a.Profile.Style))).All(v => v);
                 // The action grid shows the match: the map without the mode suffix, the clock, no groups or pace button.
                 int seconds = world.Tick/SimWorld.TicksPerSecond;
                 _observerChecks["match_panel_replaces_the_commands"] = _commands.MatchVisible && _mapName != "" && _commands.DisplayedMap == _mapName
@@ -145,9 +149,9 @@ public partial class Main
                     fixture = $"{System.IO.Path.GetFileName(_cache)} --observe --bots={string.Join(',',_bots)}; the match runs at 16x after the speed checks",
                     timeline = _observerTimeline,
                     // Every unit each bot fielded, fallen included, and its research: how far up the tree it climbed (build-47).
-                    armies = world.AiPlayers.Values.ToDictionary(a => a.Personality.Id,a => string.Join(",",world.Units.Where(u => u.Team == a.Team && !world.Workers.ContainsKey(u.Definition.Name))
+                    armies = world.AiPlayers.Values.ToDictionary(BotKey,a => string.Join(",",world.Units.Where(u => u.Team == a.Team && !world.Workers.ContainsKey(u.Definition.Name))
                         .GroupBy(u => u.Definition.DisplayName).OrderBy(g => g.Key,StringComparer.Ordinal).Select(g => g.Key+" "+g.Count()))),
-                    research = world.AiPlayers.Values.ToDictionary(a => a.Personality.Id,a => string.Join(",",(world.Researched.GetValueOrDefault(a.Team) ?? []).Order(StringComparer.Ordinal))),
+                    research = world.AiPlayers.Values.ToDictionary(BotKey,a => string.Join(",",(world.Researched.GetValueOrDefault(a.Team) ?? []).Order(StringComparer.Ordinal))),
                     corpses_buried = _corpsesBuried,winner = world.Winner,outcome_tick = world.OutcomeTick,ticks_per_frame_at_16x = _observerBurst,
                     bots = world.AiPlayers.Values.Select(a => $"{a.Personality.Id}: {a.Status}").ToArray(),
                     ticks = world.Tick,status = _status.Text,digest = world.StateDigest() };

@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Simulation;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -8,8 +9,9 @@ public sealed record SkirmishSetup(string Cache,string Map,int Human,string[] Bo
 
 /// <summary>The skirmish setup screen, a lobby in the manner of Warcraft III and StarCraft II: every multiplayer map
 /// with its player count and a preview of its start positions, one row per start position (you, a bot personality or
-/// closed; with nobody playing, you watch), the start speed, and Start. Maps not imported yet are listed with the
-/// command that imports them.</summary>
+/// closed; with nobody playing, you watch), a card describing the bot last chosen or clicked (its difficulty, its
+/// style in the Aggression / Expansion / Tech triangle and how it plays; build-49), the start speed, and Start. Maps
+/// not imported yet are listed with the command that imports them.</summary>
 public partial class SetupScreen : Control
 {
     public sealed record Personality(string Id,int Difficulty);
@@ -38,6 +40,11 @@ public partial class SetupScreen : Control
     private Label _mapTitle = null!,_mapDetail = null!,_status = null!;
     private readonly (Control Row,ColorRect Swatch,Label Name,OptionButton Choice)[] _slots = new (Control,ColorRect,Label,OptionButton)[Slots];
     private MapPreview _preview = null!;
+    private Control _card = null!;
+    private StyleTriangle _triangle = null!;
+    private Label _cardTitle = null!,_cardDetail = null!,_cardDescription = null!;
+    /// <summary>The slot the bot card describes: the last one changed or clicked (-1: the first bot slot).</summary>
+    private int _cardSlot = -1;
     private SpeedSlider _speed = null!;
     private Button _start = null!,_quit = null!;
     private MapEntry? _selected;
@@ -83,8 +90,21 @@ public partial class SetupScreen : Control
             var name = Caption($"Player {slot+1}",15,Ink); name.CustomMinimumSize = new(80,0); row.AddChild(name);
             var choice = new OptionButton { CustomMinimumSize = new(250,30),FocusMode = FocusModeEnum.None };
             StyleChoice(choice); choice.ItemSelected += item => ChooseSlot(index,(int)item); row.AddChild(choice);
+            choice.Pressed += () => { _cardSlot = index; Refresh(); };
             _slots[slot] = (row,swatch,name,choice);
         }
+        var card = new PanelContainer(); _card = card;
+        var cardBox = Box(new Color(0,0,0,.3f),Edge); cardBox.ContentMarginTop = cardBox.ContentMarginBottom = 6;
+        card.AddThemeStyleboxOverride("panel",cardBox); right.AddChild(card);
+        var cardRow = new HBoxContainer(); cardRow.AddThemeConstantOverride("separation",14); card.AddChild(cardRow);
+        _triangle = new StyleTriangle { CustomMinimumSize = new(240,104),
+            TooltipText = "The bot's style: Aggression, Expansion and Tech sum to 100.\nThe shaded centre is Balanced, each 25 or more." };
+        cardRow.AddChild(_triangle);
+        var cardText = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill,Alignment = BoxContainer.AlignmentMode.Center };
+        cardText.AddThemeConstantOverride("separation",2); cardRow.AddChild(cardText);
+        _cardTitle = Caption("",17,Gold); cardText.AddChild(_cardTitle);
+        _cardDetail = Caption("",13,Ink); cardText.AddChild(_cardDetail);
+        _cardDescription = Caption("",14,Dim); _cardDescription.AutowrapMode = TextServer.AutowrapMode.WordSmart; cardText.AddChild(_cardDescription);
         var speedRow = new HBoxContainer(); speedRow.AddThemeConstantOverride("separation",14); right.AddChild(speedRow);
         var speedLabel = Caption("Start speed",15,Ink); speedLabel.SizeFlagsVertical = SizeFlags.ShrinkCenter; speedRow.AddChild(speedLabel);
         _speed = new SpeedSlider { CustomMinimumSize = new(240,44),TooltipText = "Game speed at the start · - and + change it during the match" };
@@ -141,7 +161,12 @@ public partial class SetupScreen : Control
             swatch.Color = slot < map.Colors.Length ? map.Colors[slot] : Dim;
             choice.Clear();
             choice.AddItem("You"); choice.AddItem("Closed");
-            foreach (var bot in map.Personalities) choice.AddItem($"Bot · {bot.Id} ({Difficulty(bot.Difficulty)})");
+            foreach (var bot in map.Personalities)
+            {
+                var entry = AiRoster.Entry(bot.Id);
+                choice.AddItem($"Bot · {entry.Name} ({AiRoster.Difficulty(bot.Difficulty)})");
+                choice.SetItemTooltip(choice.ItemCount-1,BotTip(bot));
+            }
             int pick = slot == 0 ? You : DefaultBot(map);
             if (previous != null && previous.Cache == map.Cache)
                 pick = previous.Human == slot ? You : previous.Closed.Contains(slot) ? Closed
@@ -149,11 +174,17 @@ public partial class SetupScreen : Control
             choice.Select(pick);
         }
         if (map.Imported && map.Cache != null && !_terrain.ContainsKey(map.Cache)) _terrain[map.Cache] = Terrain(map.Cache);
+        _cardSlot = -1;
         Refresh();
     }
 
     private static int DefaultBot(MapEntry map) => FirstBot+Math.Max(0,Array.FindIndex(map.Personalities,p => p.Id == map.DefaultPersonality));
-    private static string Difficulty(int level) => level switch { 0 => "Easy",1 => "Normal",_ => "Hard" };
+
+    private static string BotTip(Personality bot)
+    {
+        var entry = AiRoster.Entry(bot.Id);
+        return $"{entry.Name} · {AiRoster.Summary(bot.Difficulty,entry.Style)}\n{entry.Description}";
+    }
 
     /// <summary>Only one person plays: choosing You for a slot hands the previous one to the default bot.</summary>
     private void ChooseSlot(int slot,int item)
@@ -162,7 +193,27 @@ public partial class SetupScreen : Control
         if (item == You)
             for (int other = 0; other < _selected.Players; other++)
                 if (other != slot && _slots[other].Choice.Selected == You) _slots[other].Choice.Select(DefaultBot(_selected));
+        _cardSlot = slot;
         Refresh();
+    }
+
+    /// <summary>The bot card shows the focused slot's bot, else the first bot slot's.</summary>
+    private void RefreshCard(MapEntry? map,int players)
+    {
+        _card.Visible = players > 0;
+        if (map == null || !_card.Visible) return;
+        int slot = _cardSlot >= 0 && _cardSlot < players && Choice(_cardSlot) >= FirstBot ? _cardSlot
+            : Enumerable.Range(0,players).FirstOrDefault(s => Choice(s) >= FirstBot,-1);
+        if (slot < 0)
+        {
+            _cardTitle.Text = "No bots"; _cardDetail.Text = ""; _cardDescription.Text = "Choose a bot for a start position to see how it plays.";
+            _triangle.Display(null,Dim); return;
+        }
+        var bot = map.Personalities[Choice(slot)-FirstBot]; var entry = AiRoster.Entry(bot.Id); var style = entry.Style;
+        _cardTitle.Text = $"{entry.Name} · {AiRoster.Difficulty(bot.Difficulty)} · {style.Label}";
+        _cardDetail.Text = $"Player {slot+1} · Aggression {style.Aggression} · Expansion {style.Expansion} · Tech {style.Tech}";
+        _cardDescription.Text = entry.Description;
+        _triangle.Display(style,slot < map.Colors.Length ? map.Colors[slot] : Ink);
     }
 
     private int Choice(int slot) => _slots[slot].Choice.Selected;
@@ -174,6 +225,7 @@ public partial class SetupScreen : Control
         int open = Enumerable.Range(0,players).Count(s => Choice(s) != Closed);
         int human = Enumerable.Range(0,players).FirstOrDefault(s => Choice(s) == You,-1);
         _preview.Display(map,map?.Cache is { } cache ? _terrain.GetValueOrDefault(cache) : null,Enumerable.Range(0,players).Select(Choice).ToArray());
+        RefreshCard(map,players);
         _start.Disabled = _loading || map is not { Imported: true } || open < 2;
         _status.Text = map == null ? "No multiplayer maps found." : !map.Imported ? $"Not imported yet. Run: python tools/prepare_prototype.py --skirmish --map {map.Stem}"
             : open < 2 ? "At least two start positions must be open."
@@ -322,6 +374,42 @@ public partial class SetupScreen : Control
     public Button StartButton => _start;
     public string StatusText => _status.Text;
     public bool PreviewDrawn => _preview.Drawn;
+    public string CardText => _card.Visible ? $"{_cardTitle.Text}\n{_cardDetail.Text}\n{_cardDescription.Text}" : "";
+    public AiStyle? CardStyle => _triangle.Style;
+    public string BotTooltip(int slot,int item) => _slots[slot].Choice.GetItemTooltip(item);
+}
+
+/// <summary>The bot card's style triangle: Aggression at the top, Expansion bottom left, Tech bottom right, the
+/// Balanced region (every value 25 or more) shaded, and the bot's point as a dot in its slot's colour.</summary>
+public partial class StyleTriangle : Control
+{
+    public AiStyle? Style { get; private set; }
+    private Color _color;
+
+    public void Display(AiStyle? style,Color color) { Style = style; _color = color; QueueRedraw(); }
+
+    public override void _Draw()
+    {
+        var font = GetThemeDefaultFont();
+        const int labelSize = 11;
+        float side = 96,height = side*.866f;
+        var top = new Vector2(Size.X/2,labelSize+4);
+        Vector2 left = top+new Vector2(-side/2,height),right = top+new Vector2(side/2,height);
+        // A style's point: the corners weighted by its values.
+        Vector2 Point(int a,int e,int t) => (top*a+left*e+right*t)/100;
+        DrawColoredPolygon([top,left,right],new Color(0,0,0,.35f));
+        DrawColoredPolygon([Point(50,25,25),Point(25,50,25),Point(25,25,50)],new Color(1,.9f,.5f,.18f));
+        DrawPolyline([top,left,right,top],new Color("6f6040"),1.5f,true);
+        var ink = new Color("c9b98a");
+        DrawString(font,new Vector2(top.X-50,labelSize),"Aggression",HorizontalAlignment.Center,100,labelSize,ink);
+        DrawString(font,new Vector2(left.X-66,left.Y+4),"Expansion",HorizontalAlignment.Right,62,labelSize,ink);
+        DrawString(font,new Vector2(right.X+4,right.Y+4),"Tech",HorizontalAlignment.Left,62,labelSize,ink);
+        if (Style is not { } style) return;
+        var at = Point(style.Aggression,style.Expansion,style.Tech);
+        DrawCircle(at,6,new Color(0,0,0,.7f));
+        DrawCircle(at,4.5f,_color);
+        DrawArc(at,6.5f,0,Mathf.Tau,24,new Color("f7d16a"),1.5f,true);
+    }
 }
 
 /// <summary>The setup screen's map: terrain, wells and ore piles, and each start position numbered in its slot's

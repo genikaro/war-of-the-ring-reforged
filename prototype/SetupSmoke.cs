@@ -3,7 +3,8 @@ using Reforged.Simulation;
 using System.Text.Json;
 
 /// <summary>The setup screen end to end, across the scene reloads it causes. On the 8-player Boneyard it puts you in
-/// slot 3, closes slots 6-8, names two bots and starts at 2x: the match must load exactly that. The debug menu's
+/// slot 3, closes slots 6-8, names two bots and starts at 2x: the match must load exactly that. The bot items' tooltips
+/// and the bot card must describe the bots chosen (build-49). The debug menu's
 /// Skirmish setup button then returns to the screen, which keeps those choices, and an observer match of Gimli
 /// against Aragorn on Bilbo's Bluffs at 16x must load as chosen. Clicks press and release on separate frames.</summary>
 public partial class Main
@@ -12,9 +13,10 @@ public partial class Main
     /// <summary>Which screen or match the smoke is in; static, like the checks, because each start reloads the scene.</summary>
     private static int _setupPhase;
     private static readonly Dictionary<string,bool> SetupChecks = [];
-    private const int SetupSmokeChecks = 10;
+    private const int SetupSmokeChecks = 12;
     private const string SetupBigMap = "MP08_Boneyard",SetupSmallMap = "MP02_Bilbos_Bluffs";
     private static string _setupBigTitle = "";
+    private static bool _setupCardOk;
 
     private void PickSlot(int slot,int item)
     {
@@ -53,9 +55,21 @@ public partial class Main
                     Press(screen.SpeedSlider.NotchGlobal(1));
                 }
                 if (_frames == 9) Release(screen.SpeedSlider.NotchGlobal(1));
-                if (_frames == 10 && _capture != "") _ = CaptureScreen(System.IO.Path.ChangeExtension(_capture,null)+"-setup.png");
+                if (_frames == 10)
+                {
+                    if (_capture != "") _ = CaptureScreen(System.IO.Path.ChangeExtension(_capture,null)+"-setup.png");
+                    // Build-49: each bot item's tooltip and the bot card describe the bot. The last slot changed was closed,
+                    // so the card falls back to the first bot slot, Gimli's.
+                    SetupChecks["bot_tooltip_describes_the_bot"] = screen.BotTooltip(0,BotItem("Gimli")) == "Gimli · Normal · Tech-Aggression (30/20/50)\n"
+                        +"Stubborn: a tower first, upgrades early, attacks with heavy parties." && screen.SlotChoice(0).GetItemText(BotItem("Smaug")) == "Bot · Smaug (Hard)";
+                    _setupCardOk = screen.CardText.StartsWith("Gimli · Normal · Tech-Aggression\nPlayer 1 · Aggression 30 · Expansion 20 · Tech 50\nStubborn")
+                        && screen.CardStyle == new AiStyle(30,20,50);
+                    PickSlot(1,BotItem("Aragorn"));
+                }
                 if (_frames == 11)
                 {
+                    SetupChecks["bot_card_follows_the_chosen_slot"] = _setupCardOk && screen.CardText.StartsWith("Aragorn · Hard · Aggression-Tech\nPlayer 2 · ")
+                        && screen.CardStyle == new AiStyle(50,20,30);
                     SetupChecks["status_names_the_match"] = screen.StatusText == "You play Player 3 against 4 bots · 2x speed" && !screen.StartButton.Disabled;
                     Press(screen.StartButton.GetGlobalRect().GetCenter());
                 }

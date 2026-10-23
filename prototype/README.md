@@ -271,13 +271,21 @@ python tools/prepare_prototype.py --skirmish
 does). It is a lobby in the manner of Warcraft III and StarCraft II: every
 multiplayer map with its player count and a preview of its start positions, and one
 row per start position set to You, a bot personality (with its difficulty) or
-Closed. With no slot set to You, you watch. It also sets the start speed. Restart on
+Closed. With no slot set to You, you watch. Each bot item's tooltip, and a card below
+the slots for the bot last chosen or clicked, give its difficulty, its style in the
+Aggression / Expansion / Tech triangle and how it plays (build-49). It also sets the start speed. Restart on
 the result panel replays the same setup; its Setup button, or the debug menu's
 Skirmish setup button, goes back to the screen. Any flag that chooses the match
 (`-Map`, `-Observe`, `-Bots`, `-Speed`, `-NoAi`, `-AiPersonality`, the smokes) skips the screen.
 
-The skirmish plays against the enemy bot (build-27). Bots expand with a new Citadel
-between 10 and 15 minutes, go all in when their army can no longer grow, and
+The skirmish plays against the enemy bot (build-27). Since build-49 a bot's difficulty
+sets how well it plays (Easy decides every 3 s with one builder and marches straight;
+Hard decides twice a second with three builders, finishes wounded enemies and falls
+back at half a party; no bot gets extra income) and its style what it plays: when it
+first attacks, its party size, workers, expansions, Citadel upgrade and research. Each
+named bot has its own style (see [skirmish notes](SKIRMISH.md#build-49-bot-difficulty-and-style)).
+Bots expand with a new Citadel
+between 5 and 15 minutes by style, go all in when their army can no longer grow, and
 surrender when they can never field one again (build-38). Each expansion keeps half an
 assault party as its guard, home armies stop chasing enemies that have left, and idle
 soldiers reinforce a party already out (build-40). Parties muster on their route and

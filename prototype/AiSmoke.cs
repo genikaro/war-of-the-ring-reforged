@@ -35,8 +35,9 @@ public partial class Main
         switch (_aiPhase)
         {
             case 0:
-                _aiChecks["enemy_runs_the_default_personality"] = ai is { Personality: { Id: "Default",Difficulty: 1,Aggressiveness: 50 } }
-                    && world.AiPartySize(ai) == 8 && AiSummary().Contains("Default");
+                // Build-49: Default plays the Balanced style, 34/33/33, so its party is 10.
+                _aiChecks["enemy_runs_the_default_personality"] = ai is { Personality: { Id: "Default",Difficulty: 1 },Profile.Style.Label: "Balanced" }
+                    && world.AiPartySize(ai) == 10 && AiSummary().Contains("Default · Normal · Balanced");
                 _aiChecks["player_team_has_no_ai"] = !world.AiPlayers.ContainsKey(0);
                 FocusStructure(SmokeEnemyCitadel);
                 _aiPhase = 1; break;
@@ -51,7 +52,8 @@ public partial class Main
                 _aiChecks["enemy_trains_workers"] = _aiMaxWorkers >= 8;
                 _aiChecks["enemy_builds_mill_and_foundry"] = built.Contains("built_Mill") && built.Contains("built_Foundry");
                 _aiChecks["enemy_builds_camp_and_military"] = built.Contains("built_Camp") && (built.Contains("built_Barracks") || built.Contains("built_Dwarf Hall"));
-                _aiChecks["enemy_trains_an_army_before_attacking"] = _aiArmyAtLaunch >= 8;
+                _aiChecks["enemy_trains_an_army_before_attacking"] = ai != null && _aiArmyAtLaunch >= world.AiPartySize(ai)
+                    && _aiTimeline.GetValueOrDefault("assault_sent") >= ai.Profile.AssaultFromTicks;
                 _aiChecks["assault_reaches_the_player_base"] = _aiTimeline.ContainsKey("player_citadel_damaged");
                 _aiChecks["enemy_razes_the_passive_player"] = world.MatchOver && world.Winner == AiTeam;
                 _aiPhase = 2; _aiStep = 0; break;

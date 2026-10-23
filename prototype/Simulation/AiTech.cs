@@ -2,17 +2,18 @@ namespace Reforged.Simulation;
 
 /// <summary>Bots climb the technology tree (owner request, build-47; adapter rules, the source decision code is not
 /// recovered): the home Citadel goes to its next level once a military producer stands and the clock passes
-/// 4:00 + 4 s per point of aggressiveness (4:00 for the most defensive personality, 10:40 for the most aggressive),
-/// its cost reserved while the bot saves for it once it fields a full assault party (food is the bots' bottleneck, and an
-/// earlier reserve starved their training); the research buildings (source AIBuildingClass UPGRADE) join the build
-/// plan after the military ones; and an idle research building researches the first technique, in its action-grid
-/// order, that helps a unit type the bot has alive, paid only from money nothing else has reserved.</summary>
+/// 10:00 - 4 s per point of Tech (10:00 at Tech 0, 3:20 at 100; build-49), its cost reserved while the bot saves for it
+/// once it fields a full assault party (food is the bots' bottleneck, and an earlier reserve starved their training);
+/// the research buildings (source AIBuildingClass UPGRADE) join the build plan after the military ones; and an idle
+/// research building researches the first technique, in its action-grid order, by the style's AiResearch rule: one that
+/// helps a unit type the bot has alive, paid only from money nothing else has reserved (Tech 20-49), only once the bank
+/// holds twice its cost (below 20), or any technique, its cost reserved before training (50 and more).</summary>
 public sealed partial class SimWorld
 {
-    public static int AiTechTick(AiPlayer ai) => (240+4*ai.Personality.Aggressiveness)*TicksPerSecond;
+    public static int AiTechTick(AiPlayer ai) => ai.Profile.UpgradeTicks;
 
     /// <summary>Upgrade and research for one think, after construction has reserved its cost. Returns what it did and the
-    /// cost of an upgrade it is saving for, which training must leave alone too.</summary>
+    /// cost of an upgrade or technique it is saving for, which training must leave alone too.</summary>
     private (string Plan,int Food,int Ore) AiTech(AiPlayer ai,int reserveFood,int reserveOre,bool armyReady)
     {
         var bank = Economies[ai.Team];
@@ -32,13 +33,26 @@ public sealed partial class SimWorld
             else if (armyReady) { saving = (next.FoodCost,next.OreCost); plan = "saving for "+next.DisplayName; }
         }
         else if (citadel is { Upgrading: true }) plan = "upgrading to "+UpgradeRules(citadel)!.DisplayName;
-        // Unit types the bot has alive: research that helps nobody waits.
+        // Unit types the bot has alive: below Tech 50, research that helps nobody waits.
+        var research = ai.Profile.Research;
         var fielded = Units.Where(u => u.Team == ai.Team && u.Health > 0).Select(u => u.Definition.Name).ToHashSet();
+        bool reserved = false;
         foreach (var site in ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Complete && s.Health > 0 && s.Research == null && !s.Upgrading))
-            foreach (var technique in ResearchOptions(site).Where(t => t.Bonuses.Keys.Any(fielded.Contains)))
+            foreach (var technique in ResearchOptions(site).Where(t => research == AiResearch.Eager || t.Bonuses.Keys.Any(fielded.Contains)))
             {
-                int index = Techniques.IndexOf(technique);
-                if (!Affords(technique.FoodCost+saving.Food,technique.OreCost+saving.Ore) || !CanResearch(ai.Team,site.Id,index,out _)) continue;
+                int index = Techniques.IndexOf(technique),share = research == AiResearch.Thrifty ? 2 : 1;
+                bool ready = CanResearch(ai.Team,site.Id,index,out string reason);
+                if (!ready && reason != "Insufficient resources") continue;
+                if (!ready || !Affords(share*technique.FoodCost+saving.Food,share*technique.OreCost+saving.Ore))
+                {
+                    // An eager researcher keeps the first technique it cannot pay for yet out of training's reach.
+                    if (research == AiResearch.Eager && !reserved)
+                    {
+                        reserved = true; saving = (saving.Food+technique.FoodCost,saving.Ore+technique.OreCost);
+                        plan += (plan == "" ? "" : " · ")+"saving for "+technique.DisplayName;
+                    }
+                    continue;
+                }
                 // Orders apply at once, so the bank Affords reads already holds the payment.
                 AiOrder(ai,[site.Id],OrderKind.Research,index,site.Id);
                 plan += (plan == "" ? "" : " · ")+"researching "+technique.DisplayName;

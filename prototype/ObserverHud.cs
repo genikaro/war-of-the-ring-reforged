@@ -144,7 +144,8 @@ public partial class ObserverHud : Control
     {
         var bot = world.AiPlayers.GetValueOrDefault(team);
         string state = world.DefeatedTeams.Contains(team) ? bot?.Status == "surrendered" ? "Surrendered" : "Defeated" : world.Winner == team ? "Winner" : bot is null ? "No bot" : bot.Status == "" ? "Starting" : bot.Status;
-        return $"Player {team+1} · {PlayerName(world,team)}\n{state}\nClick to centre the camera on this base.";
+        string style = bot is null ? "" : "\n"+AiRoster.Summary(bot.Personality.Difficulty,bot.Profile.Style);
+        return $"Player {team+1} · {PlayerName(world,team)}{style}\n{state}\nClick to centre the camera on this base.";
     }
 
     private void RefreshEconomy(SimWorld world,Func<int,Color> color)

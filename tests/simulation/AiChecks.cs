@@ -11,8 +11,15 @@ public static class AiChecks
         FootprintPoint[] Square(int half) => [new(-half,-half),new(half,-half),new(half,half),new(-half,half)];
         var worker = UnitDefinition.Probe with { Name = "worker",DpsMilli = 2000 };
         var soldier = UnitDefinition.Probe with { Name = "soldier" };
-        AiPersonality Personality(int aggressiveness,int difficulty = 1) => new("test","Test",difficulty,aggressiveness,50,50,50,true,true);
-        SimWorld Fixture(int aggressiveness = 50,bool mirror = false,bool foundry = false,bool[]? allowed = null)
+        // A test bot of an Aggression (Expansion and Tech share the rest) or an explicit style. Its assault gate is off
+        // unless asked for, so a party leaves as soon as the army is ready.
+        AiPlayer Bot(int team,int aggression,int difficulty = 1,AiStyle? style = null,bool gate = false)
+        {
+            var bot = new AiPlayer(team,new("test","Test",difficulty,50,50,50,50,true,true),style ?? new(aggression,(100-aggression)/2,100-aggression-(100-aggression)/2));
+            if (!gate) bot.Profile = bot.Profile with { AssaultFromTicks = 0 };
+            return bot;
+        }
+        SimWorld Fixture(int aggressiveness = 50,bool mirror = false,bool foundry = false,bool[]? allowed = null,int difficulty = 1)
         {
             var nav = new GridNavigation(W,H,1000,allowed ?? Enumerable.Repeat(true,W*H).ToArray(),new int[(W+1)*(H+1)],
                 obstacles: [new NavigationObstacle(Keep0,Box(6,12,6),[]),new NavigationObstacle(Keep1,Box(58,12,6),[]),
@@ -58,7 +65,7 @@ public static class AiChecks
             world.Navigation.ForBody(350,700);
             world.Spawn(1,Cell(55,10),worker); world.Spawn(1,Cell(55,20),worker);
             world.Spawn(0,Cell(16,15),worker).Order = OrderKind.HoldGround;
-            world.AiPlayers.Add(1,new(1,Personality(aggressiveness)));
+            world.AiPlayers.Add(1,Bot(1,aggressiveness,difficulty));
             if (mirror)
             {
                 // Bot against bot: a mirror base with its own ore and well, and an aggressive bot against the default one.
@@ -67,7 +74,7 @@ public static class AiChecks
                 world.Resources.Add(Pile+10,new(Pile+10,ResourceKind.Ore,17500,26500,4500,20,1_000_000,2000));
                 world.ConstructionSites.Add(Well+10,new(Well+10,20017,2500));
                 world.Economies[0] = new(300,300);
-                world.AiPlayers.Add(0,new(0,Personality(80)));
+                world.AiPlayers.Add(0,Bot(0,80));
             }
             if (foundry)
             {
@@ -82,8 +89,35 @@ public static class AiChecks
         void Step(SimWorld world,int ticks) { for (int i = 0; i < ticks; i++) world.Step(); }
 
         var sizes = Fixture();
-        check(sizes.AiPartySize(new(1,Personality(0))) == 12 && sizes.AiPartySize(new(1,Personality(50))) == 8
-            && sizes.AiPartySize(new(1,Personality(100))) == 5,"party size runs from the Assault MaxSize at aggressiveness 0 to MinSize at 100");
+        check(sizes.AiPartySize(Bot(1,0)) == 12 && sizes.AiPartySize(Bot(1,50)) == 8
+            && sizes.AiPartySize(Bot(1,100)) == 5,"party size runs from the Assault MaxSize at Aggression 0 to MinSize at 100");
+
+        // Build-49: the named bots' styles, and what difficulty and style change.
+        var styles = AiRoster.Bots.Select(b => b.Style).ToArray();
+        check(styles.All(s => s.Valid) && styles.Distinct().Count() == styles.Length && AiRoster.Entry("Default").Style.Label == "Balanced"
+            && AiRoster.Entry("Gimli").Style.Label == "Tech-Aggression" && AiRoster.Entry("Saruman").Style.Label == "Expansion-Aggression"
+            && AiRoster.Entry("Smaug").Style.Label == "Aggression" && AiRoster.Entry("NewBot") is { Name: "NewBot",Style.Label: "Balanced" },
+            "every roster style sums to 100, no two bots share one, and labels name the heavy axes: "+string.Join(", ",AiRoster.Bots.Select(b => b.Id+" "+b.Style.Label)));
+        bool threw = false;
+        try { AiProfile.For(new("test","Test",1,50,50,50,50,true,true),new(50,50,50)); } catch (ArgumentException) { threw = true; }
+        check(threw,"a style that does not sum to 100 is refused");
+        int[] thinks = [.. new[] {0,1,2}.Select(d => { var w = Fixture(difficulty: d); Step(w,600); return w.AiPlayers[1].Thinks; })];
+        check(thinks.SequenceEqual([10,30,60]),"in 30 s Easy thinks every 3 s, Normal every second and Hard twice a second: "+string.Join('/',thinks));
+        int[] crews = [.. new[] {0,1,2}.Select(d =>
+        {
+            var w = Fixture(difficulty: d); w.Economies[1] = new(5000,5000);
+            w.Spawn(1,Cell(55,12),worker); w.Spawn(1,Cell(55,18),worker);
+            int most = 0;
+            for (int i = 0; i < 1200; i++) { w.Step(); most = Math.Max(most,w.Units.Count(u => u.Team == 1 && u.Order is OrderKind.Build or OrderKind.PlaceBuilding)); }
+            return most;
+        })];
+        check(crews.SequenceEqual([1,2,3]),"Easy, Normal and Hard put 1, 2 and 3 builders on a project: "+string.Join('/',crews));
+        var tests = new AiPersonality("test","Test",1,50,50,50,50,true,true);
+        AiProfile farmer = AiProfile.For(tests,new(0,100,0)),scholar = AiProfile.For(tests,new(0,0,100)),balanced = AiProfile.For(tests,AiStyle.Balanced);
+        check(farmer.Workers == 16 && scholar.Workers == 10 && farmer.ExpansionTicks < balanced.ExpansionTicks && balanced.ExpansionTicks < scholar.ExpansionTicks
+            && farmer.MaxCitadels == 4 && scholar.MaxCitadels == 2 && scholar.UpgradeTicks < balanced.UpgradeTicks && balanced.UpgradeTicks < farmer.UpgradeTicks
+            && scholar.Research == AiResearch.Eager && balanced.Research == AiResearch.Fielded && farmer.Research == AiResearch.Thrifty,
+            "Expansion raises the workers and brings the expansion forward; Tech brings the upgrade forward and widens research");
 
         var economy = Fixture();
         Step(economy,25);
@@ -114,28 +148,41 @@ public static class AiChecks
         var replay = Fixture(); Step(replay,war.Tick);
         check(replay.StateDigest() == war.StateDigest(),"an AI match replays identically");
 
-        // Build-47: a rich bot climbs the tree. Its keep upgrades no earlier than the tech time (4:00 at aggressiveness 0),
+        // Build-47: a rich bot climbs the tree. Its keep upgrades no earlier than the tech time (3:20 at Tech 100),
         // the research building follows, its technique is researched, and the barracks trains the dearer knight.
-        var tech = Fixture(aggressiveness: 0); tech.Economies[1] = new(5000,5000);
-        tech.BuildingRules.Add("keep2",new("keep2","keep2",null,115,105,100,600,750000,750000,100000,50000,["keep"]));
-        tech.Upgrades.Add("keep","keep2"); tech.Placements.Add("keep2",tech.Placements["keep"]); tech.ProducedUnits.Add("keep2",["worker"]);
-        tech.PlaceableBuildings.Add("forge");
-        tech.BuildingRules.Add("forge",new("forge","forge",null,75,100,60,300,750000,750000,100000,50000,["keep2"]));
-        tech.Placements.Add("forge",new(Square(2000),-400,400,4180,true,false)); tech.PlacementRadiusMm.Add("forge",15000);
-        tech.AiBuildings.Add("forge",new("UPGRADE",false,2,true));
-        tech.Techniques.Add(new("edge","Edge","forge",0,75,75,100,null,null,new Dictionary<string,(int,int)> { ["soldier"] = (1000,0) }));
-        tech.Rules.Units.Add("knight",soldier with { Name = "knight",MaxHealth = 235 });
-        tech.ProductionRules.Add("knight",new("knight","Knight",85,30,3,60,Prerequisites: ["keep2"]));
-        tech.AiUnits.Add("knight",new(false,70)); tech.ProducedUnits["barracks"] = ["soldier","knight"];
+        SimWorld TechFixture(AiStyle style)
+        {
+            var world = Fixture(); world.Economies[1] = new(5000,5000); world.AiPlayers[1] = Bot(1,0,style: style);
+            world.BuildingRules.Add("keep2",new("keep2","keep2",null,115,105,100,600,750000,750000,100000,50000,["keep"]));
+            world.Upgrades.Add("keep","keep2"); world.Placements.Add("keep2",world.Placements["keep"]); world.ProducedUnits.Add("keep2",["worker"]);
+            world.PlaceableBuildings.Add("forge");
+            world.BuildingRules.Add("forge",new("forge","forge",null,75,100,60,300,750000,750000,100000,50000,["keep2"]));
+            world.Placements.Add("forge",new(Square(2000),-400,400,4180,true,false)); world.PlacementRadiusMm.Add("forge",15000);
+            world.AiBuildings.Add("forge",new("UPGRADE",false,2,true));
+            world.Techniques.Add(new("edge","Edge","forge",0,75,75,100,null,null,new Dictionary<string,(int,int)> { ["soldier"] = (1000,0) }));
+            // Build-49: a technique for a unit nobody fields, which only a Tech 50+ style researches.
+            world.Techniques.Add(new("hide","Hide","forge",1,75,75,100,null,null,new Dictionary<string,(int,int)> { ["ghost"] = (0,1000) }));
+            world.Rules.Units.Add("knight",soldier with { Name = "knight",MaxHealth = 235 });
+            world.ProductionRules.Add("knight",new("knight","Knight",85,30,3,60,Prerequisites: ["keep2"]));
+            world.AiUnits.Add("knight",new(false,70)); world.ProducedUnits["barracks"] = ["soldier","knight"];
+            return world;
+        }
+        var tech = TechFixture(new(0,0,100));
         int upgradedAt = -1;
-        for (int i = 0; i < 12000 && !tech.HasResearched(1,"edge"); i++)
+        for (int i = 0; i < 12000 && !(tech.HasResearched(1,"edge") && tech.HasResearched(1,"hide")); i++)
         {
             tech.Step();
             if (upgradedAt < 0 && tech.ConstructionSites[Keep1].Upgrading) upgradedAt = tech.Tick;
         }
-        check(upgradedAt >= SimWorld.AiTechTick(tech.AiPlayers[1]) && tech.ConstructionSites[Keep1].Building == "keep2","the bot upgrades its keep once the tech time comes");
+        check(upgradedAt >= SimWorld.AiTechTick(tech.AiPlayers[1]) && SimWorld.AiTechTick(tech.AiPlayers[1]) == 200*SimWorld.TicksPerSecond
+            && tech.ConstructionSites[Keep1].Building == "keep2","the bot upgrades its keep once the tech time comes");
         check(tech.ConstructionSites.Values.Any(s => s.Team == 1 && s.Building == "forge" && s.Complete) && tech.HasResearched(1,"edge"),
             "the bot builds the research building and researches for the units it fields: "+tech.AiPlayers[1].Status);
+        check(tech.HasResearched(1,"hide"),"a Tech 50+ style also researches a technique that helps no unit it fields");
+        var fieldedOnly = TechFixture(new(0,70,30));
+        for (int i = 0; i < 14000 && !fieldedOnly.HasResearched(1,"edge"); i++) fieldedOnly.Step();
+        Step(fieldedOnly,400);
+        check(fieldedOnly.HasResearched(1,"edge") && !fieldedOnly.HasResearched(1,"hide"),"a Tech 20-49 style researches only for the units it fields: "+fieldedOnly.AiPlayers[1].Status);
         // Its keep already at level 2, the bot's first barracks soldier is the knight: equal Assault worth, dearer unit.
         var choice = Fixture(); choice.Economies[1] = new(5000,5000);
         choice.BuildingRules.Add("keep2",new("keep2","keep2",null,115,105,100,600,750000,750000,100000,50000,["keep"]));
@@ -154,12 +201,45 @@ public static class AiChecks
         var duelReplay = Fixture(mirror: true); Step(duelReplay,duel.Tick);
         check(duelReplay.StateDigest() == duel.StateDigest(),"a bot-against-bot match replays identically");
 
+        // Build-49: bots thinking at different rates (Hard twice a second, Easy every 3 s) still replay identically. Who
+        // wins is judged on Bilbo's Bluffs (SKIRMISH.md): here the bases stand 52 m apart, inside each other's 30 m
+        // defence radius, so the duel turns on whose buildings stand farther forward.
+        SimWorld Skill()
+        {
+            var world = Fixture(mirror: true);
+            world.AiPlayers[0] = Bot(0,50,difficulty: 2); world.AiPlayers[1] = Bot(1,50,difficulty: 0);
+            return world;
+        }
+        var skilled = Skill(); Step(skilled,2000);
+        var skillReplay = Skill(); Step(skillReplay,2000);
+        check(skillReplay.StateDigest() == skilled.StateDigest() && skilled.AiPlayers[0].Thinks == 200 && !skilled.MatchOver,
+            "a Hard against Easy match replays identically: "+string.Join(" | ",skilled.AiPlayers.Values.Select(a => a.Status)));
+
+        // The assault gate: no party before (100 - Aggression) x 6 s, five minutes at Aggression 50.
+        var patient = Fixture(); patient.AiPlayers[1] = Bot(1,50,gate: true);
+        Enumerable.Range(0,8).Select(i => patient.Spawn(1,Cell(48+(i%4)*2,8+(i/4)*14),soldier)).ToArray();
+        Step(patient,300*SimWorld.TicksPerSecond-40);
+        bool held = patient.AiPlayers[1].PartiesSent == 0 && patient.AiPlayers[1].Status.Contains("attacks from 5:00");
+        Step(patient,60);
+        check(held && patient.AiPlayers[1].PartiesSent == 1,"no assault leaves before the style's gate, and one leaves once it passes: "+patient.AiPlayers[1].Status);
+
         var regroup = Fixture();
         var straggler = regroup.Spawn(1,Cell(30,15),soldier); regroup.AiPlayers[1].Party.Add(straggler.Id); regroup.AiPlayers[1].PartyTarget = Keep0;
         var fresh = Enumerable.Range(0,8).Select(i => regroup.Spawn(1,Cell(48+(i%4)*2,8+(i/4)*14),soldier).Id).ToArray();
         Step(regroup,25);
         check(straggler.Order == OrderKind.Move && regroup.AiPlayers[1].Party.Order().SequenceEqual(fresh) && regroup.AiPlayers[1].PartiesSent == 1,
             "a broken assault falls back home and the idle army forms the next one");
+        // Build-49: three of a party of eight hold on below Hard (a third is 2.7) and fall back on Hard (half is 4).
+        bool[] fellBack = [.. new[] {1,2}.Select(d =>
+        {
+            var w = Fixture(difficulty: d);
+            var three = Enumerable.Range(0,3).Select(i => w.Spawn(1,Cell(30,13+2*i),soldier)).ToArray();
+            foreach (var unit in three) { unit.Order = OrderKind.HoldGround; w.AiPlayers[1].Party.Add(unit.Id); }
+            w.AiPlayers[1].PartyTarget = Keep0;
+            Step(w,25);
+            return w.AiPlayers[1].Party.Count == 0 && three.All(u => u.Order == OrderKind.Move);
+        })];
+        check(fellBack.SequenceEqual([false,true]),"a party of three in eight falls back on Hard but not on Normal");
 
         // Regrouping (build-41): a new party musters on its route before marching, and moves on only once together;
         // one attack-move to the target strung it out into a file.
@@ -180,6 +260,14 @@ public static class AiChecks
         }
         check(spread >= 0 && spread <= (long)SimWorld.AiRegroupMm*SimWorld.AiRegroupMm,
             $"the party marches on only once every member stands within 12 m of the muster point (farthest {Math.Sqrt(Math.Max(0,spread))/1000:0.#} m)");
+        // Build-49: an Easy bot marches straight at the target.
+        var straight = Fixture(difficulty: 0);
+        var marchers = Enumerable.Range(0,8).Select(i => straight.Spawn(1,Cell(48+(i%4)*2,8+(i/4)*14),soldier).Id).ToArray();
+        Step(straight,60);
+        bool AtKeep(int cell) => cell >= 0 && SimWorld.DistanceSquared(straight.Navigation.Center(cell).X,straight.Navigation.Center(cell).Z,9000,15000) <= 8000L*8000;
+        check(straight.AiPlayers[1].PartiesSent == 1 && straight.AiPlayers[1].Legs.Count == 0
+            && marchers.All(id => straight.Units[id].Order == OrderKind.AttackMove && AtKeep(straight.Units[id].OrderDestination)),
+            "an Easy bot's party marches straight at its target without regrouping: "+straight.AiPlayers[1].Status);
 
         // Reinforcements (build-40): a full party's worth of idle soldiers at home joins a party still out and marches
         // on its target, instead of waiting for a remnant that may never come back.
@@ -199,6 +287,33 @@ public static class AiChecks
         check(guards.All(id => defence.Units[id].Order == OrderKind.AttackMove || defence.Units[id].Target == raider.Id),"enemies near the base draw the home army");
         check(defence.AiPlayers[1].Party.Count == 0,"no assault leaves while the base is under threat");
 
+        // Build-49 bug: after 30 s of fighting, the bot gave up on raiders its army was hitting, stopped the soldiers on them
+        // every think and so cancelled their swings; a Hard bot's army froze. Harmless raiders too tough to kill in two
+        // minutes must keep being hit, without being given up on.
+        var siege = Fixture(difficulty: 2);
+        var tough = soldier with { Name = "tough",MaxHealth = 20000,DpsMilli = 0 };
+        siege.Rules.Units.Add("tough",tough);
+        foreach (int i in Enumerable.Range(0,6)) siege.Spawn(1,Cell(50+(i%3)*2,12+(i/3)*4),soldier);
+        foreach (int i in Enumerable.Range(0,3)) siege.Spawn(0,Cell(44,12+3*i),tough).Order = OrderKind.HoldGround;
+        int lateHits = 0,lateCancels = 0;
+        for (int i = 0; i < 2400; i++)
+        {
+            siege.Step();
+            if (siege.Tick < 800) continue;
+            lateHits += siege.CombatEvents.Count(e => e.Kind == CombatEventKind.Hit && e.Unit >= 0 && siege.Units[e.Unit].Team == 1);
+            lateCancels += siege.CombatEvents.Count(e => e.Kind == CombatEventKind.Cancel && e.Unit >= 0 && siege.Units[e.Unit].Team == 1);
+        }
+        check(siege.AiPlayers[1].Unreachable.Count == 0 && lateHits >= 400 && lateCancels*10 < lateHits,
+            $"a Hard bot keeps hitting raiders it has fought for over 30 s instead of giving up and cancelling its swings: {lateHits} hits, {lateCancels} cancels after 40 s");
+        // An enemy given up on (out of reach for 30 s) is forgiven once it loses health: it was reachable after all.
+        var forgiven = Fixture();
+        forgiven.Rules.Units.Add("tough",tough);
+        var pocketed = forgiven.Spawn(0,Cell(44,15),tough); pocketed.Order = OrderKind.HoldGround;
+        forgiven.AiPlayers[1].Unreachable[pocketed.Id] = pocketed.HealthMilli;
+        pocketed.HealthMilli -= 1000;
+        Step(forgiven,25);
+        check(!forgiven.AiPlayers[1].Unreachable.ContainsKey(pocketed.Id),"an enemy given up on is forgiven once it loses health");
+
         // Spread attacks (build-43): a whole army sent at one enemy left all but the few that fit around it standing.
         var spreadOut = Fixture();
         var answering = Enumerable.Range(0,8).Select(i => spreadOut.Spawn(1,Cell(50+(i%4)*2,12+(i/4)*4),soldier).Id).ToArray();
@@ -208,6 +323,18 @@ public static class AiChecks
         var split = raidParty.Select(r => answering.Count(id => spreadOut.Units[id].Target == r.Id || spreadOut.Units[id].OrderTarget == r.Id)).ToArray();
         check(split.Order().SequenceEqual([2,3,3]),
             "the home army spreads its attacks evenly over the raiders: "+string.Join('/',split));
+        // Build-49: of two raiders standing together, Normal answers the nearer one and Hard the wounded one.
+        int[] answered = [.. new[] {1,2}.Select(d =>
+        {
+            var w = Fixture(difficulty: d);
+            var defender = w.Spawn(1,Cell(52,15),soldier);
+            // Beyond the defender's 10 m idle awareness, so the bot's order picks the target.
+            var near = w.Spawn(0,Cell(40,15),soldier); var hurt = w.Spawn(0,Cell(38,18),soldier);
+            near.Order = hurt.Order = OrderKind.HoldGround; hurt.Health = soldier.MaxHealth/2;
+            Step(w,25);
+            return defender.Target == hurt.Id || defender.OrderTarget == hurt.Id ? 1 : defender.Target == near.Id || defender.OrderTarget == near.Id ? 0 : -1;
+        })];
+        check(answered.SequenceEqual([0,1]),"Normal attacks the nearest raider and Hard finishes the wounded one beside it: "+string.Join('/',answered));
 
         // Surrender: no units left and no money for any unit.
         var beaten = Fixture();
@@ -231,11 +358,11 @@ public static class AiChecks
         check(spent.AiPlayers[1].PartiesSent == 1 && spent.AiPlayers[1].AllIn && lastStand.All(id => spent.Units[id].Order is OrderKind.AttackMove or OrderKind.AttackStructure),
             "a spent bot sends its last soldiers all in: "+spent.AiPlayers[1].Status);
 
-        // Expansion: a Citadel by unclaimed ore outside the home Citadel's reach, from 10:00-15:00 by aggressiveness.
+        // Expansion: a Citadel by unclaimed ore outside the home Citadel's reach, from 15:00-5:00 by Expansion.
         var expand = Fixture();
         expand.Placements["keep"] = expand.Placements["keep"] with { MustBeNear = false,DropOff = true };
         expand.Resources.Add(30,new(30,ResourceKind.Ore,36000,28500,4500,20,1_000_000,2000));
-        int expandAt = (600+3*50)*SimWorld.TicksPerSecond,laidAt = -1;
+        int expandAt = SimWorld.AiExpansionTick(expand.AiPlayers[1]),laidAt = -1;
         ConstructionSite? expansion = null;
         for (int i = 0; i < expandAt+4000 && expansion == null; i++)
         {

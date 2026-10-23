@@ -2160,3 +2160,149 @@ setup smoke's observer check; `skirmish_map.TITLES` restores the apostrophe.
 Validation: `SimulationTests` 830 checks, 34 worker-traffic checks on the slim
 Bilbo cache and 897 on Helm's Deep; the Python importer tests; all 16 Bilbo
 smokes, the Helm's Deep smoke and the setup smoke (all maps) pass.
+
+## Build-49: bot difficulty and style
+
+Owner model (Oct 23): only two `.rai` knobs were ever read (Difficulty for the
+worker count, Aggressiveness for party size and timings), so Default played like
+Frodo, Grishnakh like Legolas and Shelob, and Gandalf like Saruman. A bot now has
+three layers, of which this build adds the first two; player-picked traits follow
+in build-50. All of it is adapter data in `Simulation/AiRoster.cs`, so no cache
+needs refreshing.
+
+**Difficulty is execution** (`AiSkill`), the same for every style. Hard plays fair:
+no income bonus.
+
+| | Easy | Normal (as before) | Hard |
+|---|---|---|---|
+| Tactical think (defence, guards, assault) | 3 s | 1 s | 0.5 s |
+| Strategic think (building, workers, tech, training) | 3 s | 1 s | 1 s (every other think) |
+| Base workers | 8 | 10 | 12 |
+| Builders per project | 1 | 2 | 3 |
+| March | straight attack-move | regroup legs (build-41) | regroup legs |
+| Target choice | nearest, not spread | spread, nearest first (build-43) | spread; among enemies within 6 m of the nearest, the most wounded first, ranged before melee |
+| Party falls back below | a fifth | a third | half |
+
+**Style is the game plan** (`AiStyle`): a point in an Aggression / Expansion /
+Tech triangle whose values sum to 100 (A, E, T below). It replaces every
+Aggressiveness read:
+
+| Value | Rule |
+|---|---|
+| Party size | 12 - (7 x A + 50) / 100 (A 0: 12, A 100: 5), as before |
+| No assault before | (100 - A) x 6 s (A 90: 1:00, A 10: 9:00) |
+| Worker target | difficulty base + E x 6 / 100, + 2 per Mill |
+| First expansion | 15:00 - 6 s x E (E 0: 15:00, E 100: 5:00) |
+| Expansion interval | 10:00 - 4 s x E |
+| Most Citadels | 2 + (E + 16) / 33, at most 4 |
+| Citadel upgrade from | 10:00 - 4 s x T (T 0: 10:00, T 100: 3:20) |
+| Research | T 50+: every technique, its cost reserved before training; T 20-49: as build-47 (for fielded units, from unreserved money); below 20: only once the bank holds twice the cost |
+| Watchtower before military | A 30 or less |
+| More military buildings | A 50+: once every producer is training; otherwise once the bank pays twice over, as before |
+
+The label names the style: "Balanced" when every value is 25 or more, else the
+axes of 30 or more, heaviest first.
+
+**The roster.** Each named bot keeps its `.rai` difficulty and gets a fixed style
+and a lobby description; no two share a style. A personality missing from the
+roster (a new `.rai`) plays Balanced.
+
+| Bot | Difficulty | A / E / T | Style |
+|---|---|---|---|
+| Farmer Maggot | Easy | 10/70/20 | Expansion |
+| Gollum | Easy | 60/30/10 | Aggression-Expansion |
+| Saleme | Easy | 20/30/50 | Tech-Expansion |
+| Default | Normal | 34/33/33 | Balanced |
+| Frodo | Normal | 20/60/20 | Expansion |
+| Gimli | Normal | 30/20/50 | Tech-Aggression |
+| Grishnakh | Normal | 70/20/10 | Aggression |
+| Legolas | Normal | 40/0/60 | Tech-Aggression |
+| Shelob | Normal | 10/50/40 | Expansion-Tech |
+| Aragorn | Hard | 50/20/30 | Aggression-Tech |
+| Gandalf | Hard | 30/10/60 | Tech-Aggression |
+| Saruman | Hard | 30/50/20 | Expansion-Aggression |
+| Smaug | Hard | 90/0/10 | Aggression |
+
+**Lobby.** Each bot item in a slot's dropdown now reads its English name
+("Bot · Farmer Maggot (Easy)") and has a tooltip with its difficulty, style and
+description. A card below the slots describes the bot last chosen or clicked (or
+the first bot slot): name, difficulty and style, its three values, a small triangle
+with its point (the shaded centre is Balanced) and how it plays. It fits the
+existing frame. The observer overview's name tooltips add the difficulty and style,
+the debug menu's AI line the style, and the bot status shows "attacks from m:ss"
+until the assault gate passes.
+
+**Changed on the way.**
+- The plan let Aggression 50+ build more military buildings freely. In the first
+  reference match Aragorn then stood three Barracks and three Dwarf Halls by 8:00,
+  spent the food (the bots' bottleneck) on producers it could not keep busy, sat on
+  1800 ore with 5-25 food and lost at 14:01. An aggressive style now adds a producer
+  once every producer it has is training.
+- The observer report's `armies` and `research` were keyed by bot id, so a mirror
+  match (Default against Default) crashed the report; they are keyed "Player 1 Gimli".
+- **Frozen armies (owner playtest).** Twice in a row Saruman's army stood still, its
+  units starting to swing and cancelling at the last moment. Since build-28 a bot
+  gave up on any enemy that had stood within range for 30 s, to stop chasing one
+  tucked into a pocket it could never reach. In a fight lasting 30 s that also gave
+  up on enemies the army was hitting: every think stopped the soldiers on them, an
+  idle soldier picked the same enemy again, and the next stop cancelled its swing
+  (every order cancels one). Normal bots lost swings too; a Hard bot, stopping them
+  twice a second, landed almost none. Now the 30 s count restarts whenever the enemy
+  loses health, so only an enemy the bot cannot hurt is given up on, and one given up
+  on is forgiven once it loses health. In Saruman against Aragorn the swings Saruman's
+  army landed against those it cancelled went from 14:26 to 67:41 (sampled once a
+  frame at 16x), and Saruman now wins.
+
+**Difficulty check.** Hard against Easy with the same style (Default's) can only be
+judged on a real map: the synthetic two-base fixture puts the bases 52 m apart,
+inside each other's 30 m defence radius, so its duels turn on whose buildings stand
+farther forward. On Bilbo's Bluffs the first slot wins every mirror (Default
+against Default too), so the result there is the slot's. Observer runs
+with a temporary difficulty override (not committed), 16x:
+
+| Map | Slot 1 vs slot 2 | Winner |
+|---|---|---|
+| Sorrow | Hard vs Easy | Hard, 15:29 |
+| Sorrow | Easy vs Hard | Hard, 20:54 |
+| Dust and Blood | Hard vs Easy | Hard, 10:50 |
+| Dust and Blood | Easy vs Hard | Hard, 11:57 |
+| Bilbo's Bluffs | Hard vs Easy | Hard, 21:02 |
+| Bilbo's Bluffs | Easy vs Hard | Easy, 23:16 |
+| Bilbo's Bluffs | Normal vs Normal | slot 1, 22:55 |
+
+**Reference matches** on Bilbo's Bluffs (observer smoke, 16x):
+
+| Match | Winner, time | Notes |
+|---|---|---|
+| Gimli vs Aragorn | Gimli 13:15 (tick 15903) | Gimli: Citadel 2, 6 Riders, 6 Rangers, two researches; Aragorn: no research |
+| Aragorn vs Gimli | Aragorn 15:48 (tick 18973) | both research everything |
+| Saruman vs Aragorn | Saruman 14:02 (tick 16843) | Saruman expands and guards it; Aragorn ends with one worker |
+| Smaug vs Shelob | Shelob 21:08 (tick 25360) | Smaug's parties of six do not break Shelob, who guards her expansion and researches everything |
+
+`-AiSmoke` timeline (Default, now Balanced, party 10): the assault waits for the
+6:36 gate and leaves with 12 at once, reaches the player's Citadel at 7:48 and razes
+it at 8:05 (was 4:26 and 5:48).
+
+**Frame time.** An 8-bot free-for-all on MP08_Rift with the four Hard bots (Aragorn,
+Gimli, Gandalf, Legolas, Saruman, Shelob, Smaug, Frodo; `-Observe -Speed 16 -Profile`,
+stopped after 9 minutes of wall time at 16:00 of game time): 12-14 FPS and 17-18 ms
+a tick once 235-280 units are on the field (build-37 recorded 13-20 FPS and
+11-17 ms; no build-48 baseline was run for this match). The bots' thinking costs
+1.0-2.5 ms a tick, unit movement 11-13 ms, so Hard's twice-a-second tactics are not
+a hot spot; its strategy runs once a second like Normal's.
+
+Validation: `SimulationTests` 844 checks (14 new in `AiChecks`: roster styles sum
+to 100 and differ, an invalid style is refused, think rates 10/30/60 in 30 s,
+builders 1/2/3, profile values move with Expansion and Tech, a Tech 50+ style
+researches a technique for no fielded unit and a Tech 30 one does not, a party of
+three in eight falls back on Hard but not Normal, Easy marches without legs, Hard
+attacks the wounded raider and Normal the nearest, the assault gate holds until
+5:00 at Aggression 50, a Hard against Easy match replays identically, a Hard army
+keeps hitting harmless raiders it has fought for two minutes with no more than one
+cancelled swing in ten, and an enemy given up on is forgiven once it loses health). The
+existing checks now build their test bot with an explicit style and no assault gate.
+`-SetupSmoke` 12 cases (2 new: the bot tooltip, and the card following the slot
+last chosen); the observer smoke's name check includes the tooltip's style. The
+observer reference is now Gimli wins at tick 15903 (digest 437816B8...). All 16
+Bilbo smokes, the setup smoke (all maps), the Helm's Deep smoke and 183 Python
+tests pass.

@@ -52,6 +52,6 @@ public partial class Main
     }
 
     private string AiSummary() => _world?.AiPlayers.Values.ToArray() is not { Length: > 0 } bots ? "Enemy AI off"
-        : bots.Length == 1 ? $"Enemy AI · {bots[0].Personality.DisplayName} ({bots[0].Personality.Id}) · {bots[0].Status}"
-        : string.Join('\n',bots.Select(ai => $"Player {ai.Team+1} AI · {ai.Personality.Id} · {ai.Status}"));
+        : bots.Length == 1 ? $"Enemy AI · {AiRoster.Entry(bots[0].Personality.Id).Name} · {AiRoster.Summary(bots[0].Personality.Difficulty,bots[0].Profile.Style)} · {bots[0].Status}"
+        : string.Join('\n',bots.Select(ai => $"Player {ai.Team+1} AI · {AiRoster.Entry(ai.Personality.Id).Name} · {ai.Status}"));
 }
