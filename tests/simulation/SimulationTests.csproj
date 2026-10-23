@@ -8,4 +8,5 @@
   <ItemGroup><Compile Include="../../prototype/Simulation/*.cs" Link="Simulation/%(Filename)%(Extension)" /></ItemGroup>
   <ItemGroup><Compile Include="../../prototype/Input/*.cs" Link="Input/%(Filename)%(Extension)" /></ItemGroup>
   <ItemGroup><Compile Include="../../prototype/Presentation/*.cs" Link="Presentation/%(Filename)%(Extension)" /></ItemGroup>
+  <ItemGroup><Compile Include="../../prototype/CacheManifest.cs" Link="CacheManifest.cs" /></ItemGroup>
 </Project>

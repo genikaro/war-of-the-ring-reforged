@@ -64,6 +64,8 @@ def refresh(output):
     manifest = json.loads(path.read_text(encoding='utf-8'))
     if manifest.get('mode') != 'skirmish':
         raise ValueError('production refresh requires a skirmish cache')
+    import content_pack
+    content_pack.reject_slim_cache(manifest)
     manifest['skirmish']['production'] = export(output, resolver, [m['unit'] for m in manifest['models']])
     manifest['files'][RALLY_BANNER_FILE] = hashlib.sha256((output / RALLY_BANNER_FILE).read_bytes()).hexdigest()
     path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')

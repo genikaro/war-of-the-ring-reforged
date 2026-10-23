@@ -86,8 +86,10 @@ public static class WorkerTrafficChecks
 
     public static SimWorld Load(string cache)
     {
-        JsonElement Read(string file) => JsonDocument.Parse(File.ReadAllText(Path.Combine(cache,file))).RootElement.Clone();
-        var manifest = Read("manifest.json"); var nav = Read("navigation.json"); var data = manifest.GetProperty("skirmish");
+        // The map cache merged with its content pack (build-48); combat rules live in the pack.
+        var files = CacheManifest.Load(cache);
+        JsonElement Read(string file) => JsonDocument.Parse(File.ReadAllText(files.Resolve(file))).RootElement.Clone();
+        var manifest = files.Root; var nav = Read("navigation.json"); var data = manifest.GetProperty("skirmish");
         byte[] raw = File.ReadAllBytes(Path.Combine(cache,"heights.bin"));
         int[] heights = Enumerable.Range(0,raw.Length/4).Select(i => BinaryPrimitives.ReadInt32LittleEndian(raw.AsSpan(i*4,4))).ToArray();
         var layers = nav.GetProperty("runtime_obstacles").EnumerateArray().ToArray();
@@ -98,7 +100,7 @@ public static class WorkerTrafficChecks
             layers.Select(NavigationObstacle.Parse).ToArray());
         navigation.LoadBodyProfiles(nav);
         foreach (var id in nav.GetProperty("inactive_obstacles").EnumerateArray()) navigation.SetObstacle(id.GetInt32(),false);
-        var world = new SimWorld(navigation,CombatRules.Parse(File.ReadAllText(Path.Combine(cache,"combat/rules.json"))));
+        var world = new SimWorld(navigation,CombatRules.Parse(File.ReadAllText(files.Resolve("combat/rules.json"))));
         var definition = world.Rules.Units["UNIT_G_HUMAN_WORKER"];
         var body = navigation.ForBody(definition.BodyRadiusMm,definition.BodyHeightMm);
         foreach (var spawn in manifest.GetProperty("spawns").EnumerateArray())

@@ -108,6 +108,8 @@ def refresh(output):
     manifest = json.loads(path.read_text())
     if manifest.get('mode') != 'skirmish':
         raise ValueError('AI refresh requires a skirmish cache')
+    import content_pack
+    content_pack.reject_slim_cache(manifest)
     data = manifest['skirmish']
     data['ai'] = export(resolver, skirmish_construction.CONSTRUCTION_ORDER, list(data['production']['units']))
     path.write_text(json.dumps(manifest, indent=2)+'\n')

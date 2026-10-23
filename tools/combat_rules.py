@@ -290,6 +290,8 @@ def export(output, resolver=None, roster=None):
 def refresh(output):
     output = Path(output).resolve()
     manifest_path = output/'manifest.json'; manifest = json.loads(manifest_path.read_text())
+    import content_pack
+    content_pack.reject_slim_cache(manifest)
     data = export(output, roster=[m['unit'] for m in manifest['models']])
     import prototype_clearance
     prototype_clearance.refresh(output,data['Units'])

@@ -95,6 +95,8 @@ def refresh(output):
     manifest = json.loads(path.read_text(encoding='utf-8'))
     if manifest.get('mode') != 'skirmish':
         raise ValueError('research refresh requires a skirmish cache')
+    import content_pack
+    content_pack.reject_slim_cache(manifest)
     manifest['skirmish']['research'] = research_data(resolver)
     prototype_interface.export(output, resolver)
     # The purchase icons join the interface art; the cache verifies every file it lists.

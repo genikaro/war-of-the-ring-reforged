@@ -161,33 +161,31 @@ public partial class Main : Node3D
         }
     }
 
+    /// <summary>The cache's manifest merged with its content pack, and where each of its files lives (build-48).</summary>
+    private CacheManifest _cacheFiles = null!;
+    private string CachePath(string relative) => _cacheFiles.Resolve(relative);
+
     private JsonElement ReadJson(string relative)
-        => JsonDocument.Parse(System.IO.File.ReadAllText(System.IO.Path.Combine(_cache, relative))).RootElement.Clone();
+        => JsonDocument.Parse(System.IO.File.ReadAllText(CachePath(relative))).RootElement.Clone();
 
     private Node3D LoadGlb(string relative, Color? teamColor = null)
-        => _presentation.Load(System.IO.Path.Combine(_cache, relative), relative, teamColor);
+        => _presentation.Load(CachePath(relative), relative, teamColor);
 
     private void LoadSandbox()
     {
-        var manifest = ReadJson("manifest.json");
+        _cacheFiles = CacheManifest.Load(_cache);
+        var manifest = _cacheFiles.Root;
         if (manifest.GetProperty("format_version").GetInt32() != 1) throw new InvalidOperationException("Unsupported cache format");
         _skirmish = manifest.TryGetProperty("mode",out var mode) && mode.GetString() == "skirmish";
         _mapName = manifest.GetProperty("name").GetString()!.Split(" — ")[0];
-        foreach (var file in manifest.GetProperty("files").EnumerateObject())
-        {
-            string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(_cache, file.Name));
-            if (!path.StartsWith(System.IO.Path.GetFullPath(_cache) + System.IO.Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Cache path escapes its folder");
-            string hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.IO.File.ReadAllBytes(path)));
-            if (!hash.Equals(file.Value.GetString(), StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Stale or damaged cache: " + file.Name);
-        }
+        _cacheFiles.Verify();
         if (manifest.TryGetProperty("team_colors", out var colors))
             _teamColors = colors.EnumerateArray().Select(c => new Color(c[0].GetSingle(), c[1].GetSingle(), c[2].GetSingle())).ToArray();
         string rulesPath = manifest.GetProperty("combat_rules").GetString()!;
-        _rules = CombatRules.Parse(System.IO.File.ReadAllText(System.IO.Path.Combine(_cache,rulesPath)));
+        _rules = CombatRules.Parse(System.IO.File.ReadAllText(CachePath(rulesPath)));
         LoadCombatAudio(ReadJson(rulesPath));
         var nav = ReadJson("navigation.json");
-        byte[] bytes = System.IO.File.ReadAllBytes(System.IO.Path.Combine(_cache, "heights.bin"));
+        byte[] bytes = System.IO.File.ReadAllBytes(CachePath("heights.bin"));
         int[] heights = new int[bytes.Length / 4];
         for (int i = 0; i < heights.Length; i++) heights[i] = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(i * 4, 4));
         bool dynamic = nav.TryGetProperty("runtime_obstacles", out _obstacleLayers);
@@ -239,7 +237,8 @@ public partial class Main : Node3D
             if (_skirmish && !SlotOpen(team)) continue;
             bool primary = team == PlayerTeam && _primarySquad.Count < 6;
             if (_surfaceSmoke && primary) { cell = surfaceNavigation.Nearest(surfaceStart, surfaceSpawns); surfaceSpawns.Add(cell); }
-            var model = manifest.GetProperty("models")[spawn.GetProperty("model").GetInt32()];
+            // Map caches since build-48 name the unit; the pack's model list may grow.
+            var model = spawn.TryGetProperty("unit",out var named) ? _unitModels[named.GetString()!] : manifest.GetProperty("models")[spawn.GetProperty("model").GetInt32()];
             var definition = _rules.Units[model.GetProperty("unit").GetString()!];
             if (_skirmish) cell = SkirmishSpawnCell(team,definition,cell);
             var unit = _world.Spawn(team, cell,definition);
@@ -250,7 +249,8 @@ public partial class Main : Node3D
         _friendlySquads.AddRange(_world.Units.Where(u => u.Team == PlayerTeam).Select(u => u.Id).Chunk(6));
         for (int slot = 0; slot < _friendlySquads.Count; slot++) _controlGroups.Assign(slot,_friendlySquads[slot],LivingFriendly);
         _commands.TeamColors = _teamColors;
-        _commands.LoadArtwork(_cache,_world);
+        // HUD art is faction content: in the pack, or in a self-contained cache.
+        _commands.LoadArtwork(_cacheFiles.Content,_world);
         _heroBar.LoadArtwork(_commands);
         _hudScale.Value = _commands.ScalePercent;
         if (_skirmish) LoadSkirmishScene(manifest);
@@ -294,7 +294,7 @@ public partial class Main : Node3D
         root.AddChild(ring);
         var health = new HealthBar(Math.Max(1.1f,2.2f*unit.Definition.BodyRadiusMm/1000f),.16f) { Position = new(0,.12f,0) };
         root.AddChild(health);
-        if (!_appearanceData.ContainsKey(modelKey.Item1)) _appearanceData[modelKey.Item1] = UnitAppearance.Read(System.IO.Path.Combine(_cache,modelKey.Item1));
+        if (!_appearanceData.ContainsKey(modelKey.Item1)) _appearanceData[modelKey.Item1] = UnitAppearance.Read(CachePath(modelKey.Item1));
         var appearance = new UnitAppearance(visual,_appearanceData[modelKey.Item1]);
         appearance.Apply(model.GetProperty("idle").GetString()!,0);
         var player = Descendants(visual).OfType<AnimationPlayer>().FirstOrDefault()

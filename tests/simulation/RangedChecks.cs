@@ -32,7 +32,7 @@ static class RangedChecks
     /// <summary>The skirmish cache's Dwarf Axethrower throws through its decoded source release only.</summary>
     public static void Cached(Action<bool,string> check,string cache)
     {
-        var rules = CombatRules.Parse(File.ReadAllText(Path.Combine(cache,"combat/rules.json")));
+        var rules = CombatRules.Parse(File.ReadAllText(CacheManifest.Load(cache).Resolve("combat/rules.json")));
         if (!rules.Units.TryGetValue("UNIT_G_DWARVEN_AXETHROWER",out var axe)) return;
         var world = new SimWorld(new(40,10,1000,Enumerable.Repeat(true,400).ToArray(),new int[41*11]),rules);
         world.Spawn(0,4*40+5,axe); world.Spawn(2,4*40+13,UnitDefinition.Probe with {BodyHeightMm = 2000});

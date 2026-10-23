@@ -88,6 +88,8 @@ def refresh(cache):
     manifest = json.loads(path.read_text(encoding='utf-8'))
     if manifest.get('mode') != 'skirmish':
         raise ValueError('economy refresh requires a skirmish cache')
+    import content_pack
+    content_pack.reject_slim_cache(manifest)
     manifest['skirmish']['economy'] = economy_data(Resolver())
     path.write_text(json.dumps(manifest, indent=2), encoding='utf-8')
 

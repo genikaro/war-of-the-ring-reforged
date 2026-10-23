@@ -71,6 +71,7 @@ class MarkerTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 skirmish_map.map_file(bad)
         self.assertEqual(skirmish_map.map_title('Multiplayer/MP04_Under_the_Canopy.wor'), 'Under the Canopy')
+        self.assertEqual(skirmish_map.map_title(skirmish_map.MAP_FILE), "Bilbo's Bluffs")
         self.assertEqual(prepare_prototype.skirmish_cache(None), wor.ROOT / 'converted/skirmish')
         self.assertEqual(prepare_prototype.skirmish_cache('MP08_Rift'), wor.ROOT / 'converted/skirmish-maps/MP08_Rift')
 

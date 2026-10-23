@@ -147,6 +147,8 @@ def refresh_units(output):
     path = output/'manifest.json'
     manifest = json.loads(path.read_text())
     skirmish = manifest.get('mode') == 'skirmish'
+    import content_pack
+    content_pack.reject_slim_cache(manifest)
     manifest['models'] = export_units(output, Resolver(), SKIRMISH_ROSTER if skirmish else None)
     for model in manifest['models']:
         manifest['files'][model['file']] = hashlib.sha256((output/model['file']).read_bytes()).hexdigest()
@@ -317,10 +319,15 @@ def skirmish_cache(map_name=None):
     return wor.ROOT / ('converted/skirmish' if file == skirmish_map.MAP_FILE else 'converted/skirmish-maps/' + Path(file).stem)
 
 
-def prepare_skirmish(output, install=None, map_name=None):
+def prepare_skirmish(output, install=None, map_name=None, content=None):
     """A multiplayer map (default Bilbo's Bluffs) with a Good Citadel and four workers on every start point (build-4,
-    any map since build-35)."""
+    any map since build-35). Since build-48 the cache holds only the map: terrain, navigation, resources and start
+    layout. Units, buildings, rules and HUD art come from the shared content pack it points to (content_pack.py)."""
+    import content_pack
+    import os
     output = Path(output).resolve()
+    content = Path(content or content_pack.PACK).resolve()
+    pack = content_pack.load(content)
     resolver = open_resolver(output, install)
     map_file = skirmish_map.map_file(map_name)
     source = wor.ROOT / 'extracted/Levels' / map_file
@@ -328,6 +335,12 @@ def prepare_skirmish(output, install=None, map_name=None):
         raise ValueError('no such multiplayer map: ' + map_file)
     data = source.read_bytes()
     output.mkdir(parents=True, exist_ok=True)
+    # Faction content lived in every map cache before build-48; the pack holds it now.
+    for stale in ['units', 'buildings', 'objects', 'combat', 'interface']:
+        for path in sorted((output / stale).rglob('*'), reverse=True) if (output / stale).is_dir() else []:
+            path.unlink() if path.is_file() else path.rmdir()
+        if (output / stale).is_dir():
+            (output / stale).rmdir()
     wor2gltf.export(source, output / 'map', resolver)
     scene = world_scene.parse(data)
     world_scene.resolve_objects(scene, resolver.db)
@@ -349,51 +362,40 @@ def prepare_skirmish(output, install=None, map_name=None):
         footprint['name'] = 'Start Citadel %d' % team
         bases.append({'team': team, 'start_point': point['name'], 'position': [x, y, z], 'footprint': footprint})
     construction, site_footprints = skirmish_construction.construction_data(resolver, skirmish_map.resource_nodes(scene))
-    construction.update(skirmish_construction.placement_data(resolver))
-    construction['defenses'] = skirmish_construction.defense_data(output, resolver)
     nav, allowed, width, height = build_navigation(scene, resolver, output, [b['footprint'] for b in bases]+site_footprints,
         [s['obstacle'] for s in construction['sites']], precise=True)
+    # Navigation for every body either faction can field, so new units never need a map re-import.
+    import prototype_clearance
+    prototype_clearance.refresh(output, pack['bodies'])
     region = start_regions(allowed, width, height, spacing, [b['position'][:2] for b in bases])
     ground = bytes(1 if allowed[i] and i in region else 0 for i in range(width * height))
     spawns, groups = [], []
-    roster = SKIRMISH_ROSTER
-    models = export_units(output, resolver, roster)
-    worker = roster.index('UNIT_G_HUMAN_WORKER')
     for base in bases:
         cells = skirmish_map.worker_cells(ground, width, height, spacing, base['position'])
         base['worker_cells'] = cells
         groups.append({'id': base['team'], 'team': base['team'], 'name': 'Player %d workers' % (base['team'] + 1),
                        'anchor': cells[0]})
-        spawns.extend({'team': base['team'], 'cell': cell, 'group': base['team'], 'model': worker} for cell in cells)
+        spawns.extend({'team': base['team'], 'cell': cell, 'group': base['team'], 'unit': 'UNIT_G_HUMAN_WORKER'} for cell in cells)
     nodes = skirmish_map.resource_nodes(scene)
     near = skirmish_map.assign_resources(nodes, points)
     for node in nodes:
         node['start_team'] = next((team for team, ids in enumerate(near) if node['id'] in ids.values()), None)
-    building_files = skirmish_construction.export_buildings(output, resolver)
-    production = skirmish_production.export(output, resolver, roster)
-    variables = resolver.db['WorldVariables'].records[0]
-    citadel = resolver.db['Buildings'].get(skirmish_map.CITADEL)
-    population = sum(resolver.db['Units'].get('UNIT_G_HUMAN_WORKER')['PopulationCost'] for _ in range(skirmish_map.START_WORKERS))
-    start_state = {'food': variables['DefaultInitialFood'], 'ore': variables['DefaultInitialOre'],
-                   'population': population, 'population_cap': citadel['AdditionalPopAdded'] + variables['DefaultInitialPopulationCapacity']}
     x, y, _ = bases[0]['position']
     camera_cell = int(y / spacing) * width + int(x / spacing)
+    files = [output / 'map/scene.glb', output / 'navigation.json', output / 'heights.bin']
     manifest = {'format_version': 1, 'mode': 'skirmish', 'name': skirmish_map.map_title(map_file) + ' — Good Skirmish', 'map': 'map/scene.glb',
                 'map_file': map_file, 'players': len(bases),
-                'team_colors': team_colors(resolver), 'models': models, 'spawns': spawns, 'groups': groups, 'camera_cell': camera_cell,
-                'rules': 'Imported combat stats, resource-site construction, carried food/ore and Citadel worker training; the rest of Tier 1 remains open.',
-                'skirmish': {'start_state': start_state, 'resources': nodes, 'building_files': building_files,
+                'content': Path(os.path.relpath(content, output)).as_posix(),
+                'spawns': spawns, 'groups': groups, 'camera_cell': camera_cell,
+                'skirmish': {'resources': nodes, 'construction': {'sites': construction['sites']},
                              'selectable_objects': skirmish_map.selectable_objects(scene, resolver),
-                             'economy': skirmish_economy.economy_data(resolver),
-                             'construction': construction,
-                             'production': production,
-                             'research': skirmish_research.research_data(resolver),
-                             'ai': skirmish_ai.export(resolver, skirmish_construction.CONSTRUCTION_ORDER, list(production['units'])),
                              'bases': [{'team': b['team'], 'start_point': b['start_point'], 'position': b['position'],
                                         'building': skirmish_map.CITADEL, 'footprint_object': b['footprint']['object_id'],
                                         'worker_cells': b['worker_cells']} for b in bases]},
-                'source_sha256': metadata['sha256']}
-    finish_cache(output, resolver, manifest, models, sorted(set(building_files.values())) + [skirmish_production.RALLY_BANNER_FILE])
+                'source_sha256': metadata['sha256'],
+                'files': {p.relative_to(output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}}
+    (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+    (output / 'index.json').write_text(json.dumps([{'unit': manifest['name'], 'file': manifest['map'], 'clips': []}], indent=2) + '\n')
     return manifest
 
 

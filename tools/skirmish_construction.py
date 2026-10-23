@@ -164,6 +164,8 @@ def refresh(output):
     manifest = json.loads(path.read_text())
     if manifest.get('mode') != 'skirmish':
         raise ValueError('construction refresh requires a skirmish cache')
+    import content_pack
+    content_pack.reject_slim_cache(manifest)
     data = manifest['skirmish']
     data['building_files'] = export_buildings(output, resolver)
     building_paths = [output / file for file in sorted(set(data['building_files'].values()))]

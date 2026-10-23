@@ -61,9 +61,11 @@ def export(output, resolver=None):
 
 def refresh(output):
     output = Path(output).resolve()
-    index = export(output)
     manifest_path = output / 'manifest.json'
     manifest = json.loads(manifest_path.read_text())
+    import content_pack
+    content_pack.reject_slim_cache(manifest)
+    index = export(output)
     manifest['interface'] = 'interface/index.json'
     for path in sorted((output / 'interface').glob('*')):
         manifest['files'][path.relative_to(output).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()

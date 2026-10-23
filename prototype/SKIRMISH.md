@@ -2122,3 +2122,41 @@ Validation: `SimulationTests` 830 checks (3 new in `AiChecks`: a rich bot upgrad
 its keep no earlier than the tech time, builds the research building and
 researches; with level 2 its first barracks soldier is the dearer knight). Every
 Bilbo smoke passes.
+
+## Build-48: one content pack for every map
+
+Owner request: restructure the caches so adding a unit, building or research no
+longer means refreshing 32 map caches. Every skirmish map cache used to carry its
+own copy of the Good faction: unit and building models, combat rules, HUD art,
+production, research and AI tables, re-exported by six per-section refresh scripts.
+
+- **Content pack:** `tools/content_pack.py` builds `converted/content/good/`
+  once (11 unit models, every building, 318 files, 18 MB) with a `content.json`
+  holding the faction sections the map manifests used to hold.
+- **Map caches:** `prepare_prototype.py --skirmish` now writes only the map
+  (terrain, navigation, heights, resources, construction sites, start layout) and
+  a relative `content` path to the pack. Spawns name their unit instead of an index
+  into the model list, so the pack's roster may grow.
+- **Navigation:** the map's body profiles cover all 52 collision bodies of Good
+  and Evil units (`faction_bodies`), so a new unit never needs a map re-import.
+- **Loading:** `CacheManifest` merges the pack under the map manifest (objects
+  key by key, the map wins), resolves each file in the map folder first and then
+  in the pack, and verifies both folders' hashes. A cache without `content`
+  (Helm's Deep, every older map cache) loads unchanged as self-contained. The
+  setup screen and the simulation tests read caches the same way.
+- **Refresh scripts:** `--units-only`, `--rules-only`, `--ui-only` and the
+  `skirmish_*.py --cache` refreshes stop with a message on a pack-based cache;
+  they keep working for self-contained caches.
+
+Each map cache drops its 18 MB copy of the faction. All 32 map caches are
+re-imported (`python tools/prepare_prototype.py --all-maps` after building the
+pack, about 2 minutes per map: clearance now runs for 52 bodies); a cache that
+was not re-imported keeps loading as self-contained.
+
+Bug found on the way: Bilbo's Bluffs had not been re-imported since map titles
+came from the file stem (build-35), which reads "Bilbos Bluffs" and failed the
+setup smoke's observer check; `skirmish_map.TITLES` restores the apostrophe.
+
+Validation: `SimulationTests` 830 checks, 34 worker-traffic checks on the slim
+Bilbo cache and 897 on Helm's Deep; the Python importer tests; all 16 Bilbo
+smokes, the Helm's Deep smoke and the setup smoke (all maps) pass.

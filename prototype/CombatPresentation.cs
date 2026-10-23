@@ -34,8 +34,8 @@ public partial class Main
 
     private (AudioStreamWav Stream,float VolumeDb) LoadCombatSound(JsonElement sound)
     {
-        string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(_cache,sound.GetProperty("File").GetString()!));
-        if (!path.StartsWith(System.IO.Path.GetFullPath(_cache)+System.IO.Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))
+        string path = System.IO.Path.GetFullPath(CachePath(sound.GetProperty("File").GetString()!));
+        if (!new[] {_cache,_cacheFiles.Content}.Any(root => path.StartsWith(System.IO.Path.GetFullPath(root)+System.IO.Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException("Combat audio escapes cache");
         var stream = AudioStreamWav.LoadFromFile(path) ?? throw new InvalidOperationException("Cannot load combat audio");
         return (stream,Mathf.LinearToDb(sound.GetProperty("VolumePpm").GetInt32()/1_000_000f));
@@ -44,7 +44,7 @@ public partial class Main
     private void LoadCombatAudio(JsonElement rules)
     {
         if (rules.TryGetProperty("HealVisual",out var healVisual))
-            (_healingDuration,_healingLayers) = HealingEffect.Load(_cache,healVisual);
+            (_healingDuration,_healingLayers) = HealingEffect.Load(_cacheFiles.Content,healVisual);
         foreach (var sound in rules.GetProperty("Sounds").EnumerateArray())
             _impactSounds.Add(LoadCombatSound(sound));
         if (rules.TryGetProperty("AbilitySounds",out var abilitySounds))

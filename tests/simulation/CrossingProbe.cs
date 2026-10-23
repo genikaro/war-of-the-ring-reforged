@@ -8,7 +8,7 @@ static class CrossingProbe
 {
     public static void Run(string cache)
     {
-        var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(cache,"manifest.json"))).RootElement;
+        var manifest = CacheManifest.Load(cache).Root;
         var world = WorkerTrafficChecks.Load(cache);
         var nav = world.Navigation;
         var bases = manifest.GetProperty("skirmish").GetProperty("bases").EnumerateArray()

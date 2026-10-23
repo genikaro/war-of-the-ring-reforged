@@ -30,6 +30,13 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-48 (Oct 23):** one content pack for every map. The Good faction's models,
+rules, HUD art, production, research and AI tables now live once in
+`converted/content/good/` (`tools/content_pack.py`); a skirmish map cache holds
+only its map and names the pack, and its navigation covers every unit body of both
+factions. New units, buildings and research reach all maps by rebuilding the pack;
+older self-contained caches still load. All 32 map caches are re-imported. See [skirmish notes](../prototype/SKIRMISH.md#build-48-one-content-pack-for-every-map).
+
 **Build-47 (Oct 23):** bots climb the tree. A bot upgrades its Citadel after
 4:00-10:40 depending on aggressiveness, builds the Ranger Post, Forge and
 Wilderness Outpost, prefers the Rider and Shieldbreaker once its army is a full

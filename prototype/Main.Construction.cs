@@ -178,7 +178,7 @@ public partial class Main
     private Node3D BuildingGhost(string building,StandardMaterial3D material)
     {
         var ghost = LoadGlb(_constructionFiles[building],TeamColor(Math.Max(0,PlayerTeam))); AddChild(ghost);
-        var data = UnitAppearance.Read(System.IO.Path.Combine(_cache,_constructionFiles[building]));
+        var data = UnitAppearance.Read(CachePath(_constructionFiles[building]));
         new UnitAppearance(ghost,data).Apply(BuildingStateClips(data)[3],0);
         foreach (var mesh in Descendants(ghost).OfType<MeshInstance3D>()) mesh.MaterialOverride = material;
         return ghost;
@@ -283,7 +283,7 @@ public partial class Main
     {
         view.Model.QueueFree();
         var model = LoadGlb(_constructionFiles[building],_teamColors[site.Team]); view.Root.AddChild(model);
-        var data = UnitAppearance.Read(System.IO.Path.Combine(_cache,_constructionFiles[building]));
+        var data = UnitAppearance.Read(CachePath(_constructionFiles[building]));
         view.Model = model; view.Appearance = new UnitAppearance(model,data); view.Clips = BuildingStateClips(data);
         view.Player = Descendants(model).OfType<AnimationPlayer>().FirstOrDefault();
         view.Building = building; view.Stage = -1;
@@ -310,7 +310,7 @@ public partial class Main
                 var model = LoadGlb(_constructionFiles[rules.Name],_teamColors[site.Team]);
                 var root = new Node3D { Position = PositionOf(x,z),Name = "Building_"+site.Id };
                 root.AddChild(model); AddChild(root);
-                var appearanceData = UnitAppearance.Read(System.IO.Path.Combine(_cache,_constructionFiles[rules.Name]));
+                var appearanceData = UnitAppearance.Read(CachePath(_constructionFiles[rules.Name]));
                 var clips = BuildingStateClips(appearanceData);
                 var (barWidth,barHeight) = SiteBarSize(site);
                 var bar = new HealthBar(barWidth,barHeight) { Position = new(0,.14f,0) };

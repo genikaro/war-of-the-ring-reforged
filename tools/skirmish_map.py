@@ -66,9 +66,14 @@ def map_file(name=None):
     return 'Multiplayer/%s.wor' % stem
 
 
+# File stems that drop an apostrophe the English title has.
+TITLES = {'MP02_Bilbos_Bluffs': "Bilbo's Bluffs"}
+
+
 def map_title(file):
     """English title from the file stem: MP04_Under_the_Canopy -> Under the Canopy (the localized names are Russian)."""
-    return Path(file).stem.split('_', 1)[1].replace('_', ' ')
+    stem = Path(file).stem
+    return TITLES.get(stem) or stem.split('_', 1)[1].replace('_', ' ')
 
 
 def start_points(markers):

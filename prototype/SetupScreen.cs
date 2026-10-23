@@ -219,7 +219,8 @@ public partial class SetupScreen : Control
 
     private static MapEntry Read(string stem,string cache)
     {
-        var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(cache,"manifest.json"))).RootElement;
+        // Team colours and AI personalities come from the content pack the map cache names (build-48).
+        var manifest = CacheManifest.Load(cache).Root;
         var skirmish = manifest.GetProperty("skirmish");
         (int,int) Ground(JsonElement at) => ((int)Math.Round(at[0].GetDouble()*1000),(int)Math.Round(at[1].GetDouble()*1000));
         var bases = skirmish.GetProperty("bases").EnumerateArray().OrderBy(b => b.GetProperty("team").GetInt32()).Select(b => Ground(b.GetProperty("position"))).ToArray();

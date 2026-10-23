@@ -4,6 +4,11 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
+**build-48:** skirmish maps share one content pack. Run
+`python tools/content_pack.py`, then re-import each map cache
+(`python tools/prepare_prototype.py --skirmish` and `--all-maps`); older caches still
+load unchanged. See [skirmish notes](SKIRMISH.md#build-48-one-content-pack-for-every-map).
+
 **build-16:** construction clicks work again; buttons are no longer hidden and
 re-shown between a press and its release. Workers get a Build button (B) that
 swaps the unit commands for the seven Tier 1 buildings and a Back button. Esc
@@ -295,6 +300,7 @@ bot runs every side but yours; `-Bots` names their personalities by slot (your o
 slot's entry is ignored while you play), and observing a big map is a free-for-all:
 
 ```powershell
+python tools/content_pack.py
 python tools/prepare_prototype.py --skirmish --map MP04_Wasteland
 ./prototype/run.ps1 -Map MP04_Wasteland -Observe -Bots Gimli,Aragorn,Legolas,Saruman -Speed 8
 python tools/prepare_prototype.py --all-maps
@@ -312,6 +318,16 @@ simulation and frame time went, for chasing slow matches.
 All generated game data stays in ignored `converted/prototype/`, `converted/skirmish/` and `converted/skirmish-maps/`. The source
 project contains no game assets. At launch the manifest's content hashes are
 checked before loading. Never distribute the local cache with the project.
+
+Since build-48 a skirmish map cache holds only its map (terrain, navigation,
+resources, start layout) and names the shared Good content pack in
+`converted/content/good/`, which holds every unit and building model, the rules,
+HUD art and AI tables. Build the pack once with `python tools/content_pack.py`
+before importing maps; after a unit, building, research or AI change, rebuilding
+the pack updates every map. Navigation covers the body of every unit of both
+factions, so a new unit never needs a map re-import. The per-section refresh
+scripts (`--units-only`, `skirmish_*.py --cache`) only edit older self-contained
+caches and Helm's Deep.
 
 ## Controls
 
