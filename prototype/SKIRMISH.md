@@ -2532,3 +2532,74 @@ and building, the One Ring, rules without rates, and the content pack's rates); 
 new Python test for the export. All 16 Bilbo smokes and the setup smoke pass; the
 observer reference (Gimli against Aragorn) is now Aragorn winning at tick 27344,
 22:47 (digest 0713B2C9...).
+
+## Build-53: the Raider trait
+
+The first of the traits that need new bot behaviour (build-51 left Raider, Scout
+and hero use open). Scout waits for fog of war, without which scouting changes
+nothing; hero use would only be Frodo until heroes cost fate points.
+
+**Source.** Raids have their own war party, `AIWARPARTY_RAIDING`: 3 to 6 units,
+40% "Raid Building Killer Fire", 40% "Raid Building Killer Siege", 20% "Raid
+Protection". The member classes ask for fire and siege damage descriptors, which
+no Good unit has yet, and every Good soldier's `AIRaidingEffectiveness` is 50, so
+nothing chooses one soldier over another. The `.rai` Harassment knob reads "higher
+values will send smaller, more annoying forces at the enemy". `skirmish_ai.py` now
+exports the raiding party and each unit's raiding effectiveness (rebuild the pack
+with `python tools/content_pack.py`).
+
+**The Raider** (`Simulation/AiRaids.cs`, adapter rules, tuned against bots):
+- **Assaults go for the economy:** the trait's target order puts Mills and Foundries
+  (a new `Resources` class; orders that do not name it rank them as Economy, so
+  other bots play as before) right after enemy soldiers: food is every army's
+  bottleneck.
+- **Raid size:** from the raiding party's 6 at Harassment 0 down to 3 at 100 (Default
+  4, Gollum and Farmer Maggot 3, Smaug 6).
+- **When:** one raid at a time, from half the assault gate, (100 - Aggression) x 3 s,
+  and only while the assault is fighting at the enemy base, from idle home soldiers
+  trained since: a second front while the defenders are busy.
+- **Where:** the enemy economy point (a Mill or Foundry, or a raw pile enemy workers
+  mine) the raid can reach, never one a tower covers or one with as many enemy
+  soldiers as raiders within 30 m; the nearest, each soldier near it counting as
+  15 m farther.
+- **On the spot:** every free raider attacks the nearest enemy worker, then the raid
+  razes the building, then moves on to another point (not the one just cleared) or
+  walks home.
+- **Hit and run:** with more enemy soldiers than raiders within 12 m, or half the raid
+  lost, it runs home at once (an urgent order) and the next raid waits a minute.
+
+**Tuning** (owner request; a temporary trace logged every raid). The first rules lost
+every bot match: raids leaving between assaults kept the army from reaching a party,
+and the Raider lost even from the slot that wins the mirror. Raiding only while an
+assault was out still lost: the trace showed two raids in 14 minutes, both turning
+back with no kills. The first left with the assault, marched straight while the assault
+regrouped on the way, and met the whole home army at the enemy Mill; the second
+turned back from a tower's arrows on the way to an untowered target. Raids now wait
+until the assault is fighting at the enemy base, arrows on the way no longer turn
+them back, they run only when outnumbered within 12 m, and a raid no longer re-picks
+the spot it just cleared while enemy workers are still sent there (it did so every
+second for 12 s). Raids alone stayed rare and small (a kill or two), so the trait's
+assaults now go for the economy too.
+
+**Matches** (observer, 16x). Regeneration changed the plain Default mirror on Bilbo's
+Bluffs: slot 2 now wins it, at 29:08.
+
+| Map | Plain mirror | Raider in slot 1 | Raider in slot 2 |
+|---|---|---|---|
+| Bilbo's Bluffs | slot 2, 29:08 | loses at 33:05 (4 min later) | **wins at 25:32** (3.5 min sooner; one raid killed 9) |
+| Sorrow | slot 2, 26:06 | loses at 26:06, no raid | wins at 27:07, 1 raid |
+| Dust and Blood | slot 1, 25:53 | wins at 29:20, 4 raids, 2 kills | loses at 25:53, no raid |
+
+Gollum+Raider still loses to Gimli, from either slot (20:56, 16:36), as plain Gollum
+(Easy) would. The Raider now plays differently without playing worse; it is no power
+trait against bots, because a bot answers anything within 30 m of its buildings with
+every home soldier and the economy sits inside that ring. A person does not defend
+like that, so the owner's playtest remains the check of how annoying the raids are.
+
+Validation: `SimulationTests` 880 checks (7 new in `AiChecks`: the trait's raid gate
+and sizes by Harassment; a raid of four goes for the enemy Mill, not the keep, kills
+its worker first and then razes it; a raid meeting more soldiers runs home and the
+next waits; no raid without an assault out, nor while the assault is still on its
+way; a guarded or tower-covered Mill is no target; a Raider's assault picks the Mill
+where a plain bot picks the nearer barracks); the Python AI export test covers the
+raiding party. All 16 Bilbo smokes and the setup smoke pass.

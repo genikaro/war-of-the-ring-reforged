@@ -92,11 +92,14 @@ def export(resolver, buildings, units):
         origin = resolver.db['Buildings'].get(record['AIBuildingOfOrigin'])
         unit_rules[name] = {'origin': origin.name if origin else None, 'never_add': bool(record['AINeverAddUnit']),
             'always_add': bool(record['AIAlwaysAddUnit']), 'assault': record['AIAssaultEffectiveness'],
+            'raiding': record['AIRaidingEffectiveness'],
             'max_per_party': record['AIMaxUnitsOfTypePerWarParty'], 'max_per_party_easy': record['AIMaxUnitsOfTypePerWarPartyEasy']}
     return {'format_version': 1, 'personalities': personalities(), 'default_personality': DEFAULT_PERSONALITY['id'],
-            'buildings': building_rules, 'units': unit_rules, 'war_parties': {'ASSAULT': war_party(resolver, 'AIWARPARTY_ASSAULT')},
-            'policy': 'Source data: .rai knobs, Buildings AI columns, Units AIAssaultEffectiveness/AINeverAddUnit and the '
-                      'AIWARPARTY_ASSAULT size and member shares. Decision logic is an adapter; see prototype/SKIRMISH.md build-27.'}
+            'buildings': building_rules, 'units': unit_rules,
+            'war_parties': {'ASSAULT': war_party(resolver, 'AIWARPARTY_ASSAULT'), 'RAIDING': war_party(resolver, 'AIWARPARTY_RAIDING')},
+            'policy': 'Source data: .rai knobs, Buildings AI columns, Units AIAssaultEffectiveness/AIRaidingEffectiveness/AINeverAddUnit and '
+                      'the AIWARPARTY_ASSAULT and AIWARPARTY_RAIDING sizes and member shares. Decision logic is an adapter; see '
+                      'prototype/SKIRMISH.md build-27 and build-53.'}
 
 
 def refresh(output):

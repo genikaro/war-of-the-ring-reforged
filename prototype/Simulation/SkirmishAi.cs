@@ -67,6 +67,14 @@ public sealed class AiPlayer(int team,AiPersonality personality,AiStyle? style =
     /// losing health; it is given up on after 30 s even when the nearest one keeps changing.</summary>
     public SortedDictionary<int,AiSighting> IntruderSeen { get; } = [];
     public SortedDictionary<int,AiSighting> ChaseSeen { get; } = [];
+    /// <summary>A Raider's raid under way (build-53): its members, its size when it left, the spot it raids and the
+    /// enemy building there (or -1 for miners at a raw pile), raids sent, and when the next may leave.</summary>
+    public List<int> Raid { get; } = [];
+    public int RaidStart { get; internal set; }
+    public int RaidCell { get; internal set; } = -1;
+    public int RaidSite { get; internal set; } = -1;
+    public int RaidsSent { get; internal set; }
+    public int NextRaidTick { get; internal set; }
     /// <summary>Party members a Hard bot has rolled for once wounded, and whether they retreat (build-50); a member
     /// leaving the party (home, or the party over) is forgotten and rolls again in its next party.</summary>
     public SortedDictionary<int,bool> WoundedRolls { get; } = [];
@@ -124,6 +132,8 @@ public sealed partial class SimWorld
     public Dictionary<string,AiBuildingRule> AiBuildings { get; } = [];
     public Dictionary<string,AiUnitRule> AiUnits { get; } = [];
     public AiWarParty AiAssaultParty { get; set; } = new(5,12,800_000);
+    /// <summary>AIWARPARTY_RAIDING's size bounds (build-53); the default matches the source for caches without it.</summary>
+    public AiWarParty AiRaidParty { get; set; } = new(3,6,0);
     public const int AiDefenseRadiusMm = 30000,AiEngageRadiusMm = 12000,AiStallTicks = 30*TicksPerSecond,AiFoodPerMill = 6,
         AiResourceClearanceMm = 10000,AiStagnationTicks = 180*TicksPerSecond,
         AiGuardSlackMm = 8000,AiClaimWaitMm = 15000,AiAttackersPerEnemy = 4,AiTargetRankMm = 12000,AiPullOutPercent = 25,AiTowerReachMm = 42000,AiPullOutChance = 33,
@@ -192,7 +202,7 @@ public sealed partial class SimWorld
         // An enemy given up on that has lost health since was reachable after all.
         foreach (int id in ai.Unreachable.Where(p => Units[p.Key].HealthMilli < p.Value).Select(p => p.Key).ToArray()) ai.Unreachable.Remove(id);
         var expansions = AiExpansions(ai);
-        var home = mine.Where(u => IsAiSoldier(u) && !ai.Party.Contains(u.Id) && !ai.Guards.Values.Any(g => g.Units.Contains(u.Id))).ToArray();
+        var home = mine.Where(u => IsAiSoldier(u) && !ai.Party.Contains(u.Id) && !ai.Raid.Contains(u.Id) && !ai.Guards.Values.Any(g => g.Units.Contains(u.Id))).ToArray();
         var (bx,bz) = AiBase(ai);
         bool threatened = AiDefend(ai,home);
         if (strategic)
@@ -207,11 +217,13 @@ public sealed partial class SimWorld
         }
         home = AiGuard(ai,expansions,home,threatened);
         AiAssault(ai,home,bx,bz,threatened);
-        AiRally(ai,[.. home.Where(u => !ai.Party.Contains(u.Id))],bx,bz);
+        home = AiRaid(ai,[.. home.Where(u => !ai.Party.Contains(u.Id))],bx,bz,threatened);
+        AiRally(ai,home,bx,bz);
         int guards = ai.Guards.Values.Sum(g => g.Units.Count),gate = ai.Profile.AssaultFromTicks/TicksPerSecond;
         string march = ai.Party.Count > 0 && ai.Leg < ai.Legs.Count ? $" · regrouping {ai.Leg+1}/{ai.Legs.Count}" : "";
         string waits = ai.PartiesSent == 0 && Tick < ai.Profile.AssaultFromTicks ? $" · attacks from {gate/60}:{gate%60:00}" : "";
-        ai.Status = $"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)}{march}{waits}{(guards > 0 ? $" · guards {guards}" : "")} · {ai.Plan}{(ai.TechPlan != "" ? " · "+ai.TechPlan : "")} · parties {ai.PartiesSent}";
+        string raid = ai.Raid.Count > 0 ? $" · raid {ai.Raid.Count}/{ai.RaidStart}" : "";
+        ai.Status = $"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)}{march}{waits}{raid}{(guards > 0 ? $" · guards {guards}" : "")} · {ai.Plan}{(ai.TechPlan != "" ? " · "+ai.TechPlan : "")} · parties {ai.PartiesSent}{(ai.RaidsSent > 0 ? $" · raids {ai.RaidsSent}" : "")}";
     }
 
     /// <summary>The bot's Citadels away from its start (foundations too), with the guards of fallen ones released and
@@ -876,6 +888,7 @@ public sealed partial class SimWorld
     private AiTargetClass AiClassOf(SimUnit unit) => IsAiWorker(unit) ? AiTargetClass.Workers : AiTargetClass.Army;
 
     private AiTargetClass AiClassOf(ConstructionSite site) => SiteDefense(site) != null ? AiTargetClass.Defenses
+        : site.Building == null ? AiTargetClass.Resources
         : AiBuildings.GetValueOrDefault(SiteRules(site).Name)?.Class switch {
             "MILITARY" => AiTargetClass.Military,"UPGRADE" => AiTargetClass.Tech,"DEFENSIVE" => AiTargetClass.Defenses,_ => AiTargetClass.Economy };
 
@@ -883,7 +896,8 @@ public sealed partial class SimWorld
     {
         var order = ai.Profile.TargetOrder;
         for (int rank = 0; rank < order.Count; rank++) if (order[rank] == kind) return rank;
-        return order.Count;
+        // Mills and Foundries rank as Economy in an order that does not name them.
+        return kind == AiTargetClass.Resources ? AiRank(ai,AiTargetClass.Economy) : order.Count;
     }
 
     private int AiLegCell(AiPlayer ai,ConstructionSite target) => ai.Leg < ai.Legs.Count ? ai.Legs[ai.Leg] : Navigation.Cell(SitePosition(target).X,SitePosition(target).Z);
@@ -977,5 +991,5 @@ public sealed partial class SimWorld
         $"{a.Team},{a.Personality.Id}+{string.Join('+',a.Traits)},{a.Profile.Style.Aggression}/{a.Profile.Style.Expansion}/{a.Profile.Style.Tech},{a.Thinks},{a.PartyTarget},{a.PartiesSent},{a.Project},{a.ProjectProgress},{a.ProjectMovedTick},{a.Chase},{a.ChaseSince},{a.Intruder},{a.IntruderSince},"
         +$"{a.LastArmyTick},{a.AllIn},{a.CitadelSite.X},{a.CitadelSite.Z},{a.CrewDistance},{string.Join('/',a.IntruderSeen)},{string.Join('/',a.ChaseSeen)}:{string.Join(',',a.Unreachable)}:{string.Join(',',a.Party)}:{string.Join(',',a.RefusedCells.Order())}"
         +":guards:"+string.Join('|',a.Guards.Select(g => $"{g.Key}@{g.Value.Cell}={string.Join(',',g.Value.Units)}/{string.Join('/',g.Value.Seen)}"))
-        +$":legs:{a.Leg},{a.LegMovedTick},{a.LegGap}:{string.Join(',',a.Legs)}:wounded:{string.Join('/',a.WoundedRolls)}:recovering:{string.Join(',',a.Recovering)}:stray:{string.Join('/',a.StraySince)}"));
+        +$":legs:{a.Leg},{a.LegMovedTick},{a.LegGap}:{string.Join(',',a.Legs)}:wounded:{string.Join('/',a.WoundedRolls)}:recovering:{string.Join(',',a.Recovering)}:raid:{a.RaidStart},{a.RaidCell},{a.RaidSite},{a.RaidsSent},{a.NextRaidTick}:{string.Join(',',a.Raid)}:stray:{string.Join('/',a.StraySince)}"));
 }

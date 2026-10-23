@@ -274,8 +274,8 @@ row per start position set to You, a bot personality (with its difficulty) or
 Closed. With no slot set to You, you watch. Each bot item's tooltip, and a card below
 the slots for the bot last chosen or clicked, give its difficulty, its style in the
 Aggression / Expansion / Tech triangle and how it plays (build-49). Each bot slot also
-has a Traits menu (build-51): Rusher, Expansionist, Defender, Relentless, Marksman or
-Demolisher, combined freely except Rusher with Defender or Expansionist. It also sets the start speed. Restart on
+has a Traits menu (build-51): Rusher, Expansionist, Defender, Relentless, Marksman,
+Demolisher or Raider (build-53), combined freely except Rusher with Defender or Expansionist. It also sets the start speed. Restart on
 the result panel replays the same setup; its Setup button, or the debug menu's
 Skirmish setup button, goes back to the screen. Any flag that chooses the match
 (`-Map`, `-Observe`, `-Bots`, `-Speed`, `-NoAi`, `-AiPersonality`, the smokes) skips the screen.

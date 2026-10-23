@@ -37,6 +37,9 @@ class SkirmishAiTests(unittest.TestCase):
         self.assertEqual(data['war_parties']['ASSAULT'], {'min_size': 5, 'max_size': 12, 'members': [
             {'class': 'Assault Melee', 'kind': 'melee', 'share_ppm': 800000},
             {'class': 'Assault Missile', 'kind': 'missile', 'share_ppm': 200000}]})
+        raiding = data['war_parties']['RAIDING']
+        self.assertEqual((raiding['min_size'], raiding['max_size'], [m['share_ppm'] for m in raiding['members']]), (3, 6, [400000, 400000, 200000]))
+        self.assertEqual(units['UNIT_G_GONDOR_SWORDSMAN']['raiding'], 50)
 
 
 if __name__ == '__main__':

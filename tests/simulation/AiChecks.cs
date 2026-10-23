@@ -657,5 +657,91 @@ public static class AiChecks
         Step(chaseHold,25);
         check(mustering && chaseHold.Units[marchers2[0]].Order == OrderKind.AttackMove && chaseHold.Units[marchers2[0]].OrderCell == holdBot.Legs[0],
             "a regrouping party calls back a member chasing an enemy that is no longer a threat");
+
+        // Build-53: raids (Raider trait). The raid size falls from the raiding party's 6 to 3 as Harassment rises.
+        AiPlayer Harasser(int harassment) => new(1,new("test","Test",1,50,50,50,harassment,true,true),new(50,25,25),[AiTrait.Raider]);
+        var raidSizes = Fixture();
+        check(With(AiTrait.Raider) is { Raids: true,RaidFromTicks: 66*3*20 } && !plain.Raids
+            && raidSizes.AiRaidSize(Harasser(0)) == 6 && raidSizes.AiRaidSize(Harasser(50)) == 4 && raidSizes.AiRaidSize(Harasser(100)) == 3,
+            "a Raider raids from half its assault gate, in parties of 6 to 3 by Harassment");
+        // An enemy Mill on its own well with a worker at it, 45 m from the Raider's keep; four idle soldiers at home.
+        SimWorld Raided(bool guarded = false,bool tower = false)
+        {
+            var w = Fixture(); w.Units[2].Health = 0;
+            w.AiPlayers[1] = Bot(1,50,traits: [AiTrait.Raider]); w.AiPlayers[1].Profile = w.AiPlayers[1].Profile with { RaidFromTicks = 0 };
+            w.Resources.Add(Well+10,new(Well+10,ResourceKind.Food,18500,3500,4500,0,0,2000,20,1_000_000));
+            w.ConstructionSites.Add(Well+10,new(Well+10,20017,2500) { Team = 0,Health = 750,Complete = true });
+            var miller = w.Spawn(0,Cell(18,7),worker); miller.Order = OrderKind.HoldGround;
+            if (guarded) foreach (int i in Enumerable.Range(0,5)) w.Spawn(0,Cell(15+i*2,8),soldier).Order = OrderKind.HoldGround;
+            if (tower)
+            {
+                w.BuildingRules.Add("tower",new("tower","tower",null,0,100,60,300,750000,750000,100000,50000,["keep"]));
+                w.Defenses.Add("tower",new(14000,0,19000,[1000,1200,1400,1600,1750],0,5000,0));
+                w.ConstructionSites.Add(Outpost,new(Outpost,Outpost,4000,"tower",30000,4000) { Team = 0,Health = 400,Complete = true });
+            }
+            foreach (int i in Enumerable.Range(0,4)) w.Spawn(1,Cell(48+(i%2)*2,8+(i/2)*14),soldier);
+            // An assault razing the enemy keep from its far side (threats off, so it leaves the Mill's worker alone): raids
+            // leave only while one is engaged.
+            var bot = w.AiPlayers[1]; bot.Profile = bot.Profile with { ThreatsFirst = false };
+            foreach (int i in Enumerable.Range(0,8)) bot.Party.Add(w.Spawn(1,Cell(1+(i%4),20+(i/4)*2),soldier).Id);
+            bot.PartyTarget = Keep0; bot.Leg = bot.Legs.Count;
+            w.Enqueue(1,bot.Party,OrderKind.AttackStructure,target: Keep0);
+            return w;
+        }
+        var raided = Raided();
+        Step(raided,25);
+        var raidBot = raided.AiPlayers[1];
+        bool left = raidBot.RaidsSent == 1 && raidBot.Raid.Count == 4 && raidBot.RaidSite == Well+10 && raidBot.Party.Count == 8;
+        var millerUnit = raided.Units.First(u => u.Team == 0 && u.Definition.Name == "worker" && u.Health > 0);
+        int workerDied = -1,millHit = -1;
+        for (int i = 0; i < 3000 && millHit < 0; i++)
+        {
+            raided.Step();
+            if (workerDied < 0 && millerUnit.Health <= 0) workerDied = raided.Tick;
+            if (millHit < 0 && raided.ConstructionSites[Well+10].Health < 750) millHit = raided.Tick;
+        }
+        check(left && workerDied > 0 && millHit >= workerDied,
+            $"a raid of four leaves for the enemy Mill, not the keep, kills its worker first (tick {workerDied}) and then razes it (tick {millHit}): {raidBot.Status}");
+        // Hit and run: more enemy soldiers than raiders near the raid send it home at once, and the next raid waits a minute.
+        var ambush = Raided();
+        Step(ambush,25);
+        var ambushed = ambush.AiPlayers[1]; int[] raiders = [.. ambushed.Raid];
+        var first = ambush.Units[raiders[0]];
+        foreach (int i in Enumerable.Range(0,5)) ambush.Spawn(0,ambush.Navigation.Cell(first.X+(i-2)*1500,first.Z+3000),soldier).Order = OrderKind.HoldGround;
+        Step(ambush,25);
+        check(raiders.Length == 4 && ambushed.Raid.Count == 0 && raiders.All(id => ambush.Units[id].Order == OrderKind.Move)
+            && ambushed.NextRaidTick > ambush.Tick,"a raid meeting more enemy soldiers runs home and the next one waits");
+        // No raid without an assault out.
+        var alone = Raided(); alone.AiPlayers[1].Party.Clear(); Step(alone,25);
+        check(alone.AiPlayers[1].RaidsSent == 0,"no raid leaves while no assault is out");
+        // Tuning: a raid waits until the assault is fighting at the enemy base; one leaving with it outran the regrouping
+        // march and met the whole home army alone.
+        var marching = Raided(); var marchBot = marching.AiPlayers[1];
+        foreach (int id in marchBot.Party) marching.Units[id].Order = OrderKind.HoldGround;
+        marching.Enqueue(1,marchBot.Party,OrderKind.HoldGround);
+        foreach (int id in marchBot.Party.ToArray()) { marchBot.Party.Remove(id); marching.Units[id].Health = 0; }
+        foreach (int i in Enumerable.Range(0,8)) { var member = marching.Spawn(1,Cell(40+(i%4)*2,25+(i/4)*2),soldier); member.Order = OrderKind.HoldGround; marchBot.Party.Add(member.Id); }
+        Step(marching,25);
+        check(marchBot.RaidsSent == 0,"no raid leaves while the assault is still on its way");
+        // A Raider's assault goes for the Mill over a nearer barracks, which a plain bot takes first.
+        int[] economyFirst = [.. new[] {false,true}.Select(raiding =>
+        {
+            var w = Fixture(); w.Units[2].Health = 0;
+            if (raiding) w.AiPlayers[1] = Bot(1,50,traits: [AiTrait.Raider]);
+            w.Resources.Add(Well+10,new(Well+10,ResourceKind.Food,18500,3500,4500,0,0,2000,20,1_000_000));
+            w.ConstructionSites.Add(Well+10,new(Well+10,20017,2500) { Team = 0,Health = 750,Complete = true });
+            w.ConstructionSites.Add(Outpost,new(Outpost,Outpost,4000,"barracks",30000,4000) { Team = 0,Health = 400,Complete = true });
+            var bot = w.AiPlayers[1];
+            foreach (int i in Enumerable.Range(0,8)) bot.Party.Add(w.Spawn(1,Cell(26+(i%4)*2,8+(i/4)*2),soldier).Id);
+            bot.PartyTarget = Well;
+            Step(w,25);
+            return bot.PartyTarget;
+        })];
+        check(economyFirst.SequenceEqual([Outpost,Well+10]),"a Raider's assault picks the enemy Mill where a plain bot picks the nearer barracks: "+string.Join('/',economyFirst));
+        // A guarded Mill or one under a tower's arrows is no target.
+        var guardedRaid = Raided(guarded: true); Step(guardedRaid,25);
+        var toweredRaid = Raided(tower: true); Step(toweredRaid,25);
+        check(guardedRaid.AiPlayers[1].RaidSite != Well+10 && toweredRaid.AiPlayers[1].RaidSite != Well+10,
+            "a raid avoids a Mill guarded by as many soldiers or covered by a tower");
     }
 }

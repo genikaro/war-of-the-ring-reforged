@@ -39,11 +39,12 @@ public sealed record AiSkill(string Name,int ThinkTicks,int StrategicEvery,int B
 public enum AiResearch { Thrifty,Fielded,Eager }
 
 /// <summary>What a party attacks, by kind (build-50): enemy soldiers and heroes, armed buildings (towers), military
-/// producers, research buildings, the rest (Citadels, Mills, Foundries, Camps), and workers.</summary>
-public enum AiTargetClass { Army,Defenses,Military,Tech,Economy,Workers }
+/// producers, research buildings, the rest (Citadels, Mills, Foundries, Camps), and workers. Resources (build-53) are
+/// the Mills and Foundries alone; an order without them ranks them as Economy.</summary>
+public enum AiTargetClass { Army,Defenses,Military,Tech,Economy,Workers,Resources }
 
 /// <summary>A trait the player picks for a bot slot (owner model, build-51), applied after the style, in this order.</summary>
-public enum AiTrait { Rusher,Expansionist,Defender,Relentless,Marksman,Demolisher }
+public enum AiTrait { Rusher,Expansionist,Defender,Relentless,Marksman,Demolisher,Raider }
 
 /// <summary>A trait's lobby text and the traits it cannot be combined with.</summary>
 public sealed record AiTraitInfo(AiTrait Trait,string Description,AiTrait[] Excludes)
@@ -102,6 +103,9 @@ public sealed record AiProfile
     public int ReinforcePercent { get; init; } = 100;
     /// <summary>The army's melee share in millionths, or -1 for the war party's (Marksman: 40%).</summary>
     public int MeleeSharePpm { get; init; } = -1;
+    /// <summary>Raids on the enemy economy, from this tick (Raider, build-53: half the assault gate, (100 - Aggression) x 3 s).</summary>
+    public bool Raids { get; init; }
+    public int RaidFromTicks { get; init; }
 
     public static AiProfile For(AiPersonality personality,AiStyle style,IReadOnlyList<AiTrait>? traits = null)
     {
@@ -127,6 +131,9 @@ public sealed record AiProfile
                     EarlyAssaultTowers = 3,EarlyAssaultArmy = 12 },
                 AiTrait.Relentless => profile with { Skill = profile.Skill with { FallBackPercent = 0,PullsWounded = false },ReinforcePercent = 50 },
                 AiTrait.Marksman => profile with { MeleeSharePpm = 400_000 },
+                // Its assaults go for the economy too: Mills and Foundries first, food being every army's bottleneck.
+                AiTrait.Raider => profile with { Raids = true,RaidFromTicks = (100-a)*3*second,
+                    TargetOrder = [AiTargetClass.Army,AiTargetClass.Resources,AiTargetClass.Defenses,AiTargetClass.Military,AiTargetClass.Tech,AiTargetClass.Economy,AiTargetClass.Workers] },
                 AiTrait.Demolisher => profile with { ThreatsFirst = false,
                     TargetOrder = [AiTargetClass.Military,AiTargetClass.Tech,AiTargetClass.Economy,AiTargetClass.Defenses,AiTargetClass.Army,AiTargetClass.Workers] },
                 _ => profile };
@@ -169,7 +176,8 @@ public static class AiRoster
             [AiTrait.Rusher]),
         new(AiTrait.Relentless,"Parties never fall back and the wounded never retreat; half a party at home joins the one out.",[]),
         new(AiTrait.Marksman,"An army of 60% ranged units instead of 20%.",[]),
-        new(AiTrait.Demolisher,"Parties raze buildings, military first, and ignore the soldiers and towers hitting them.",[])];
+        new(AiTrait.Demolisher,"Parties raze buildings, military first, and ignore the soldiers and towers hitting them.",[]),
+        new(AiTrait.Raider,"Assaults go for Mills and Foundries first, and small raids of three to six (by the bot's Harassment) hit workers elsewhere while they fight.",[])];
 
     public static AiTraitInfo Trait(AiTrait trait) => Traits.First(t => t.Trait == trait);
 
