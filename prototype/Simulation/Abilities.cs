@@ -2,8 +2,9 @@ namespace Reforged.Simulation;
 
 /// <summary>Build-58 adds SiegeAura (Gimli: allies near him deal more damage to buildings), Ward (Legolas's Guardian
 /// Wind: a cast that shields nearby allies from missiles for a while) and Unsimulated (shown with its description, never
-/// usable yet).</summary>
-public enum AbilityKind { Heal, Fury, Immunity, Ring, Bane, Aura, SiegeAura, Ward, Unsimulated }
+/// usable yet). Build-59 adds the Sandbox training dummies' own buttons, not source abilities: ArmorUp (+1 armor),
+/// ArmorReset (armor 0) and Restore (full health), each instant and on the dummy itself.</summary>
+public enum AbilityKind { Heal, Fury, Immunity, Ring, Bane, Aura, SiegeAura, Ward, Unsimulated, ArmorUp, ArmorReset, Restore }
 [Flags] public enum StatusProtection { None = 0, Poison = 1, Stun = 2, Blind = 4, Slow = 8 }
 
 public sealed record AbilityDefinition(int Id,int Slot,string Name,string Icon,bool Passive,AbilityKind Kind,
@@ -15,11 +16,13 @@ public sealed record AbilityDefinition(int Id,int Slot,string Name,string Icon,b
 {
     /// <summary>A cast with a clip, toward a target (Heal) or on the spot (Ward).</summary>
     public bool Cast => Kind is AbilityKind.Heal or AbilityKind.Ward;
+    /// <summary>A Sandbox dummy's button: applied at once to the dummy pressing it.</summary>
+    public bool Instant => Kind is AbilityKind.ArmorUp or AbilityKind.ArmorReset or AbilityKind.Restore;
 
     public void Validate()
     {
         if (Slot is < 0 or > 3 || string.IsNullOrWhiteSpace(Name) || !Enum.IsDefined(Kind)
-            || Kind != AbilityKind.Unsimulated && Passive == (Kind is AbilityKind.Heal or AbilityKind.Ring or AbilityKind.Ward) || ((int)Immunities & ~15) != 0
+            || Kind != AbilityKind.Unsimulated && Passive == (Kind is AbilityKind.Heal or AbilityKind.Ring or AbilityKind.Ward || Instant) || ((int)Immunities & ~15) != 0
             || DpsMilli is < 0 or > 1_000_000 || BonusScale is < 0 or > 10_000_000
             || Cast && (RechargeTicks is <= 0 or > 72000 || CastTicks is <= 0 or > 1200 || EffectTick < 0 || EffectTick >= CastTicks
                 || string.IsNullOrEmpty(CastClip) || RangeMm is <= 0 or > 100000)
@@ -33,12 +36,14 @@ public sealed record AbilityDefinition(int Id,int Slot,string Name,string Icon,b
     }
 }
 
-public enum AbilityEventKind { Start, Heal, Cancel, Complete, RingOn, RingOff, Ward }
+public enum AbilityEventKind { Start, Heal, Cancel, Complete, RingOn, RingOff, Ward, Armor }
 public sealed record AbilityEvent(int Tick,AbilityEventKind Kind,int Unit,int Target,int Slot,long HealthMilli = 0);
 
 public sealed partial class SimWorld
 {
     public List<AbilityEvent> AbilityEvents { get; } = [];
+    /// <summary>The armor a training dummy's ArmorUp button adds per press.</summary>
+    public const int DummyArmorStepMilli = 1000;
 
     public void EnqueueAbility(int team,IEnumerable<int> units,int slot,int target)
     {
@@ -61,6 +66,7 @@ public sealed partial class SimWorld
             var unit = Units[id]; var ability = unit.Ability(command.AbilitySlot);
             if (unit.Team != command.Team || !unit.Present || ability == null || ability.Passive || ability.Kind == AbilityKind.Unsimulated) continue;
             if (ability.Kind == AbilityKind.Ring) { ToggleRing(unit,ability,command.Sequence); continue; }
+            if (ability.Instant) { UseDummyButton(unit,ability); continue; }
             int targetId = ability.Kind == AbilityKind.Ward ? id : command.Target;
             if (targetId < 0 || targetId >= Units.Count) continue;
             var target = Units[targetId];
@@ -72,6 +78,21 @@ public sealed partial class SimWorld
             unit.Order = OrderKind.UseAbility; unit.OrderTarget = target.Id;
             unit.AbilitySlot = ability.Slot; unit.GuardPlanTick = -1;
         }
+    }
+
+    /// <summary>A training dummy's button acts on the dummy at once and leaves its order alone. Armor 0 means the total:
+    /// the offset cancels whatever armor the dummy has from elsewhere.</summary>
+    private void UseDummyButton(SimUnit unit,AbilityDefinition ability)
+    {
+        if (ability.Kind == AbilityKind.Restore)
+        {
+            long restored = (long)unit.MaxHealth*1000-unit.HealthMilli;
+            unit.HealthMilli += restored;
+            AbilityEvents.Add(new(Tick,AbilityEventKind.Heal,unit.Id,unit.Id,ability.Slot,restored));
+            return;
+        }
+        unit.BonusArmorMilli = ability.Kind == AbilityKind.ArmorUp ? unit.BonusArmorMilli+DummyArmorStepMilli : unit.BonusArmorMilli-unit.ArmorMilli;
+        AbilityEvents.Add(new(Tick,AbilityEventKind.Armor,unit.Id,unit.Id,ability.Slot,unit.ArmorMilli));
     }
 
     private void CancelAbility(SimUnit unit)

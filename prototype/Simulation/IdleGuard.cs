@@ -8,7 +8,7 @@ public sealed partial class SimWorld
     /// pursuit, and so do a bot's (build-50).</summary>
     public HashSet<int> AggressiveIdleTeams { get; } = [1];
 
-    private bool IdleGuardEnabled(SimUnit unit) => unit.Order==OrderKind.Idle && unit.Definition.BodyRadiusMm>350
+    private bool IdleGuardEnabled(SimUnit unit) => unit.Order==OrderKind.Idle && unit.Definition.BodyRadiusMm>350 && !unit.Definition.Passive
         && (!AggressiveIdleTeams.Contains(unit.Team) || AiPlayers.ContainsKey(unit.Team));
 
     /// <summary>A bot's idle soldiers guard like a player's and also answer any enemy within 16 m of their spot that is

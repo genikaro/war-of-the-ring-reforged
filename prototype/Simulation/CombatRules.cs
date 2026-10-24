@@ -12,8 +12,9 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
     int FriendlyCompressionPpm = 1_000_000,int ModelScalePpm = 1_000_000,
     int ProjectileSpeedMmPerSecond = 0,int MinimumRangeMm = 0,
     int MeleeDpsMilli = 0,int MeleeReachMm = 2000,int MeleeGapMm = 0,AbilityDefinition[]? Abilities = null,bool Hero = false,
-    int RegenerationPpm = 1_000_000,int SiegePpm = 1_000_000)
+    int RegenerationPpm = 1_000_000,int SiegePpm = 1_000_000,bool Passive = false)
 {
+    // Passive: never picks a fight nor answers one (the Sandbox's training dummies, build-59).
     public bool IsRanged => ProjectileSpeedMmPerSecond > 0;
     public bool HasMelee => IsRanged && Attacks.Any(a => a.Melee);
     public bool FiresProjectile(int attack) => IsRanged && !Attacks[attack].Melee;

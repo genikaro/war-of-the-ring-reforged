@@ -30,6 +30,14 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-59 (Oct 24):** training dummies in the Sandbox. Four dummies stand beside the
+blue base, one per damage type (Cutting, Piercing, Blunt, Hero), with 1000 health, no
+regeneration and no attack; they never fight back. Their buttons add 1 armor, set armor
+to 0 and restore health, for every selected dummy; the 0 key selects all four. They are
+drawn half again as big and gilded, and every hit on one floats its damage with the type
+multiplier, for example "-26.8 (125%)". See
+[skirmish notes](../prototype/SKIRMISH.md#build-59-training-dummies-in-the-sandbox).
+
 **Build-58 (Oct 24):** the rest of the Good tech tree, and the Fate heroes, checked
 against the Good compendium. Citadel 3, 4 and 5; Nature's Haven, the Elven Sanctuary
 and the House of Lore; the Ballista Tower with its source bolt. The Beorning, Huorn

@@ -285,9 +285,17 @@ public partial class Main : Node3D
         var root = new Node3D { Name = "Unit_" + unit.Id, PhysicsInterpolationMode = Node.PhysicsInterpolationModeEnum.Off };
         AddChild(root); root.Position = UnitPosition(unit);
         var modelKey = (model.GetProperty("file").GetString()!,team);
+        // The first unit of a model keeps its visual as the template later ones copy, overrides included, so a gilded
+        // training dummy has a template of its own.
+        var templateKey = unit.Definition.Passive ? (modelKey.Item1+"#sandbox-dummy",team) : modelKey;
         Node3D visual;
-        if (_modelTemplates.TryGetValue(modelKey,out var template)) visual = (Node3D)template.Duplicate();
-        else { visual = LoadGlb(modelKey.Item1,_teamColors[team]); _modelTemplates.Add(modelKey,visual); }
+        if (_modelTemplates.TryGetValue(templateKey,out var template)) visual = (Node3D)template.Duplicate();
+        else
+        {
+            visual = LoadGlb(modelKey.Item1,_teamColors[team]);
+            if (unit.Definition.Passive) TintSandboxDummy(visual);
+            _modelTemplates.Add(templateKey,visual);
+        }
         var modelSize = new Node3D { Name = "ModelSize", Scale = Vector3.One*(unit.Definition.ModelScalePpm/1_000_000f) };
         root.AddChild(modelSize); modelSize.AddChild(visual);
         var ring = new MeshInstance3D { Mesh = ScenePresentation.SelectionRing(), Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
@@ -678,6 +686,7 @@ public partial class Main : Node3D
             if (_engagementSmoke) RecordEngagementStep(System.Diagnostics.Stopwatch.GetElapsedTime(stepStart).TotalMilliseconds);
             PresentCombatEvents();
             PresentAbilityEvents();
+            if (_sandboxMap) PresentDummyDamage();
             PresentFoundationFailures();
             if (_skirmish) PresentPlaceCaptures();
             PresentOutcome();
@@ -853,7 +862,7 @@ public partial class Main : Node3D
         _presentStep = false;
         if (_toolsPanel.Visible) RefreshDebugMenu();
         PresentWaypoints();
-        if (_sandboxMap) PresentSandboxRallies();
+        if (_sandboxMap) { PresentSandboxRallies(); AnimateDummyDamage(); }
         _hud.DestinationTime -= dt; _hud.QueueRedraw();
         _frames++;
         if (_commandSmoke) CommandSmokeInput();

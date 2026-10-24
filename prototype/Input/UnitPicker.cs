@@ -22,7 +22,8 @@ public static class UnitPicker
                 double d = b*b-4*a*c; if (d < 0) continue;
                 double root = Math.Sqrt(d); enter = Math.Max(enter,(-b-root)/(2*a)); exit = Math.Min(exit,(-b+root)/(2*a));
             }
-            double low = unit.Y/1000d,high = low+unit.Definition.BodyHeightMm/1000d;
+            // A Sandbox training dummy is drawn bigger than its body; its whole drawing answers a click.
+            double low = unit.Y/1000d,high = low+unit.Definition.BodyHeightMm/1000d*(unit.Definition.Passive ? Math.Max(1,unit.Definition.ModelScalePpm/1_000_000d) : 1);
             if (Math.Abs(direction.Y) < 1e-12) { if (origin.Y < low || origin.Y > high) continue; }
             else
             {

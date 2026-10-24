@@ -2975,3 +2975,78 @@ Validation:
 - The skirmish, construction, structure, production, Dwarf Hall, minimap, Frodo, tech,
   Tier 2, research, siege, defense, victory, AI, ability, command, orders, observer and
   setup smokes all pass.
+
+## Build-59: training dummies in the Sandbox
+
+The owner asked for four dummies next to the blue base, each with 1000 health and no
+regeneration, each of a different unit type, and each with three abilities: gain +1
+armor, set armor to 0, restore health.
+
+**The dummies.** Player 1 (blue) gets one dummy per damage type, in a row beside its
+base: 26 m from the Citadel toward the centre and 18–30 m to the side, off the way its
+units take to the rally point (`SimWorld.SpawnTrainingDummies`). Each stands on the free
+cell nearest its spot that connects to the base, 4 m apart.
+
+| Dummy | Type (source damage type) | Model |
+|---|---|---|
+| Cutting Dummy | Cutting | Gondor Swordsman |
+| Piercing Dummy | Piercing | Elven Archer |
+| Blunt Dummy | Blunt | Dwarf Shieldbreaker |
+| Hero Dummy | Hero | Gimli |
+
+Each has 1000 health, armor 0, no regeneration (`RegenerationPpm` 0) and no attack, and
+costs no population. A dummy is `Passive`: it never picks a fight, never answers one
+and never guards, so it stands still while it is hit. It takes the type-cycle damage of
+its type (125% from the type it is weak to, 75% from the one it beats, 100% for Hero),
+but none of its model unit's own pair modifiers, because it has its own unit id. It is
+not a hero: no hero portrait, no hero limit. The four are on Player 1's control group 0
+(the 0 key).
+
+To find them at a glance (owner follow-up), the dummies are drawn half again as big
+and gilded: copies of the model's materials, tinted gold with a faint glow, so the real
+units sharing those models keep their colours. The first unit of a model keeps its
+drawing as the template later ones are copied from, overrides included; the dummies were
+the first blue Swordsman and Archer, so at first every Swordsman and Archer trained after
+them came out gold too. Dummies now have templates of their own. The body stays the model unit's,
+because navigation holds a clearance profile only for source bodies; a click anywhere on
+the bigger drawing still selects the dummy (`UnitPicker` stretches a dummy's pick height
+by its drawing scale).
+
+**Damage numbers.** Every hit on a dummy floats its damage overhead: the damage dealt
+after armor, with the type multiplier when it is not 100%, orange for 125% and grey-blue
+for 75% (for example "-26.8 (125%)", a Rohan Rider's blunt blow on the Cutting Dummy).
+Tower arrows have no damage type and show plain numbers. Numbers landing together spread
+sideways, rise and fade over 1.4 s, and freeze while paused. Numbers use a decimal point
+whatever the system language; the heal and Ring tooltips had shown a comma on a Russian
+system and now read the same way.
+
+**Buttons** (sandbox tools, not source abilities; instant, no cooldown, `AbilityKind`
+ArmorUp, ArmorReset and Restore):
+
+- **Q · Armor +1**: one more armor point each press.
+- **W · Armor 0**: armor back to 0 (the total, whatever else adds to it).
+- **E · Restore health**: full health at once.
+
+A press serves every selected dummy, so 0 then Q arms all four. A floating "Armor N" or
+"+N" marks each change, and the unit card shows the new Armor.
+
+To hit them: Player 2's units attack them like any enemy; Player 1's own units need a
+force attack (A, then click the dummy).
+
+Validation:
+
+- `SimulationTests` 924 checks (9 new in `SandboxDummyChecks`: no fight picked beside an
+  enemy, none answered when struck, +1 armor for every named dummy and once more per
+  press, armor 0, no regeneration, full restore, only their own side presses, the
+  digest covers dummy armor).
+- `-SandboxSmoke` (30 checks): the four dummies stand beside the blue base, off its
+  rally point, one of each type with their stats and buttons, drawn 1.5× and gilded;
+  a Swordsman and an Elven Archer trained afterwards keep their own size and colours
+  (the check fails with the shared template); 0 selects them; Q twice gives all four
+  armor 2, W clears it, a hurt dummy stays hurt, and E restores it; Player 2's Rider
+  then strikes the Cutting Dummy, which does not answer, and "-N (125%)" floats over
+  it. Calling Gandalf now waits until he steps out: rendered frames and simulation ticks
+  do not pair one to one, and in a capture run he could appear a frame after the check.
+- The ability, Frodo, command, orders, skirmish, placement, structure, defense and siege
+  smokes pass, and the observer match ends exactly as in build-58 (same tick and state
+  digest): units that are not dummies behave the same.

@@ -48,7 +48,9 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int PlaceRangedPpm { get; internal set; } = 1_000_000;
     public int PlaceSiegePpm { get; internal set; } = 1_000_000;
     public int PlaceCooldownPpm { get; internal set; } = 1_000_000;
-    public int ArmorMilli => Definition.ArmorMilli+TechniqueArmorMilli+PlaceArmorMilli;
+    /// <summary>Armor a Sandbox training dummy's own buttons add or clear (build-59).</summary>
+    public int BonusArmorMilli { get; internal set; }
+    public int ArmorMilli => Definition.ArmorMilli+TechniqueArmorMilli+PlaceArmorMilli+BonusArmorMilli;
     public bool Walking { get; internal set; }
     public int[] AbilityReadyAt { get; } = new int[4];
     /// <summary>Thousandths of a tick of extra recharge gained under a recharge aura.</summary>
@@ -822,6 +824,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         text += ":abilities:"+string.Join(';',Units.Select(u => $"{u.AbilitySlot},{u.CastStartTick},{u.CastSerial},{u.CastApplied}:{string.Join(',',u.AbilityReadyAt)}"));
         text += ":ring:"+string.Join(';',Units.Select(u => $"{u.RingActive}:{string.Join(',',u.AbilityRechargeCarry)}"));
         if (Units.Any(u => u.MissileWardUntil >= 0)) text += ":ward:"+string.Join(';',Units.Select(u => $"{u.MissileWardPpm},{u.MissileWardUntil}"));
+        if (Units.Any(u => u.BonusArmorMilli != 0)) text += ":bonus-armor:"+string.Join(';',Units.Select(u => u.BonusArmorMilli));
         text += EconomyDigest();
         text += ConstructionDigest();
         text += ProductionDigest();

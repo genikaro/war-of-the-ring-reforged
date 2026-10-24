@@ -40,6 +40,12 @@ public partial class Main
         if (candidates.Length == 0) return;
         var caster = candidates[0]; var ability = caster.Ability(slot)!;
         if (ability.Kind == AbilityKind.Unsimulated) { Notify(ability.Name+" is not simulated yet"); return; }
+        if (ability.Instant)
+        {
+            // A training dummy's button serves every selected dummy at once.
+            _world.EnqueueAbility(PlayerTeam,candidates.Where(u => u.Ability(slot)?.Kind == ability.Kind).Select(u => u.Id),slot,-1);
+            _status.Text = ability.Name+(_paused ? " queued (paused)" : ""); return;
+        }
         if (ability.Passive) { _status.Text = ability.Name+" is passive"; return; }
         if (ability.Kind == AbilityKind.Ring)
         {
@@ -91,7 +97,7 @@ public partial class Main
         foreach (var effect in _world.AbilityEvents.Where(e => e.Kind == AbilityEventKind.Heal))
         {
             var target = _world.Units[effect.Target];
-            var label = new Label3D { Text = $"+{effect.HealthMilli/1000m:0.#}",FontSize = 44,PixelSize = .018f,
+            var label = new Label3D { Text = string.Create(System.Globalization.CultureInfo.InvariantCulture,$"+{effect.HealthMilli/1000m:0.#}"),FontSize = 44,PixelSize = .018f,
                 Modulate = new Color("b4ff93"),OutlineModulate = new Color("173312"),OutlineSize = 9,
                 Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,NoDepthTest = true,
                 Position = UnitPosition(target)+Vector3.Up*(target.Definition.BodyHeightMm/1000f+.6f) };
@@ -102,6 +108,15 @@ public partial class Main
                 AddChild(visual.Root); _healingEffects.Add(visual);
             }
             PlayAbilitySound(_world.Units[effect.Unit].Ability(effect.Slot)?.SoundEvents,effect.Unit,UnitPosition(target));
+        }
+        foreach (var armor in _world.AbilityEvents.Where(e => e.Kind == AbilityEventKind.Armor))
+        {
+            var dummy = _world.Units[armor.Unit];
+            var label = new Label3D { Text = string.Create(System.Globalization.CultureInfo.InvariantCulture,$"Armor {armor.HealthMilli/1000m:0.#}"),FontSize = 40,PixelSize = .018f,
+                Modulate = new Color("e6dcb4"),OutlineModulate = new Color("2a2418"),OutlineSize = 9,
+                Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,NoDepthTest = true,
+                Position = UnitPosition(dummy)+Vector3.Up*(dummy.Definition.BodyHeightMm/1000f+.6f) };
+            AddChild(label); _healLabels.Add((label,_world.Tick+24));
         }
         foreach (var ward in _world.AbilityEvents.Where(e => e.Kind == AbilityEventKind.Ward))
         {

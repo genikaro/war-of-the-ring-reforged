@@ -265,7 +265,9 @@ public partial class CommandPanel : Control
     public Texture2D? Art(string name) => _art.GetValueOrDefault(name);
 
     public static string OrderName(OrderKind kind) => kind switch { OrderKind.AttackMove => "Attack-move",OrderKind.HoldGround => "Hold Position",OrderKind.ForceAttack => "Force Attack",OrderKind.ToggleWalkRun => "Walk / Run",OrderKind.UseAbility => "Greater Kingsfoil",OrderKind.PlaceBuilding => "Build",_ => kind.ToString() };
-    public static string PortraitName(string name) => name switch { "Aragorn" => "Portrait_G_Aragorn","Frodo" => "Portrait_G_Frodo","Elf Knight" or "Elven Knight" => "Portrait_G_Elven_Knight","Elven Archer" => "Portrait_G_Elven_Archer","Human Worker" => "Portrait_G_Human_Worker","Gondor Swordsman" => "Portrait_G_Gondor_Swordsman","Dwarf Axethrower" => "Portrait_G_Dwarven_Axethrower",
+    /// <summary>Portraits of units the source does not name, such as the Sandbox's training dummies (their model's).</summary>
+    public static readonly Dictionary<string,string> ExtraPortraits = [];
+    public static string PortraitName(string name) => ExtraPortraits.TryGetValue(name,out var extra) ? extra : name switch { "Aragorn" => "Portrait_G_Aragorn","Frodo" => "Portrait_G_Frodo","Elf Knight" or "Elven Knight" => "Portrait_G_Elven_Knight","Elven Archer" => "Portrait_G_Elven_Archer","Human Worker" => "Portrait_G_Human_Worker","Gondor Swordsman" => "Portrait_G_Gondor_Swordsman","Dwarf Axethrower" => "Portrait_G_Dwarven_Axethrower",
         "Rohan Rider" => "Portrait_G_Rohan_Rider","Dwarf Shieldbreaker" => "Portrait_G_Dwarven_Shieldbreaker","Ranger" => "Portrait_G_Ranger",
         // Build-58: Tier 3-4 units and the Fate heroes (source Units Portrait records).
         "Elven Lightbearer" => "Portrait_G_Elven_Lightbringer","Beorning" => "Portrait_G_Beorning","Huorn" => "Portrait_G_Huorn",
@@ -378,6 +380,9 @@ public partial class CommandPanel : Control
     public string AbilityLabel(int slot) => _abilityLabels[slot].Text;
     public Label AbilityHotkey(int slot) => _abilityHotkeys[slot];
 
+    /// <summary>Numbers in tooltips read with a decimal point whatever the system's language.</summary>
+    private static readonly System.Globalization.CultureInfo Invariant = System.Globalization.CultureInfo.InvariantCulture;
+
     private void RefreshAbilities(IReadOnlyList<SimUnit> units,OrderKind? pending,int tick,int pendingSlot)
     {
         var hero = units.All(u => u.Team == PlayerTeam) ? units.FirstOrDefault(u => u.Definition.Abilities?.Length > 0) : null;
@@ -398,14 +403,17 @@ public partial class CommandPanel : Control
             _abilityRecharge[slot].Size = new(54,ability.RechargeTicks > 0 ? 54*Math.Clamp(remaining/(float)ability.RechargeTicks,0,1) : 0);
             button.TooltipText = ability.Kind switch {
                 AbilityKind.Ring => $"{ability.Name} [{key}] · {(hero.RingActive ? "Worn" : "Off")}\nToggle: Frodo turns invisible to enemies and will not fight.\n"
-                    + $"Costs {ability.DrainMilliPerTick*SimWorld.TicksPerSecond/1000m:0.#} HP per second while worn (stops at 1 HP).",
+                    + string.Create(Invariant,$"Costs {ability.DrainMilliPerTick*SimWorld.TicksPerSecond/1000m:0.#} HP per second while worn (stops at 1 HP)."),
                 AbilityKind.Bane => $"{ability.Name} · Passive\n{ability.BonusScale/10000}% damage against orcs, Uruk-Hai and goblins.",
                 AbilityKind.Aura => $"{ability.Name} · Passive\nAllies within {ability.RangeMm/1000} m recharge abilities {ability.RechargeScalePpm/10000}% as fast.",
                 AbilityKind.Heal => $"{ability.Name} [{key}]\nHeal a friendly unit or Aragorn for up to {ability.HealMilli/1000} HP.\n{ability.RangeMm/1000} m range · {ability.RechargeTicks/20}s cooldown. Target must be below 99% health.\nAragorn approaches distant targets. Moving or issuing another order interrupts the cast.",
                 AbilityKind.Fury => $"{ability.Name} · Passive\nWeapon Attack {ability.DpsMilli/1000}. {ability.BonusScale/10000}% damage against Wraiths and Black Riders.\nEquipped for this sandbox trial.",
                 AbilityKind.SiegeAura => $"{ability.Name} · Passive\nAllies within {ability.RangeMm/1000} m of {hero.Definition.DisplayName}, and he himself, deal {ability.BonusScale/10000}% damage to buildings.",
-                AbilityKind.Ward => $"{ability.Name} [{key}]\nAllies within {ability.RangeMm/1000} m take {ability.BonusScale/10000m:0.#}% damage from missiles for {ability.DurationTicks/20}s.\n{ability.RechargeTicks/20}s cooldown. Cast on the spot; another order interrupts it.",
+                AbilityKind.Ward => string.Create(Invariant,$"{ability.Name} [{key}]\nAllies within {ability.RangeMm/1000} m take {ability.BonusScale/10000m:0.#}% damage from missiles for {ability.DurationTicks/20}s.\n{ability.RechargeTicks/20}s cooldown. Cast on the spot; another order interrupts it."),
                 AbilityKind.Unsimulated => $"{ability.Name} · not simulated yet\n{ability.Description}"+(ability.RechargeTicks > 0 ? $"\nSource cooldown {ability.RechargeTicks/20}s." : ""),
+                AbilityKind.ArmorUp => string.Create(Invariant,$"{ability.Name} [{key}] · training dummy\nAdds 1 armor (now {hero.ArmorMilli/1000m:0.#}). Every selected dummy takes it."),
+                AbilityKind.ArmorReset => string.Create(Invariant,$"{ability.Name} [{key}] · training dummy\nSets armor to 0 (now {hero.ArmorMilli/1000m:0.#}). Every selected dummy takes it."),
+                AbilityKind.Restore => $"{ability.Name} [{key}] · training dummy\nRestores full health ({hero.Health}/{hero.MaxHealth}); dummies never regenerate. Every selected dummy takes it.",
                 _ => "Immunity · Passive\nProtection from poison, stun, blind and slow.\nCurrent demo enemies do not inflict these effects. Equipped for this sandbox trial." };
         }
     }

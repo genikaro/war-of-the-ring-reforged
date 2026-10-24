@@ -152,8 +152,8 @@ public sealed partial class SimWorld
 
     private bool MayAcquire(SimUnit unit,SimUnit enemy)
     {
-        // The Ring-bearer neither picks fights nor can be found by enemies.
-        if (unit.RingActive || enemy.RingActive) return false;
+        // The Ring-bearer neither picks fights nor can be found by enemies; a training dummy picks none.
+        if (unit.RingActive || enemy.RingActive || unit.Definition.Passive) return false;
         if (IdleGuardEnabled(unit)) return IdleGuardMayAcquire(unit,enemy);
         if (unit.Order==OrderKind.AttackMove && unit.Definition.BodyRadiusMm>350)
         {
@@ -215,7 +215,7 @@ public sealed partial class SimWorld
         // A force move keeps its destination even when struck. A stationary
         // order can return blows within reach, but can never start a pursuit.
         // A force attack never provokes its victim: only the owner's own order turns friendly units on each other.
-        if (attacker.Order == OrderKind.ForceAttack || attacker.Team == victim.Team) return;
+        if (attacker.Order == OrderKind.ForceAttack || attacker.Team == victim.Team || victim.Definition.Passive) return;
         if (!victim.Present || victim.Order is OrderKind.Move or OrderKind.UseAbility or OrderKind.Gather or OrderKind.Build or OrderKind.PlaceBuilding
             or OrderKind.AttackStructure || victim.AttackMoveReturning) return;
         if (HoldsPosition(victim) && !AttackReach(victim,victim.Node,victim.X,victim.Y,victim.Z,attacker)) return;

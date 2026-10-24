@@ -1,6 +1,7 @@
 using Godot;
 using Reforged.Input;
 using Reforged.Rendering;
+using Reforged.Simulation;
 
 /// <summary>The Sandbox test map (build-56), for trying units out: one person commands Player 1 and Player 2 on an empty
 /// level field (tools/sandbox_map.py; its cache says "sandbox"). Every building the faction can raise stands finished around both Citadels, each upgraded as
@@ -35,6 +36,10 @@ public partial class Main
             foreach (var (squad,slot) in world.Units.Where(u => u.Team == team).Select(u => u.Id).Chunk(6).Select((s,i) => (s,i))) groups.Assign(slot,squad,Living);
             _sandboxMapGroups[team] = groups;
         }
+        // Build-59: four training dummies beside the blue base (Player 1), on control group 0.
+        _sandboxDummies.Clear();
+        _sandboxDummies.AddRange(world.SpawnTrainingDummies(SandboxDummyTeam,SandboxDummyDefinitions(),world.Units.First(u => u.Team == SandboxDummyTeam).Node).Select(u => u.Id));
+        if (PlayerTeam == SandboxDummyTeam) _controlGroups.Assign(9,_sandboxDummies,LivingFriendly);
         foreach (int team in SandboxMapTeams) world.RallyTowardCentre(team);
         RefillSandboxMapBanks();
         // The owner's choice: building, training, upgrades and research finish at once here (the debug menu turns it off).

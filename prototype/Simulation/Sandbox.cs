@@ -25,6 +25,29 @@ public sealed partial class SimWorld
         return cell;
     }
 
+    /// <summary>Training dummies stand in a row this far toward the centre from their side's start building, starting this
+    /// far to the side of the rally line, this far apart (build-59).</summary>
+    public const int SandboxDummyForwardMm = 26000,SandboxDummySideMm = 18000,SandboxDummySpacingMm = 4000;
+
+    /// <summary>Stands one dummy of each definition in a row beside the team's base, off the way its units take to the
+    /// rally point: each on the free cell nearest its spot that connects to the base. Returns them in order.</summary>
+    public List<SimUnit> SpawnTrainingDummies(int team,IReadOnlyList<UnitDefinition> dummies,int anchor)
+    {
+        var start = StartStructures.First(s => s.Team == team);
+        long cx = (long)StartStructures.Average(s => (long)s.X),cz = (long)StartStructures.Average(s => (long)s.Z);
+        double length = Math.Max(1,Math.Sqrt(DistanceSquared(start.X,start.Z,(int)cx,(int)cz))),dx = (cx-start.X)/length,dz = (cz-start.Z)/length;
+        var spawned = new List<SimUnit>();
+        for (int index = 0; index < dummies.Count; index++)
+        {
+            double side = SandboxDummySideMm+index*SandboxDummySpacingMm;
+            int x = start.X+(int)Math.Round(dx*SandboxDummyForwardMm-dz*side),z = start.Z+(int)Math.Round(dz*SandboxDummyForwardMm+dx*side);
+            int cell = ExitCell(team,dummies[index],Navigation.Cell(x,z),anchor);
+            if (cell < 0) continue;
+            spawned.Add(Spawn(team,cell,dummies[index]));
+        }
+        return spawned;
+    }
+
     /// <summary>Raises a finished copy of every building the team lacks and promotes everything it owns to the end of its
     /// upgrade line. Trained units leave into the region of <paramref name="exitAnchor"/>. Returns the buildings that found no room.</summary>
     public List<string> PrebuildBase(int team,int exitAnchor)

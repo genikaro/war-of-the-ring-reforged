@@ -12,8 +12,9 @@ public partial class Main
     private bool _sandboxMapSmoke;
     private readonly Dictionary<string,bool> _sandboxMapChecks = [];
     private int _sandboxMapHold,_sandboxMapWorker = -1;
-    private const int SandboxMapSmokeChecks = 22;
+    private const int SandboxMapSmokeChecks = 30;
     private const string SandboxGandalf = "UNIT_G_HERO_GANDALF";
+    private static readonly string[] SandboxDummyLookalikes = ["UNIT_G_GONDOR_SWORDSMAN","UNIT_G_ELVEN_ARCHER"];
     private static readonly string[] SandboxFateHeroes = ["UNIT_G_HERO_GIMLI","UNIT_G_HERO_ARAGORN","UNIT_G_HERO_LEGOLAS",SandboxGandalf];
     private const string SandboxRider = "UNIT_G_ROHAN_RIDER",SandboxBarracks = "BUILDING_G_GONDORIAN_BARRACKS";
 
@@ -116,12 +117,15 @@ public partial class Main
                 _sandboxMapChecks["click_takes_command_of_player_1"] = PlayerTeam == 0 && _selectedStructure == world.ConstructionSites.Values.First(s => s.Team == 0 && s.Prebuilt).Obstacle
                     && _commands.SandboxTab(0).ButtonPressed && SelectedOwnSite() != null;
                 // Build-58: call Gandalf (4 Fate) at Player 1's Citadel 5 with its training button.
-                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-citadel.png");
                 Press(_commands.TrainButton(Array.IndexOf(SelectedProducer()!.Units,SandboxGandalf)).GetGlobalRect().GetCenter()); break;
             case 19: Release(_commands.TrainButton(Array.IndexOf(SelectedProducer()!.Units,SandboxGandalf)).GetGlobalRect().GetCenter()); break;
+            // A capture run shows the Citadel 5 training grid, away from the button's press and release frames.
+            case 20: if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-citadel.png"); break;
             case 21:
             {
                 var gandalf = world.Units.FirstOrDefault(u => u.Team == 0 && u.Present && u.Definition.Name == SandboxGandalf);
+                // Rendered frames and simulation ticks do not pair one to one: wait for him to step out.
+                if (Hold((gandalf == null || _heroBar.HeroIn(0) != gandalf.Id) && _sandboxMapHold < 400)) break;
                 _sandboxMapChecks["gandalf_called_with_fate_on_the_hero_bar"] = gandalf != null && world.Economies[0].Fate == world.MaxFate
                     && gandalf.Definition.Abilities is { Length: 4 } && _heroBar.HeroIn(0) == gandalf.Id
                     && !world.CanTrain(0,SelectedProducer()!.Id,Array.IndexOf(SelectedProducer()!.Units,SandboxGandalf),out string again) && again.EndsWith("already in play");
@@ -157,6 +161,71 @@ public partial class Main
                 _debugInstant.ButtonPressed = true;
                 _sandboxMapChecks["instant_toggle_serves_both_players"] = off && world.InstantBuildTeams.SetEquals(teams); break;
             case 29:
+            {
+                // Build-59: one training dummy per damage type in a row beside the blue base, off its rally line.
+                var dummies = _sandboxDummies.Select(id => world.Units[id]).ToArray();
+                var blue = world.StartStructures.First(s => s.Team == SandboxDummyTeam); var red = world.StartStructures.First(s => s.Team != SandboxDummyTeam);
+                var (rx,rz) = world.Navigation.Center(world.Producers.Values.First(p => p.Team == SandboxDummyTeam).RallyCell);
+                _sandboxMapChecks["four_dummies_beside_the_blue_base"] = dummies.Length == 4 && dummies.All(d => d.Team == SandboxDummyTeam && d.Present
+                        && d.Definition is { Passive: true,MaxHealth: SandboxDummyHealth,RegenerationPpm: 0,DpsMilli: 0,ArmorMilli: 0,Hero: false }
+                        && d.Definition.Abilities!.Select(a => a.Kind).SequenceEqual([AbilityKind.ArmorUp,AbilityKind.ArmorReset,AbilityKind.Restore])
+                        && SimWorld.DistanceSquared(d.X,d.Z,blue.X,blue.Z) <= 45000L*45000 && SimWorld.DistanceSquared(d.X,d.Z,blue.X,blue.Z) < SimWorld.DistanceSquared(d.X,d.Z,red.X,red.Z)
+                        && SimWorld.DistanceSquared(d.X,d.Z,rx,rz) >= 8000L*8000 && d.Target < 0 && d.Order == OrderKind.Idle)
+                    && dummies.Select(d => d.Definition.DamageTypeName).Distinct().Count() == 4 && dummies.Any(d => d.Definition.DamageTypeName == "DAMAGE_TYPE_HERO")
+                    && dummies.Select(d => d.Definition.DisplayName).SequenceEqual(["Cutting Dummy","Piercing Dummy","Blunt Dummy","Hero Dummy"])
+                    && world.PopulationUsed(SandboxDummyTeam) == 4;
+                // Fixture: one dummy is hurt, to see it stay hurt (no regeneration) until its own button restores it.
+                dummies[1].HealthMilli = 400_000;
+                var centre = dummies.Aggregate(Vector3.Zero,(sum,d) => sum+UnitPosition(d))/Math.Max(1,dummies.Length);
+                _focus = centre; _distance = 40; UpdateCamera();
+                PushKey(Key.Key0); break;
+            }
+            case 31:
+                // Drawn half again as big and gilded (units trained later with the same models are checked at frame 41).
+                _sandboxMapChecks["dummies_drawn_bigger_and_gilded"] = _sandboxDummies.All(id => _views[id].Root.GetNode<Node3D>("ModelSize").Scale.X > 1.49f
+                        && Descendants(_views[id].Root.GetNode("ModelSize")).OfType<MeshInstance3D>().Any(m => m.GetSurfaceOverrideMaterial(0) is BaseMaterial3D { EmissionEnabled: true }));
+                _sandboxMapChecks["group_0_selects_the_dummies_with_their_buttons"] = _selected.SetEquals(_sandboxDummies)
+                    && Enumerable.Range(0,3).All(slot => _commands.AbilityButton(slot) is { Visible: true,Disabled: false,Icon: not null })
+                    && !_commands.AbilityButton(3).Visible && _commands.AbilityButton(0).TooltipText.StartsWith("Armor +1 [Q]");
+                PushKey(Key.Q); break;
+            case 33: PushKey(Key.Q); break;
+            case 35:
+                _sandboxMapChecks["q_adds_armor_to_every_dummy"] = _sandboxDummies.All(id => world.Units[id].ArmorMilli == 2*SimWorld.DummyArmorStepMilli);
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-dummies.png");
+                PushKey(Key.W); break;
+            case 37:
+                _sandboxMapChecks["w_sets_armor_to_0_and_no_regeneration"] = _sandboxDummies.All(id => world.Units[id].ArmorMilli == 0)
+                    && world.Units[_sandboxDummies[1]].HealthMilli == 400_000;
+                PushKey(Key.E); break;
+            case 39:
+                _sandboxMapChecks["e_restores_full_health"] = _sandboxDummies.All(id => world.Units[id].HealthMilli == SandboxDummyHealth*1000L);
+                // Player 2's Rider (Blunt) attacks the Cutting dummy: Blunt beats Cutting, 125%.
+                world.Enqueue(1,[world.Units.First(u => u.Team == 1 && u.Definition.Name == SandboxRider).Id],OrderKind.Attack,target: _sandboxDummies[0]);
+                // Player 1 trains a Swordsman and an Elven Archer, the models of two dummies drawn before them.
+                foreach (string unit in SandboxDummyLookalikes)
+                {
+                    var producer = world.Producers.Values.First(p => p.Team == SandboxDummyTeam && p.Units.Contains(unit));
+                    world.Enqueue(SandboxDummyTeam,[],OrderKind.Train,Array.IndexOf(producer.Units,unit),producer.Id);
+                }
+                break;
+            case 41:
+            {
+                var target = world.Units[_sandboxDummies[0]];
+                var lookalikes = world.Units.Where(u => u.Team == SandboxDummyTeam && SandboxDummyLookalikes.Contains(u.Definition.Name) && _views.ContainsKey(u.Id)).ToArray();
+                if (Hold((!DummyDamageTexts.Any() || lookalikes.Length < SandboxDummyLookalikes.Length) && _sandboxMapHold < 1500)) break;
+                // A dummy's gilding stays on the dummies: the template it was first drawn from is its own.
+                _sandboxMapChecks["units_sharing_dummy_models_keep_their_colours"] = lookalikes.Select(u => u.Definition.Name).Distinct().Count() == SandboxDummyLookalikes.Length
+                    && lookalikes.All(u => _views[u.Id].Root.GetNode<Node3D>("ModelSize").Scale.X < 1.01f && Descendants(_views[u.Id].Root.GetNode("ModelSize"))
+                        .OfType<MeshInstance3D>().All(m => Enumerable.Range(0,m.Mesh?.GetSurfaceCount() ?? 0).All(i => m.GetSurfaceOverrideMaterial(i) == null)));
+                _sandboxMapChecks["damage_floats_over_the_dummy_with_its_type_multiplier"] = DummyDamageTexts.Any(t => t.StartsWith('-') && t.EndsWith("(125%)") && !t.Contains(','))
+                    && target.HealthMilli < SandboxDummyHealth*1000L && target.Target < 0 && target.Order == OrderKind.Idle;
+                _focus = UnitPosition(target); _distance = 30; UpdateCamera();
+                break;
+            }
+            case 43:
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-damage.png");
+                break;
+            case 45:
                 bool passed = _sandboxMapChecks.Count == SandboxMapSmokeChecks && _sandboxMapChecks.Values.All(v => v);
                 var report = new { build = BuildInfo.Label,checks = _sandboxMapChecks,passed,held_frames = _sandboxMapHold,missing = _sandboxMapMissing,
                     bases = teams.Select(t => new { team = t,buildings = world.ConstructionSites.Values.Where(s => s.Team == t).Select(s => new { world.SiteRules(s).Name,s.X,s.Z,s.Health }),

@@ -71,6 +71,7 @@ PlacementChecks.Run(Check);
 UpgradeChecks.Run(Check);
 ResearchChecks.Run(Check);
 TechTreeChecks.Run(Check);
+SandboxDummyChecks.Run(Check);
 SiegeChecks.Run(Check);
 DefenseChecks.Run(Check);
 OutcomeChecks.Run(Check);
