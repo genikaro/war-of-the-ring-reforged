@@ -30,6 +30,12 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-62 (Oct 24):** the unit panel's Attack is damage per hit, matching the
+Sandbox dummies' floating numbers; the original showed the weapon's damage per second.
+Hovering Attack gives the damage per second and the attack speed from very slow to very
+fast (Gondor Swordsman 10 per hit, 10 per second, very fast). Hits show whole numbers. See
+[skirmish notes](../prototype/SKIRMISH.md#build-62-attack-shows-damage-per-hit).
+
 **Build-61 (Oct 24):** four fixes from the owner's playtest. The Ranger (and the
 Rohan Rider's and Shieldbreaker's runs) no longer runs ahead of its centre: root motion
 is removed from the rest position, not the clip's first key. A source unit-pair row now

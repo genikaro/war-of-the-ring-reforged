@@ -30,7 +30,7 @@ public partial class CommandPanel : Control
     private Button _singlePortrait = null!;
     private TextureRect _typeIcon = null!, _statsBackground = null!;
     private ColorRect _singleHealth = null!;
-    private Label _singleHealthText = null!, _attackValue = null!, _armorValue = null!, _victoriesValue = null!;
+    private Label _singleHealthText = null!, _attackName = null!, _attackValue = null!, _armorValue = null!, _victoriesValue = null!;
     private CombatRules _rules = CombatRules.Probe;
     private int _detailUnit = -1;
     private TextureRect _background = null!;
@@ -112,11 +112,14 @@ public partial class CommandPanel : Control
         var statValues = new Label[3];
         for (int row = 0; row < statNames.Length; row++)
         {
-            _single.AddChild(Text(statNames[row],new(345,33+row*22),new(102,22),13));
+            var name = Text(statNames[row],new(345,33+row*22),new(102,22),13); _single.AddChild(name);
             var value = Text("",new(447,33+row*22),new(44,22),13); value.HorizontalAlignment = HorizontalAlignment.Right;
             _single.AddChild(value); statValues[row] = value;
+            if (row == 0) _attackName = name;
         }
         (_attackValue,_armorValue,_victoriesValue) = (statValues[0],statValues[1],statValues[2]);
+        // Build-62: Attack shows damage per hit; hovering the row gives the damage per second and attack speed.
+        foreach (var label in new[] {_attackName,_attackValue}) label.MouseFilter = MouseFilterEnum.Pass;
         for (int slot = 0; slot < 10; slot++)
         {
             int group = slot;
@@ -324,7 +327,7 @@ public partial class CommandPanel : Control
             portrait.Health.Color = new Color(unit.Team == PlayerTeam ? "69ae63" : "d05b4c");
             portrait.Button.TooltipText = $"{name(unit.Id)} #{unit.Id+1} · {unit.Health}/{unit.MaxHealth}\n{OrderName(unit.Order)}"
                 + (unit.Walking ? " · Walking" : " · Running")
-                + $"\nAttack {stats.Attack} · Armor {stats.Armor} · Victories {stats.Victories}\n{stats.Type}\n{stats.Matchups}"
+                + $"\nAttack {stats.Attack} per hit · Armor {stats.Armor} · Victories {stats.Victories}\n{stats.Type}\n{stats.Matchups}"
                   + (unit.CargoMilli > 0 ? $"\nCarrying {unit.CargoMilli/1000.0:0.0} {unit.CargoKind.ToString().ToLowerInvariant()}" : "")
                 + (unit.OrderQueue.Count > 0 ? "\nQueue: "+string.Join(" → ",unit.OrderQueue.Select(o => OrderName(o.Kind))) : "")
                 + "\nClick to select. Shift-click adds/removes. Double-click or Ctrl-click selects all of this type.";
@@ -333,6 +336,7 @@ public partial class CommandPanel : Control
                 _detailUnit = unit.Id; _singlePortrait.Icon = portrait.Button.Icon; _singlePortrait.TooltipText = portrait.Button.TooltipText;
                 _typeIcon.Texture = _art.GetValueOrDefault(stats.Icon); _typeIcon.TooltipText = stats.Type+" damage\n"+stats.Matchups;
                 _attackValue.Text = stats.Attack; _armorValue.Text = stats.Armor; _victoriesValue.Text = stats.Victories;
+                _attackName.TooltipText = _attackValue.TooltipText = stats.AttackTip;
                 _singleHealthText.Text = stats.Health;
                 _singleHealth.Color = new Color(unit.Team == PlayerTeam ? "48972e" : "b84c3c");
                 _singleHealth.Size = new(244*Math.Clamp(unit.HealthMilli/(float)(unit.MaxHealth*1000L),0,1),12);
@@ -432,6 +436,7 @@ public partial class CommandPanel : Control
     public bool SingleUnitDetailsVisible => _single.Visible;
     public string DisplayedVictories => _victoriesValue.Text;
     public string DisplayedAttack => _attackValue.Text;
+    public string DisplayedAttackTip => _attackValue.TooltipText;
     public string DisplayedArmor => _armorValue.Text;
     public string DisplayedName => _title.Text;
     public string DisplayedOrder => _order.Text;

@@ -3090,3 +3090,33 @@ With damage no longer stacked, the Bilbo's Bluffs observer match (Gimli against
 Aragorn) runs longer: Gimli wins at tick 21743 (build-60: 16483), digest 9E0A8988….
 The other smokes pass; the Formation smoke's `attack_move_arrived` failure predates
 both builds.
+
+## Build-62: Attack shows damage per hit
+
+The original panel's Attack is the weapon's source damage per second (Gondor Swordsman
+10, Rohan Rider 13). The prototype spreads that rate over each swing: a swing deals the
+rate for as long as its clip lasts, split among its hits, and the next swing follows at
+once. The Sandbox dummies' floating numbers (damage per hit) therefore did not match the
+panel; a Swordsman hit for 11 with "Attack 10". The owner chose to show damage per hit.
+
+**Attack** is now the mean damage of one hit: damage per second × mean time between
+hits, over the clips the stat covers (a ranged unit's missile clips), each weighted by
+its source choice weight (`UnitHudStats.SecondsPerHit`). The Swordsman's clips last 21,
+22 and 34 ticks with one, one and two hits, so a hit every 0.96 s and 9.6 per hit
+(10.5, 11, then 8.5 + 8.5). The owner asked for whole numbers, so the panel shows 10;
+the dummies' floating numbers round the same way, keeping a decimal only below 1. Hovering the Attack row shows the damage per hit, the
+damage per second and the attack speed, for example "very fast (a hit every 0.96 s)".
+
+| Attack speed | Time between hits | Good units |
+|---|---|---|
+| Very fast | under 1.0 s | Human Worker 0.77, Frodo 0.92, Gondor Swordsman 0.96 |
+| Fast | 1.0–1.3 s | Shieldbreaker 1.13, Gandalf 1.22, Legolas 1.25, Aragorn 1.28, Beorning 1.28 |
+| Average | 1.3–1.6 s | Uruk-Hai 1.35, Huorn 1.5 |
+| Slow | 1.6–1.9 s | Elven Knight, Ranger 1.6, Gimli 1.62, Lightbearer, Rohan Rider 1.65 |
+| Very slow | 1.9 s and over | Elven Archer 2.05, Dwarf Axethrower 2.2 |
+
+Research and place bonuses still add to the damage per second, so Iron Blades makes
+the Swordsman 11 per second, 11 per hit (10.6). Damage itself is unchanged. How the original
+splits its per-second rate into hits remains unmeasured: counting a Rohan Rider's hits
+on a fresh Swordsman (5 under this model, 8 if a hit dealt the Attack value) would
+settle it.

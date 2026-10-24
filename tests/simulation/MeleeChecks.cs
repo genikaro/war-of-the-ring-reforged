@@ -104,8 +104,20 @@ static class MeleeChecks
         killing.Records[0].UnitKills["Probe"]++;
         check(beforeKillChange == killing.StateDigest(),"the observer stats stay out of replay state"); killing.Records[0].UnitKills["Probe"]--;
         var stats = UnitHudStats.From(killing.Units[0],Rules());
-        check(stats.Attack == "20" && stats.Armor == "0" && stats.Victories == "1" && stats.Health == "100/100","unit HUD reflects live simulation stats and kills");
+        // Two hits in a one-second swing at 20 per second: 10 per hit.
+        check(stats.Attack == "10" && stats.Armor == "0" && stats.Victories == "1" && stats.Health == "100/100","unit HUD reflects live simulation stats and kills");
         check(UnitHudStats.From(world.Units[0],Rules()).Icon == "","unclassified profiles never borrow a weapon icon");
+        // Build-62: the Gondor Swordsman's three clips (21, 22 and a two-hit 34 ticks) at 10 per second.
+        MeleeHit hit = new(5,1_000_000);
+        var swordsman = Fixture(Profile with { DpsMilli = 10000,Attacks = [new("a",1,21,[hit]),new("b",1,22,[hit]),new("c",1,34,[hit,new(20,1_000_000)])] }).Units[0];
+        var swordsmanStats = UnitHudStats.From(swordsman,Rules());
+        check(swordsmanStats.Attack == "10" && swordsmanStats.AttackTip == "Damage per hit: 10\nDamage per second: 10\nAttack speed: very fast (a hit every 0.96 s)",
+            "the HUD shows damage per hit, with damage per second and attack speed behind it");
+        check((UnitHudStats.Whole(9.625m),UnitHudStats.Whole(10.5m),UnitHudStats.Whole(24.375m),UnitHudStats.Whole(.3m)) == ("10","11","24","0.3"),
+            "damage per hit shows whole numbers, keeping a decimal below 1");
+        check(new[] {.99m,1m,1.3m,1.6m,1.9m}.Select(UnitHudStats.SpeedName).SequenceEqual(["very fast","fast","average","slow","very slow"]),
+            "attack speed bands split the time between hits");
+        check(UnitHudStats.From(Fixture(Profile with { DpsMilli = 0 }).Units[0],Rules()).AttackTip == "No attack","a unit without damage has no attack speed");
         for (int type = 0; type < 4; type++)
         {
             var unit = Fixture(Profile with { DamageType = type },rules:Rules()).Units[0];

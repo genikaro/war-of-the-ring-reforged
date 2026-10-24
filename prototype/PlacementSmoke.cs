@@ -184,6 +184,9 @@ public partial class Main
                 var stats = selected == null ? null : Reforged.Presentation.UnitHudStats.From(selected,_rules);
                 _placementChecks["swordsman_selectable_with_source_stats"] = selected != null && _selected.SetEquals([selected.Id]) && _commands.SingleUnitDetailsVisible
                     && _commands.DisplayedName == "Gondor Swordsman" && _commands.DisplayedHealth == "155/155" && stats is { Attack: "10",Armor: "0" }
+                    // Build-62: Attack is damage per hit; the row's tooltip has the source 10 damage per second.
+                    && _commands.DisplayedAttack == "10"
+                    && _commands.DisplayedAttackTip == "Damage per hit: 10\nDamage per second: 10\nAttack speed: very fast (a hit every 0.96 s)"
                     && !_commands.ConstructionButton(SmokeCamp).Visible && !_commands.BuildButton.Visible;
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-swordsman.png");
                 break;
