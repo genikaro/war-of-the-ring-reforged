@@ -3120,3 +3120,25 @@ the Swordsman 11 per second, 11 per hit (10.6). Damage itself is unchanged. How 
 splits its per-second rate into hits remains unmeasured: counting a Rohan Rider's hits
 on a fresh Swordsman (5 under this model, 8 if a hit dealt the Attack value) would
 settle it.
+
+## Build-63: bones a clip leaves unkeyed return to rest
+
+The owner saw the Ranger's head turned and clipping, his cloak and the Elven Archer's
+hair floating. Some source clips leave bones unkeyed. The Ranger's idle and talk clips
+key no hood bones, and `Idle_01` also leaves `J_Cape_01` and the left forearm and hand
+unkeyed; the Archer's `Idle_01` leaves the hair, lower cape, right hand and bow unkeyed.
+The source's own transitions show what such a bone should do: `Attack_Ready_Enter`
+starts with the hood at rest (lowered) and raises it, and `Attack_Ready_Exit` lowers it
+again. So the Ranger idles with his hood down and raises it to fight or move.
+
+Godot's `AnimationMixer.deterministic` defaults to false, and then a bone missing from
+the playing clip keeps whatever the previous clip set. After a run, the hood, cape and
+hair stayed in their running pose while the idle turned the head inside the hood.
+Unit animation players are now deterministic, so an unkeyed bone takes its rest pose
+(the bind pose). The Tier 2 smoke's `idle_returns_unkeyed_bones_to_rest` checks the
+Ranger's hood and upper cape bones after he runs to the rally point; with the old
+setting the same check fails.
+
+The Rohan Rider's idle keys all 49 bones, so this change does not alter the horse.
+Its idle matches its bind pose apart from small weight shifts; the reported hind-leg
+fault was not reproduced from the data.

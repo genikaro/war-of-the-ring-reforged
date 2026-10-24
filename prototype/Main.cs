@@ -310,6 +310,9 @@ public partial class Main : Node3D
         appearance.Apply(model.GetProperty("idle").GetString()!,0);
         var player = Descendants(visual).OfType<AnimationPlayer>().FirstOrDefault()
             ?? throw new InvalidOperationException("Missing animation player for "+unit.Definition.Name);
+        // Build-63: a bone a clip leaves unkeyed (the Ranger's hood and cape in idle, the Archer's hair) goes back to
+        // rest, as the source's ready transitions show, instead of keeping the previous clip's pose (Godot's default).
+        player.Deterministic = true;
         foreach (string clip in unit.Definition.Attacks.Select(a => a.Clip).Append(unit.Definition.ReadyClip))
             if (!player.GetAnimationList().Any(a => a == clip || a.EndsWith('/'+clip)))
                 throw new InvalidOperationException("Missing combat animation: "+clip);

@@ -30,6 +30,12 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-63 (Oct 24):** bones a clip leaves unkeyed go back to rest instead of keeping
+the previous clip's pose. The Ranger's hood and cape and the Elven Archer's hair are not
+keyed in their idle clips, so after a run they stayed raised or streaming while idle.
+Unit animation players are now deterministic. See
+[skirmish notes](../prototype/SKIRMISH.md#build-63-bones-a-clip-leaves-unkeyed-return-to-rest).
+
 **Build-62 (Oct 24):** the unit panel's Attack is damage per hit, matching the
 Sandbox dummies' floating numbers; the original showed the weapon's damage per second.
 Hovering Attack gives the damage per second and the attack speed from very slow to very

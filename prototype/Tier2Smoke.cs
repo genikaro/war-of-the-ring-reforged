@@ -111,6 +111,12 @@ public partial class Main
             case 59:
                 _tier2Checks["rider_panel_shows_source_stats"] = _selected.SetEquals([Trained(SmokeRider)!.Id]) && _commands.DisplayedName == "Rohan Rider"
                     && _commands.DisplayedHealth == "235/235";
+                // Build-63: the Ranger ran to the rally point; his idle keys no hood or upper cape bone, so they are back at rest.
+                var ranger = _views[Trained(SmokeRanger)!.Id];
+                var rangerSkeleton = Descendants(ranger.Root).OfType<Skeleton3D>().First();
+                _tier2Checks["idle_returns_unkeyed_bones_to_rest"] = ranger.Player is { Deterministic: true } && new[] {"J_Hood_01","J_Hood_02","J_Cape_01"}
+                    .All(name => rangerSkeleton.FindBone(name) is int bone and >= 0
+                        && rangerSkeleton.GetBonePoseRotation(bone).AngleTo(rangerSkeleton.GetBoneRest(bone).Basis.GetRotationQuaternion()) < .01f);
                 // A tight box around the three: the Rider's horse covers its neighbours for single clicks.
                 var points = new[] {SmokeRider,SmokeShieldbreaker,SmokeRanger}.Select(n => UnitPoint(Trained(n)!)).ToArray();
                 StructureSmokeDrag(new(points.Min(p => p.X)-25,points.Min(p => p.Y)-25),new(points.Max(p => p.X)+25,points.Max(p => p.Y)+25)); break;
@@ -129,7 +135,7 @@ public partial class Main
                 if (_capture != "") _ = CaptureFrame(false);
                 break;
             case 702:
-                var report = new { build = BuildInfo.Label,checks = _tier2Checks,passed = _tier2Checks.Count == 11 && _tier2Checks.Values.All(v => v),
+                var report = new { build = BuildInfo.Label,checks = _tier2Checks,passed = _tier2Checks.Count == 12 && _tier2Checks.Values.All(v => v),
                     fixture = "Start bank credited 1500 food and 1500 ore and instant build/train for team 0 at frame 2",held_frames = _tier2Hold,
                     citadel_health = new { before = _tier2CitadelHealth,after = world.ConstructionSites[10000].Health },
                     attacks = new[] {SmokeRider,SmokeShieldbreaker,SmokeRanger}.Select(n => Trained(n)?.AttackSerial ?? -1).ToArray(),
