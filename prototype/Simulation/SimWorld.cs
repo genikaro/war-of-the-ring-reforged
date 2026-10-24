@@ -368,6 +368,19 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         bool Eligible(SimUnit u) => u.Id != waiting.Id && u.Team == waiting.Team && !priorities.Contains(u.Id)
             && u.Order is not (OrderKind.Stop or OrderKind.HoldGround)
             && u.Present && u.Target < 0 && (u.YieldFor < 0 || u.YieldFor == waiting.Id);
+        // A refuge must let its unit return to its goal without crossing the destination. A start that a failed full
+        // search already reached cannot return either, so it is skipped without searching again: the refuge chosen is
+        // the same, and a unit whose way back is cut off no longer floods its whole region once for every cell of it.
+        // On MP04_River_Raid that stalled a worker's tick for minutes at 11:07 (build-57).
+        var failedReturns = new List<(GridNavigation Nav,int Resume,int Flood)>();
+        bool CanReturn(SimUnit mover,int from,int resume)
+        {
+            var nav = Nav(mover);
+            if (failedReturns.Any(f => f.Nav == nav && f.Resume == resume && nav.FloodReached(f.Flood,from))) return false;
+            if (nav.FindPath(from, resume, new HashSet<int> { destination }).Count > 0) return true;
+            if (nav.LastFullFlood != 0) failedReturns.Add((nav,resume,nav.LastFullFlood));
+            return false;
+        }
         var occupants = new Dictionary<int, SimUnit>();
         foreach (var u in Units.Where(u => u.Present))
         {
@@ -397,7 +410,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 // would trap an ordered unit behind that final position; an
                 // idle unit settles in the refuge instead.
                 bool free = !occupants.ContainsKey(candidate) && !route.Contains(candidate) && !reserved.Contains(candidate);
-                bool canReturn = free && Nav(mover).FindPath(candidate, resume, new HashSet<int> { destination }).Count > 0;
+                bool canReturn = free && CanReturn(mover,candidate,resume);
                 if (free && (canReturn || mover.Goal < 0 || mover.ReturningToRest))
                 {
                     bool giveUpRest = !canReturn;

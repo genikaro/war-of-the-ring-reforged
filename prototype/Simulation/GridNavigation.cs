@@ -53,6 +53,11 @@ public sealed partial class GridNavigation
     private int _searchStamp;
     /// <summary>The stamp of the last FindPath that explored its whole region without reaching the goal, else 0.</summary>
     private int _lastFloodStamp;
+    /// <summary>The last FindPath that failed by closing every node it could reach, no budget cutting it short, else 0.
+    /// Every node it closed fails to reach that goal too (avoiding the same nodes): its route would have extended the
+    /// search's. FloodReached asks whether a node is one of them while no later search has closed it again.</summary>
+    public int LastFullFlood { get; private set; }
+    public bool FloodReached(int flood,int node) => flood != 0 && node >= 0 && node < _searchClosed.Length && _searchClosed[node] == flood;
     public int BodyRadiusMm { get; }
     public int BodyHeightMm { get; }
     private bool TypedBody => BodyRadiusMm != 350 || BodyHeightMm != 700;
@@ -718,7 +723,7 @@ public sealed partial class GridNavigation
     {
         using var time = SimProfiler.Time("FindPath");
         long began = SimProfiler.Start();
-        _lastFloodStamp = 0;
+        _lastFloodStamp = 0; LastFullFlood = 0;
         if (!IsConnected(start,goal) || blocked?.Contains(goal) == true) return [];
         // Array-backed A*: same priorities, neighbour order and tie rules as the dictionary version it replaced.
         BeginSearch();
@@ -753,7 +758,7 @@ public sealed partial class GridNavigation
             }
         }
         SimProfiler.Record(blocked == null ? "FindPath flood (static)" : "FindPath flood (blocked)",began);
-        _lastFloodStamp = stamp;
+        _lastFloodStamp = LastFullFlood = stamp;
         return [];
     }
 

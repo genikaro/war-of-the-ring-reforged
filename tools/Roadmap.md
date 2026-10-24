@@ -30,6 +30,12 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-57 (Oct 24):** the River Raid stall. A four-bot match froze at 11:07: a
+walled-in unit asked to make way searched every free cell of its region for a
+refuge, flooding the whole map for each. A cell that a failed search already reached
+is now skipped without searching again; the refuges chosen are the same (identical
+Bilbo observer digest), and the match plays to the end. See [skirmish notes](../prototype/SKIRMISH.md#build-57-the-river-raid-stall).
+
 **Build-55 (Oct 24):** observer Stats tab. The spectator overview gets a third tab
 (S): each player's food and ore gathered over the match and units killed and lost,
 with tooltips by unit type plus buildings razed and lost. A tower's kills count for
@@ -890,6 +896,11 @@ window 4.2 ms per tick, 16x at 17-26 fps.
   split by a plug of bodies), and a backward flood from the goal once disagreed
   with A*, so the open-edge relation is not exactly symmetric; find out why (edge
   cache invalidation?) before relying on symmetry.
+- [x] Refuge search floods (build-57): `RequestYield` searched a full flood for every free
+  cell around a unit whose way back to its goal was cut off, stalling one tick for
+  minutes on River Raid. Cells a failed search reached are now skipped (exact). Left:
+  the walk over the region itself repeats every tick while that unit stays walled
+  in, about 1 ms per tick there; a memory of the failure for a few ticks would end it.
 - [x] Route smoothing (build-32): the swept-body test scanned a long path's whole
   bounding box (0.9 ms per tick at 12:00); rows are now solved as intervals.
 - [ ] Unit movement step (0.5-0.65 ms per tick mid-game after build-32): each

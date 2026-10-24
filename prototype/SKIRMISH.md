@@ -2684,7 +2684,8 @@ Hasty Summoning), Gimli, Aragorn, Saruman and Legolas: every bot sent squads fro
 **Open issue:** that River Raid match stops advancing at tick 13343 (11:07): one tick
 never ends, calling `FindPath` again and again (a temporary watchdog on the profiler's
 sections showed nothing else). Whether places of power cause it, or only lead the
-match to a state that triggers an older pathing loop, is not known yet.
+match to a state that triggers an older pathing loop, is not known yet. (Build-57:
+the older loop, a refuge search in `RequestYield`; fixed there.)
 
 Validation: `SimulationTests` 888 checks (6 in the new `PlacesOfPowerChecks`: capture
 alone, holding, contesting and retaking; armor for every unit including later ones
@@ -2826,3 +2827,34 @@ Validation:
 - `SimulationTests` (894 checks), the Python suite, and the skirmish, construction,
   placement, structure, production, tech, Tier 2, command, minimap and siege smokes
   all pass.
+
+## Build-57: the River Raid stall
+
+The open issue from build-54: a four-bot observer match on River Raid (Gimli,
+Aragorn, Saruman and Legolas, seed 3) stopped advancing at 11:07. A temporary
+watchdog thread that logged the simulation sections entered last found the tick
+inside `RequestYield`, not in the places-of-power code. One of Saruman's workers,
+walking to a building site, was blocked and asked the units in its way to make
+room. For each of them the search walks outward over free cells and takes a cell as
+its refuge only if that unit can still walk back to its own goal without crossing
+the worker's destination. This unit's way back was cut off, so every free cell of
+its region failed the test, and each failure was a full flood of the region: about
+a hundred map-wide searches a second, through thousands of cells, every tick.
+
+**Fix** (`SimWorld.RequestYield`, `GridNavigation.LastFullFlood` and
+`FloodReached`): a failed full search marks every cell it closed, and none of those
+cells can reach the goal either (its route would have extended the search's), so the
+refuge search skips them without searching again. It keeps the failed searches of
+each body's graph and goal for the call, and searches anew only from a cell no
+earlier failure reached. The refuge chosen is always the same, so play does not
+change: the Bilbo's Bluffs observer match (Gimli against Aragorn) ends identically
+with and without the fix (Gimli wins at tick 21983, the same state digest).
+
+**River Raid** now plays to the end: Legolas wins at 32:56 (tick 39526) holding all
+four places, after the other three surrendered; every observer check passes. The
+refuge search costs at most about 1.2 ms a tick in that match (10:00 to 14:00), where
+a tick used to take minutes. It still walks the whole region once a tick while that
+worker stays walled in (see the Roadmap's performance backlog).
+
+Validation: `SimulationTests` 894 checks pass; the A/B observer match above; the
+River Raid match.
