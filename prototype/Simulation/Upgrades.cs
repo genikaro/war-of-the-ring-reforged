@@ -68,12 +68,13 @@ public sealed partial class SimWorld
 
     private void Promote(ConstructionSite site,ConstructionDefinition rules)
     {
-        var previous = SiteRules(site);
+        int previous = SiteMaxHealth(site);
         // A start building counts through StartBuildings for population and prerequisites.
-        if (site.Prebuilt && StartBuildings.TryGetValue(site.Team,out var starts) && starts.Remove(previous.Name)) starts.Add(rules.Name);
+        if (site.Prebuilt && StartBuildings.TryGetValue(site.Team,out var starts) && starts.Remove(SiteRules(site).Name)) starts.Add(rules.Name);
         site.Building = rules.Name; site.Upgrading = false; site.UpgradeTicks = 0;
         // ponytail: damage carries over; the new maximum adds to the health the building had.
-        site.Health = Math.Clamp(site.Health+rules.MaxHealth-previous.MaxHealth,1,rules.MaxHealth);
+        int max = SiteMaxHealth(site);
+        site.Health = Math.Clamp(site.Health+max-previous,1,max);
         if (Producers.TryGetValue(site.Id,out var producer) && ProducedUnits.TryGetValue(rules.Name,out var units)) producer.Units = units;
     }
 

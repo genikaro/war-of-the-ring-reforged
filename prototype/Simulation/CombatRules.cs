@@ -12,7 +12,7 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
     int FriendlyCompressionPpm = 1_000_000,int ModelScalePpm = 1_000_000,
     int ProjectileSpeedMmPerSecond = 0,int MinimumRangeMm = 0,
     int MeleeDpsMilli = 0,int MeleeReachMm = 2000,int MeleeGapMm = 0,AbilityDefinition[]? Abilities = null,bool Hero = false,
-    int RegenerationPpm = 1_000_000)
+    int RegenerationPpm = 1_000_000,int SiegePpm = 1_000_000)
 {
     public bool IsRanged => ProjectileSpeedMmPerSecond > 0;
     public bool HasMelee => IsRanged && Attacks.Any(a => a.Melee);
@@ -37,7 +37,7 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
             || MeleeDpsMilli is < 0 or > 1_000_000 || MeleeReachMm is < 700 or > 10000 || MeleeGapMm is < 0 or > 10000
             || WalkScale is <= 0 or > 1_000_000
             || BodyRadiusMm is < 100 or > 5000 || BodyHeightMm is < 100 or > 15000 || SelectionRadiusMm is < 100 or > 6000
-            || AttackGapMm is < 0 or > 10000 || RegenerationPpm is < 0 or > 10_000_000
+            || AttackGapMm is < 0 or > 10000 || RegenerationPpm is < 0 or > 10_000_000 || SiegePpm is <= 0 or > 10_000_000
             || FriendlyCompressionPpm is < 500_000 or > 1_000_000 || ModelScalePpm is < 500_000 or > 2_000_000
             || Attacks == null || Attacks.Length == 0 || string.IsNullOrEmpty(Name)) throw new ArgumentException("Invalid unit definition");
         if (IsRanged && Attacks.All(a => a.Melee)) throw new ArgumentException("Ranged unit has no missile attack");

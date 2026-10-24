@@ -6,7 +6,7 @@ using Reforged.Rendering;
 /// level field (tools/sandbox_map.py; its cache says "sandbox"). Every building the faction can raise stands finished around both Citadels, each upgraded as
 /// far as its line goes, so every unit and technique is on offer, and every producer's rally point stands on the way to
 /// the centre, short of it, so new units gather in front of their base (a flag in each player's colour marks every rally
-/// point); both banks stay full (the source storage cap), the
+/// point); both banks stay full (the source storage cap, and Fate at its maximum of 20 for the heroes), the
 /// population cap is the source maximum, and building, training, upgrades and research finish at once (the debug menu's
 /// cheat, on by default). No bots play and no result ends the match. Tab, the two console tabs beside the
 /// menu button, or a click on a unit or building of the other side switches which player the mouse and keyboard command;
@@ -45,8 +45,8 @@ public partial class Main
             : "Sandbox · no room for "+string.Join(", ",_sandboxMapMissing.Distinct().Select(b => world.BuildingRules.GetValueOrDefault(b)?.DisplayName ?? b));
     }
 
-    /// <summary>Keeps both banks at the source storage cap.</summary>
-    private void RefillSandboxMapBanks() { foreach (int team in SandboxMapTeams) _world!.GrantResources(team,1_000_000); }
+    /// <summary>Keeps both banks at the source storage cap, Fate at its source maximum (build-58).</summary>
+    private void RefillSandboxMapBanks() { foreach (int team in SandboxMapTeams) _world!.GrantResources(team,1_000_000,_world.MaxFate); }
 
     private void SwitchSandboxPlayer() => CommandSandboxPlayer(SandboxMapTeams[(Array.IndexOf(SandboxMapTeams,PlayerTeam)+1)%SandboxMapTeams.Length]);
 

@@ -29,8 +29,10 @@ public partial class Main
             case 3: PushKey(Key.Key1); _focus = PositionOf(start.X,start.Z); UpdateCamera(); break;
             case 5: Click(_commands.BuildButton.GetGlobalRect().GetCenter()); break;
             case 6:
+                // Build-58: Tier 2 sits on the Advanced page (the placement smoke checks its locked buttons); the basic page lacks it.
                 _techChecks["tier2_buildings_locked_until_citadel_2"] = new[] {"BUILDING_G_ARMORY","BUILDING_G_RANGER_BARRACKS",SmokeForge}
-                    .All(b => _commands.ConstructionButton(b) is { Visible: true,Disabled: true,Icon: not null } && _commands.ConstructionButton(b).TooltipText.EndsWith("Requires Citadel 2"));
+                    .All(b => !world.CanStartBuilding(0,b,out string reason) && reason == "Requires Citadel 2" && PageChoices().All(c => c.Building != b))
+                    && _commands.AdvancedBuildButton.Visible == false && _buildMenu;
                 _techCampCell = VisiblePlacementCells(SmokeCamp)[0];
                 Click(_commands.ConstructionButton(SmokeCamp).GetGlobalRect().GetCenter()); break;
             case 8: Click(PlacementPoint(_techCampCell)); break;
@@ -74,7 +76,8 @@ public partial class Main
                     && world.PopulationProvided[SmokeCitadel2] == 10 && producer.Units.SequenceEqual(world.ProducedUnits[SmokeCitadel2]);
                 _techChecks["upgraded_model_and_panel"] = _constructionViews[10000].Building == SmokeCitadel2 && _structureViews[10000].Type == SmokeCitadel2
                     && SelectedStructureDetails() is { Name: "Citadel 2",Health: 1000,MaxHealth: 1000 } && _commands.DisplayedHealth == "1000/1000"
-                    && !_commands.UpgradeButton.Visible && StructureAt(StructureSmokePoint(10000))?.Id == 10000;
+                    // Build-58: Citadel 2 goes on to Citadel 3.
+                    && _commands.UpgradeButton.Visible && _commands.UpgradeButton.TooltipText.StartsWith("Upgrade to Citadel 3") && StructureAt(StructureSmokePoint(10000))?.Id == 10000;
                 if (_capture != "") _ = CaptureFrame(false);
                 break;
             case 1035:
@@ -94,7 +97,7 @@ public partial class Main
                 _techChecks["war_camp_adds_source_population"] = world.PopulationCapacity(0) == 25 && SelectedStructureDetails() is { Name: "War Camp",Health: 500 }
                     && !_commands.UpgradeButton.Visible;
                 PushKey(Key.Key1); _focus = PositionOf(start.X,start.Z); UpdateCamera(); break;
-            case 1847: Click(_commands.BuildButton.GetGlobalRect().GetCenter()); break;
+            case 1847: Click(_commands.AdvancedBuildButton.GetGlobalRect().GetCenter()); break;
             case 1848:
                 _techChecks["citadel_2_opens_tier2_buildings"] = new[] {"BUILDING_G_ARMORY","BUILDING_G_RANGER_BARRACKS",SmokeForge}
                     .All(b => _commands.ConstructionButton(b) is { Visible: true,Disabled: false });

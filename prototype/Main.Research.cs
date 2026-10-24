@@ -20,9 +20,29 @@ public partial class Main
                 rules.GetProperty("slot").GetInt32(),rules.GetProperty("food_cost").GetInt32(),rules.GetProperty("ore_cost").GetInt32(),
                 rules.GetProperty("duration_ticks").GetInt32(),Optional("prerequisite"),Optional("previous"),
                 rules.GetProperty("bonuses").EnumerateObject().ToDictionary(b => b.Name,
-                    b => (b.Value.GetProperty("damage_milli").GetInt32(),b.Value.GetProperty("armor_milli").GetInt32()))));
+                    b => (b.Value.GetProperty("damage_milli").GetInt32(),b.Value.GetProperty("armor_milli").GetInt32())),
+                // Build-58 effects: missile range, a replaced missile weapon and building health.
+                Effect("range_ppm"),Effect("missile_dps_milli"),
+                rules.TryGetProperty("building_health_ppm",out var health) ? health.GetInt32() : 1_000_000));
             _techniquePortraits[item.Name] = rules.GetProperty("portrait").GetString()!;
+            Dictionary<string,int>? Effect(string key)
+            {
+                var found = rules.GetProperty("bonuses").EnumerateObject().Where(b => b.Value.TryGetProperty(key,out _))
+                    .ToDictionary(b => b.Name,b => b.Value.GetProperty(key).GetInt32());
+                return found.Count > 0 ? found : null;
+            }
         }
+        // Build-58 lists the research the simulation cannot carry out yet, shown disabled with the reason.
+        if (research.TryGetProperty("unsimulated",out var unsimulated))
+            foreach (var item in unsimulated.EnumerateObject())
+            {
+                var rules = item.Value;
+                _world!.UnsimulatedTechniques.Add(new(item.Name,rules.GetProperty("display_name").GetString()!,rules.GetProperty("building").GetString()!,
+                    rules.GetProperty("slot").GetInt32(),rules.GetProperty("food_cost").GetInt32(),rules.GetProperty("ore_cost").GetInt32(),
+                    rules.GetProperty("previous").ValueKind == JsonValueKind.Null ? null : rules.GetProperty("previous").GetString(),
+                    rules.GetProperty("reason").GetString()!));
+                _techniquePortraits[item.Name] = rules.GetProperty("portrait").GetString()!;
+            }
     }
 
     /// <summary>The technique offered in an action-grid slot of the player's selected building.</summary>

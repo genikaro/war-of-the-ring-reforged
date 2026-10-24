@@ -23,7 +23,7 @@ public partial class Main
                 world.Economies[0].FoodMilli += 300_000; world.Economies[0].OreMilli += 300_000; break;
             case 3: _focus = _structureViews[10000].Root.GlobalPosition; UpdateCamera(); Click(StructureSmokePoint(10000)); break;
             case 6:
-                _frodoChecks["citadel_offers_frodo_with_source_cost"] = citadel.Units.SequenceEqual(["UNIT_G_HUMAN_WORKER",SmokeFrodo])
+                _frodoChecks["citadel_offers_frodo_with_source_cost"] = citadel.Units.Take(2).SequenceEqual(["UNIT_G_HUMAN_WORKER",SmokeFrodo])
                     && _commands.TrainButton(1) is { Visible: true,Disabled: false,Icon: not null } && _commands.TrainButton(1).TooltipText.Contains("150 food · 100 ore · population 0 · 36s");
                 Press(_commands.TrainButton(1).GetGlobalRect().GetCenter()); break;
             case 7: Release(_commands.TrainButton(1).GetGlobalRect().GetCenter()); break;

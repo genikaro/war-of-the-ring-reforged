@@ -21,19 +21,37 @@ public partial class CommandPanel
 
     public void RefreshResearch(SimWorld world,ConstructionSite? site,Func<string,string?> portrait)
     {
-        var offered = site is { Complete: true } && site.Team == PlayerTeam ? world.ResearchOptions(site).ToDictionary(t => t.Slot) : [];
+        bool own = site is { Complete: true } && site.Team == PlayerTeam;
+        var offered = own ? world.ResearchOptions(site!).ToDictionary(t => t.Slot) : [];
+        var unsimulated = own ? world.UnsimulatedOptions(site!).ToDictionary(t => t.Slot) : [];
         for (int slot = 0; slot < _researchButtons.Length; slot++)
         {
             var button = _researchButtons[slot];
-            button.Visible = offered.TryGetValue(slot,out var technique);
+            button.Visible = offered.TryGetValue(slot,out var technique) || unsimulated.ContainsKey(slot);
+            if (technique == null && unsimulated.GetValueOrDefault(slot) is { } idle)
+            {
+                // Build-58: source research the simulation cannot carry out yet stays in its grid slot, disabled.
+                button.Disabled = true;
+                button.Icon = portrait(idle.Name) is { } art ? _art.GetValueOrDefault(art) : null;
+                button.TooltipText = $"{idle.DisplayName} [{GridKeys[slot]}]\n{idle.FoodCost} food · {idle.OreCost} ore\nNot simulated yet: {idle.Reason}.";
+                continue;
+            }
             if (technique == null) continue;
             button.Disabled = !world.CanResearch(PlayerTeam,site!.Id,world.Techniques.IndexOf(technique),out string reason);
             button.Icon = portrait(technique.Name) is { } name ? _art.GetValueOrDefault(name) : null;
-            var units = technique.Bonuses.Where(b => world.Rules.Units.ContainsKey(b.Key))
-                .Select(b => world.Rules.Units[b.Key].DisplayName+(b.Value.DpsMilli > 0 ? $" +{b.Value.DpsMilli/1000} attack" : "")
-                    +(b.Value.ArmorMilli > 0 ? $" +{b.Value.ArmorMilli/1000} armor" : "")).ToArray();
+            string Unit(string type) => world.Rules.Units.TryGetValue(type,out var definition) ? definition.DisplayName : type;
+            var units = technique.Bonuses.Where(b => world.Rules.Units.ContainsKey(b.Key) && (b.Value.DpsMilli > 0 || b.Value.ArmorMilli > 0))
+                .Select(b => Unit(b.Key)+(b.Value.DpsMilli > 0 ? $" +{b.Value.DpsMilli/1000} attack" : "")
+                    +(b.Value.ArmorMilli > 0 ? $" +{b.Value.ArmorMilli/1000} armor" : ""))
+                .Concat((technique.RangePpm ?? new Dictionary<string,int>()).Where(r => world.Rules.Units.ContainsKey(r.Key))
+                    .Select(r => $"{Unit(r.Key)} missile range x{r.Value/1_000_000m:0.##}"))
+                .Concat((technique.MissileDpsMilli ?? new Dictionary<string,int>()).Where(r => world.Rules.Units.ContainsKey(r.Key))
+                    .Select(r => $"{Unit(r.Key)} throws a new axe: attack {r.Value/1000m:0.##}"))
+                .Concat(technique.BuildingHealthPpm != 1_000_000 ? [$"Every building x{technique.BuildingHealthPpm/1_000_000m:0.##} health"] : []).ToArray();
+            bool tier = technique.Previous != null || world.Techniques.Any(t => t.Previous == technique.Name);
             button.TooltipText = $"Research {technique.DisplayName} [{GridKeys[slot]}]\n{technique.FoodCost} food · {technique.OreCost} ore · {technique.DurationTicks/20}s"
                 + (units.Length > 0 ? "\n"+string.Join("\n",units) : "")
+                + (tier ? "\nEach tier of this line replaces the one before." : "")
                 + "\nApplies to units already trained. Click its portrait in the queue to cancel for a full refund."
                 + (button.Disabled ? "\n"+reason : "");
         }

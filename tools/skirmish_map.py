@@ -22,7 +22,11 @@ CITADEL = 'BUILDING_G_TOWN_CENTER_LEVEL_1'
 START_WORKERS = 4
 SKIRMISH_UNITS = ['UNIT_G_HUMAN_WORKER', 'UNIT_G_GONDOR_SWORDSMAN', 'UNIT_G_DWARVEN_AXETHROWER', 'UNIT_G_HERO_FRODO',
                   # Tier 2: Barracks with Citadel 2, Dwarf Hall with a Forge, Ranger Post (captured unit tree, skirmish-012).
-                  'UNIT_G_ROHAN_RIDER', 'UNIT_G_DWARVEN_SHIELDBREAKER', 'UNIT_G_RANGER']
+                  'UNIT_G_ROHAN_RIDER', 'UNIT_G_DWARVEN_SHIELDBREAKER', 'UNIT_G_RANGER',
+                  # Tier 3-4: Elven Sanctuary and Nature's Haven (the Elven Archer is a combat demo unit already), and
+                  # the Fate heroes the Citadel calls (Aragorn is a combat demo unit already).
+                  'UNIT_G_ELVEN_LIGHTBRINGER', 'UNIT_G_BEORNING', 'UNIT_G_HUORN',
+                  'UNIT_G_HERO_GIMLI', 'UNIT_G_HERO_LEGOLAS', 'UNIT_G_HERO_GANDALF']
 TIER1_BUILDINGS = ['BUILDING_G_TOWN_CENTER_LEVEL_1', 'BUILDING_G_FOOD_STRUCTURE', 'BUILDING_G_BLACKSMITH',
                    'BUILDING_G_WORKER_STRUCTURE', 'BUILDING_G_GONDORIAN_BARRACKS', 'BUILDING_G_DWARF_BARRACKS',
                    'BUILDING_G_TOWER']
@@ -30,7 +34,12 @@ TIER1_BUILDINGS = ['BUILDING_G_TOWN_CENTER_LEVEL_1', 'BUILDING_G_FOOD_STRUCTURE'
 # of a Tier 1 building; the Wilderness Outpost, Ranger Post and Forge are placed by workers.
 TIER2_BUILDINGS = ['BUILDING_G_TOWN_CENTER_LEVEL_2', 'BUILDING_G_POPULATION_STRUCTURE_UPGRADE', 'BUILDING_G_ARMORY',
                    'BUILDING_G_RANGER_BARRACKS', 'BUILDING_G_SKILLS_STRUCTURE']
-SKIRMISH_BUILDINGS = TIER1_BUILDINGS + TIER2_BUILDINGS
+# Citadel 3 opens Nature's Haven, the Elven Sanctuary and the House of Lore (source BuildingRequired); Citadel 4 the
+# Watchtower's upgrade to the Ballista Tower; Citadel 5 ends the line.
+TIER3_BUILDINGS = ['BUILDING_G_TOWN_CENTER_LEVEL_3', 'BUILDING_G_STABLES', 'BUILDING_G_ELF_BARRACKS', 'BUILDING_G_HOSPITAL']
+TIER4_BUILDINGS = ['BUILDING_G_TOWN_CENTER_LEVEL_4', 'BUILDING_G_TOWER_UPGRADE']
+TIER5_BUILDINGS = ['BUILDING_G_TOWN_CENTER_LEVEL_5']
+SKIRMISH_BUILDINGS = TIER1_BUILDINGS + TIER2_BUILDINGS + TIER3_BUILDINGS + TIER4_BUILDINGS + TIER5_BUILDINGS
 WORKER_RING = (9.0, 13.0)
 
 

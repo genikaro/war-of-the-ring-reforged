@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 UNITS = ['UNIT_G_HERO_ARAGORN', 'UNIT_G_ELF_KNIGHT', 'UNIT_E_URUK_HAI', 'UNIT_G_ELVEN_ARCHER']
 # Units using their source missile weapon. The source Uruk-Hai also lists one;
 # the accepted Helm's Deep demo keeps it melee.
-RANGED_UNITS = ['UNIT_G_ELVEN_ARCHER', 'UNIT_G_DWARVEN_AXETHROWER']
+RANGED_UNITS = ['UNIT_G_ELVEN_ARCHER', 'UNIT_G_DWARVEN_AXETHROWER', 'UNIT_G_ELVEN_LIGHTBRINGER', 'UNIT_G_HERO_LEGOLAS']
 
 
 def type_matchups(damage_types):
@@ -166,16 +166,25 @@ def projectile_presentation(output, resolver, unit_name, trace, projectile_id=No
     path = Path(resolver.index.find('Projectiles',record['Filename']))
     projectile = lpo.parse(path.read_bytes())
     launch_sounds = export_sounds(output,resolver,lpo.launch_sound_events(projectile),trace,slots=6)
-    effect_id = next(b['source'] for key in projectile['resource_keys'] for b in key['bindings'] if b['source'] >= 0)
-    effect_record = resolver.db['Effects'].get(effect_id)
-    effect_path = Path(resolver.index.find('Effects',effect_record['Filename']))
-    effect = lfx.parse(effect_path.read_bytes())
-    trail = trail_profile(effect['trail_tracks'][0])
-    trail['Source'] = {'Id': effect_id,'Name': effect_record.name,'File': str(effect_path.relative_to(ROOT)), 'Data': effect}
-    trace(effect_path); trace(resolver.db.files['effects'])
+    # The first bound effect with a trail track draws the ribbon; the Lightbearer's bolt (effect 167) has none.
+    trail = None
+    for effect_id in [b['source'] for key in projectile['resource_keys'] for b in key['bindings'] if b['source'] >= 0]:
+        effect_record = resolver.db['Effects'].get(effect_id)
+        effect_path = Path(resolver.index.find('Effects',effect_record['Filename']))
+        effect = lfx.parse(effect_path.read_bytes())
+        trace(effect_path)
+        if effect['trail_tracks']:
+            trail = trail_profile(effect['trail_tracks'][0])
+            trail['Source'] = {'Id': effect_id,'Name': effect_record.name,'File': str(effect_path.relative_to(ROOT)), 'Data': effect}
+            break
+    trace(resolver.db.files['effects'])
     model_id = next(k['id'] for k in projectile['resource_keys'] if k['kind'] == 0 and k['id'] >= 0)
     visual = 'combat/' + record.name.lower() + '.glb'
-    convert_model(resolver,str(model_id),str(output/visual),extras={'wotrProjectile':projectile})
+    try:
+        convert_model(resolver,str(model_id),str(output/visual),extras={'wotrProjectile':projectile})
+    except ValueError:
+        # The Lightbearer's bolt model holds no mesh (its look is the particle effect); the game draws a stand-in.
+        visual = None
     trace(path); trace(resolver.db.files['projectiles'])
     trace(ROOT/resolver.resolve(str(model_id),recurse=False)['file'])
     return {'Visual': visual,'LaunchSounds': launch_sounds,'Trail': trail,
@@ -257,6 +266,8 @@ def export(output, resolver=None, roster=None):
             'WalkScale': walk_scale,'WalkClip': motion['Walk']['Clip'],'RunClip': motion['Run']['Clip'],
             'BodyRadiusMm': radius,'BodyHeightMm': body_height,'SelectionRadiusMm': quantize(unit['SelectionRingRadius']),
             'Abilities': hero_abilities.export(resolver,unit,model,skeleton),
+            # Source IsSiege weapons (the Huorn's) multiply their damage against buildings by SiegeMultiplier.
+            'SiegePpm': quantize(weapon['SiegeMultiplier'],1_000_000) if weapon['IsSiege'] else 1_000_000,
             **demo_body_tuning(name, radius, body_height),
             'AttackGapMm': 0 if ranged else quantize(weapon['MaximumRange']),
             'Source': {'Unit': unit.name,'ModelId': model['id'],'ModelFile': model['file'],
@@ -264,9 +275,14 @@ def export(output, resolver=None, roster=None):
                        'MeleeWeaponId': melee_weapon.id,'MeleeWeaponName': melee_weapon.name,'MeleeWeapon': melee_weapon.values,'MeleeStateId': melee_state['id'],
                        'MaxTurnAngleDegrees': unit['MaxTurnAngle']}})
     ids = {u['Id'] for u in units}
-    pairs = [{'From': p['FromUnit'],'To': p['ToUnit'],'Scale': quantize(p['DamageMultiplier'],1_000_000),
-              'Invincible': bool(p['IsInvinicible']),'SourceId': p.id,'SourceName': p.name}
-             for p in resolver.db['UnitToUnitModifiers'].records if p['FromUnit'] in ids and p['ToUnit'] in ids]
+    # The source repeats a few pairs (Lightbearer to Lightbearer twice, one row named ..._TO_ROHAN_RIDER); the repeats
+    # carry the same multiplier, so the first row of each pair stands.
+    pairs, seen = [], set()
+    for p in resolver.db['UnitToUnitModifiers'].records:
+        if p['FromUnit'] in ids and p['ToUnit'] in ids and (p['FromUnit'], p['ToUnit']) not in seen:
+            seen.add((p['FromUnit'], p['ToUnit']))
+            pairs.append({'From': p['FromUnit'],'To': p['ToUnit'],'Scale': quantize(p['DamageMultiplier'],1_000_000),
+                          'Invincible': bool(p['IsInvinicible']),'SourceId': p.id,'SourceName': p.name})
     sound_event_ids = set()
     for unit in units:
         impact = unit['Source']['Weapon']['WeaponImpactType']

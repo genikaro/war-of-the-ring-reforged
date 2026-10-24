@@ -9,6 +9,8 @@ public partial class Main
     private Button _debugPause = null!, _debugStep = null!, _debugFocus = null!, _debugGrant = null!, _setupButton = null!;
     private CheckButton _debugInstant = null!;
     private const int CheatGrant = 1000;
+    /// <summary>Fate the cheat grants: enough for a Fate hero (3-4) twice over.</summary>
+    private const int CheatFate = 10;
     private bool _openDebugMenu, _singleStepRequested, _presentStep;
 
     private static Button DebugButton(string text, Action action)
@@ -72,10 +74,10 @@ public partial class Main
         }
         body.AddChild(new HSeparator()); body.AddChild(DebugText("Cheats"));
         var cheats = new HBoxContainer(); body.AddChild(cheats);
-        _debugGrant = DebugButton($"+{CheatGrant} food and ore",() => {
-            foreach (int team in CheatTeams) _world!.GrantResources(team,CheatGrant);
+        _debugGrant = DebugButton($"+{CheatGrant} food and ore, +{CheatFate} Fate",() => {
+            foreach (int team in CheatTeams) _world!.GrantResources(team,CheatGrant,CheatFate);
             if (_skirmish) ApplySkirmishHud(_commands);
-            _status.Text = $"Cheat: +{CheatGrant} food and +{CheatGrant} ore";
+            _status.Text = $"Cheat: +{CheatGrant} food, +{CheatGrant} ore and +{CheatFate} Fate";
         });
         _debugGrant.TooltipText = "Credit your bank immediately, up to its storage limit."; cheats.AddChild(_debugGrant);
         _debugInstant = new CheckButton { Text = "Build and train instantly", FocusMode = Control.FocusModeEnum.None,

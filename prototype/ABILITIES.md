@@ -129,3 +129,24 @@ Frodo trains at the skirmish Citadel with his three source abilities equipped:
 orcs, Uruk-Hai and goblins) and **E · Heroic Aura** (passive, allies within 15 m
 recharge abilities 1.5× as fast). Rules, adapters and validation are in
 [the skirmish notes](SKIRMISH.md#build-19-frodo-and-the-hero-portraits).
+
+## Gimli, Legolas and Gandalf — build-58
+
+The Citadel trains the three other Fate heroes with their source gear in its
+`SpecificIndex` slots. Two new abilities work:
+
+- **Gimli · E · Siege Aura** (passive): allies within 10 m, Gimli included, deal
+  ×1.5 damage to buildings (source child spell 17, `APPLY_BUILDING_DAMAGE_MODIFIER`;
+  StackableType 3, so overlapping auras do not stack).
+- **Legolas · E · Guardian Wind**: cast on the spot (no target) with the source
+  clip (animation state 91); at its toolscript event (29) every ally within 12 m,
+  Legolas included, takes 1% of missile damage for 12 s (child spell 30,
+  `APPLY_MISSLE_WEAPON_DAMAGE_MULTIPLIER` 0.01, `START_TIMER` 12). Cooldown 30 s;
+  another order interrupts the cast like Kingsfoil's.
+
+Gimli's Sunder and Capture, Legolas's Trueshot and Elven Speed, and all four of
+Gandalf's (Blinding Light, Flame Shield, Negate Ability, Rain of Fire) need
+knockback, stuns, tower capture, ground targeting or spell negation. They show on
+the card disabled, with an English description after the manual and the source
+cooldown. The Elven Lightbearer's Protection does the same. Rules and validation
+are in [the skirmish notes](SKIRMISH.md#build-58-the-rest-of-the-good-tech-tree-and-the-fate-heroes).

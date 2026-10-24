@@ -12,7 +12,9 @@ public partial class Main
     private bool _sandboxMapSmoke;
     private readonly Dictionary<string,bool> _sandboxMapChecks = [];
     private int _sandboxMapHold,_sandboxMapWorker = -1;
-    private const int SandboxMapSmokeChecks = 20;
+    private const int SandboxMapSmokeChecks = 22;
+    private const string SandboxGandalf = "UNIT_G_HERO_GANDALF";
+    private static readonly string[] SandboxFateHeroes = ["UNIT_G_HERO_GIMLI","UNIT_G_HERO_ARAGORN","UNIT_G_HERO_LEGOLAS",SandboxGandalf];
     private const string SandboxRider = "UNIT_G_ROHAN_RIDER",SandboxBarracks = "BUILDING_G_GONDORIAN_BARRACKS";
 
     private void SandboxMapSmokeInput()
@@ -31,19 +33,28 @@ public partial class Main
                 _sandboxMapChecks["every_building_stands"] = _sandboxMapMissing.Count == 0 && teams.All(t => world.MissingPrerequisite(t,world.PlaceableBuildings) == null
                     && world.MissingPrerequisite(t,resourceBuildings) == null
                     && world.ConstructionSites.Values.Count(s => s.Team == t) == world.PlaceableBuildings.Count+resourceBuildings.Length);
+                // Build-58: the upgrade lines end at Citadel 5, the War Camp and the Ballista Tower.
                 _sandboxMapChecks["finished_and_fully_upgraded"] = world.ConstructionSites.Values.Where(s => s.Team >= 0)
-                    .All(s => s.Complete && s.Health == world.SiteRules(s).MaxHealth && world.UpgradeRules(s) == null)
-                    && teams.All(t => Site(t,"BUILDING_G_TOWN_CENTER_LEVEL_2") is { Prebuilt: true } && Site(t,"BUILDING_G_POPULATION_STRUCTURE_UPGRADE") != null);
+                    .All(s => s.Complete && s.Health == world.SiteMaxHealth(s) && world.UpgradeRules(s) == null)
+                    && teams.All(t => Site(t,"BUILDING_G_TOWN_CENTER_LEVEL_5") is { Prebuilt: true } && Site(t,"BUILDING_G_POPULATION_STRUCTURE_UPGRADE") != null
+                        && Site(t,"BUILDING_G_TOWER_UPGRADE") != null);
                 _sandboxMapChecks["full_banks_and_source_population_maximum"] = teams.All(t => Full(t) && world.PopulationCapacity(t) == world.MaxPopulation)
                     && _commands.ResourceReadout.Contains("99999");
                 RefreshDebugMenu();
                 _sandboxMapChecks["instant_build_on_by_default"] = world.InstantBuildTeams.SetEquals(teams) && _debugInstant.ButtonPressed;
-                // Every unit each producer offers, and every technique somewhere in the base.
+                // Every unit each producer offers, and every technique somewhere in the base: a chain's first tier at once,
+                // a later tier with its own prerequisite already standing (it is offered once the tier before is done).
                 _sandboxMapChecks["every_unit_and_technique_on_offer"] = teams.All(t =>
                     world.Producers.Values.Where(p => p.Team == t).All(p => Enumerable.Range(0,p.Units.Length).All(slot => world.CanTrain(t,p.Id,slot,out _)))
                     && world.Producers.Values.Where(p => p.Team == t).SelectMany(p => p.Units).Distinct().Count() == world.ProductionRules.Count
-                    && world.Techniques.All(technique => world.ConstructionSites.Values.Any(s => s.Team == t
-                        && world.CanResearch(t,s.Id,world.Techniques.IndexOf(technique),out _))));
+                    && world.Techniques.All(technique => technique.Previous == null
+                        ? world.ConstructionSites.Values.Any(s => s.Team == t && world.CanResearch(t,s.Id,world.Techniques.IndexOf(technique),out _))
+                        : technique.Prerequisite == null || world.MissingPrerequisite(t,[technique.Prerequisite]) == null));
+                // Build-58: Fate full for the four Fate heroes, each on offer at the Citadel 5.
+                _sandboxMapChecks["fate_full_and_every_hero_on_offer"] = teams.All(t => world.Economies[t].Fate == world.MaxFate
+                    && world.Producers.Values.Single(p => p.Team == t && p.Units.Contains(SandboxGandalf)) is var citadel
+                    && SandboxFateHeroes.All(hero => world.CanTrain(t,citadel.Id,Array.IndexOf(citadel.Units,hero),out _)))
+                    && world.MaxFate == 20 && _commands.FateReadout == "20";
                 _sandboxMapChecks["no_bots_and_no_chasing"] = world.AiPlayers.Count == 0 && world.AggressiveIdleTeams.Count == 0;
                 // The widest trainable body finds open ground beside every producer, connected to its base.
                 var widest = world.ProductionRules.Keys.Select(n => _rules.Units[n]).MaxBy(u => u.BodyRadiusMm)!;
@@ -57,7 +68,8 @@ public partial class Main
                 _sandboxMapChecks["rally_points_face_the_centre"] = teams.All(t => rallies[t] is [>= 0] && world.Navigation.Center(rallies[t][0]) is var (rx,rz)
                     && Math.Abs(Math.Sqrt(SimWorld.DistanceSquared(rx,rz,centreX,centreZ))-SimWorld.SandboxRallyShortMm) <= 1500
                     && SimWorld.DistanceSquared(starts[t].X,starts[t].Z,rx,rz) < SimWorld.DistanceSquared(starts[t].X,starts[t].Z,centreX,centreZ))
-                    && world.Producers.Values.Count(p => teams.Contains(p.Team)) == 8;
+                    // Citadel, Barracks, Dwarf Hall, Ranger Post, Nature's Haven and Elven Sanctuary on each side.
+                    && world.Producers.Values.Count(p => teams.Contains(p.Team)) == 12;
                 _sandboxMapChecks["flags_mark_both_rally_points"] = _sandboxRallyFlags.Count == 2 && teams.All(t => rallies[t] is [var cell]
                     && _sandboxRallyFlags.TryGetValue((t,cell),out var flag) && flag.Root.Visible && flag.Banner.Visible && world.Navigation.Center(cell) is var (fx,fz)
                     && flag.Root.Position.DistanceTo(new(-fx/1000f,world.Navigation.NodeHeight(cell)/1000f,fz/1000f)) < .01f);
@@ -103,9 +115,24 @@ public partial class Main
             case 18:
                 _sandboxMapChecks["click_takes_command_of_player_1"] = PlayerTeam == 0 && _selectedStructure == world.ConstructionSites.Values.First(s => s.Team == 0 && s.Prebuilt).Obstacle
                     && _commands.SandboxTab(0).ButtonPressed && SelectedOwnSite() != null;
-                Press(_commands.SandboxTab(1).GetGlobalRect().GetCenter()); break;
-            case 19: Release(_commands.SandboxTab(1).GetGlobalRect().GetCenter()); break;
+                // Build-58: call Gandalf (4 Fate) at Player 1's Citadel 5 with its training button.
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-citadel.png");
+                Press(_commands.TrainButton(Array.IndexOf(SelectedProducer()!.Units,SandboxGandalf)).GetGlobalRect().GetCenter()); break;
+            case 19: Release(_commands.TrainButton(Array.IndexOf(SelectedProducer()!.Units,SandboxGandalf)).GetGlobalRect().GetCenter()); break;
             case 21:
+            {
+                var gandalf = world.Units.FirstOrDefault(u => u.Team == 0 && u.Present && u.Definition.Name == SandboxGandalf);
+                _sandboxMapChecks["gandalf_called_with_fate_on_the_hero_bar"] = gandalf != null && world.Economies[0].Fate == world.MaxFate
+                    && gandalf.Definition.Abilities is { Length: 4 } && _heroBar.HeroIn(0) == gandalf.Id
+                    && !world.CanTrain(0,SelectedProducer()!.Id,Array.IndexOf(SelectedProducer()!.Units,SandboxGandalf),out string again) && again.EndsWith("already in play");
+                // A capture run shows Gandalf's four source abilities: select him as his hero portrait does.
+                if (_capture != "" && gandalf != null) ChooseHero(gandalf.Id,center: true,append: false);
+                Press(_commands.SandboxTab(1).GetGlobalRect().GetCenter()); break;
+            }
+            case 22:
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-gandalf.png");
+                Release(_commands.SandboxTab(1).GetGlobalRect().GetCenter()); break;
+            case 24:
             {
                 _sandboxMapChecks["console_tab_commands_player_2"] = PlayerTeam == 1 && _commands.SandboxTab(1).ButtonPressed && _selectedStructure == null;
                 // A box around a Player 1 worker alone, clear of the console.
@@ -114,7 +141,7 @@ public partial class Main
                 _sandboxMapWorker = worker.u.Id;
                 StructureSmokeDrag(worker.At-new Vector2(22,22),worker.At+new Vector2(22,22)); break;
             }
-            case 23:
+            case 26:
                 _sandboxMapChecks["box_takes_command_of_player_1"] = PlayerTeam == 0 && _selected.Contains(_sandboxMapWorker) && _selected.All(id => world.Units[id].Team == 0);
                 if (_capture != "")
                 {
@@ -123,17 +150,18 @@ public partial class Main
                     _distance = 105; UpdateCamera(); _ = CaptureFrame(false);
                 }
                 break;
-            case 24:
+            case 27:
                 // The debug menu's instant building and training turns off and on for both players here.
                 _debugInstant.ButtonPressed = false;
                 bool off = world.InstantBuildTeams.Count == 0;
                 _debugInstant.ButtonPressed = true;
                 _sandboxMapChecks["instant_toggle_serves_both_players"] = off && world.InstantBuildTeams.SetEquals(teams); break;
-            case 26:
+            case 29:
                 bool passed = _sandboxMapChecks.Count == SandboxMapSmokeChecks && _sandboxMapChecks.Values.All(v => v);
                 var report = new { build = BuildInfo.Label,checks = _sandboxMapChecks,passed,held_frames = _sandboxMapHold,missing = _sandboxMapMissing,
                     bases = teams.Select(t => new { team = t,buildings = world.ConstructionSites.Values.Where(s => s.Team == t).Select(s => new { world.SiteRules(s).Name,s.X,s.Z,s.Health }),
-                        population = new { used = world.PopulationUsed(t),capacity = world.PopulationCapacity(t) },food = world.Economies[t].Food,ore = world.Economies[t].Ore }),
+                        population = new { used = world.PopulationUsed(t),capacity = world.PopulationCapacity(t) },food = world.Economies[t].Food,ore = world.Economies[t].Ore,
+                        fate = world.Economies[t].Fate,heroes = world.Units.Where(u => u.Team == t && u.Present && u.Definition.Hero).Select(u => u.Definition.Name) }),
                     status = _status.Text,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"sandbox-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("SANDBOX_MAP_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(passed ? 0 : 1); break;

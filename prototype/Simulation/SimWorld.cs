@@ -27,6 +27,17 @@ public sealed class SimUnit(int id, int team, int x, int z)
     /// <summary>Researched bonuses (source TechniqueUnitModifiers) added to weapon DPS and armor.</summary>
     public int TechniqueDpsMilli { get; internal set; }
     public int TechniqueArmorMilli { get; internal set; }
+    /// <summary>Researched missile range multiplier (Eagle Fletching) and the change a replaced missile weapon makes to
+    /// the missile DPS (Razored Edge, Flaming Axe).</summary>
+    public int TechniqueRangePpm { get; internal set; } = 1_000_000;
+    public int TechniqueMissileDpsMilli { get; internal set; }
+    /// <summary>Attack reach: a ranged unit's missile range with its research.</summary>
+    public int ReachMm => Definition.IsRanged ? (int)((long)Definition.ReachMm*TechniqueRangePpm/1_000_000) : Definition.ReachMm;
+    /// <summary>The strongest Siege Aura over the unit this tick (Gimli: x1.5 damage against buildings within 10 m).</summary>
+    public int SiegeAuraPpm { get; internal set; } = 1_000_000;
+    /// <summary>Guardian Wind: missiles hitting the unit deal this share of their damage until the tick (Legolas: 1% for 12 s).</summary>
+    public int MissileWardPpm { get; internal set; } = 1_000_000;
+    public int MissileWardUntil { get; internal set; } = -1;
     /// <summary>The bonuses of the places of power its team controls (build-54), recomputed when one changes hands.</summary>
     public int PlaceDpsMilli { get; internal set; }
     public int PlaceArmorMilli { get; internal set; }
@@ -52,7 +63,7 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public StatusProtection Immunities => (Definition.Abilities ?? []).Where(a => a.Passive)
         .Aggregate(StatusProtection.None,(flags,a) => flags | a.Immunities);
     public int MeleeDamageRate => (Definition.Abilities?.FirstOrDefault(a => a.Passive && a.Kind == AbilityKind.Fury)?.DpsMilli
-        ?? Definition.DpsMilli)+TechniqueDpsMilli+PlaceDpsMilli;
+        ?? Definition.DpsMilli)+TechniqueDpsMilli+PlaceDpsMilli+(Definition.IsRanged ? TechniqueMissileDpsMilli : 0);
     public int AbilityDamageScale(int targetType) => Definition.Abilities?.FirstOrDefault(a => a.Passive && a.Kind is AbilityKind.Fury or AbilityKind.Bane
         && a.BonusTargets?.Contains(targetType) == true)?.BonusScale ?? 1_000_000;
     public int Facing { get; internal set; }
@@ -810,6 +821,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         text += ":pace:"+string.Join(';',_walkingTeams.OrderBy(p => p.Key).Select(p => $"{p.Key},{p.Value}"));
         text += ":abilities:"+string.Join(';',Units.Select(u => $"{u.AbilitySlot},{u.CastStartTick},{u.CastSerial},{u.CastApplied}:{string.Join(',',u.AbilityReadyAt)}"));
         text += ":ring:"+string.Join(';',Units.Select(u => $"{u.RingActive}:{string.Join(',',u.AbilityRechargeCarry)}"));
+        if (Units.Any(u => u.MissileWardUntil >= 0)) text += ":ward:"+string.Join(';',Units.Select(u => $"{u.MissileWardPpm},{u.MissileWardUntil}"));
         text += EconomyDigest();
         text += ConstructionDigest();
         text += ProductionDigest();

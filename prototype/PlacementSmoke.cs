@@ -54,10 +54,10 @@ public partial class Main
                 _placementCells = VisiblePlacementCells(SmokeCamp,SmokeBarracks,SmokeCamp);
                 _placementChecks["build_page_replaces_unit_commands"] = _buildMenu && !_commands.BuildButton.Visible && _commands.BuildBackButton.Visible
                     && !_commands.ButtonFor(OrderKind.Attack).Visible && !_commands.ButtonFor(OrderKind.Patrol).Visible;
-                // Seven Tier 1 buildings in the original panel order, then the three Tier 2 buildings (build-44).
-                _placementChecks["tier1_then_tier2_in_original_order"] = _constructionChoices.Length == 10 && _constructionChoices.All(c => _commands.ConstructionButton(c.Building) is { Visible: true,Icon: not null })
-                    && !_commands.CancelConstructionButton.Visible && _constructionChoices[3].Building == "BUILDING_G_TOWER"
-                    && _constructionChoices[9].Building == "BUILDING_G_SKILLS_STRUCTURE" && _commands.ConstructionButton("BUILDING_G_SKILLS_STRUCTURE").Disabled;
+                // Build: the seven Tier 1 buildings in the original panel order; Tiers 2 and 3 moved to Advanced (build-58).
+                _placementChecks["basic_page_holds_tier1_in_original_order"] = _constructionChoices.Length == 13 && PageChoices() is { Length: 7 } basic
+                    && basic.All(c => _commands.ConstructionButton(c.Building) is { Visible: true,Icon: not null })
+                    && !_commands.CancelConstructionButton.Visible && basic[3].Building == "BUILDING_G_TOWER" && !_commands.AdvancedBuildButton.Visible;
                 _placementChecks["unaffordable_citadel_disabled"] = _commands.ConstructionButton("BUILDING_G_TOWN_CENTER_LEVEL_1") is { Disabled: true } citadelButton
                     && citadelButton.TooltipText.Contains("Insufficient resources") && !_commands.ConstructionButton(SmokeCamp).Disabled;
                 Press(_commands.ConstructionButton(SmokeCamp).GetGlobalRect().GetCenter()); break;
@@ -108,6 +108,15 @@ public partial class Main
                     && _commands.ConstructionButton(SmokeCamp).GetChildren().OfType<Label>().Any(l => l.Text == CommandPanel.GridKeys[campSlot].ToString());
                 PushKey(Key.Escape); break;
             case 30: PushKey(Key.Escape); break;
+            case 31: PushGridKey(1); break; // W opens Advanced: the second row of the original worker palette (good-018).
+            case 32:
+                _placementChecks["advanced_page_holds_tiers_2_and_3_in_palette_order"] = _buildMenu && PageChoices().Select(c => c.Building).SequenceEqual(
+                        ["BUILDING_G_SKILLS_STRUCTURE","BUILDING_G_RANGER_BARRACKS","BUILDING_G_ARMORY","BUILDING_G_STABLES","BUILDING_G_ELF_BARRACKS","BUILDING_G_HOSPITAL"])
+                    && PageChoices().All(c => _commands.ConstructionButton(c.Building) is { Visible: true,Icon: not null,Disabled: true })
+                    && _commands.ConstructionButton("BUILDING_G_SKILLS_STRUCTURE").TooltipText.Contains("Requires Citadel 2")
+                    && _commands.ConstructionButton("BUILDING_G_HOSPITAL").TooltipText.Contains("Requires Citadel 3");
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-advanced.png");
+                PushKey(Key.Escape); break;
             case 40:
                 if (Hold(Site(SmokeCamp,_placementCells[0]) == null)) break;
                 var camp = Site(SmokeCamp,_placementCells[0]);
@@ -179,7 +188,7 @@ public partial class Main
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-swordsman.png");
                 break;
             case 1906:
-                var report = new { build = BuildInfo.Label,checks = _placementChecks,passed = _placementChecks.Count == 27 && _placementChecks.Values.All(v => v),
+                var report = new { build = BuildInfo.Label,checks = _placementChecks,passed = _placementChecks.Count == 28 && _placementChecks.Values.All(v => v),
                     cells = _placementCells,held_frames = _placementHold,sites = world.ConstructionSites.Values.Where(s => s.Building != null).Select(s => new { s.Id,s.Building,s.X,s.Z,s.Team,s.Complete,s.Health }),
                     bank = new { world.Economies[0].FoodMilli,world.Economies[0].OreMilli },population = new { used = world.PopulationUsed(0),capacity = world.PopulationCapacity(0) },
                     selected = _selected,display = new { _commands.DisplayedName,_commands.DisplayedHealth,_commands.SingleUnitDetailsVisible },

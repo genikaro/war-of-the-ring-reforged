@@ -31,8 +31,11 @@ public sealed class UnitGrid
     {
         unit.Grid = this; unit.GridBucket = Row(unit.Z)*_columns+Column(unit.X);
         _buckets[unit.GridBucket].Add(unit); Count++;
-        Measure(unit.Definition);
+        Measure(unit.Definition); MeasureReach(unit.ReachMm);
     }
+
+    /// <summary>A unit's researched reach (Eagle Fletching) can exceed its definition's.</summary>
+    internal void MeasureReach(int reachMm) => MaxReachMm = Math.Max(MaxReachMm,reachMm);
 
     public void Rebuild(IEnumerable<SimUnit> units)
     {

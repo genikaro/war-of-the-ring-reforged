@@ -74,7 +74,7 @@ public partial class Main
         panel.ShowResources(!_observing,armies: !_observing);
         if (_observing) return;
         var bank = _world!.Economies.GetValueOrDefault(PlayerTeam);
-        panel.SetResources(_world.PopulationUsed(PlayerTeam),_world.PopulationCapacity(PlayerTeam),bank?.Food ?? _startState.Food,bank?.Ore ?? _startState.Ore);
+        panel.SetResources(_world.PopulationUsed(PlayerTeam),_world.PopulationCapacity(PlayerTeam),bank?.Food ?? _startState.Food,bank?.Ore ?? _startState.Ore,bank?.Fate ?? 0);
     }
 
     private void LoadSkirmishEconomy(JsonElement data)

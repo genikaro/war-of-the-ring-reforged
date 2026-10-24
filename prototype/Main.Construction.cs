@@ -9,6 +9,8 @@ public partial class Main
     private string? _constructionBuilding;
     /// <summary>Worker build page open, for the selection it was opened with.</summary>
     private bool _buildMenu;
+    /// <summary>The open build page is Advanced: the buildings a Citadel upgrade opens (build-58).</summary>
+    private bool _advancedBuildPage;
     private string _buildMenuSelection = "";
     private readonly Dictionary<string,string> _constructionFiles = [];
     private (string Building,string Portrait)[] _constructionChoices = [];
@@ -82,12 +84,20 @@ public partial class Main
         }
         foreach (var item in defenses.EnumerateObject())
         {
-            var origin = item.Value.GetProperty("origin_mm");
-            var defense = new DefenseDefinition(item.Value.GetProperty("dps_milli").GetInt32(),item.Value.GetProperty("minimum_range_mm").GetInt32(),
-                item.Value.GetProperty("range_mm").GetInt32(),item.Value.GetProperty("rates_milli").EnumerateArray().Select(r => r.GetInt32()).ToArray(),
-                origin[0].GetInt32(),origin[1].GetInt32(),origin[2].GetInt32());
-            defense.Validate(); world.Defenses.Add(item.Name,defense);
-            LoadProjectileStyle(item.Name,item.Value.GetProperty("projectile"));
+            // Build-58 lists every weapon of a building (the Ballista Tower has two); older packs hold one object.
+            var weapons = item.Value.ValueKind == JsonValueKind.Array ? item.Value.EnumerateArray().ToArray() : [item.Value];
+            var loaded = weapons.Select((weapon,index) =>
+            {
+                var origin = weapon.GetProperty("origin_mm");
+                var defense = new DefenseDefinition(weapon.GetProperty("dps_milli").GetInt32(),weapon.GetProperty("minimum_range_mm").GetInt32(),
+                    weapon.GetProperty("range_mm").GetInt32(),weapon.GetProperty("rates_milli").EnumerateArray().Select(r => r.GetInt32()).ToArray(),
+                    origin[0].GetInt32(),origin[1].GetInt32(),origin[2].GetInt32());
+                defense.Validate();
+                LoadProjectileStyle(index == 0 ? item.Name : item.Name+"#"+index,weapon.GetProperty("projectile"));
+                return defense;
+            }).ToArray();
+            world.Defenses.Add(item.Name,loaded[0]);
+            if (loaded.Length > 1) world.ExtraDefenses.Add(item.Name,loaded[1..]);
         }
         foreach (var radius in construction.GetProperty("placement_radius_mm").EnumerateObject()) world.PlacementRadiusMm.Add(radius.Name,radius.Value.GetInt32());
         var order = construction.GetProperty("order").EnumerateArray().Select(n => n.GetString()!).ToArray();
@@ -139,10 +149,18 @@ public partial class Main
         return hit == null ? -1 : _world!.Navigation.Cell((int)Math.Round(hit.Position.X*1000),(int)Math.Round(hit.Position.Z*1000));
     }
 
-    private void OpenBuildMenu(bool open)
+    /// <summary>The buildings of the open build page, in palette order: Build holds Tier 1, Advanced every building that
+    /// asks for an upgraded Citadel.</summary>
+    private (string Building,string Portrait)[] PageChoices() => _constructionChoices.Where(c => AdvancedBuilding(c.Building) == _advancedBuildPage).ToArray();
+
+    private bool AdvancedBuilding(string building) => _world!.BuildingRules.TryGetValue(building,out var rules) && rules.Prerequisites.Any(_world.Upgrades.ContainsValue);
+
+    private void OpenBuildMenu(bool open) => OpenBuildMenu(open,advanced: false);
+
+    private void OpenBuildMenu(bool open,bool advanced)
     {
         ClearConstructionTargeting(); _orders.Cancel();
-        _buildMenu = open && _skirmish && SelectedWorkers().Any();
+        _buildMenu = open && _skirmish && SelectedWorkers().Any(); _advancedBuildPage = advanced;
         _buildMenuSelection = string.Join(',',_selected.Order());
     }
 
@@ -331,7 +349,7 @@ public partial class Main
             }
             if (view.Player != null) view.Player.SpeedScale = _paused ? 0 : 1;
             // Construction health climbs with the work done, so the health bar doubles as the progress bar.
-            view.Bar.Refresh(site.Health,rules.MaxHealth);
+            view.Bar.Refresh(site.Health,_world!.SiteMaxHealth(site));
         }
     }
 }

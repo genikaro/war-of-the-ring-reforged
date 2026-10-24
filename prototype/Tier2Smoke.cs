@@ -44,7 +44,7 @@ public partial class Main
             string building = buildings[_tier2Placed];
             switch (_tier2Step++)
             {
-                case 0: Click(_commands.BuildButton.GetGlobalRect().GetCenter()); break;
+                case 0: Click((AdvancedBuilding(building) ? _commands.AdvancedBuildButton : _commands.BuildButton).GetGlobalRect().GetCenter()); break;
                 case 1: _tier2Cells = VisiblePlacementCells(building); Click(_commands.ConstructionButton(building).GetGlobalRect().GetCenter()); break;
                 case 3: Click(PlacementPoint(_tier2Cells[0])); break;
                 case >= 5 when Site(building) is { Complete: true }: _tier2Placed++; _tier2Step = 0; break;

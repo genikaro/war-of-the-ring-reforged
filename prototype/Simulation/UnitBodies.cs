@@ -18,7 +18,7 @@ public sealed partial class SimWorld
     private static int FightSpacing(SimUnit a,SimUnit b) => BodySeparation(a,b)+400;
     private static int ApproachSpacing(SimUnit a,SimUnit b) => BodySeparation(a,b)+300;
     private static int AttackRange(SimUnit a,SimUnit b)
-        => a.Definition.IsRanged ? a.Definition.ReachMm
+        => a.Definition.IsRanged ? a.ReachMm
             : Math.Max(a.Definition.ReachMm,a.Definition.BodyRadiusMm+b.Definition.BodyRadiusMm+a.Definition.AttackGapMm);
     private static int MeleeRange(SimUnit a,SimUnit b)
         => a.Definition.HasMelee ? Math.Max(a.Definition.MeleeReachMm,

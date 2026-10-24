@@ -14,9 +14,9 @@ RALLY_BANNER_FILE = 'objects/' + RALLY_BANNER + '.glb'
 
 
 def production_data(resolver, roster):
-    """Source UnitProduced order per skirmish producer, with each unit's source BuildingRequired list. Units needing
-    a building beyond the skirmish set, fate-point calls and units outside the exported roster are listed as
-    unavailable with the reason."""
+    """Source UnitProduced order per skirmish producer, with each unit's source BuildingRequired list, its Fate cost
+    (source PowerCost) and its hero group. Units needing a building beyond the skirmish set and units outside the
+    exported roster are listed as unavailable with the reason."""
     units, buildings = resolver.db['Units'], resolver.db['Buildings']
     variables = resolver.db['WorldVariables'].records[0]
     producers, rules = {}, {}
@@ -29,23 +29,31 @@ def production_data(resolver, roster):
             source = units.get(unit)
             required = [buildings.get(source['BuildingRequired%d' % i]).name for i in range(1, 5) if source['BuildingRequired%d' % i] >= 0]
             missing = [building for building in required if building not in skirmish_map.SKIRMISH_BUILDINGS]
-            reason = ('requires ' + ', '.join(missing) if missing else 'requires fate points' if source['PowerCost']
-                      else None if unit in roster else 'model and rules not exported')
+            reason = 'requires ' + ', '.join(missing) if missing else None if unit in roster else 'model and rules not exported'
             if reason:
                 producers[name]['unavailable'][unit] = reason
                 continue
             producers[name]['units'].append(unit)
             rules[unit] = {'display_name': source['Name'], 'food_cost': source['FoodCost'], 'ore_cost': source['OreCost'],
+                           'fate_cost': source['PowerCost'],
                            'population': source['PopulationCost'], 'duration_ticks': (source['UnitTrainingTime']+49)//50,
-                           'unique': bool(source['IsUnique']), 'prerequisites': required}
+                           'unique': bool(source['IsUnique']), 'unique_group': source['UniqueGroup'], 'prerequisites': required}
+    # Citadel levels 2-5 hold 1, 2, 3 and 3 heroes of the source unique group 0 (Gimli, Aragorn, Legolas).
+    capacity = {name: {'group': record['UniqueGroupBuildingAffects'], 'amount': record['AmountBuildingAffectsUniqueGroup']}
+                for name in skirmish_map.SKIRMISH_BUILDINGS
+                for record in [buildings.get(name)] if record['UniqueGroupBuildingAffects'] >= 0}
     return {'format_version': 1, 'ticks_per_second': 20, 'producers': producers, 'units': rules,
             'population_provided': {name: buildings.get(name)['AdditionalPopAdded'] for name in skirmish_map.SKIRMISH_BUILDINGS},
+            'unique_group_capacity': capacity, 'max_fate': variables['MaxPowerPoints'],
             'initial_population_capacity': variables['DefaultInitialPopulationCapacity'],
             'max_population': variables['MaxPopulationCap'], 'rally_banner': RALLY_BANNER_FILE,
-            'adapter': 'UnitTrainingTime milliseconds round up to 20 Hz ticks. Cost is paid and population reserved when a unit is queued. '
-                       'Cancellation refunds the full cost; the queue holds five units; units appear on the nearest free cell to the '
-                       'building center. These three rules are not traced to source data. A unique unit (source IsUnique) cannot be queued '
-                       'while one is alive or queued; the source HeroDeathRefreshTime is not applied.'}
+            'adapter': 'UnitTrainingTime milliseconds round up to 20 Hz ticks. Cost, Fate included, is paid and population reserved '
+                       'when a unit is queued. Cancellation refunds the full cost; the queue holds five units; units appear on the '
+                       'nearest free cell to the building center. These three rules are not traced to source data. A unique unit '
+                       '(source IsUnique) cannot be queued while one is alive or queued; the source HeroDeathRefreshTime is not applied. '
+                       'Heroes of a unique group (Gimli, Aragorn, Legolas) are capped by the best standing building of the team that '
+                       'holds that group (source AmountBuildingAffectsUniqueGroup: Citadel 2-5 hold 1, 2, 3, 3); whether several '
+                       'Citadels add up is unverified. Fate is not earned yet: a team starts with none, the Sandbox map keeps it full.'}
 
 
 def export(output, resolver, roster):

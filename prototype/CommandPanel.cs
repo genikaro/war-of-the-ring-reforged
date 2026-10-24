@@ -36,8 +36,8 @@ public partial class CommandPanel : Control
     private TextureRect _background = null!;
     private Label _title = null!, _order = null!, _hint = null!, _armies = null!;
     private Control _resources = null!;
-    private TextureRect _populationIcon = null!, _foodIcon = null!, _oreIcon = null!;
-    private Label _populationText = null!, _foodText = null!, _oreText = null!;
+    private TextureRect _populationIcon = null!, _foodIcon = null!, _oreIcon = null!, _fateIcon = null!;
+    private Label _populationText = null!, _foodText = null!, _oreText = null!, _fateText = null!;
     private TextureButton _menu = null!;
     private TextureButton _walkRun = null!;
     private BattleMinimap _map = null!;
@@ -92,9 +92,11 @@ public partial class CommandPanel : Control
         _order = Text("",new(265,192),new(505,18),12); _content.AddChild(_order);
         _armies = Text("",new(787,8),new(229,18),12); _content.AddChild(_armies);
         _resources = new Control { Position = new(787,6),Size = new(229,22),Visible = false,MouseFilter = MouseFilterEnum.Ignore }; _content.AddChild(_resources);
-        (_populationIcon,_populationText) = ResourceCell(0,10,"Population · units / capacity");
-        (_foodIcon,_foodText) = ResourceCell(72,21,"Food");
-        (_oreIcon,_oreText) = ResourceCell(150,24,"Ore");
+        (_populationIcon,_populationText) = ResourceCell(0,10,"Population · units / capacity",52);
+        (_foodIcon,_foodText) = ResourceCell(65,21,"Food",40);
+        (_oreIcon,_oreText) = ResourceCell(130,24,"Ore",40);
+        // Build-58: Fate points pay for the heroes Gimli, Aragorn, Legolas and Gandalf (not earned yet; the Sandbox keeps them full).
+        (_fateIcon,_fateText) = ResourceCell(198,13,"Fate · pays for heroes (at most 20)",16);
         _roster = new Control { Position = new(265,84),Size = new(505,104),MouseFilter = MouseFilterEnum.Ignore }; _content.AddChild(_roster);
         _single = new Control { Position = new(265,59),Size = new(505,129),Visible = false,MouseFilter = MouseFilterEnum.Ignore }; _content.AddChild(_single);
         _singlePortrait = new Button { Size = new(62,62),ExpandIcon = true,FocusMode = FocusModeEnum.None };
@@ -173,19 +175,20 @@ public partial class CommandPanel : Control
         var config = new ConfigFile(); config.SetValue("hud","scale_percent",ScalePercent); config.Save("user://interface.cfg");
     }
 
-    private (TextureRect Icon,Label Text) ResourceCell(float x,float iconWidth,string tip)
+    private (TextureRect Icon,Label Text) ResourceCell(float x,float iconWidth,string tip,float textWidth)
     {
         var icon = new TextureRect { Position = new(x,3),Size = new(iconWidth,15),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Stop,TooltipText = tip };
-        var text = Counter("",new(x+iconWidth+4,3),new(74-iconWidth,15),14); text.MouseFilter = MouseFilterEnum.Stop; text.TooltipText = tip;
+        var text = Counter("",new(x+iconWidth+3,3),new(textWidth,15),14); text.MouseFilter = MouseFilterEnum.Stop; text.TooltipText = tip;
         _resources.AddChild(icon); _resources.AddChild(text); return (icon,text);
     }
 
-    /// <summary>Skirmish resource strip: population, food and ore, in the original icon order.</summary>
+    /// <summary>Skirmish resource strip: population, food and ore, in the original icon order, then Fate.</summary>
     public void ShowResources(bool visible,bool armies = true) { _resources.Visible = visible; _armies.Visible = !visible && armies; }
-    public void SetResources(int population,int capacity,int food,int ore)
+    public void SetResources(int population,int capacity,int food,int ore,int fate = 0)
     {
-        _populationText.Text = $"{population}/{capacity}"; _foodText.Text = food.ToString(); _oreText.Text = ore.ToString();
+        _populationText.Text = $"{population}/{capacity}"; _foodText.Text = food.ToString(); _oreText.Text = ore.ToString(); _fateText.Text = fate.ToString();
     }
+    public string FateReadout => _fateText.Text;
     public bool ResourcesVisible => _resources.Visible;
     public string ResourceReadout => $"{_populationText.Text} {_foodText.Text} {_oreText.Text}";
     public bool ResourceIconsLoaded => _populationIcon.Texture != null && _foodIcon.Texture != null && _oreIcon.Texture != null;
@@ -248,6 +251,7 @@ public partial class CommandPanel : Control
         _populationIcon.Texture = _art.GetValueOrDefault("console_g_resourcepopulation");
         _foodIcon.Texture = _art.GetValueOrDefault("console_g_resourcefood");
         _oreIcon.Texture = _art.GetValueOrDefault("console_g_resourcewater");
+        _fateIcon.Texture = _art.GetValueOrDefault("console_g_powerchit");
         foreach (var command in Commands) _buttons[command.Kind].Icon = _art[command.Icon];
         _map.Configure(world);
     }
@@ -262,7 +266,10 @@ public partial class CommandPanel : Control
 
     public static string OrderName(OrderKind kind) => kind switch { OrderKind.AttackMove => "Attack-move",OrderKind.HoldGround => "Hold Position",OrderKind.ForceAttack => "Force Attack",OrderKind.ToggleWalkRun => "Walk / Run",OrderKind.UseAbility => "Greater Kingsfoil",OrderKind.PlaceBuilding => "Build",_ => kind.ToString() };
     public static string PortraitName(string name) => name switch { "Aragorn" => "Portrait_G_Aragorn","Frodo" => "Portrait_G_Frodo","Elf Knight" or "Elven Knight" => "Portrait_G_Elven_Knight","Elven Archer" => "Portrait_G_Elven_Archer","Human Worker" => "Portrait_G_Human_Worker","Gondor Swordsman" => "Portrait_G_Gondor_Swordsman","Dwarf Axethrower" => "Portrait_G_Dwarven_Axethrower",
-        "Rohan Rider" => "Portrait_G_Rohan_Rider","Dwarf Shieldbreaker" => "Portrait_G_Dwarven_Shieldbreaker","Ranger" => "Portrait_G_Ranger",_ => "Portrait_E_Uruk_Hai" };
+        "Rohan Rider" => "Portrait_G_Rohan_Rider","Dwarf Shieldbreaker" => "Portrait_G_Dwarven_Shieldbreaker","Ranger" => "Portrait_G_Ranger",
+        // Build-58: Tier 3-4 units and the Fate heroes (source Units Portrait records).
+        "Elven Lightbearer" => "Portrait_G_Elven_Lightbringer","Beorning" => "Portrait_G_Beorning","Huorn" => "Portrait_G_Huorn",
+        "Gimli" => "Portrait_G_Gimli","Legolas" => "Portrait_G_Legolas","Gandalf the Grey" => "Portrait_G_Gandalf",_ => "Portrait_E_Uruk_Hai" };
 
     public void Refresh(IReadOnlyList<SimUnit> units,Func<int,string> name,OrderKind? pending,bool paused,IReadOnlyList<int[]>? groups = null,int allies = 0,int enemies = 0,bool walking = false,int tick = 0,int pendingAbilitySlot = -1)
     {
@@ -382,11 +389,12 @@ public partial class CommandPanel : Control
             int remaining = Math.Max(0,hero!.AbilityReadyAt[slot]-tick);
             string key = "QWER"[slot].ToString();
             button.Icon = _art.GetValueOrDefault(ability.Icon);
-            button.Disabled = ability.Passive || remaining > 0 || hero.Casting;
+            bool unsimulated = ability.Kind == AbilityKind.Unsimulated;
+            button.Disabled = ability.Passive || unsimulated || remaining > 0 || hero.Casting;
             button.SetPressedNoSignal(ability.Kind == AbilityKind.Ring ? hero.RingActive : !ability.Passive && pending == OrderKind.UseAbility && pendingSlot == slot);
-            button.AddThemeColorOverride("icon_disabled_color",ability.Passive ? Colors.White : new Color(.6f,.6f,.6f,1));
+            button.AddThemeColorOverride("icon_disabled_color",ability.Passive && !unsimulated ? Colors.White : new Color(.6f,.6f,.6f,1));
             _abilityLabels[slot].Text = remaining > 0 && !ability.Passive ? $"{remaining/20f:0.0}s" : "";
-            _abilityHotkeys[slot].Text = ability.Passive ? "" : key;
+            _abilityHotkeys[slot].Text = ability.Passive || unsimulated ? "" : key;
             _abilityRecharge[slot].Size = new(54,ability.RechargeTicks > 0 ? 54*Math.Clamp(remaining/(float)ability.RechargeTicks,0,1) : 0);
             button.TooltipText = ability.Kind switch {
                 AbilityKind.Ring => $"{ability.Name} [{key}] · {(hero.RingActive ? "Worn" : "Off")}\nToggle: Frodo turns invisible to enemies and will not fight.\n"
@@ -395,6 +403,9 @@ public partial class CommandPanel : Control
                 AbilityKind.Aura => $"{ability.Name} · Passive\nAllies within {ability.RangeMm/1000} m recharge abilities {ability.RechargeScalePpm/10000}% as fast.",
                 AbilityKind.Heal => $"{ability.Name} [{key}]\nHeal a friendly unit or Aragorn for up to {ability.HealMilli/1000} HP.\n{ability.RangeMm/1000} m range · {ability.RechargeTicks/20}s cooldown. Target must be below 99% health.\nAragorn approaches distant targets. Moving or issuing another order interrupts the cast.",
                 AbilityKind.Fury => $"{ability.Name} · Passive\nWeapon Attack {ability.DpsMilli/1000}. {ability.BonusScale/10000}% damage against Wraiths and Black Riders.\nEquipped for this sandbox trial.",
+                AbilityKind.SiegeAura => $"{ability.Name} · Passive\nAllies within {ability.RangeMm/1000} m of {hero.Definition.DisplayName}, and he himself, deal {ability.BonusScale/10000}% damage to buildings.",
+                AbilityKind.Ward => $"{ability.Name} [{key}]\nAllies within {ability.RangeMm/1000} m take {ability.BonusScale/10000m:0.#}% damage from missiles for {ability.DurationTicks/20}s.\n{ability.RechargeTicks/20}s cooldown. Cast on the spot; another order interrupts it.",
+                AbilityKind.Unsimulated => $"{ability.Name} · not simulated yet\n{ability.Description}"+(ability.RechargeTicks > 0 ? $"\nSource cooldown {ability.RechargeTicks/20}s." : ""),
                 _ => "Immunity · Passive\nProtection from poison, stun, blind and slow.\nCurrent demo enemies do not inflict these effects. Equipped for this sandbox trial." };
         }
     }
@@ -405,9 +416,9 @@ public partial class CommandPanel : Control
     public TextureButton MenuButton => _menu;
     public bool CommandsAvailable => _buttons.Values.All(b => !b.Disabled);
     public bool CommandPaletteEmpty => !_buttons.Values.Concat(_abilities).Concat(_constructionButtons).Concat(_trainButtons)
-        .Concat([_buildButton,_backButton,_cancelConstructionButton,_upgradeButton]).Concat(_researchButtons).Any(b => b.Visible);
+        .Concat([_buildButton,_advancedBuildButton,_backButton,_cancelConstructionButton,_upgradeButton]).Concat(_researchButtons).Any(b => b.Visible);
     public bool HealthCounterCentered => Math.Abs(_singleHealthText.GetRect().GetCenter().Y-_singleHealth.GetRect().GetCenter().Y) < .01f;
-    public bool ResourceCountersCentered => new[] {(_populationIcon,_populationText),(_foodIcon,_foodText),(_oreIcon,_oreText)}
+    public bool ResourceCountersCentered => new[] {(_populationIcon,_populationText),(_foodIcon,_foodText),(_oreIcon,_oreText),(_fateIcon,_fateText)}
         .All(p => Math.Abs(p.Item1.GetRect().GetCenter().Y-p.Item2.GetRect().GetCenter().Y) < .01f);
     public bool SingleUnitDetailsVisible => _single.Visible;
     public string DisplayedVictories => _victoriesValue.Text;

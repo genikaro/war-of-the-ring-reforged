@@ -22,8 +22,15 @@ public partial class Main
                 rules.TryGetProperty("unique",out var unique) && unique.GetBoolean(),
                 // Build-44 exports each unit's source BuildingRequired list.
                 rules.TryGetProperty("prerequisites",out var required) ? required.EnumerateArray().Select(p => p.GetString()!).ToArray()
-                    : throw new InvalidOperationException("Refresh production: python tools/skirmish_production.py --cache converted/skirmish")));
+                    : throw new InvalidOperationException("Refresh production: python tools/skirmish_production.py --cache converted/skirmish"),
+                // Build-58 adds the Fate heroes and their group.
+                rules.TryGetProperty("fate_cost",out var fate) ? fate.GetInt32() : 0,
+                rules.TryGetProperty("unique_group",out var group) ? group.GetInt32() : -1));
         }
+        if (production.TryGetProperty("unique_group_capacity",out var capacity))
+            foreach (var building in capacity.EnumerateObject())
+                world.UniqueGroupCapacity.Add(building.Name,(building.Value.GetProperty("group").GetInt32(),building.Value.GetProperty("amount").GetInt32()));
+        if (production.TryGetProperty("max_fate",out var maxFate)) world.MaxFate = maxFate.GetInt32();
         foreach (var building in production.GetProperty("population_provided").EnumerateObject()) world.PopulationProvided.Add(building.Name,building.Value.GetInt32());
         world.InitialPopulationCapacity = production.GetProperty("initial_population_capacity").GetInt32();
         world.MaxPopulation = production.GetProperty("max_population").GetInt32();

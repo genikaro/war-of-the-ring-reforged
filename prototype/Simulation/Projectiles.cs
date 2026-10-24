@@ -31,8 +31,10 @@ public sealed partial class SimWorld
                 if (ConstructionSites.TryGetValue(arrow.Site,out var site) && site.Team >= 0 && site.Health > 0)
                     DamageSite(Units[arrow.Unit],site,arrow.Attack,arrow.Hit,arrow.DamageMilli,arrow.StartTick);
             }
-            else if (Units[arrow.Target].Present)
-                ApplyHit(arrow.Unit >= 0 ? Units[arrow.Unit] : null,Units[arrow.Target],arrow.Attack,arrow.Hit,arrow.DamageMilli,arrow.StartTick,arrow.Source);
+            else if (Units[arrow.Target] is { Present: true } victim)
+                // Guardian Wind (build-58): a warded unit takes its share of missile damage when the missile lands.
+                ApplyHit(arrow.Unit >= 0 ? Units[arrow.Unit] : null,victim,arrow.Attack,arrow.Hit,
+                    victim.MissileWardUntil > Tick ? arrow.DamageMilli*victim.MissileWardPpm/1_000_000 : arrow.DamageMilli,arrow.StartTick,arrow.Source);
             Projectiles.Remove(arrow);
         }
     }

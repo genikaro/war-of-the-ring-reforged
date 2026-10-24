@@ -2775,6 +2775,8 @@ Today that is Citadel 2, War Camp, Watchtower, Barracks, Dwarf Hall, Wilderness
 Outpost, Ranger Post and Forge. Only Tier 2 exists in the game so far: Tiers 3–5 will
 appear in the Sandbox by themselves once their buildings and upgrades are imported.
 Every unit and all four techniques are on offer; nothing is researched in advance.
+(Build-58 imports them: each side now stands at Citadel 5 with the Ballista Tower,
+Nature's Haven, Elven Sanctuary and House of Lore, and Fate stays full for the heroes.)
 
 **Rules.**
 
@@ -2858,3 +2860,118 @@ worker stays walled in (see the Roadmap's performance backlog).
 
 Validation: `SimulationTests` 894 checks pass; the A/B observer match above; the
 River Raid match.
+
+## Build-58: the rest of the Good tech tree, and the Fate heroes
+
+The owner asked to continue the Good tech tree in the Sandbox, checked against the
+references and the [Good compendium](../references/original-game/GOOD-COMPENDIUM.md),
+heroes included. Everything below is imported from the source tables into the shared
+content pack, so it reaches every map; the Sandbox simply builds and upgrades all of it.
+
+**Buildings.** Citadel 2 upgrades on to Citadel 3, 4 and 5 (120/120, 125/135 and
+130/150 food/ore, 50 s each; 1250, 1500 and 1750 health, armor 5, 5 and 6). Citadel 3
+opens Nature's Haven (130/135), the Elven Sanctuary (135/135) and the House of Lore
+(95/100); Citadel 4 opens the Watchtower's upgrade to the Ballista Tower (150/150,
+40 s, 500 health). The Ballista Tower keeps the Watchtower's arrows and adds the
+source bolt (`BUILDING_DEFENSES_G_SUPER_TOWER_BOLT`): 35 DPS at 10–22 m, one bolt every
+10 s at its base rate of fire, 350 damage less armor, from its own joint and with its
+own model. Each weapon of a building keeps its own target and cooldown
+(`SimWorld.ExtraDefenses`); garrisons, knockback and the turret's turn are not simulated.
+
+**The Build menu splits in two**, like Warcraft's Basic and Advanced Structures: Build
+(Q or B) holds Tier 1, Build advanced (W or Shift+B) everything that asks for an
+upgraded Citadel. The two pages are the two rows of the original worker palette
+(capture good-018): Citadel, Mill, Foundry, Watchtower, Camp, Barracks, Dwarf Hall;
+then Forge, Ranger Post, Wilderness Outpost, Nature's Haven, Elven Sanctuary, House of
+Lore. That capture also corrected the Tier 2 order (it was the building tree's). Paging
+was left for the owner to decide; this is a default and easy to change.
+
+**Units.** Nature's Haven trains the Beorning (100/70, 3 population) and the Huorn
+(235/200, 5, Citadel 4); the Elven Sanctuary the Elven Archer (80/75, 3) and the Elven
+Lightbearer (100/85, 3, Citadel 4). All stats are the source ones the atlas lists. The
+Lightbearer shoots its source missile (17 m); its bolt model holds no mesh (the look is
+a particle effect, not imported), so a small glowing orb stands in. The Huorn's weapon
+is a source siege weapon: its damage against buildings is multiplied by its
+`SiegeMultiplier`, 3 (`UnitDefinition.SiegePpm`). Bear form, Treeform and the
+Lightbearer's spells are not simulated yet; Protection shows disabled with its
+description.
+
+**Heroes and Fate.** The Citadel now trains all six of its source units: Worker,
+Frodo, then Gimli, Aragorn and Legolas (3 Fate each, Citadel 2) and Gandalf the Grey
+(4 Fate, Citadel 5), in grid slots Q W E R A S. Fate is a fourth counter in the resource
+strip (the source orb art is animated and not imported). Fate is not earned yet
+(exploring, expanding and battling, per the manual): a team starts with none, so outside
+the Sandbox the heroes wait; the Sandbox keeps both sides at the source maximum, 20, and
+the F4 cheat now also grants 10. Training pays Fate on request and cancelling refunds it.
+
+The shared hero limit follows the source: Gimli, Aragorn and Legolas share
+`UniqueGroup` 0, and a Citadel 2, 3, 4 or 5 holds 1, 2, 3 or 3 of them
+(`AmountBuildingAffectsUniqueGroup`). Frodo and Gandalf are outside the group, which
+fits the compendium's live branch with four heroes at Citadel 5. Adapter: the team's
+best standing Citadel sets the limit; whether several Citadels add up is unverified.
+Each hero is unique (one at a time); `HeroDeathRefreshTime`, purchases and levels are
+not simulated, so every ability is equipped as before.
+
+Hero abilities. Aragorn and Frodo keep theirs. New:
+
+- **Siege Aura** (Gimli, passive): allies within 10 m, Gimli included, deal ×1.5
+  damage to buildings (the child spell's `APPLY_BUILDING_DAMAGE_MODIFIER`; overlapping
+  auras do not stack).
+- **Guardian Wind** (Legolas, E): cast on the spot with the source clip; at its
+  toolscript tick every ally within 12 m takes 1% of missile damage for 12 s; 30 s
+  cooldown (`AbilityKind.Ward`). The source particle effects are not imported; a label
+  marks the cast.
+- Sunder, Capture, Trueshot, Elven Speed, Blinding Light, Flame Shield, Negate Ability
+  and Rain of Fire need knockback, stuns, tower capture, ground targeting or spell
+  negation. They show on the hero's card, disabled, with an English description and
+  the source cooldown (`AbilityKind.Unsimulated`).
+
+Legolas is a ranged hero (source missile 16 m, 20 DPS, melee up close).
+
+**Research.** All 32 Good techniques are now listed: 22 are simulated, 10 show in their
+grid slot disabled with the reason (`UnsimulatedTechniques`).
+
+- Every attack and armor chain at the Forge, Wilderness Outpost and House of Lore,
+  three tiers each (75/75, 125/125, 175/175 at Citadel 1 or 2, 3 and 5; the nature
+  chains need Citadel 3, 4 and 5). A later tier **replaces** the earlier one: +1, +2,
+  +3 from the per-unit source rows, as the Elven Archer panel showed 14, 15, 16, 17
+  after each Outpost blade (captures good-035, -046, -056). Build-46 summed them.
+- Eagle Fletching: Elven Archer missile range ×1.2 (`SimUnit.ReachMm`).
+- Razored Edge, then Flaming Axe: the Axethrower's missile weapon is replaced (source
+  weapons 48 and 49: 10 and 10.35 DPS). Their chain target and burning projectile are
+  not simulated.
+- Dwarven Engineering: every building of the team ×1.2 health; standing buildings keep
+  their share of the new maximum (unverified, as the compendium notes).
+- Not simulated: Shield Break, Camouflage, Bear Form, Savage Blow, Treeform, Negate
+  Magic and Light of Lothlórien (ability grants), Lookout Tower and Eagle Eye (sight;
+  there is no fog of war), and Elven Cloaks (no source field carries the cloak).
+
+**Fixes on the way.** Training buttons were laid out in one row, so a fifth or sixth
+unit fell off the console; they now use the 4×3 grid. Hero ability casts used team 0,
+which broke for the Sandbox's Player 2; they use the commanding side. The source repeats
+three unit-pair modifier rows (one named Lightbearer to Rohan Rider points at the
+Lightbearer); the first of each pair is kept, and the repeats agree.
+
+**Bots** climb the new tree by themselves: in the Bilbo's Bluffs observer match Gimli
+reaches Citadel 5 by 14:00, builds every Tier 3 building and researches the blade,
+leather, nature and axe lines, and still wins, now at 30:44 (tick 36883, was 21983).
+Neither bot trains the Tier 3 units or heroes, and Aragorn's tech spending starves his
+army. Bot tuning for the new tiers is open.
+
+Validation:
+
+- `SimulationTests` 915 checks (21 new in `TechTreeChecks`: Fate costs and refunds,
+  the hero limit by Citadel level, tier replacement, range, replaced missile weapons,
+  building health, the Ballista bolt's damage, minimum range and interval, the Huorn's
+  ×3 and Siege Aura's ×1.5 against buildings, Guardian Wind's cast, radius and 1%).
+- Python suite (192 tests), with the source costs, chains, upgrades, hero groups and the
+  Ballista bolt checked against the install.
+- `-SandboxSmoke` (22 checks): Citadel 5, War Camp and Ballista Tower on both sides, all
+  12 producers rallying, every unit and every first research tier on offer, Fate full
+  with all four heroes on offer, and Gandalf called from his Citadel button onto the
+  hero bar with his four abilities.
+- `-PlacementSmoke` (28): the basic page holds Tier 1 in the original order; W opens
+  Advanced with its six buildings in palette order, locked with "Requires Citadel 2/3".
+- The skirmish, construction, structure, production, Dwarf Hall, minimap, Frodo, tech,
+  Tier 2, research, siege, defense, victory, AI, ability, command, orders, observer and
+  setup smokes all pass.

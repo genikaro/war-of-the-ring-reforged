@@ -26,6 +26,9 @@ public sealed class ConstructionSite(int id,int obstacle,int radiusMm,string? bu
     /// <summary>Ticks until a defending building's next arrow, and the unit it is shooting (-1 for none).</summary>
     public int DefenseCooldown { get; internal set; }
     public int DefenseTarget { get; internal set; } = -1;
+    /// <summary>The same for each further weapon (the Ballista Tower's bolt), sized when the building gets one.</summary>
+    public int[] ExtraDefenseCooldowns { get; internal set; } = [];
+    public int[] ExtraDefenseTargets { get; internal set; } = [];
     /// <summary>An upgrade in progress and its fixed-tick progress toward the promoted building.</summary>
     public bool Upgrading { get; internal set; }
     public int UpgradeTicks { get; internal set; }
@@ -141,7 +144,7 @@ public sealed partial class SimWorld
         }
         var rules = SiteRules(site); var bank = Economies[unit.Team];
         bank.FoodMilli -= rules.FoodCost*1000L; bank.OreMilli -= rules.OreCost*1000L;
-        site.Team = unit.Team; site.Health = Math.Max(1,(int)((long)rules.MaxHealth*rules.InitialHealthPpm/1_000_000));
+        site.Team = unit.Team; site.Health = Math.Max(1,(int)((long)SiteMaxHealth(site)*rules.InitialHealthPpm/1_000_000));
         Navigation.SetObstacle(site.Obstacle,true);
         unit.PlacementWaitTick = -1;
     }
@@ -190,8 +193,8 @@ public sealed partial class SimWorld
             if (working.Length == 0 && !instant) continue;
             long duration = rules.DurationTicks*1_000_000L;
             site.ProgressMicroTicks = instant ? duration : Math.Min(duration,site.ProgressMicroTicks+1_000_000L+(working.Length-1L)*rules.ExtraWorkerPpm);
-            long initial = Math.Max(1,(long)rules.MaxHealth*rules.InitialHealthPpm/1_000_000);
-            site.Health = (int)(initial+(rules.MaxHealth-initial)*site.ProgressMicroTicks/duration);
+            int max = SiteMaxHealth(site); long initial = Math.Max(1,(long)max*rules.InitialHealthPpm/1_000_000);
+            site.Health = (int)(initial+(max-initial)*site.ProgressMicroTicks/duration);
             if (site.ProgressMicroTicks < duration) continue;
             site.Complete = true;
             if (site.Building != null) CompleteBuilding(site,(working.FirstOrDefault() ?? builders[0]).Node);

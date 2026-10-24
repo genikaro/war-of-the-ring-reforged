@@ -16,8 +16,9 @@ OBSTACLE_BASE = 20000
 # Good worker construction panel order observed in local-009 (original 1.01.0011).
 CONSTRUCTION_ORDER = [skirmish_map.CITADEL, BUILDINGS['food'], BUILDINGS['ore'], 'BUILDING_G_TOWER',
                       'BUILDING_G_WORKER_STRUCTURE', 'BUILDING_G_GONDORIAN_BARRACKS', 'BUILDING_G_DWARF_BARRACKS',
-                      # Tier 2, left to right as the captured building tree (local skirmish-013) draws them.
-                      'BUILDING_G_ARMORY', 'BUILDING_G_RANGER_BARRACKS', 'BUILDING_G_SKILLS_STRUCTURE']
+                      # Tiers 2 and 3: the second row of the full worker palette (good-018, 2026-10-23).
+                      'BUILDING_G_SKILLS_STRUCTURE', 'BUILDING_G_RANGER_BARRACKS', 'BUILDING_G_ARMORY',
+                      'BUILDING_G_STABLES', 'BUILDING_G_ELF_BARRACKS', 'BUILDING_G_HOSPITAL']
 
 
 def display_name(name, record):
@@ -87,30 +88,33 @@ def projectile_joint_mm(resolver, building, flag):
 
 
 def defense_data(output, resolver):
-    """Source building defenses of the placeable Tier 1 buildings (the Watchtower): weapon, rates of fire by
-    garrison size, the projectile joint and the arrow's model, launch sounds and trail."""
+    """Source building defenses of every skirmish building (the Watchtower's arrows; the Ballista Tower's arrows and
+    bolt): per building, each BuildingDefenses entry's weapon, rates of fire by garrison size, the projectile joint and
+    the projectile's model, launch sounds and trail."""
     import combat_rules
     defenses = {}
-    for name in CONSTRUCTION_ORDER:
+    rates = ['BaseRateOfFire', 'RateOfFireWithOneUnitGarrisoned', 'RateOfFireWithTwoUnitsGarrisoned',
+             'RateOfFireWithThreeUnitsGarrisoned', 'RateOfFireWithFourUnitsGarrisoned']
+    for name in skirmish_map.SKIRMISH_BUILDINGS:
         record = resolver.db['Buildings'].get(name)
-        if record['BuildingDefenses1'] < 0:
-            continue
-        defense = resolver.db['BuildingDefenses'].get(record['BuildingDefenses1'])
-        weapon = resolver.db['Weapons'].get(defense['WeaponType'])
-        sources = {}
-        def trace(path):
-            path = Path(path).resolve()
-            sources[path.relative_to(wor.ROOT).as_posix() if path.is_relative_to(wor.ROOT) else path.name] =                 hashlib.sha256(path.read_bytes()).hexdigest()
-        rates = ['BaseRateOfFire', 'RateOfFireWithOneUnitGarrisoned', 'RateOfFireWithTwoUnitsGarrisoned',
-                 'RateOfFireWithThreeUnitsGarrisoned', 'RateOfFireWithFourUnitsGarrisoned']
-        defenses[name] = {'defense': defense.name, 'weapon': weapon.name,
-            'dps_milli': round((weapon['CuttingDamagePerSecond']+weapon['FireDamagePerSecond'])*1000),
-            'minimum_range_mm': round(weapon['MinimumRange']*1000), 'range_mm': round(weapon['MaximumRange']*1000),
-            'rates_milli': [round(defense[rate]*1000) for rate in rates],
-            'max_garrison': record['MaxGarrisonedUnits'],
-            'origin_mm': projectile_joint_mm(resolver, name, defense['ProjectileSourceJointFlag']),
-            'projectile': combat_rules.projectile_presentation(output, resolver, None, trace, weapon['AssociatedProjectile']),
-            'sources': sources}
+        for slot in range(1, 4):
+            if record['BuildingDefenses%d' % slot] < 0:
+                continue
+            defense = resolver.db['BuildingDefenses'].get(record['BuildingDefenses%d' % slot])
+            weapon = resolver.db['Weapons'].get(defense['WeaponType'])
+            sources = {}
+            def trace(path):
+                path = Path(path).resolve()
+                sources[path.relative_to(wor.ROOT).as_posix() if path.is_relative_to(wor.ROOT) else path.name] = \
+                    hashlib.sha256(path.read_bytes()).hexdigest()
+            defenses.setdefault(name, []).append({'defense': defense.name, 'weapon': weapon.name,
+                'dps_milli': round((weapon['CuttingDamagePerSecond']+weapon['FireDamagePerSecond'])*1000),
+                'minimum_range_mm': round(weapon['MinimumRange']*1000), 'range_mm': round(weapon['MaximumRange']*1000),
+                'rates_milli': [round(defense[rate]*1000) for rate in rates],
+                'max_garrison': record['MaxGarrisonedUnits'],
+                'origin_mm': projectile_joint_mm(resolver, name, defense['ProjectileSourceJointFlag']),
+                'projectile': combat_rules.projectile_presentation(output, resolver, None, trace, weapon['AssociatedProjectile']),
+                'sources': sources})
     return defenses
 
 

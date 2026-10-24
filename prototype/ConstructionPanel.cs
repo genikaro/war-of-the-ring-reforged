@@ -2,14 +2,17 @@ using Godot;
 using Reforged.Presentation;
 using Reforged.Simulation;
 
-/// <summary>Worker Build menu: a Build button on the unit card opens a page of buildings, as in Warcraft.</summary>
+/// <summary>Worker Build menu: a Build button on the unit card opens a page of buildings, as in Warcraft. Build-58 splits it
+/// like Warcraft's Basic and Advanced Structures: Tier 1 on Build (Q), everything a Citadel upgrade opens on Advanced (W),
+/// the two rows of the original worker palette (good-018).</summary>
 public partial class CommandPanel
 {
     public event Action<string?>? ConstructionChosen;
     public event Action<bool>? BuildMenuChosen;
+    public event Action? AdvancedBuildMenuChosen;
     // Tier 1 buildings in the original worker panel order, then Tier 2, fill the action grid row by row up to Back.
     private readonly Button[] _constructionButtons = new Button[BackSlot];
-    private Button _buildButton = null!,_backButton = null!,_cancelConstructionButton = null!;
+    private Button _buildButton = null!,_advancedBuildButton = null!,_backButton = null!,_cancelConstructionButton = null!;
     private string[] _constructionNames = [];
     private readonly Dictionary<ResourceKind,int> _resourceSlots = [];
     /// <summary>Set by the owner before each refresh: show the building page instead of unit commands.</summary>
@@ -17,6 +20,7 @@ public partial class CommandPanel
     public Button ConstructionButton(string building) => _constructionButtons[Array.IndexOf(_constructionNames,building)];
     public Button ConstructionButton(ResourceKind kind) => _constructionButtons[_resourceSlots[kind]];
     public Button BuildButton => _buildButton;
+    public Button AdvancedBuildButton => _advancedBuildButton;
     public Button BuildBackButton => _backButton;
     public Button CancelConstructionButton => _cancelConstructionButton;
 
@@ -37,8 +41,12 @@ public partial class CommandPanel
             _constructionButtons[index] = button;
         }
         _buildButton = ActionButton(0);
-        _buildButton.TooltipText = $"Build [{GridKeys[0]}] (or B)\nShow the buildings these workers can construct.";
+        _buildButton.TooltipText = $"Build [{GridKeys[0]}] (or B)\nShow the basic buildings these workers can construct.";
         _buildButton.Pressed += () => BuildMenuChosen?.Invoke(true);
+        _advancedBuildButton = ActionButton(1);
+        _advancedBuildButton.TooltipText = $"Build advanced [{GridKeys[1]}] (or Shift+B)\nShow the buildings a Citadel upgrade opens: Forge, Ranger Post, Wilderness Outpost, Nature's Haven, Elven Sanctuary and House of Lore.";
+        _advancedBuildButton.Pressed += () => AdvancedBuildMenuChosen?.Invoke();
+        var advanced = Text("II",new(4,1),new(20,18),15); _advancedBuildButton.AddChild(advanced);
         _backButton = ActionButton(BackSlot,"Back");
         _backButton.TooltipText = $"Back [{GridKeys[BackSlot]}] (or Esc)\nReturn to the unit commands.";
         _backButton.Pressed += () => BuildMenuChosen?.Invoke(false);
@@ -57,6 +65,8 @@ public partial class CommandPanel
         bool page = workers && BuildMenuOpen;
         _buildButton.Visible = workers && !BuildMenuOpen;
         _buildButton.Icon ??= _art.GetValueOrDefault("console_g_action_build");
+        _advancedBuildButton.Visible = _buildButton.Visible;
+        _advancedBuildButton.Icon ??= _art.GetValueOrDefault("console_g_action_build");
         _backButton.Visible = page;
         bool cancel = structure is { UnderConstruction: true } && structure.Team == PlayerTeam;
         _cancelConstructionButton.Visible = cancel; _cancelConstructionButton.Disabled = !cancel;

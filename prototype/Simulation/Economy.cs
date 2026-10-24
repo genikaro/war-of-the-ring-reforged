@@ -38,6 +38,8 @@ public sealed class TeamEconomy(int food,int ore,int foodCapacity = 99999,int or
     public long OreCapacityMilli { get; } = oreCapacity * 1000L;
     public int Food => (int)(FoodMilli / 1000);
     public int Ore => (int)(OreMilli / 1000);
+    /// <summary>Fate points (source PowerCost pays for the heroes), at most SimWorld.MaxFate; not earned yet (build-58).</summary>
+    public int Fate { get; internal set; }
     /// <summary>Everything workers have delivered, for the observer's income readout. Derived from the
     /// deliveries, so it stays out of the state digest.</summary>
     public long GatheredFoodMilli { get; internal set; }
@@ -243,7 +245,7 @@ public sealed partial class SimWorld
         return false;
     }
 
-    private string EconomyDigest() => ":economy:"+string.Join(';',Economies.OrderBy(p => p.Key).Select(p => $"{p.Key},{p.Value.FoodMilli},{p.Value.OreMilli},{p.Value.FoodCapacityMilli},{p.Value.OreCapacityMilli}"))
+    private string EconomyDigest() => ":economy:"+string.Join(';',Economies.OrderBy(p => p.Key).Select(p => $"{p.Key},{p.Value.FoodMilli},{p.Value.OreMilli},{p.Value.FoodCapacityMilli},{p.Value.OreCapacityMilli},{p.Value.Fate}"))
         + ":resources:"+string.Join(';',Resources.Values.Select(r => $"{r.Id},{r.Kind},{r.X},{r.Z},{r.RadiusMm},{r.RemainingMilli},{r.RawFloorMilli},{r.RateMilliPerTick},{r.ImprovedRateMilliPerTick},{r.ImprovedFloorMilli}"))
         + ":workers:"+string.Join(';',Workers.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => $"{p.Key},{p.Value}"))
         + ":depots:"+string.Join(';',DropOffs.Select(d => $"{d.Team},{d.X},{d.Z},{d.RadiusMm},{d.Obstacle}"))

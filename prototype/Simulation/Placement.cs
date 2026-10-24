@@ -185,7 +185,7 @@ public sealed partial class SimWorld
         var rules = BuildingRules[building]; var bank = Economies[team];
         if (!free) { bank.FoodMilli -= rules.FoodCost*1000L; bank.OreMilli -= rules.OreCost*1000L; }
         var site = new ConstructionSite(id,id,placement.InteractionRadiusMm,building,x,z) { Team = team,
-            Health = Math.Max(1,(int)((long)rules.MaxHealth*rules.InitialHealthPpm/1_000_000)) };
+            Health = Math.Max(1,(int)((long)rules.MaxHealth*BuildingHealthPpm(team)/1_000_000*rules.InitialHealthPpm/1_000_000)) };
         ConstructionSites.Add(id,site);
         Navigation.SetObstacle(id,true);
         return site;

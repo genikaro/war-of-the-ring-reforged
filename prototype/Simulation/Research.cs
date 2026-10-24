@@ -1,20 +1,53 @@
 namespace Reforged.Simulation;
 
 /// <summary>A source technique: researched once per team at its building, it adds to the weapon DPS and armor of
-/// the listed unit types, living and trained later.</summary>
+/// the listed unit types, living and trained later. Build-58 effects: a missile range multiplier (Eagle Fletching), a
+/// replaced missile weapon's DPS (Razored Edge, Flaming Axe) and a health multiplier on every building of the team
+/// (Dwarven Engineering).</summary>
 public sealed record TechniqueDefinition(string Name,string DisplayName,string Building,int Slot,int FoodCost,int OreCost,int DurationTicks,
-    string? Prerequisite,string? Previous,IReadOnlyDictionary<string,(int DpsMilli,int ArmorMilli)> Bonuses)
+    string? Prerequisite,string? Previous,IReadOnlyDictionary<string,(int DpsMilli,int ArmorMilli)> Bonuses,
+    IReadOnlyDictionary<string,int>? RangePpm = null,IReadOnlyDictionary<string,int>? MissileDpsMilli = null,int BuildingHealthPpm = 1_000_000)
 {
     public override string ToString() => $"{Name},{Building},{Slot},{FoodCost},{OreCost},{DurationTicks},{Prerequisite},{Previous},"
-        +string.Join('/',Bonuses.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => $"{p.Key}={p.Value.DpsMilli}:{p.Value.ArmorMilli}"));
+        +string.Join('/',Bonuses.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => $"{p.Key}={p.Value.DpsMilli}:{p.Value.ArmorMilli}"))
+        +(RangePpm is { Count: > 0 } ? ",range:"+string.Join('/',RangePpm.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => $"{p.Key}={p.Value}")) : "")
+        +(MissileDpsMilli is { Count: > 0 } ? ",missile:"+string.Join('/',MissileDpsMilli.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => $"{p.Key}={p.Value}")) : "")
+        +(BuildingHealthPpm != 1_000_000 ? ",buildings:"+BuildingHealthPpm : "");
 }
+
+/// <summary>A technique button the simulation cannot carry out yet (an ability grant, sight, a cloak), shown disabled with
+/// the reason so a building's grid lists its whole source research.</summary>
+public sealed record UnsimulatedTechnique(string Name,string DisplayName,string Building,int Slot,int FoodCost,int OreCost,string? Previous,string Reason);
 
 /// <summary>Research at the Forge and Wilderness Outpost: one technique at a time per building, paid on request.</summary>
 public sealed partial class SimWorld
 {
     /// <summary>Command index order for Research (SimCommand.Cell).</summary>
     public List<TechniqueDefinition> Techniques { get; } = [];
+    public List<UnsimulatedTechnique> UnsimulatedTechniques { get; } = [];
     public Dictionary<int,HashSet<string>> Researched { get; } = [];
+
+    /// <summary>A researched technique counts unless the next step of its chain is researched too: tiers replace
+    /// each other (+1, +2, +3 attack on the Elven Archer panel after each Outpost blade, good-035/-046/-056).</summary>
+    private bool TechniqueApplies(int team,TechniqueDefinition technique) => HasResearched(team,technique.Name)
+        && !Techniques.Any(next => next.Previous == technique.Name && HasResearched(team,next.Name));
+
+    /// <summary>The team's building health multiplier (Dwarven Engineering, source HitPointsModifier on all buildings).</summary>
+    public int BuildingHealthPpm(int team) => (int)Techniques.Where(t => t.BuildingHealthPpm != 1_000_000 && TechniqueApplies(team,t))
+        .Aggregate(1_000_000L,(ppm,t) => ppm*t.BuildingHealthPpm/1_000_000);
+
+    /// <summary>A building's maximum health with its team's research.</summary>
+    public int SiteMaxHealth(ConstructionSite site) => site.Team < 0 ? SiteRules(site).MaxHealth
+        : (int)((long)SiteRules(site).MaxHealth*BuildingHealthPpm(site.Team)/1_000_000);
+
+    /// <summary>Unsimulated buttons a building shows in free grid slots: the first step of each chain it cannot carry out.</summary>
+    public IEnumerable<UnsimulatedTechnique> UnsimulatedOptions(ConstructionSite site)
+    {
+        if (site.Building is not { } building) return [];
+        var taken = ResearchOptions(site).Select(t => t.Slot).ToHashSet();
+        return UnsimulatedTechniques.Where(t => Satisfies(building,t.Building) && !taken.Contains(t.Slot)
+            && (t.Previous == null || UnsimulatedTechniques.All(u => u.Name != t.Previous))).GroupBy(t => t.Slot).Select(g => g.First());
+    }
 
     public bool HasResearched(int team,string technique) => Researched.TryGetValue(team,out var done) && done.Contains(technique);
 
@@ -66,21 +99,34 @@ public sealed partial class SimWorld
             if (site.ResearchTicks < rules.DurationTicks) continue;
             site.Research = null; site.ResearchTicks = 0;
             if (!Researched.TryGetValue(site.Team,out var done)) Researched.Add(site.Team,done = []);
+            var standing = rules.BuildingHealthPpm == 1_000_000 ? []
+                : ConstructionSites.Values.Where(s => s.Team == site.Team && s.Health > 0).Select(s => (Site: s,Max: SiteMaxHealth(s))).ToArray();
             done.Add(rules.Name);
+            // ponytail: unverified; every building of the team keeps its share of the raised maximum, as units do.
+            foreach (var (building,max) in standing) building.Health = Math.Max(1,(int)((long)building.Health*SiteMaxHealth(building)/Math.Max(1,max)));
             foreach (var unit in Units.Where(u => u.Team == site.Team && u.Health > 0)) ApplyTechniques(unit);
         }
     }
 
-    /// <summary>The team's researched bonuses for this unit type, recomputed from scratch.</summary>
+    /// <summary>The team's researched bonuses for this unit type, recomputed from scratch; a later tier of a chain replaces
+    /// the earlier one.</summary>
     private void ApplyTechniques(SimUnit unit)
     {
-        unit.TechniqueDpsMilli = unit.TechniqueArmorMilli = 0;
-        foreach (var technique in Techniques.Where(t => HasResearched(unit.Team,t.Name)))
+        unit.TechniqueDpsMilli = unit.TechniqueArmorMilli = unit.TechniqueMissileDpsMilli = 0; unit.TechniqueRangePpm = 1_000_000;
+        foreach (var technique in Techniques.Where(t => TechniqueApplies(unit.Team,t)))
+        {
             if (technique.Bonuses.TryGetValue(unit.Definition.Name,out var bonus))
             { unit.TechniqueDpsMilli += bonus.DpsMilli; unit.TechniqueArmorMilli += bonus.ArmorMilli; }
+            if (technique.RangePpm?.TryGetValue(unit.Definition.Name,out int range) == true)
+            { unit.TechniqueRangePpm = (int)((long)unit.TechniqueRangePpm*range/1_000_000); unit.Grid?.MeasureReach(unit.ReachMm); }
+            // A replaced missile weapon (Razored Edge, then Flaming Axe) changes the missile DPS, not the melee weapon's.
+            if (unit.Definition.IsRanged && technique.MissileDpsMilli?.TryGetValue(unit.Definition.Name,out int missile) == true)
+                unit.TechniqueMissileDpsMilli = missile-unit.Definition.DpsMilli;
+        }
     }
 
     private string ResearchDigest() => ":techniques:"+string.Join(';',Techniques)
         + ":researched:"+string.Join(';',Researched.OrderBy(p => p.Key).Select(p => p.Key+"="+string.Join(',',p.Value.Order(StringComparer.Ordinal))))
-        + ":technique-bonuses:"+string.Join(';',Units.Select(u => $"{u.TechniqueDpsMilli},{u.TechniqueArmorMilli}"));
+        + ":technique-bonuses:"+string.Join(';',Units.Select(u => $"{u.TechniqueDpsMilli},{u.TechniqueArmorMilli}"
+            +(u.TechniqueRangePpm != 1_000_000 || u.TechniqueMissileDpsMilli != 0 ? $",{u.TechniqueRangePpm},{u.TechniqueMissileDpsMilli}" : "")));
 }

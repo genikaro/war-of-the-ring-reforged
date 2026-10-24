@@ -1,9 +1,12 @@
 namespace Reforged.Simulation;
 
+/// <summary>A trainable unit: source costs (FateCost = PowerCost, the heroes' Fate points), population, training time,
+/// uniqueness and hero group (source UniqueGroup: Gimli, Aragorn and Legolas share group 0), and its BuildingRequired list.</summary>
 public sealed record ProductionDefinition(string Unit,string DisplayName,int FoodCost,int OreCost,int Population,int DurationTicks,bool Unique = false,
-    string[]? Prerequisites = null)
+    string[]? Prerequisites = null,int FateCost = 0,int UniqueGroup = -1)
 {
-    public override string ToString() => $"{Unit},{DisplayName},{FoodCost},{OreCost},{Population},{DurationTicks},{Unique},{string.Join('/',Prerequisites ?? [])}";
+    public override string ToString() => $"{Unit},{DisplayName},{FoodCost},{OreCost},{Population},{DurationTicks},{Unique},{string.Join('/',Prerequisites ?? [])}"
+        + (FateCost > 0 || UniqueGroup >= 0 ? $",{FateCost},{UniqueGroup}" : "");
 }
 public sealed record QueuedUnit(string Unit,int Sequence);
 
@@ -35,6 +38,21 @@ public sealed partial class SimWorld
     public Dictionary<string,int> PopulationProvided { get; } = [];
     public int MaxPopulation { get; set; } = 100;
     public int InitialPopulationCapacity { get; set; }
+    /// <summary>Source WorldVariables.MaxPowerPoints: the most Fate a team can hold.</summary>
+    public int MaxFate { get; set; } = 20;
+    /// <summary>Buildings that hold heroes of a unique group: the group and how many (source UniqueGroupBuildingAffects,
+    /// AmountBuildingAffectsUniqueGroup).</summary>
+    public Dictionary<string,(int Group,int Amount)> UniqueGroupCapacity { get; } = [];
+
+    /// <summary>How many heroes of a unique group the team may field: what its best standing building holds (Citadel 2 to
+    /// 5 hold 1, 2, 3 and 3 of Gimli, Aragorn and Legolas). Whether several Citadels add up is unverified; the best counts.</summary>
+    public int UniqueGroupLimit(int team,int group) => ConstructionSites.Values
+        .Where(s => s.Team == team && s.Complete && s.Health > 0 && s.Building != null)
+        .Select(s => UniqueGroupCapacity.TryGetValue(s.Building!,out var held) && held.Group == group ? held.Amount : 0).DefaultIfEmpty(0).Max();
+
+    /// <summary>Living and queued heroes of the group.</summary>
+    public int UniqueGroupUsed(int team,int group) => Units.Count(u => u.Team == team && u.Health > 0 && ProductionRules.GetValueOrDefault(u.Definition.Name)?.UniqueGroup == group)
+        + Producers.Values.Where(p => p.Team == team).Sum(p => p.Queue.Count(q => ProductionRules[q.Unit].UniqueGroup == group));
 
     public int PopulationCapacity(int team) => Math.Min(MaxPopulation,InitialPopulationCapacity
         + (StartBuildings.GetValueOrDefault(team) ?? []).Sum(name => PopulationProvided.GetValueOrDefault(name))
@@ -57,7 +75,10 @@ public sealed partial class SimWorld
         if (rules.Unique && (Units.Any(u => u.Team == team && u.Health > 0 && u.Definition.Name == rules.Unit)
             || Producers.Values.Any(p => p.Team == team && p.Queue.Any(q => q.Unit == rules.Unit))))
         { reason = rules.DisplayName+" is already in play"; return false; }
+        if (rules.UniqueGroup >= 0 && UniqueGroupUsed(team,rules.UniqueGroup) >= UniqueGroupLimit(team,rules.UniqueGroup))
+        { reason = $"Hero limit reached ({UniqueGroupLimit(team,rules.UniqueGroup)}); upgrade the Citadel for more"; return false; }
         if (bank.FoodMilli < rules.FoodCost*1000L || bank.OreMilli < rules.OreCost*1000L) { reason = "Insufficient resources"; return false; }
+        if (bank.Fate < rules.FateCost) { reason = $"Requires {rules.FateCost} Fate"; return false; }
         if (PopulationUsed(team)+rules.Population > PopulationCapacity(team)) { reason = "Population limit reached"; return false; }
         reason = "Ready to train"; return true;
     }
@@ -66,7 +87,7 @@ public sealed partial class SimWorld
     {
         if (!CanTrain(command.Team,command.Target,command.Cell,out _)) return;
         var producer = Producers[command.Target]; var rules = ProductionRules[producer.Units[command.Cell]]; var bank = Economies[command.Team];
-        bank.FoodMilli -= rules.FoodCost*1000L; bank.OreMilli -= rules.OreCost*1000L;
+        bank.FoodMilli -= rules.FoodCost*1000L; bank.OreMilli -= rules.OreCost*1000L; bank.Fate -= rules.FateCost;
         producer.Queue.Add(new(rules.Unit,command.Sequence));
     }
 
@@ -79,6 +100,7 @@ public sealed partial class SimWorld
         // ponytail: no source field states a training refund; cancellation returns the full cost, capped by storage.
         bank.FoodMilli = Math.Min(bank.FoodCapacityMilli,bank.FoodMilli+rules.FoodCost*1000L);
         bank.OreMilli = Math.Min(bank.OreCapacityMilli,bank.OreMilli+rules.OreCost*1000L);
+        bank.Fate = Math.Min(MaxFate,bank.Fate+rules.FateCost);
         producer.Queue.RemoveAt(index);
         if (index == 0) producer.ProgressTicks = 0;
     }
@@ -153,5 +175,6 @@ public sealed partial class SimWorld
     private string ProductionDigest() => ":production-rules:"+string.Join(';',ProductionRules.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => p.Value))
         + ":producers:"+string.Join(';',Producers.Values.Select(p => $"{p.Id},{p.Team},{p.X},{p.Z},{p.ExitAnchor},{string.Join('/',p.Units)},{p.ProgressTicks},{p.RallyCell},{p.RallyResource},{string.Join('/',p.Queue.Select(q => q.Unit+"#"+q.Sequence))}"))
         + ":population:"+MaxPopulation+","+InitialPopulationCapacity+","+string.Join(';',PopulationProvided.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => p.Key+"="+p.Value))
+        + (UniqueGroupCapacity.Count > 0 ? ":heroes:"+MaxFate+","+string.Join(';',UniqueGroupCapacity.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => $"{p.Key}={p.Value.Group}:{p.Value.Amount}")) : "")
         + ":instant:"+string.Join(',',InstantBuildTeams.Order());
 }

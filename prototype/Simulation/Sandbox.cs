@@ -57,7 +57,7 @@ public sealed partial class SimWorld
     private void Finish(ConstructionSite site)
     {
         var rules = SiteRules(site);
-        site.ProgressMicroTicks = rules.DurationTicks*1_000_000L; site.Health = rules.MaxHealth; site.Complete = true;
+        site.ProgressMicroTicks = rules.DurationTicks*1_000_000L; site.Health = SiteMaxHealth(site); site.Complete = true;
     }
 
     private void PromoteFully(ConstructionSite site)

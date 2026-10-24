@@ -64,7 +64,8 @@ public partial class Main
     /// <summary>A projectile's model, launch sounds and trail, keyed by the unit or building that fires it.</summary>
     private void LoadProjectileStyle(string key,JsonElement projectile)
     {
-        var style = new ProjectileStyle(LoadGlb(projectile.GetProperty("Visual").GetString()!,_teamColors[0]));
+        var visual = projectile.GetProperty("Visual");
+        var style = new ProjectileStyle(visual.ValueKind == JsonValueKind.String ? LoadGlb(visual.GetString()!,_teamColors[0]) : LightBolt());
         var launches = projectile.GetProperty("LaunchSounds");
         foreach (var sound in launches.EnumerateArray()) style.LaunchSounds.Add(LoadCombatSound(sound));
         // One voice pool serves every ranged type, sized for the largest source voice cap.
@@ -89,9 +90,24 @@ public partial class Main
         _projectileStyles.Add(key,style);
     }
 
-    private ProjectileStyle? ProjectileStyleFor(int unit,int site) => unit >= 0
+    /// <summary>The look of a unit's missile, or of a building's weapon: its first under the building's name, a further
+    /// one (the Ballista Tower's bolt, Attack 1) under name#1.</summary>
+    private ProjectileStyle? ProjectileStyleFor(int unit,int site,int attack = 0) => unit >= 0
         ? _projectileStyles.GetValueOrDefault(_world!.Units[unit].Definition.Name)
-        : _world!.ConstructionSites.TryGetValue(site,out var building) && building.Building != null ? _projectileStyles.GetValueOrDefault(building.Building) : null;
+        : _world!.ConstructionSites.TryGetValue(site,out var building) && building.Building != null
+            ? _projectileStyles.GetValueOrDefault(attack > 0 ? building.Building+"#"+attack : building.Building) : null;
+
+    /// <summary>ponytail: the Lightbearer's bolt model holds no mesh (its look is a particle effect, not imported yet);
+    /// a small glowing orb stands in.</summary>
+    private static Node3D LightBolt()
+    {
+        var root = new Node3D();
+        root.AddChild(new MeshInstance3D { Mesh = new SphereMesh { Radius = .14f,Height = .28f,RadialSegments = 12,Rings = 6 },
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            MaterialOverride = new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,AlbedoColor = new Color(1f,.97f,.75f),
+                EmissionEnabled = true,Emission = new Color(1f,.95f,.6f) } });
+        return root;
+    }
 
     private void PresentCombatEvents()
     {
@@ -103,7 +119,7 @@ public partial class Main
             if (combat.Kind == CombatEventKind.Release)
             {
                 _arrowReleases++;
-                if (ProjectileStyleFor(combat.Unit,combat.Site) is { LaunchSounds.Count: > 0 } style)
+                if (ProjectileStyleFor(combat.Unit,combat.Site,combat.Attack) is { LaunchSounds.Count: > 0 } style)
                 {
                     var launchPlayer = _launchPlayers[_launchCursor++%_launchPlayers.Count];
                     var launchSound = style.LaunchSounds[(Math.Max(combat.Unit,combat.Site)+combat.StartTick)%style.LaunchSounds.Count];
@@ -137,7 +153,7 @@ public partial class Main
         {
             if (!_arrowViews.TryGetValue(arrow.Id,out var view))
             {
-                if (ProjectileStyleFor(arrow.Unit,arrow.Source) is not { } style) continue;
+                if (ProjectileStyleFor(arrow.Unit,arrow.Source,arrow.Attack) is not { } style) continue;
                 view = (Node3D)style.Template.Duplicate(); AddChild(view); _arrowViews.Add(arrow.Id,view); _arrowVisuals++;
                 if (style.Trail)
                 {

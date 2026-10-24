@@ -1,30 +1,39 @@
 namespace Reforged.Simulation;
 
-public enum AbilityKind { Heal, Fury, Immunity, Ring, Bane, Aura }
+/// <summary>Build-58 adds SiegeAura (Gimli: allies near him deal more damage to buildings), Ward (Legolas's Guardian
+/// Wind: a cast that shields nearby allies from missiles for a while) and Unsimulated (shown with its description, never
+/// usable yet).</summary>
+public enum AbilityKind { Heal, Fury, Immunity, Ring, Bane, Aura, SiegeAura, Ward, Unsimulated }
 [Flags] public enum StatusProtection { None = 0, Poison = 1, Stun = 2, Blind = 4, Slow = 8 }
 
 public sealed record AbilityDefinition(int Id,int Slot,string Name,string Icon,bool Passive,AbilityKind Kind,
     int HealMilli = 0,int RechargeTicks = 0,int RangeMm = 0,int MaxTargetHealthPpm = 1_000_000,
     string CastClip = "",int CastTicks = 0,int EffectTick = 0,int DpsMilli = 0,
     int BonusScale = 1_000_000,int[]? BonusTargets = null,StatusProtection Immunities = StatusProtection.None,
-    int DrainMilliPerTick = 0,int AlphaPpm = 1_000_000,int RechargeScalePpm = 1_000_000,int[]? SoundEvents = null)
+    int DrainMilliPerTick = 0,int AlphaPpm = 1_000_000,int RechargeScalePpm = 1_000_000,int[]? SoundEvents = null,
+    int DurationTicks = 0,string Description = "")
 {
+    /// <summary>A cast with a clip, toward a target (Heal) or on the spot (Ward).</summary>
+    public bool Cast => Kind is AbilityKind.Heal or AbilityKind.Ward;
+
     public void Validate()
     {
         if (Slot is < 0 or > 3 || string.IsNullOrWhiteSpace(Name) || !Enum.IsDefined(Kind)
-            || Passive == (Kind is AbilityKind.Heal or AbilityKind.Ring) || ((int)Immunities & ~15) != 0
+            || Kind != AbilityKind.Unsimulated && Passive == (Kind is AbilityKind.Heal or AbilityKind.Ring or AbilityKind.Ward) || ((int)Immunities & ~15) != 0
             || DpsMilli is < 0 or > 1_000_000 || BonusScale is < 0 or > 10_000_000
-            || Kind == AbilityKind.Heal && (HealMilli is <= 0 or > 1_000_000_000 || RechargeTicks is <= 0 or > 72000
-                || RangeMm is <= 0 or > 100000 || MaxTargetHealthPpm is <= 0 or > 1_000_000
-                || CastTicks is <= 0 or > 1200 || EffectTick < 0 || EffectTick >= CastTicks || string.IsNullOrEmpty(CastClip))
+            || Cast && (RechargeTicks is <= 0 or > 72000 || CastTicks is <= 0 or > 1200 || EffectTick < 0 || EffectTick >= CastTicks
+                || string.IsNullOrEmpty(CastClip) || RangeMm is <= 0 or > 100000)
+            || Kind == AbilityKind.Heal && (HealMilli is <= 0 or > 1_000_000_000 || MaxTargetHealthPpm is <= 0 or > 1_000_000)
+            || Kind == AbilityKind.Ward && DurationTicks is <= 0 or > 72000
             || Kind == AbilityKind.Ring && (DrainMilliPerTick is < 0 or > 1_000_000 || AlphaPpm is < 0 or > 1_000_000)
             || Kind == AbilityKind.Bane && (BonusTargets == null || BonusTargets.Length == 0)
-            || Kind == AbilityKind.Aura && (RangeMm is <= 0 or > 100000 || RechargeScalePpm is < 1_000_000 or > 10_000_000))
+            || Kind == AbilityKind.Aura && (RangeMm is <= 0 or > 100000 || RechargeScalePpm is < 1_000_000 or > 10_000_000)
+            || Kind == AbilityKind.SiegeAura && (RangeMm is <= 0 or > 100000 || BonusScale < 1_000_000))
             throw new ArgumentException("Invalid hero ability");
     }
 }
 
-public enum AbilityEventKind { Start, Heal, Cancel, Complete, RingOn, RingOff }
+public enum AbilityEventKind { Start, Heal, Cancel, Complete, RingOn, RingOff, Ward }
 public sealed record AbilityEvent(int Tick,AbilityEventKind Kind,int Unit,int Target,int Slot,long HealthMilli = 0);
 
 public sealed partial class SimWorld
@@ -37,8 +46,10 @@ public sealed partial class SimWorld
         Commands.Add(new(Tick,_sequence++,team,units.Distinct().Order().ToArray(),-1,target,OrderKind.UseAbility,AbilitySlot:slot));
     }
 
+    /// <summary>Kingsfoil: a living ally below the health limit. Guardian Wind is cast on the spot: the caster itself.</summary>
     public bool ValidAbilityTarget(SimUnit caster,AbilityDefinition ability,SimUnit target)
-        => target.Present && target.Team == caster.Team && target.Team >= 0
+        => ability.Kind == AbilityKind.Ward ? target.Id == caster.Id && caster.Present
+            : target.Present && target.Team == caster.Team && target.Team >= 0
             && target.HealthMilli*1_000_000 < (long)target.MaxHealth*1000*ability.MaxTargetHealthPpm;
 
     private void BeginAbility(SimCommand command)
@@ -48,10 +59,11 @@ public sealed partial class SimWorld
         {
             if (id < 0 || id >= Units.Count) continue;
             var unit = Units[id]; var ability = unit.Ability(command.AbilitySlot);
-            if (unit.Team != command.Team || !unit.Present || ability == null || ability.Passive) continue;
+            if (unit.Team != command.Team || !unit.Present || ability == null || ability.Passive || ability.Kind == AbilityKind.Unsimulated) continue;
             if (ability.Kind == AbilityKind.Ring) { ToggleRing(unit,ability,command.Sequence); continue; }
-            if (command.Target < 0 || command.Target >= Units.Count) continue;
-            var target = Units[command.Target];
+            int targetId = ability.Kind == AbilityKind.Ward ? id : command.Target;
+            if (targetId < 0 || targetId >= Units.Count) continue;
+            var target = Units[targetId];
             if (unit.AbilityReadyAt[ability.Slot] > Tick || !ValidAbilityTarget(unit,ability,target)
                 || !Nav(unit).IsConnected(unit.Node,target.Node)) continue;
             // Casts replace the previous order, using the same cancellation and
@@ -88,6 +100,15 @@ public sealed partial class SimWorld
         {
             if (range > (long)ability.RangeMm*ability.RangeMm) { Finish(true); return true; }
             int elapsed = Tick-unit.CastStartTick;
+            if (!unit.CastApplied && elapsed >= ability.EffectTick && ability.Kind == AbilityKind.Ward)
+            {
+                // Guardian Wind's child spell: every ally within the area, Legolas included, takes the missile multiplier.
+                foreach (var ally in NearUnits(unit.X,unit.Z,ability.RangeMm).Where(u => u.Present && u.Team == unit.Team
+                    && SeparationSquared(unit,u) <= (long)ability.RangeMm*ability.RangeMm))
+                { ally.MissileWardPpm = ability.BonusScale; ally.MissileWardUntil = Tick+ability.DurationTicks; }
+                unit.CastApplied = true;
+                AbilityEvents.Add(new(Tick,AbilityEventKind.Ward,unit.Id,unit.Id,ability.Slot));
+            }
             if (!unit.CastApplied && elapsed >= ability.EffectTick)
             {
                 long healed = Math.Max(0,Math.Min(ability.HealMilli,(long)target.MaxHealth*1000-target.HealthMilli));
@@ -138,9 +159,16 @@ public sealed partial class SimWorld
             else ReleaseCombat(enemy);
     }
 
-    /// <summary>Per-tick Ring drain and Heroic Aura recharge.</summary>
+    /// <summary>Per-tick Ring drain, Siege Aura and Heroic Aura recharge.</summary>
     private void UpdateHeroAbilities()
     {
+        // Gimli's Siege Aura: allies within its radius, Gimli included, take the strongest aura over them (StackableType 3).
+        foreach (var unit in Units.Where(u => u.SiegeAuraPpm != 1_000_000)) unit.SiegeAuraPpm = 1_000_000;
+        foreach (var source in Units.Where(u => u.Present && u.Definition.Abilities != null))
+            foreach (var aura in source.Definition.Abilities!.Where(a => a.Kind == AbilityKind.SiegeAura))
+                foreach (var ally in NearUnits(source.X,source.Z,aura.RangeMm).Where(u => u.Present && u.Team == source.Team
+                    && SeparationSquared(source,u) <= (long)aura.RangeMm*aura.RangeMm))
+                    ally.SiegeAuraPpm = Math.Max(ally.SiegeAuraPpm,aura.BonusScale);
         foreach (var unit in Units.Where(u => u.RingActive))
         {
             if (!unit.Present) { unit.RingActive = false; continue; }

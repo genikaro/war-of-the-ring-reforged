@@ -29,9 +29,7 @@ def export(output, resolver=None):
     paths += list((source / 'Console/ActionButtons/Good').glob('*.uva'))
     paths += [source / 'Console/Main/console_frameportrait.uva']
     paths += list((source / 'Console/Counter Markers').glob('*.uva'))
-    paths += [source / ('Console/Unit Abilities/Borderless/' + name + '.uva') for name in
-              ['BattleGear_Greater_Kingsfoil_Borderless','BattleGear_Andurils_Fury_Borderless','BattleGear_Immunity_Borderless',
-               'BattleGear_OneRing_Borderless','BattleGear_Frodo_Sting_Borderless','BattleGear_Heroic_Aura_Borderless']]
+    paths += list((source / 'Console/Unit Abilities/Borderless').glob('*.uva'))
     paths += [source / 'Console/UnitPortraits/Evil/Portrait_E_Uruk_Hai.uva']
     paths += list((source / 'Console/UnitPortraits/Good').glob('*.uva'))
     paths += list((source / 'Console/BuildingPortraits/Good').glob('*.uva'))

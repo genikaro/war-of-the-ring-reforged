@@ -40,7 +40,7 @@ public partial class Main
         }
         if (_skirmish)
         {
-            hud.RefreshConstruction(_world,selected,_constructionTargeting,_constructionBuilding,_constructionChoices,SelectedStructureDetails());
+            hud.RefreshConstruction(_world,selected,_constructionTargeting,_constructionBuilding,PageChoices(),SelectedStructureDetails());
             hud.RefreshStructure(SelectedStructureDetails());
             hud.RefreshProduction(_world,SelectedProducer(),SelectedOwnSite(),UpgradePortrait(),
                 SelectedOwnSite()?.Research is { } research ? _techniquePortraits.GetValueOrDefault(research) : null);

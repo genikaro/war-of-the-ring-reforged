@@ -39,14 +39,21 @@ public partial class Main
             .OrderBy(u => u.AbilityReadyAt[slot]).ThenBy(u => u.Id).ToArray();
         if (candidates.Length == 0) return;
         var caster = candidates[0]; var ability = caster.Ability(slot)!;
+        if (ability.Kind == AbilityKind.Unsimulated) { Notify(ability.Name+" is not simulated yet"); return; }
         if (ability.Passive) { _status.Text = ability.Name+" is passive"; return; }
         if (ability.Kind == AbilityKind.Ring)
         {
-            _world.EnqueueAbility(0,[caster.Id],slot,-1);
+            _world.EnqueueAbility(PlayerTeam,[caster.Id],slot,-1);
             _status.Text = ability.Name+(caster.RingActive ? " removed" : " worn")+(_paused ? " (paused)" : ""); return;
         }
         if (caster.Casting || caster.AbilityReadyAt[slot] > _world.Tick)
         { _status.Text = ability.Name+" is recharging"; return; }
+        if (ability.Kind == AbilityKind.Ward)
+        {
+            // Guardian Wind is cast on the spot: no target to choose.
+            _world.EnqueueAbility(PlayerTeam,[caster.Id],slot,caster.Id);
+            _status.Text = ability.Name+(_paused ? " queued (paused)" : ""); return;
+        }
         _pendingAbilityCaster = caster.Id; _pendingAbilitySlot = slot;
         ClearConstructionTargeting();
         _orders.Begin(OrderKind.UseAbility); _dragging = false; _hud.SelectionBox = null;
@@ -63,7 +70,7 @@ public partial class Main
         if (caster.AbilityReadyAt[ability.Slot] > _world.Tick || caster.Casting) { CancelTargeting(); return; }
         if (!_world.Navigation.ForBody(caster.Definition.BodyRadiusMm,caster.Definition.BodyHeightMm).IsConnected(caster.Node,target.Node))
         { _status.Text = "Greater Kingsfoil: target cannot be reached"; return; }
-        _world.EnqueueAbility(0,[caster.Id],ability.Slot,target.Id); _orders.Cancel();
+        _world.EnqueueAbility(PlayerTeam,[caster.Id],ability.Slot,target.Id); _orders.Cancel();
         _status.Text = _paused ? "Greater Kingsfoil queued (paused)" : "Greater Kingsfoil";
     }
 
@@ -95,6 +102,17 @@ public partial class Main
                 AddChild(visual.Root); _healingEffects.Add(visual);
             }
             PlayAbilitySound(_world.Units[effect.Unit].Ability(effect.Slot)?.SoundEvents,effect.Unit,UnitPosition(target));
+        }
+        foreach (var ward in _world.AbilityEvents.Where(e => e.Kind == AbilityEventKind.Ward))
+        {
+            // ponytail: the source particle effects (160, 329) are not imported; a label marks the cast.
+            var caster = _world.Units[ward.Unit];
+            var label = new Label3D { Text = caster.Ability(ward.Slot)?.Name ?? "",FontSize = 40,PixelSize = .018f,
+                Modulate = new Color("bfe6ff"),OutlineModulate = new Color("10283a"),OutlineSize = 9,
+                Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,NoDepthTest = true,
+                Position = UnitPosition(caster)+Vector3.Up*(caster.Definition.BodyHeightMm/1000f+.6f) };
+            AddChild(label); _healLabels.Add((label,_world.Tick+40));
+            PlayAbilitySound(caster.Ability(ward.Slot)?.SoundEvents,ward.Unit,UnitPosition(caster));
         }
         foreach (var flash in _healLabels.Where(f => _world.Tick >= f.EndTick).ToArray())
         { flash.Label.QueueFree(); _healLabels.Remove(flash); }

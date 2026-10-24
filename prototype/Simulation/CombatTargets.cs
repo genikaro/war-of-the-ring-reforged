@@ -35,7 +35,7 @@ public sealed partial class SimWorld
         var shared=NearUnits(unit.X,unit.Z,shareRadius).Where(u => u.Id != unit.Id && u.Team==unit.Team && u.Present && u.Target >= 0
             && SeparationSquared(unit,u)<=(long)shareRadius*shareRadius).Select(u=>u.Target).ToHashSet();
         // Nearby enemies and the targets allies share; the order below is total, so the pool's order is irrelevant.
-        long radius=Math.Max(AcquireRadius(unit),unit.Definition.ReachMm);
+        long radius=Math.Max(AcquireRadius(unit),unit.ReachMm);
         var pool=NearUnits(unit.X,unit.Z,(int)radius);
         int from=PlanningNode(unit);
         pool.AddRange(shared.Where(id => pool.All(u => u.Id != id)).Select(id => Units[id]));

@@ -10,7 +10,8 @@ public partial class CommandPanel
     public const int UpgradeSlot = 8;
     private Button _upgradeButton = null!;
     public Button UpgradeButton => _upgradeButton;
-    private readonly Button[] _trainButtons = new Button[4];
+    // The Citadel trains six (Worker, Frodo and the four Fate heroes, source UnitProduced1-6); the upgrade keeps slot 8.
+    private readonly Button[] _trainButtons = new Button[6];
     private readonly Button[] _queueButtons = new Button[SimWorld.ProductionQueueLimit];
     private Control _training = null!,_trainingProgress = null!;
     private TextureRect _trainingBar = null!;
@@ -28,7 +29,8 @@ public partial class CommandPanel
         for (int slot = 0; slot < _trainButtons.Length; slot++)
         {
             int chosen = slot;
-            var button = new Button { Position = new(788+slot*56,34),Size = new(54,54),FocusMode = FocusModeEnum.None,ExpandIcon = true,Visible = false };
+            // Grid positions row by row (the Citadel's Legolas and Gandalf take A and S on the second row).
+            var button = new Button { Position = new(788+slot%4*56,34+slot/4*56),Size = new(54,54),FocusMode = FocusModeEnum.None,ExpandIcon = true,Visible = false };
             Skin(button); AddHotkey(button,GridKeys[slot].ToString()); button.Pressed += () => TrainingChosen?.Invoke(chosen);
             _trainButtons[slot] = button; _content.AddChild(button);
         }
@@ -66,7 +68,9 @@ public partial class CommandPanel
             var rules = world.ProductionRules[producer!.Units[slot]];
             button.Disabled = !world.CanTrain(PlayerTeam,producer.Id,slot,out string reason);
             button.Icon = _art.GetValueOrDefault(PortraitName(rules.DisplayName));
-            button.TooltipText = $"Train {rules.DisplayName} [{GridKeys[slot]}]\n{rules.FoodCost} food · {rules.OreCost} ore · population {rules.Population} · {rules.DurationTicks/20}s"
+            button.TooltipText = $"Train {rules.DisplayName} [{GridKeys[slot]}]\n{rules.FoodCost} food · {rules.OreCost} ore"
+                + (rules.FateCost > 0 ? $" · {rules.FateCost} Fate" : "")+$" · population {rules.Population} · {rules.DurationTicks/20}s"
+                + (rules.UniqueGroup >= 0 ? $"\nHero: your Citadel holds {world.UniqueGroupLimit(PlayerTeam,rules.UniqueGroup)} of Gimli, Aragorn and Legolas at a time" : "")
                 + $"\nClick again to queue up to {SimWorld.ProductionQueueLimit}. Click a portrait in training or press Backspace to cancel for a full refund."
                 + (button.Disabled ? "\n"+reason : "");
         }

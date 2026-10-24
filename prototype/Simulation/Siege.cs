@@ -27,11 +27,11 @@ public sealed partial class SimWorld
     private enum SiegeStep { Walking, Striking, Unreachable }
 
     public bool NeedsRepair(ConstructionSite site) => site.Team >= 0 && site.Complete
-        && site.Health > 0 && site.Health < SiteRules(site).MaxHealth;
+        && site.Health > 0 && site.Health < SiteMaxHealth(site);
 
     /// <summary>How close a unit must stand to a building's footprint to hit it: its own weapon reach, and at
     /// least a body and a half so a melee fighter always has somewhere to stand.</summary>
-    private static int SiegeReachMm(SimUnit unit) => Math.Max(unit.Definition.ReachMm,unit.Definition.BodyRadiusMm*3/2);
+    private static int SiegeReachMm(SimUnit unit) => Math.Max(unit.ReachMm,unit.Definition.BodyRadiusMm*3/2);
 
     private WorkArea SiegeArea(SimUnit unit,ConstructionSite site)
     {
@@ -95,7 +95,7 @@ public sealed partial class SimWorld
 
     private int NearbyEnemySite(SimUnit unit)
     {
-        int acquire = Math.Max(10000,unit.Definition.ReachMm);
+        int acquire = Math.Max(10000,unit.ReachMm);
         bool Near(ConstructionSite site) => Navigation.HasFootprints(site.Obstacle) ? Navigation.WithinFootprintReach(site.Obstacle,unit.X,unit.Z,acquire)
             : DistanceSquared(unit.X,unit.Z,SitePosition(site).X,SitePosition(site).Z) <= (long)(acquire+site.RadiusMm)*(acquire+site.RadiusMm);
         return ConstructionSites.Values.Where(s => s.Id != unit.AttackMoveIgnoredSite && CanAttackSite(unit.Team,s.Id) && Near(s))
@@ -178,6 +178,8 @@ public sealed partial class SimWorld
             long rate = Math.Max(0,(long)unit.MeleeDamageRate-SiteRules(site).ArmorMilli);
             long damage = rate*attack.DurationTicks*attack.Hits[index].Scale/(TicksPerSecond*attack.Hits.Sum(h => (long)h.Scale));
             damage = PlaceDamage(unit,damage,unit.Definition.FiresProjectile(unit.AttackVariant),building: true);
+            // A source siege weapon (the Huorn's, x3) and Gimli's Siege Aura (x1.5) multiply damage against buildings.
+            damage = damage*unit.Definition.SiegePpm/1_000_000*unit.SiegeAuraPpm/1_000_000;
             if (unit.Definition.FiresProjectile(unit.AttackVariant)) ReleaseSiegeProjectile(unit,site,index,damage);
             else DamageSite(unit,site,unit.AttackVariant,index,damage,unit.AttackStartTick);
         }
@@ -233,10 +235,10 @@ public sealed partial class SimWorld
     {
         foreach (var site in ConstructionSites.Values.Where(s => s.Team >= 0 && s.Complete).ToArray())
         {
-            var rules = SiteRules(site);
+            var rules = SiteRules(site); int max = SiteMaxHealth(site);
             var builders = Units.Where(u => u.Team == site.Team && u.Present && u.Order == OrderKind.Build && u.OrderTarget == site.Id).ToArray();
             if (builders.Length == 0) continue;
-            if (site.Health >= rules.MaxHealth || site.Health <= 0)
+            if (site.Health >= max || site.Health <= 0)
             {
                 foreach (var unit in builders)
                     Apply(new(Tick,unit.OrderSequence,unit.Team,[unit.Id],-1,Kind: OrderKind.Stop),activating: true);
@@ -246,11 +248,11 @@ public sealed partial class SimWorld
             if (working.Length == 0 && !InstantBuildTeams.Contains(site.Team)) continue;
             long perTick = 1_000_000L+(Math.Max(1,working.Length)-1L)*rules.ExtraWorkerPpm;
             site.RepairMicroTicks += InstantBuildTeams.Contains(site.Team) ? (long)rules.DurationTicks*1_000_000 : perTick;
-            long each = (long)rules.DurationTicks*1_000_000/rules.MaxHealth;
+            long each = (long)rules.DurationTicks*1_000_000/max;
             int restored = (int)(site.RepairMicroTicks/Math.Max(1,each));
             if (restored <= 0) continue;
             site.RepairMicroTicks -= restored*Math.Max(1,each);
-            site.Health = Math.Min(rules.MaxHealth,site.Health+restored);
+            site.Health = Math.Min(max,site.Health+restored);
         }
     }
 

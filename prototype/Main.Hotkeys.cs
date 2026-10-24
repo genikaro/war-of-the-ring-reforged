@@ -12,9 +12,9 @@ public partial class Main
         if (_buildMenu)
         {
             if (slot == CommandPanel.BackSlot) OpenBuildMenu(false);
-            else if (slot < _constructionChoices.Length)
+            else if (slot < PageChoices().Length)
             {
-                string building = _constructionChoices[slot].Building;
+                string building = PageChoices()[slot].Building;
                 if (!_commands.ConstructionButton(building).Disabled) ChooseConstruction(building);
                 else Notify(ResourceBuildingKind(building) != null || _world!.CanStartBuilding(PlayerTeam,building,out string reason) ? "Insufficient resources" : reason);
             }
@@ -29,6 +29,7 @@ public partial class Main
         }
         if (slot == CommandPanel.BackSlot && _commands.CancelConstructionButton.Visible) { ChooseConstruction(null); return true; }
         if (slot == 0 && _commands.BuildButton.Visible) { OpenBuildMenu(true); return true; }
+        if (slot == 1 && _commands.AdvancedBuildButton.Visible) { OpenBuildMenu(true,advanced: true); return true; }
         return false;
     }
 

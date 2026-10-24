@@ -27,7 +27,7 @@ public partial class Main
             string building = buildings[_researchPlaced];
             switch (_researchStep++)
             {
-                case 0: Click(_commands.BuildButton.GetGlobalRect().GetCenter()); break;
+                case 0: Click((AdvancedBuilding(building) ? _commands.AdvancedBuildButton : _commands.BuildButton).GetGlobalRect().GetCenter()); break;
                 case 1: _researchCells = VisiblePlacementCells(building); Click(_commands.ConstructionButton(building).GetGlobalRect().GetCenter()); break;
                 case 3: Click(PlacementPoint(_researchCells[0])); break;
                 case >= 5 when Site(building) is { Complete: true }: _researchPlaced++; _researchStep = 0; break;
@@ -64,7 +64,9 @@ public partial class Main
             case 18:
                 _researchChecks["forge_offers_iron_blades_and_plating"] = SelectedStructureDetails() is { Name: "Forge",Health: 590 }
                     && _commands.ResearchButton(0) is { Visible: true,Disabled: false,Icon: not null } && _commands.ResearchButton(1) is { Visible: true,Disabled: false,Icon: not null }
-                    && !_commands.ResearchButton(2).Visible && _commands.ResearchButton(0).TooltipText.StartsWith("Research Iron Blades [Q]\n75 food · 75 ore · 90s")
+                    // Build-58: Razored Edge waits for Citadel 3 in slot E; Dwarven Engineering (A) needs nothing more.
+                    && _commands.ResearchButton(2) is { Visible: true,Disabled: true } && _commands.ResearchButton(2).TooltipText.EndsWith("Requires Citadel 3")
+                    && _commands.ResearchButton(4) is { Visible: true,Disabled: false } && _commands.ResearchButton(0).TooltipText.StartsWith("Research Iron Blades [Q]\n75 food · 75 ore · 90s")
                     && _commands.ResearchButton(0).TooltipText.Contains("Gondor Swordsman +1 attack")
                     && _commands.ResearchButton(1).TooltipText.StartsWith("Research Iron Plating [W]") && _commands.ResearchButton(1).TooltipText.Contains("Rohan Rider +1 armor");
                 _researchFood = bank.FoodMilli; _researchOre = bank.OreMilli;
@@ -84,7 +86,9 @@ public partial class Main
                 // Source BuildTime 90 s at 20 Hz; the bonus reaches the Swordsman trained before the research.
                 _researchChecks["iron_blades_completes_after_source_time"] = Site(SmokeForge) is { Research: null } && world.Tick-_researchTick is >= 1800 and <= 1803
                     && world.Units[_researchSwordsman] is { TechniqueDpsMilli: 1000,TechniqueArmorMilli: 0 }
-                    && _commands.ResearchButton(0).Visible == false && _commands.ResearchButton(1).Visible;
+                    // The chain's next tier takes the slot, locked until Citadel 3 (build-58).
+                    && _commands.ResearchButton(0) is { Visible: true,Disabled: true } && _commands.ResearchButton(0).TooltipText.StartsWith("Research Steel Blades [Q]")
+                    && _commands.ResearchButton(0).TooltipText.EndsWith("Requires Citadel 3") && _commands.ResearchButton(1).Visible;
                 var swordsman = world.Units[_researchSwordsman]; _focus = UnitPosition(swordsman); UpdateCamera(); break;
             case 27: Click(_camera.UnprojectPosition(UnitPosition(world.Units[_researchSwordsman])+Vector3.Up)); break;
             case 29:

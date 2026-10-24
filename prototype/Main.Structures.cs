@@ -176,7 +176,8 @@ public partial class Main
         var world = _world!;
         var site = entry.Team >= 0 ? world.ConstructionSites.Values.FirstOrDefault(s => s.Obstacle == id && s.Team == entry.Team) : null;
         // An upgrade changes the building's type under the same view.
-        var definition = _structureDefinitions[site?.Building ?? entry.Type]; int max = definition.GetProperty("max_health").GetInt32();
+        var definition = _structureDefinitions[site?.Building ?? entry.Type];
+        int max = site != null ? world.SiteMaxHealth(site) : definition.GetProperty("max_health").GetInt32();
         int progress = site == null || site.Complete ? 100 : (int)(site.ProgressMicroTicks*100/(world.SiteRules(site).DurationTicks*1_000_000L));
         string resource = entry.Resource < 0 ? "" : $"{world.Resources[entry.Resource].Kind} remaining: {(world.Resources[entry.Resource].RemainingMilli+999)/1000}";
         var place = PlaceAt(id);
