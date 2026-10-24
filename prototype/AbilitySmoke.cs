@@ -32,6 +32,9 @@ public partial class Main
             case 2:
                 foreach (var team in world.Units.GroupBy(u => u.Team))
                     world.Enqueue(team.Key,team.Select(u => u.Id),OrderKind.HoldGround);
+                // Fixture: these checks count exact health (60 before the heal, 310 after, 100 after Stop), and since
+                // build-52 an idle unit regains 50 milli-HP a tick, which shows as the next whole point (RegenerationChecks).
+                world.Rules.Regeneration = RegenerationRates.None;
                 PushKey(Key.Key1); break;
             case 5: Click(_commands.PortraitButton(0).GetGlobalRect().GetCenter()); break;
             case 8:

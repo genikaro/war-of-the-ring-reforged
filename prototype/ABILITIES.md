@@ -102,6 +102,8 @@ Q, the heal button, mixed/passive/nonhero/enemy availability, target rejection,
 cast animation, health gain, cooldown, pause/resume and cancellation. Optional
 `-CapturePath converted/prototype/ability.png -Resolution 3840x2160` captures the
 hero console. Existing Command, Orders and Melee smoke checks remain enabled.
+The smoke switches health regeneration off: it counts exact health (60 before the
+heal, 310 after), and since build-52 a resting unit regains a little every tick.
 
 The plain C# checks cover precise effect ticks, clamping, self-heal, distant
 approach, ownership, invalid targets, source health boundary, interruption,
