@@ -280,6 +280,23 @@ the result panel replays the same setup; its Setup button, or the debug menu's
 Skirmish setup button, goes back to the screen. Any flag that chooses the match
 (`-Map`, `-Observe`, `-Bots`, `-Speed`, `-Seed`, `-NoAi`, `-AiPersonality`, the smokes) skips the screen.
 
+The **Sandbox** test map (build-56) heads the lobby's map list: an empty, level
+200 × 200 m field for trying units out, where you command both players, their bases
+80 m apart. Every building stands finished around both Citadels and fully upgraded, so
+every unit and technique is on offer, and new units gather at a rally point in front of
+their base, toward the centre, marked by a flag and a ground ring in its player's colour; both banks stay full and the population cap is the maximum
+(100); building, training, upgrades and research finish at once (the debug menu's
+instant cheat, on by default; F4 turns it off); no bots play and nothing ends the match. Tab, or the Player 1 / Player 2 tabs
+beside the console's menu button, switches the player you command; clicking the
+other player's unit or building, or boxing only its units, switches too. Build its
+cache once, then pick it in the lobby or launch it directly
+([skirmish notes](SKIRMISH.md#build-56-the-sandbox-test-map)):
+
+```powershell
+python tools/prepare_prototype.py --sandbox
+./prototype/run.ps1 -Sandbox
+```
+
 The skirmish plays against the enemy bot (build-27). Since build-49 a bot's difficulty
 sets how well it plays (Easy decides every 3 s with one builder and marches straight;
 Hard decides twice a second with three builders, finishes wounded enemies and falls
@@ -402,6 +419,7 @@ caches and Helm's Deep.
 | - / + | Game speed down / up (1x, 2x, 4x, 8x, 16x) |
 | Observing: E / U / S | Open the overview's Economy / Units / Stats tab; the open tab's key folds the overview |
 | Observing: Tab or the overview's chevron | Fold or unfold the overview |
+| Sandbox: Tab, or the Player 1 / Player 2 tabs beside the console menu | Command the other player (clicking its unit or building does too) |
 | Observing: a player's name in the overview | Center the camera on that player's base |
 | Observing: speed slider / pause button | Choose the game speed / pause and resume |
 | Esc | Cancel targeting; then close the build page; otherwise clear selection |
@@ -458,6 +476,7 @@ a normal viewport capture with `-CapturePath`.
 ./prototype/run.ps1 -AiSmoke
 ./prototype/run.ps1 -ObserverSmoke
 ./prototype/run.ps1 -SetupSmoke
+./prototype/run.ps1 -SandboxSmoke
 ./prototype/run.ps1 -SurfaceSmoke
 ./prototype/run.ps1 -ObstacleSmoke
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --movement-benchmark converted/prototype/movement-after.json

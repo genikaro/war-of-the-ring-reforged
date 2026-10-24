@@ -37,6 +37,8 @@ public partial class Main
         // Every side without a person at the keyboard pursues the enemies its idle units notice, unless a bot runs it:
         // a bot's idle soldiers guard instead (build-50).
         world.AggressiveIdleTeams.Clear();
+        // On the Sandbox map one person commands both sides (build-56): no bots, and no idle units give chase.
+        if (_sandboxMap) return;
         world.AggressiveIdleTeams.UnionWith(world.Contenders.Where(t => t != PlayerTeam));
         if (_noAi || PassiveEnemyFixture && !_observing) return;
         string fallback = ai.GetProperty("default_personality").GetString()!;

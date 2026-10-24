@@ -28,6 +28,8 @@ param(
     [switch]$ObserverSmoke,
     [switch]$Setup,
     [switch]$SetupSmoke,
+    [switch]$Sandbox,
+    [switch]$SandboxSmoke,
     [switch]$Observe,
     [string[]]$Bots,
     [int]$Speed,
@@ -72,8 +74,8 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 if ($LASTEXITCODE -ne 0) { throw 'C# build failed' }
 $arguments = @('--path', $PSScriptRoot)
 if ($Resolution) { $arguments += @('--resolution',$Resolution) }
-if ($SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $TechSmoke -or $Tier2Smoke -or $ResearchSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $Observe -or $Map) { $Skirmish = $true }
-if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $AbilitySmoke -or $SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $TechSmoke -or $Tier2Smoke -or $ResearchSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $SetupSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
+if ($SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $TechSmoke -or $Tier2Smoke -or $ResearchSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $Observe -or $Map -or $Sandbox -or $SandboxSmoke) { $Skirmish = $true }
+if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $AbilitySmoke -or $SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $TechSmoke -or $Tier2Smoke -or $ResearchSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $SetupSmoke -or $SandboxSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
     $renderRate = if ($MotionSmoke -or $FormationSmoke) { '80' } else { '20' }
     if (-not $CapturePath) { $arguments += '--headless' }
     $arguments += @('--fixed-fps', $renderRate)
@@ -106,6 +108,7 @@ if ($AiSmoke) { $arguments += '--ai-smoke' }
 if ($ObserverSmoke) { $arguments += @('--observer-smoke','--observe','--bots=Gimli,Aragorn') }
 if ($setupMode) { $arguments += '--setup' }
 if ($SetupSmoke) { $arguments += '--setup-smoke' }
+if ($SandboxSmoke) { $arguments += '--sandbox-smoke' }
 if ($Observe) { $arguments += '--observe' }
 if ($Bots) { $arguments += "--bots=$($Bots -join ',')" }
 if ($Speed) { $arguments += "--speed=$Speed" }
@@ -123,6 +126,8 @@ if ($CapturePath) { $arguments += "--capture=$([System.IO.Path]::GetFullPath($Ca
 if ($CapturePath -and $Resolution) { $arguments += "--capture-resolution=$Resolution" }
 # Bilbo's Bluffs lives in converted/skirmish; -Map MP04_Wasteland uses converted/skirmish-maps/MP04_Wasteland.
 if ($Map -and -not $CachePath) { $CachePath = Join-Path $repo "converted/skirmish-maps/$Map" }
+# The Sandbox test map (build-56): an empty field where you command both players; python tools/prepare_prototype.py --sandbox builds it.
+if (($Sandbox -or $SandboxSmoke) -and -not $CachePath) { $CachePath = Join-Path $repo 'converted/skirmish-maps/Sandbox' }
 if ($Skirmish -and -not $CachePath) { $CachePath = Join-Path $repo 'converted/skirmish' }
 if ($CachePath) { $arguments += "--cache=$([System.IO.Path]::GetFullPath($CachePath))" }
 & $GodotPath @arguments

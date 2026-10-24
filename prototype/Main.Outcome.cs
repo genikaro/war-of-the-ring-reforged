@@ -40,7 +40,8 @@ public partial class Main
 
     private void PresentOutcome()
     {
-        if (_outcomeShown || _world is not { MatchOver: true } world) return;
+        // The Sandbox map is for testing: razing a side ends nothing.
+        if (_outcomeShown || _sandboxMap || _world is not { MatchOver: true } world) return;
         _outcomeShown = true;
         bool won = world.Winner == PlayerTeam;
         if (_observing)

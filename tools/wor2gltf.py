@@ -209,12 +209,16 @@ def water_meshes(ex, scene):
     return report
 
 
-def export(source, output, resolver=None):
+def export(source, output, resolver=None, transform=None):
+    """transform(scene) may rewrite the parsed, resolved world before export (the Sandbox map's empty field)."""
     source, output = Path(source).resolve(), Path(output).resolve()
     if output.is_relative_to(wor.ROOT / 'TLOTR - War of the Ring') or output.is_relative_to(source.parent):
         raise ValueError('output must be outside the original install and source level folder')
     scene = world_scene.parse(source.read_bytes()); resolver = resolver or Resolver()
     counts = world_scene.resolve_objects(scene, resolver.db)
+    if transform:
+        transform(scene)
+        counts = world_scene.resolve_objects(scene, resolver.db)
     world_scene.resolve_decals(scene, resolver.db)
     if None in counts:
         raise ValueError('unresolved placed model references')

@@ -72,6 +72,12 @@ public sealed partial class SimWorld
         // ponytail: center distance to a completed building of the team; the original's measurement is unverified.
         if (placement.MustBeNear && !PlacementAnchors(team).Any(a => DistanceSquared(a.X,a.Z,x,z) <= (long)a.Radius*a.Radius))
         { reason = "Too far from your buildings"; return false; }
+        return FootprintClear(footprint,out reason,ignoreUnits);
+    }
+
+    /// <summary>The ground under a footprint: source building passability, resource clearance, other structures and units.</summary>
+    private bool FootprintClear(NavigationFootprint footprint,out string reason,bool ignoreUnits)
+    {
         if (Resources.Values.Any(r => ResourceClearanceMm.TryGetValue(r.Kind,out int clearance) && GridNavigation.FootprintBlocks(footprint,r.X,r.Z,r.X,r.Z,clearance)))
         { reason = TooCloseToResource; return false; }
         foreach (int covered in CoveredCells(footprint))
@@ -171,13 +177,13 @@ public sealed partial class SimWorld
             (other,px,pz) => GridNavigation.FootprintBlocks(footprint,px,pz,px,pz,other.Definition.BodyRadiusMm));
     }
 
-    private ConstructionSite LayFoundation(int team,string building,int cell,NavigationFootprint footprint)
+    private ConstructionSite LayFoundation(int team,string building,int cell,NavigationFootprint footprint,bool free = false)
     {
         var placement = Placements[building]; var (x,z) = Navigation.Center(cell);
         int id = Math.Max(PlacedObstacleBase,Navigation.ObstacleIds.DefaultIfEmpty(0).Max()+1);
         Navigation.AddObstacle(id,[footprint]);
         var rules = BuildingRules[building]; var bank = Economies[team];
-        bank.FoodMilli -= rules.FoodCost*1000L; bank.OreMilli -= rules.OreCost*1000L;
+        if (!free) { bank.FoodMilli -= rules.FoodCost*1000L; bank.OreMilli -= rules.OreCost*1000L; }
         var site = new ConstructionSite(id,id,placement.InteractionRadiusMm,building,x,z) { Team = team,
             Health = Math.Max(1,(int)((long)rules.MaxHealth*rules.InitialHealthPpm/1_000_000)) };
         ConstructionSites.Add(id,site);
@@ -224,13 +230,13 @@ public sealed partial class SimWorld
     }
 
     /// <summary>A completed Citadel accepts deliveries; producers train from their source unit lists.</summary>
-    private void CompleteBuilding(ConstructionSite site,SimUnit builder)
+    private void CompleteBuilding(ConstructionSite site,int exitAnchor)
     {
         var placement = Placements[site.Building!];
         if (placement.DropOff) DropOffs.Add(new(site.Team,site.X,site.Z,placement.InteractionRadiusMm,site.Obstacle));
         // The builder stands on ground connected to the work envelope; trained units exit into the same region.
         if (ProducedUnits.TryGetValue(site.Building!,out var units) && units.Length > 0)
-            Producers.Add(site.Id,new(site.Id,site.Team,site.X,site.Z,builder.Node,units));
+            Producers.Add(site.Id,new(site.Id,site.Team,site.X,site.Z,exitAnchor,units));
     }
 
     private string PlacementDigest() => ":placeable:"+string.Join(';',PlaceableBuildings)

@@ -28,6 +28,7 @@ public partial class Main
         hud.SetMinimapMarkers(_minimapMarkers);
         hud.SetMinimapView(ViewFootprint(camera,viewport.GetVisibleRect(),hud.Visible ? hud.GetGlobalRect().Position.Y : viewport.GetVisibleRect().End.Y));
         if (_skirmish) ApplySkirmishHud(hud);
+        hud.RefreshSandboxTabs(_sandboxMap);
         var selected = _world!.Units.Where(u => _selected.Contains(u.Id) && u.Health > 0).ToList();
         hud.Refresh(selected,UnitName,_orders.Pending,_paused,Enumerable.Range(0,10).Select(slot => _controlGroups.Recall(slot,LivingFriendly)).ToArray(),
             _world.Units.Count(u => u.Team == PlayerTeam && u.Health > 0),_world.Units.Count(u => u.Team != PlayerTeam && u.Health > 0),_world.IsWalking(PlayerTeam),_world.Tick,_pendingAbilitySlot);

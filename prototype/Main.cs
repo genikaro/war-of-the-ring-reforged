@@ -18,7 +18,7 @@ public partial class Main : Node3D
     private SandboxHud _hud = null!;
     private CommandPanel _commands = null!;
     private readonly OrderInput _orders = new();
-    private readonly ControlGroups _controlGroups = new();
+    private ControlGroups _controlGroups = new();
     private int _lastGroup = -1;
     private ulong _lastGroupTime;
     private readonly HashSet<int> _selected = [];
@@ -106,6 +106,7 @@ public partial class Main : Node3D
             if (arg == "--observer-smoke") _observerSmoke = true;
             if (arg == "--setup") _setupMode = true;
             if (arg == "--setup-smoke") _setupSmoke = _setupMode = true;
+            if (arg == "--sandbox-smoke") _sandboxMapSmoke = true;
             if (arg.StartsWith("--capture-resolution="))
             {
                 var size = arg[21..].Split('x'); _captureResolution = new(int.Parse(size[0]),int.Parse(size[1]));
@@ -158,7 +159,7 @@ public partial class Main : Node3D
             RefreshDebugMenu();
             _status.Text = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             GD.PushError(error.ToString());
-            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _tier2Smoke || _researchSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke || _observerSmoke || _setupSmoke || _engagementSmoke || _capture != "") GetTree().Quit(1);
+            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _tier2Smoke || _researchSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke || _observerSmoke || _setupSmoke || _engagementSmoke || _sandboxMapSmoke || _capture != "") GetTree().Quit(1);
         }
     }
 
@@ -178,6 +179,7 @@ public partial class Main : Node3D
         var manifest = _cacheFiles.Root;
         if (manifest.GetProperty("format_version").GetInt32() != 1) throw new InvalidOperationException("Unsupported cache format");
         _skirmish = manifest.TryGetProperty("mode",out var mode) && mode.GetString() == "skirmish";
+        _sandboxMap = _skirmish && manifest.TryGetProperty("sandbox",out var sandbox) && sandbox.GetBoolean();
         _mapName = manifest.GetProperty("name").GetString()!.Split(" — ")[0];
         _cacheFiles.Verify();
         if (manifest.TryGetProperty("team_colors", out var colors))
@@ -290,7 +292,7 @@ public partial class Main : Node3D
         root.AddChild(modelSize); modelSize.AddChild(visual);
         var ring = new MeshInstance3D { Mesh = ScenePresentation.SelectionRing(), Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             MaterialOverride = new StandardMaterial3D {
-                AlbedoColor = _observing ? TeamColor(team).Lightened(.25f) : new Color(team == PlayerTeam ? "e9c22d" : "e65045"), CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+                AlbedoColor = _observing || _sandboxMap ? TeamColor(team).Lightened(.25f) : new Color(team == PlayerTeam ? "e9c22d" : "e65045"), CullMode = BaseMaterial3D.CullModeEnum.Disabled,
                 ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
         root.AddChild(ring);
         var health = new HealthBar(Math.Max(1.1f,2.2f*unit.Definition.BodyRadiusMm/1000f),.16f) { Position = new(0,.12f,0) };
@@ -419,6 +421,7 @@ public partial class Main : Node3D
                 _dragging = false; _hud.SelectionBox = null;
             }
             if (_observing && ObserverHotkey(key)) return;
+            if (_sandboxMap && key.Keycode == Key.Tab && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed) { SwitchSandboxPlayer(); return; }
             // Grid hotkeys go by key position, so they follow QWER/ASDF/ZXCV on any keyboard layout.
             int gridSlot = CommandPanel.GridSlot(key.PhysicalKeycode);
             if (gridSlot >= 0 && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed && UseGridHotkey(gridSlot)) return;
@@ -495,26 +498,30 @@ public partial class Main : Node3D
         {
             var structure = StructureAt(end);
             var unit = UnitAt(end,structure?.Distance);
-            if (unit == null && structure is { } hit) { SelectStructure(hit.Id,append); return; }
+            // On the Sandbox map, clicking the other player's unit or building takes command of that player.
+            if (unit == null && structure is { } hit) { CommandSandboxPlayer(_structureViews[hit.Id].Team); SelectStructure(hit.Id,append); return; }
+            if (unit != null) CommandSandboxPlayer(unit.Team);
             _selectedStructure = null;
             UnitSelection.Click(_selected,_world!.Units,unit,append,sameType);
             return;
         }
+        if (_sandboxMap && SandboxPlayerInBox(rect) is int side) CommandSandboxPlayer(side);
         int? previousStructure = _selectedStructure;
         _selectedStructure = null;
         if (!append || !_selected.All(LivingFriendly)) _selected.Clear();
         foreach (var unit in _world!.Units.Where(u => (u.Team == PlayerTeam || _observing) && u.Present))
-        {
-            var pos = UnitPosition(unit) + Vector3.Up;
-            if (_camera.IsPositionBehind(pos)) continue;
-            var screen = _camera.UnprojectPosition(pos);
-            if (rect.HasPoint(screen)) _selected.Add(unit.Id);
-        }
+            if (InBox(rect,unit)) _selected.Add(unit.Id);
         // Units in the box (or retained by Shift) take priority. Structures
         // remain a separate inspection selection when no units are selected.
         if (_selected.Count > 0) return;
         if (StructureInBox(rect) is int structureId) SelectStructure(structureId);
         else if (append) _selectedStructure = previousStructure;
+    }
+
+    private bool InBox(Rect2 rect,SimUnit unit)
+    {
+        var pos = UnitPosition(unit) + Vector3.Up;
+        return !_camera.IsPositionBehind(pos) && rect.HasPoint(_camera.UnprojectPosition(pos));
     }
 
     private void Order(Vector2 mouse, bool groundOnly = false,bool queued = false)
@@ -664,6 +671,7 @@ public partial class Main : Node3D
         {
             long stepStart=_engagementSmoke?System.Diagnostics.Stopwatch.GetTimestamp():0;
             _world.Step();
+            if (_sandboxMap) RefillSandboxMapBanks();
             while (_views.Count < _world.Units.Count) AddUnitView(_world.Units[_views.Count]);
             if (_skirmish) ApplySkirmishHud(_commands);
             if (_engagementSmoke) RecordEngagementStep(System.Diagnostics.Stopwatch.GetElapsedTime(stepStart).TotalMilliseconds);
@@ -844,6 +852,7 @@ public partial class Main : Node3D
         _presentStep = false;
         if (_toolsPanel.Visible) RefreshDebugMenu();
         PresentWaypoints();
+        if (_sandboxMap) PresentSandboxRallies();
         _hud.DestinationTime -= dt; _hud.QueueRedraw();
         _frames++;
         if (_commandSmoke) CommandSmokeInput();
@@ -858,6 +867,7 @@ public partial class Main : Node3D
         }
         if (_engagementSmoke) { if (_formationSmoke) FormationSmokeInput(); else EngagementSmokeInput(); }
         if (_setupSmoke) SetupSmokeInput();
+        if (_sandboxMapSmoke) SandboxMapSmokeInput();
         if (_obstacleSmoke) ObstacleSmokeInput();
         if (_surfaceSmoke && _frames == 5)
         {
@@ -882,7 +892,7 @@ public partial class Main : Node3D
         if (_smoke) SmokeInput();
         if (_smoke && _capture != "" && _frames == (_combatSmoke ? 180 : 60)) _ = CaptureFrame(false);
         if (_smoke && _world.Tick >= 420) FinishSmoke();
-        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_productionSmoke && !_placementSmoke && !_dwarfHallSmoke && !_minimapSmoke && !_frodoSmoke && !_techSmoke && !_tier2Smoke && !_researchSmoke && !_siegeSmoke && !_defenseSmoke && !_victorySmoke && !_aiSmoke && !_observerSmoke && !_setupSmoke && !_engagementSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
+        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_productionSmoke && !_placementSmoke && !_dwarfHallSmoke && !_minimapSmoke && !_frodoSmoke && !_techSmoke && !_tier2Smoke && !_researchSmoke && !_siegeSmoke && !_defenseSmoke && !_victorySmoke && !_aiSmoke && !_observerSmoke && !_setupSmoke && !_engagementSmoke && !_sandboxMapSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
     }
 
     private string UnitName(int id) => _world!.Units[id].Definition.DisplayName;

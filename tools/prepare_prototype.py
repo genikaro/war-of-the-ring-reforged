@@ -25,6 +25,7 @@ import prototype_navigation
 import prototype_obstacles
 import prototype_interface
 import combat_rules
+import sandbox_map
 from lms2gltf import convert_model
 from resolve_model import Resolver
 import wor
@@ -220,11 +221,12 @@ def start_ground(scene):
     return bytes((bits[i // 32] >> (i % 32)) & 1 for i in range(width * height))
 
 
-def build_navigation(scene, resolver, output, extra_footprints=(), inactive_obstacles=(), precise=False):
-    """Write navigation.json and heights.bin; shared by the demo and skirmish maps."""
+def build_navigation(scene, resolver, output, extra_footprints=(), inactive_obstacles=(), precise=False, audit=True):
+    """Write navigation.json and heights.bin; shared by the demo and skirmish maps. The Sandbox skips the walker audit:
+    it repaints every cell walkable, so the source region graphs no longer describe it."""
     category = walker_category(scene)
-    mask_audit = verify_walker_masks.audit_category(scene, category)
-    if mask_audit.get('region_mismatches', 1):
+    mask_audit = verify_walker_masks.audit_category(scene, category) if audit else {'skipped': 'Sandbox: every cell repainted walkable'}
+    if audit and mask_audit.get('region_mismatches', 1):
         raise ValueError('painted walker bits differ from the original walker regions')
     width, height = category['grid']
     words = category['painted']['words']
@@ -319,10 +321,14 @@ def skirmish_cache(map_name=None):
     return wor.ROOT / ('converted/skirmish' if file == skirmish_map.MAP_FILE else 'converted/skirmish-maps/' + Path(file).stem)
 
 
-def prepare_skirmish(output, install=None, map_name=None, content=None):
+SANDBOX_CACHE = wor.ROOT / 'converted/skirmish-maps' / sandbox_map.STEM
+
+
+def prepare_skirmish(output, install=None, map_name=None, content=None, sandbox=False):
     """A multiplayer map (default Bilbo's Bluffs) with a Good Citadel and four workers on every start point (build-4,
     any map since build-35). Since build-48 the cache holds only the map: terrain, navigation, resources and start
-    layout. Units, buildings, rules and HUD art come from the shared content pack it points to (content_pack.py)."""
+    layout. Units, buildings, rules and HUD art come from the shared content pack it points to (content_pack.py).
+    sandbox builds the Sandbox test map instead, an empty level field cut from Bilbo's Bluffs (sandbox_map.py, build-56)."""
     import content_pack
     import os
     output = Path(output).resolve()
@@ -341,11 +347,11 @@ def prepare_skirmish(output, install=None, map_name=None, content=None):
             path.unlink() if path.is_file() else path.rmdir()
         if (output / stale).is_dir():
             (output / stale).rmdir()
-    wor2gltf.export(source, output / 'map', resolver)
+    wor2gltf.export(source, output / 'map', resolver, (lambda s: sandbox_map.flatten(s, resolver)) if sandbox else None)
     scene = world_scene.parse(data)
     world_scene.resolve_objects(scene, resolver.db)
     metadata = scene['world'].metadata
-    points = skirmish_map.start_points(skirmish_map.parse_markers(data, metadata, metadata['name_table']['names']))
+    points = sandbox_map.flatten(scene, resolver) if sandbox else skirmish_map.start_points(skirmish_map.parse_markers(data, metadata, metadata['name_table']['names']))
     if not 2 <= len(points) <= len(SLOT_COLORS):
         raise ValueError('expected 2 to %d start points, found %d' % (len(SLOT_COLORS), len(points)))
     width, _ = walker_category(scene)['grid']
@@ -363,7 +369,7 @@ def prepare_skirmish(output, install=None, map_name=None, content=None):
         bases.append({'team': team, 'start_point': point['name'], 'position': [x, y, z], 'footprint': footprint})
     construction, site_footprints = skirmish_construction.construction_data(resolver, skirmish_map.resource_nodes(scene))
     nav, allowed, width, height = build_navigation(scene, resolver, output, [b['footprint'] for b in bases]+site_footprints,
-        [s['obstacle'] for s in construction['sites']], precise=True)
+        [s['obstacle'] for s in construction['sites']], precise=True, audit=not sandbox)
     # Navigation for every body either faction can field, so new units never need a map re-import.
     import prototype_clearance
     prototype_clearance.refresh(output, pack['bodies'])
@@ -383,7 +389,8 @@ def prepare_skirmish(output, install=None, map_name=None, content=None):
     x, y, _ = bases[0]['position']
     camera_cell = int(y / spacing) * width + int(x / spacing)
     files = [output / 'map/scene.glb', output / 'navigation.json', output / 'heights.bin']
-    manifest = {'format_version': 1, 'mode': 'skirmish', 'name': skirmish_map.map_title(map_file) + ' — Good Skirmish', 'map': 'map/scene.glb',
+    title = sandbox_map.TITLE if sandbox else skirmish_map.map_title(map_file)
+    manifest = {'format_version': 1, 'mode': 'skirmish', 'name': title + ' — Good Skirmish', 'map': 'map/scene.glb',
                 'map_file': map_file, 'players': len(bases),
                 'content': Path(os.path.relpath(content, output)).as_posix(),
                 'spawns': spawns, 'groups': groups, 'camera_cell': camera_cell,
@@ -394,6 +401,9 @@ def prepare_skirmish(output, install=None, map_name=None, content=None):
                                         'worker_cells': b['worker_cells']} for b in bases]},
                 'source_sha256': metadata['sha256'],
                 'files': {p.relative_to(output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}}
+    if sandbox:
+        # The game reads this flag: both players are the person's, with every building standing (Main.SandboxMap.cs).
+        manifest['sandbox'] = True
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     (output / 'index.json').write_text(json.dumps([{'unit': manifest['name'], 'file': manifest['map'], 'clips': []}], indent=2) + '\n')
     return manifest
@@ -409,6 +419,12 @@ def prepare_all_maps(install=None):
         except Exception as error:  # noqa: BLE001 - the summary names every failed map
             print('%s: FAILED %s' % (source.stem, error), flush=True)
             failed.append(source.stem)
+    try:
+        prepare_skirmish(SANDBOX_CACHE, install, sandbox=True)
+        print('%s: 2 players' % sandbox_map.STEM, flush=True)
+    except Exception as error:  # noqa: BLE001 - the summary names every failed map
+        print('%s: FAILED %s' % (sandbox_map.STEM, error), flush=True)
+        failed.append(sandbox_map.STEM)
     return failed
 
 
@@ -418,14 +434,17 @@ if __name__ == '__main__':
     parser.add_argument('--skirmish', action='store_true', help="Build a skirmish cache (default Bilbo's Bluffs in converted/skirmish)")
     parser.add_argument('--map', help='Multiplayer map stem for --skirmish, e.g. MP04_Wasteland (default folder converted/skirmish-maps/<stem>)')
     parser.add_argument('--all-maps', action='store_true', help='Build a skirmish cache for every multiplayer map, each in its default folder')
+    parser.add_argument('--sandbox', action='store_true', help='Build the Sandbox test map, an empty level field (default folder converted/skirmish-maps/Sandbox)')
     parser.add_argument('--install', type=Path)
     parser.add_argument('--demo-only', action='store_true', help='Refresh squads and camera in an existing local cache without reconverting assets')
     parser.add_argument('--ui-only', action='store_true', help='Extract original HUD artwork into an existing cache')
     parser.add_argument('--rules-only', action='store_true', help='Refresh imported combat rules, equipment geometry and impact sounds')
     parser.add_argument('--units-only', action='store_true', help='Refresh unit models, combat rules, portraits and demo squads in an existing cache')
     args = parser.parse_args()
+    if args.sandbox and (args.map or args.skirmish or args.all_maps or args.demo_only or args.ui_only or args.rules_only or args.units_only):
+        parser.error('--sandbox builds the Sandbox cache; combine it only with --out and --install')
     if args.out is None:
-        args.out = skirmish_cache(args.map) if args.skirmish else wor.ROOT / 'converted/prototype'
+        args.out = SANDBOX_CACHE if args.sandbox else skirmish_cache(args.map) if args.skirmish else wor.ROOT / 'converted/prototype'
     if args.map and not args.skirmish:
         parser.error('--map requires --skirmish')
     if args.all_maps and (args.map or args.skirmish or args.demo_only or args.ui_only or args.rules_only or args.units_only):
@@ -452,6 +471,8 @@ if __name__ == '__main__':
         failed = prepare_all_maps(args.install)
         if failed:
             raise SystemExit('%d maps failed: %s' % (len(failed), ', '.join(failed)))
+    elif args.sandbox:
+        prepare_skirmish(args.out, args.install, sandbox=True)
     elif args.skirmish:
         prepare_skirmish(args.out, args.install, args.map)
     else:

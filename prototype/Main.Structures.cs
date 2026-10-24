@@ -68,7 +68,7 @@ public partial class Main
         var arrays = new Godot.Collections.Array(); arrays.Resize((int)Mesh.ArrayType.Max); arrays[(int)Mesh.ArrayType.Vertex] = points.ToArray();
         var ringMesh = new ArrayMesh(); ringMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles,arrays);
         var ring = new MeshInstance3D { Mesh = ringMesh,Visible = false,CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            MaterialOverride = new StandardMaterial3D { AlbedoColor = _observing && team >= 0 ? TeamColor(team).Lightened(.25f) : new Color(team < 0 ? "ded2a5" : team == PlayerTeam ? "e9c22d" : "e65045"),CullMode = BaseMaterial3D.CullModeEnum.Disabled,ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
+            MaterialOverride = new StandardMaterial3D { AlbedoColor = (_observing || _sandboxMap) && team >= 0 ? TeamColor(team).Lightened(.25f) : new Color(team < 0 ? "ded2a5" : team == PlayerTeam ? "e9c22d" : "e65045"),CullMode = BaseMaterial3D.CullModeEnum.Disabled,ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
         root.AddChild(ring); _structureViews.Add(id,new(id,team,type,resource,obstacle,root,ring,meshes));
     }
 

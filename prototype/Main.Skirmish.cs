@@ -64,6 +64,7 @@ public partial class Main
         LoadNeutralStructures(data);
         LoadSkirmishProduction(data);
         LoadSkirmishResearch(data);
+        if (_sandboxMap) PrepareSandboxMap();
         LoadSkirmishAi(data);
         ApplySkirmishHud(_commands);
     }

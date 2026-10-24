@@ -17,7 +17,7 @@ public partial class SetupScreen : Control
 {
     public sealed record Personality(string Id,int Difficulty);
     public sealed record MapEntry(string Stem,string Title,string? Cache,int Players,(int X,int Z)[] Bases,(bool Food,int X,int Z)[] Resources,
-        int WidthMm,int HeightMm,Color[] Colors,Personality[] Personalities,string DefaultPersonality)
+        int WidthMm,int HeightMm,Color[] Colors,Personality[] Personalities,string DefaultPersonality,bool Sandbox = false)
     {
         public bool Imported => Cache != null;
     }
@@ -133,7 +133,7 @@ public partial class SetupScreen : Control
         foreach (var map in _maps)
         {
             var button = new Button { Text = map.Title,ToggleMode = true,FocusMode = FocusModeEnum.None,Alignment = HorizontalAlignment.Left,
-                CustomMinimumSize = new(286,30),TooltipText = map.Imported ? map.Title : $"Not imported yet\npython tools/prepare_prototype.py --skirmish --map {map.Stem}" };
+                CustomMinimumSize = new(286,30),TooltipText = map.Sandbox && map.Imported ? SandboxDescription : map.Imported ? map.Title : $"Not imported yet\n{ImportCommand(map.Stem)}" };
             StyleListItem(button,map.Imported);
             var count = Caption($"{map.Players}",14,map.Imported ? Dim : Edge); count.HorizontalAlignment = HorizontalAlignment.Right;
             count.SetAnchorsAndOffsetsPreset(LayoutPreset.RightWide); count.OffsetLeft = -40; count.OffsetRight = -10; button.AddChild(count);
@@ -167,7 +167,9 @@ public partial class SetupScreen : Control
         _selected = map;
         foreach (var (stem,button) in _mapButtons) button.SetPressedNoSignal(stem == map.Stem);
         _mapTitle.Text = map.Title;
-        _mapDetail.Text = map.Imported ? $"{map.Players} start positions · {map.WidthMm/1000} × {map.HeightMm/1000} m" : $"{map.Players} start positions · not imported";
+        _mapDetail.Text = !map.Imported ? $"{map.Players} start positions · not imported"
+            : map.Sandbox ? $"Test map · empty level field · {map.WidthMm/1000} × {map.HeightMm/1000} m"
+            : $"{map.Players} start positions · {map.WidthMm/1000} × {map.HeightMm/1000} m";
         for (int slot = 0; slot < Slots; slot++)
         {
             var (row,swatch,name,choice,_) = _slots[slot];
@@ -177,6 +179,9 @@ public partial class SetupScreen : Control
             swatch.Color = slot < map.Colors.Length ? map.Colors[slot] : Dim;
             choice.Clear();
             choice.AddItem("You"); choice.AddItem("Closed");
+            // On the Sandbox both start positions are yours.
+            choice.Disabled = map.Sandbox;
+            if (map.Sandbox) { choice.Select(You); continue; }
             foreach (var bot in map.Personalities)
             {
                 var entry = AiRoster.Entry(bot.Id);
@@ -248,6 +253,13 @@ public partial class SetupScreen : Control
     {
         _card.Visible = players > 0;
         if (map == null || !_card.Visible) return;
+        _triangle.Visible = !map.Sandbox;
+        if (map.Sandbox)
+        {
+            _cardTitle.Text = "Sandbox · test map"; _cardDetail.Text = "Player 1 and Player 2 · both yours";
+            _cardTraits.Text = ""; _cardTraits.Visible = false; _cardDescription.Text = SandboxDescription;
+            _triangle.Display(null,Dim); return;
+        }
         int slot = _cardSlot >= 0 && _cardSlot < players && Choice(_cardSlot) >= FirstBot ? _cardSlot
             : Enumerable.Range(0,players).FirstOrDefault(s => Choice(s) >= FirstBot,-1);
         if (slot < 0)
@@ -276,8 +288,9 @@ public partial class SetupScreen : Control
         for (int slot = 0; slot < players; slot++) RefreshTraits(slot);
         RefreshCard(map,players);
         _start.Disabled = _loading || map is not { Imported: true } || open < 2;
-        _status.Text = map == null ? "No multiplayer maps found." : !map.Imported ? $"Not imported yet. Run: python tools/prepare_prototype.py --skirmish --map {map.Stem}"
+        _status.Text = map == null ? "No multiplayer maps found." : !map.Imported ? $"Not imported yet. Run: {ImportCommand(map.Stem)}"
             : open < 2 ? "At least two start positions must be open."
+            : map.Sandbox ? $"Sandbox: you command Player 1 and Player 2 · Tab switches · {_speed.Labels.ElementAtOrDefault(_speed.Index)} speed"
             : human >= 0 ? $"You play Player {human+1} against {open-1} bot{(open == 2 ? "" : "s")} · {_speed.Labels.ElementAtOrDefault(_speed.Index)} speed"
             : $"Nobody plays: you watch {open} bots · {_speed.Labels.ElementAtOrDefault(_speed.Index)} speed";
     }
@@ -290,6 +303,15 @@ public partial class SetupScreen : Control
         Started?.Invoke(new(cache,map.Title,Array.IndexOf(choices,You),bots,
             Enumerable.Range(0,map.Players).Where(s => choices[s] == Closed).ToArray(),Speeds[_speed.Index],Random.Shared.Next()));
     }
+
+    private const string SandboxStem = "Sandbox";
+    private const string SandboxDescription = "An empty level field for trying units out. You command both players: every building "
+        + "stands finished and fully upgraded, banks stay full, units train at once and gather in front of their base, "
+        + "no bots play and nothing ends the match. "
+        + "Tab or the console tabs switch players; clicking the other player's unit or building does too.";
+
+    private static string ImportCommand(string stem) => stem == SandboxStem ? "python tools/prepare_prototype.py --sandbox"
+        : $"python tools/prepare_prototype.py --skirmish --map {stem}";
 
     /// <summary>Freezes the screen while the chosen map loads.</summary>
     public void ShowLoading()
@@ -308,12 +330,15 @@ public partial class SetupScreen : Control
         var imported = Path.Combine(converted,"skirmish-maps");
         if (Directory.Exists(imported)) foreach (var folder in Directory.GetDirectories(imported)) stems.Add(Path.GetFileName(folder));
         if (File.Exists(Path.Combine(converted,"skirmish","manifest.json"))) stems.Add(bilbo);
+        // The Sandbox test map (build-56) heads the list, imported or not.
+        stems.Add(SandboxStem);
         return [.. stems.Select(stem => {
             string cache = stem.Equals(bilbo,StringComparison.OrdinalIgnoreCase) ? Path.Combine(converted,"skirmish") : Path.Combine(imported,stem);
             try { if (File.Exists(Path.Combine(cache,"manifest.json"))) return Read(stem,cache); }
             catch (Exception error) when (error is JsonException or IOException or KeyNotFoundException or InvalidOperationException or FormatException) { GD.PushWarning($"Skipping {stem}: {error.Message}"); }
-            return new MapEntry(stem,Regex.Replace(stem,@"^MP\d\d_","").Replace('_',' '),null,Players(stem),[],[],0,0,[],[],"");
-        }).OrderBy(m => m.Players).ThenBy(m => m.Title,StringComparer.OrdinalIgnoreCase)];
+            return stem == SandboxStem ? new MapEntry(stem,stem,null,2,[],[],0,0,[],[],"",Sandbox: true)
+                : new MapEntry(stem,Regex.Replace(stem,@"^MP\d\d_","").Replace('_',' '),null,Players(stem),[],[],0,0,[],[],"");
+        }).OrderByDescending(m => m.Sandbox).ThenBy(m => m.Players).ThenBy(m => m.Title,StringComparer.OrdinalIgnoreCase)];
     }
 
     private static int Players(string stem) => Regex.Match(stem,@"^MP(\d\d)") is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
@@ -339,7 +364,8 @@ public partial class SetupScreen : Control
         var head = new char[400]; string start = new(head,0,reader.Read(head,0,head.Length));
         int Field(string name) => int.Parse(Regex.Match(start,$"\"{name}\"\\s*:\\s*(\\d+)").Groups[1].Value);
         string title = manifest.GetProperty("name").GetString()!.Split(" — ")[0];
-        return new(stem,title,cache,bases.Length,bases,resources,Field("width")*Field("cell_size_mm"),Field("height")*Field("cell_size_mm"),colors,personalities,fallback);
+        return new(stem,title,cache,bases.Length,bases,resources,Field("width")*Field("cell_size_mm"),Field("height")*Field("cell_size_mm"),colors,personalities,fallback,
+            Sandbox: manifest.TryGetProperty("sandbox",out var sandbox) && sandbox.GetBoolean());
     }
 
     /// <summary>The map's walkable ground shaded by height, mirrored like the in-game minimap.</summary>

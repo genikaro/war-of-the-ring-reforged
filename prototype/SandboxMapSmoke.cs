@@ -1,0 +1,142 @@
+using Godot;
+using Reforged.Simulation;
+using System.Text.Json;
+
+/// <summary>The Sandbox map through the UI (build-56): both bases standing in full and fully upgraded with room to walk
+/// between buildings, rally points facing the centre and marked by flags, full banks, the source population maximum,
+/// instant building on and no bots; then Tab, the console tabs, a click and a box switching players, each player's own
+/// control groups, the selected Barracks' banner standing in for its flag, a Rohan Rider trained at once as Player 2
+/// walking out of its Barracks to its rally point, and the debug menu's instant-build toggle serving both players.</summary>
+public partial class Main
+{
+    private bool _sandboxMapSmoke;
+    private readonly Dictionary<string,bool> _sandboxMapChecks = [];
+    private int _sandboxMapHold,_sandboxMapWorker = -1;
+    private const int SandboxMapSmokeChecks = 20;
+    private const string SandboxRider = "UNIT_G_ROHAN_RIDER",SandboxBarracks = "BUILDING_G_GONDORIAN_BARRACKS";
+
+    private void SandboxMapSmokeInput()
+    {
+        var world = _world!; int[] teams = SandboxMapTeams;
+        bool Hold(bool waiting) { if (waiting) _sandboxMapHold++; return waiting; }
+        ConstructionSite? Site(int team,string name) => world.ConstructionSites.Values.FirstOrDefault(s => s.Team == team && world.SiteRules(s).Name == name);
+        void Focus(int x,int z) { _focus = PositionOf(x,z); UpdateCamera(); }
+        bool Full(int team) => world.Economies[team] is var bank && bank.FoodMilli == bank.FoodCapacityMilli && bank.OreMilli == bank.OreCapacityMilli;
+        var barracks = Site(1,SandboxBarracks)!;
+        switch (_frames-_sandboxMapHold)
+        {
+            case 2:
+            {
+                string[] resourceBuildings = [.. world.ConstructionRules.Values.Select(r => r.Name)];
+                _sandboxMapChecks["every_building_stands"] = _sandboxMapMissing.Count == 0 && teams.All(t => world.MissingPrerequisite(t,world.PlaceableBuildings) == null
+                    && world.MissingPrerequisite(t,resourceBuildings) == null
+                    && world.ConstructionSites.Values.Count(s => s.Team == t) == world.PlaceableBuildings.Count+resourceBuildings.Length);
+                _sandboxMapChecks["finished_and_fully_upgraded"] = world.ConstructionSites.Values.Where(s => s.Team >= 0)
+                    .All(s => s.Complete && s.Health == world.SiteRules(s).MaxHealth && world.UpgradeRules(s) == null)
+                    && teams.All(t => Site(t,"BUILDING_G_TOWN_CENTER_LEVEL_2") is { Prebuilt: true } && Site(t,"BUILDING_G_POPULATION_STRUCTURE_UPGRADE") != null);
+                _sandboxMapChecks["full_banks_and_source_population_maximum"] = teams.All(t => Full(t) && world.PopulationCapacity(t) == world.MaxPopulation)
+                    && _commands.ResourceReadout.Contains("99999");
+                RefreshDebugMenu();
+                _sandboxMapChecks["instant_build_on_by_default"] = world.InstantBuildTeams.SetEquals(teams) && _debugInstant.ButtonPressed;
+                // Every unit each producer offers, and every technique somewhere in the base.
+                _sandboxMapChecks["every_unit_and_technique_on_offer"] = teams.All(t =>
+                    world.Producers.Values.Where(p => p.Team == t).All(p => Enumerable.Range(0,p.Units.Length).All(slot => world.CanTrain(t,p.Id,slot,out _)))
+                    && world.Producers.Values.Where(p => p.Team == t).SelectMany(p => p.Units).Distinct().Count() == world.ProductionRules.Count
+                    && world.Techniques.All(technique => world.ConstructionSites.Values.Any(s => s.Team == t
+                        && world.CanResearch(t,s.Id,world.Techniques.IndexOf(technique),out _))));
+                _sandboxMapChecks["no_bots_and_no_chasing"] = world.AiPlayers.Count == 0 && world.AggressiveIdleTeams.Count == 0;
+                // The widest trainable body finds open ground beside every producer, connected to its base.
+                var widest = world.ProductionRules.Keys.Select(n => _rules.Units[n]).MaxBy(u => u.BodyRadiusMm)!;
+                var body = world.Navigation.ForBody(widest.BodyRadiusMm,widest.BodyHeightMm);
+                _sandboxMapChecks["walking_room_beside_every_producer"] = world.Producers.Values.Where(p => teams.Contains(p.Team)).All(p =>
+                    body.Nearest(world.Navigation.Cell(p.X,p.Z),connectedTo: body.NearestOpen(p.ExitAnchor,SimWorld.OpenRegionCells)) is int near && near >= 0
+                    && SimWorld.DistanceSquared(p.X,p.Z,world.Navigation.Center(near).X,world.Navigation.Center(near).Z) <= 15000L*15000);
+                // One rally point per side, 12 m short of the centre between the Citadels, on the side's own half.
+                var starts = world.StartStructures; int centreX = (int)starts.Average(s => s.X),centreZ = (int)starts.Average(s => s.Z);
+                var rallies = teams.Select(t => world.Producers.Values.Where(p => p.Team == t).Select(p => p.RallyCell).Distinct().ToArray()).ToArray();
+                _sandboxMapChecks["rally_points_face_the_centre"] = teams.All(t => rallies[t] is [>= 0] && world.Navigation.Center(rallies[t][0]) is var (rx,rz)
+                    && Math.Abs(Math.Sqrt(SimWorld.DistanceSquared(rx,rz,centreX,centreZ))-SimWorld.SandboxRallyShortMm) <= 1500
+                    && SimWorld.DistanceSquared(starts[t].X,starts[t].Z,rx,rz) < SimWorld.DistanceSquared(starts[t].X,starts[t].Z,centreX,centreZ))
+                    && world.Producers.Values.Count(p => teams.Contains(p.Team)) == 8;
+                _sandboxMapChecks["flags_mark_both_rally_points"] = _sandboxRallyFlags.Count == 2 && teams.All(t => rallies[t] is [var cell]
+                    && _sandboxRallyFlags.TryGetValue((t,cell),out var flag) && flag.Root.Visible && flag.Banner.Visible && world.Navigation.Center(cell) is var (fx,fz)
+                    && flag.Root.Position.DistanceTo(new(-fx/1000f,world.Navigation.NodeHeight(cell)/1000f,fz/1000f)) < .01f);
+                _sandboxMapChecks["player_1_tab_pressed_and_rings_in_team_colours"] = PlayerTeam == 0
+                    && _commands.SandboxTab(0) is { Visible: true,ButtonPressed: true } && _commands.SandboxTab(1) is { Visible: true,ButtonPressed: false }
+                    && world.Units.Where(u => u.Team >= 0).All(u => ((StandardMaterial3D)_views[u.Id].Ring.MaterialOverride).AlbedoColor == TeamColor(u.Team).Lightened(.25f));
+                PushKey(Key.Tab); break;
+            }
+            case 4:
+                _sandboxMapChecks["tab_commands_player_2"] = PlayerTeam == 1 && _commands.PlayerTeam == 1 && _selected.Count == 0
+                    && _commands.SandboxTab(1).ButtonPressed && !_commands.SandboxTab(0).ButtonPressed;
+                PushKey(Key.Key1); break;
+            case 6:
+                _sandboxMapChecks["player_2_has_its_own_groups"] = _selected.Count == 4 && _selected.All(id => world.Units[id].Team == 1 && world.Workers.ContainsKey(world.Units[id].Definition.Name));
+                Focus(barracks.X,barracks.Z); break;
+            case 8: Click(StructureSmokePoint(barracks.Obstacle)); break;
+            case 10:
+                _sandboxMapChecks["player_2_barracks_offers_the_rider"] = SelectedProducer()?.Id == barracks.Id && _commands.TrainButton(1) is { Visible: true,Disabled: false };
+                // The selected Barracks' own banner stands on Player 2's rally point instead of the flag, inside the ring; Player 1's stays.
+                _sandboxMapChecks["selected_banner_replaces_its_flag"] = _rallyBanner is { Visible: true }
+                    && _sandboxRallyFlags.Single(f => f.Key.Team == 1).Value is { Banner.Visible: false,Root.Visible: true }
+                    && _sandboxRallyFlags.Single(f => f.Key.Team == 0).Value.Banner.Visible;
+                Press(_commands.TrainButton(1).GetGlobalRect().GetCenter()); break;
+            case 11: Release(_commands.TrainButton(1).GetGlobalRect().GetCenter()); break;
+            case 13:
+                _sandboxMapChecks["instant_training_as_player_2_keeps_the_bank_full"] = world.Producers[barracks.Id].Queue.Count == 0
+                    && world.Units.Any(u => u.Team == 1 && u.Definition.Name == SandboxRider) && Full(1);
+                break;
+            case 14:
+            {
+                // The Rider walks out of its Barracks to Player 2's rally point and stops there.
+                var (rallyX,rallyZ) = world.Navigation.Center(world.Producers[barracks.Id].RallyCell);
+                bool Arrived(SimUnit u) => u.Present && u.Goal < 0 && SimWorld.DistanceSquared(u.X,u.Z,rallyX,rallyZ) <= 5000L*5000;
+                if (Hold(!world.Units.Any(u => u.Team == 1 && u.Definition.Name == SandboxRider && Arrived(u)) && _sandboxMapHold < 900)) break;
+                var rider = world.Units.FirstOrDefault(u => u.Team == 1 && u.Definition.Name == SandboxRider && Arrived(u));
+                _sandboxMapChecks["trained_rider_walks_to_the_rally_point"] = rider != null
+                    && world.Navigation.ForBody(rider.Definition.BodyRadiusMm,rider.Definition.BodyHeightMm).ComponentSize(rider.Node) >= SimWorld.OpenRegionCells;
+                var citadel = world.ConstructionSites.Values.First(s => s.Team == 0 && s.Prebuilt);
+                Focus(citadel.X,citadel.Z); break;
+            }
+            case 16:
+                Click(StructureSmokePoint(world.ConstructionSites.Values.First(s => s.Team == 0 && s.Prebuilt).Obstacle)); break;
+            case 18:
+                _sandboxMapChecks["click_takes_command_of_player_1"] = PlayerTeam == 0 && _selectedStructure == world.ConstructionSites.Values.First(s => s.Team == 0 && s.Prebuilt).Obstacle
+                    && _commands.SandboxTab(0).ButtonPressed && SelectedOwnSite() != null;
+                Press(_commands.SandboxTab(1).GetGlobalRect().GetCenter()); break;
+            case 19: Release(_commands.SandboxTab(1).GetGlobalRect().GetCenter()); break;
+            case 21:
+            {
+                _sandboxMapChecks["console_tab_commands_player_2"] = PlayerTeam == 1 && _commands.SandboxTab(1).ButtonPressed && _selectedStructure == null;
+                // A box around a Player 1 worker alone, clear of the console.
+                var worker = world.Units.Where(u => u.Team == 0 && u.Present && world.Workers.ContainsKey(u.Definition.Name)).Select(u => (u,At: _camera.UnprojectPosition(UnitPosition(u)+Vector3.Up)))
+                    .First(w => !_commands.GetGlobalRect().Grow(30).HasPoint(w.At) && GetViewport().GetVisibleRect().Grow(-30).HasPoint(w.At));
+                _sandboxMapWorker = worker.u.Id;
+                StructureSmokeDrag(worker.At-new Vector2(22,22),worker.At+new Vector2(22,22)); break;
+            }
+            case 23:
+                _sandboxMapChecks["box_takes_command_of_player_1"] = PlayerTeam == 0 && _selected.Contains(_sandboxMapWorker) && _selected.All(id => world.Units[id].Team == 0);
+                if (_capture != "")
+                {
+                    // Both bases and their rally points, Player 2's Rider standing at its own.
+                    var starts = world.StartStructures; Focus((int)starts.Average(s => s.X),(int)starts.Average(s => s.Z));
+                    _distance = 105; UpdateCamera(); _ = CaptureFrame(false);
+                }
+                break;
+            case 24:
+                // The debug menu's instant building and training turns off and on for both players here.
+                _debugInstant.ButtonPressed = false;
+                bool off = world.InstantBuildTeams.Count == 0;
+                _debugInstant.ButtonPressed = true;
+                _sandboxMapChecks["instant_toggle_serves_both_players"] = off && world.InstantBuildTeams.SetEquals(teams); break;
+            case 26:
+                bool passed = _sandboxMapChecks.Count == SandboxMapSmokeChecks && _sandboxMapChecks.Values.All(v => v);
+                var report = new { build = BuildInfo.Label,checks = _sandboxMapChecks,passed,held_frames = _sandboxMapHold,missing = _sandboxMapMissing,
+                    bases = teams.Select(t => new { team = t,buildings = world.ConstructionSites.Values.Where(s => s.Team == t).Select(s => new { world.SiteRules(s).Name,s.X,s.Z,s.Health }),
+                        population = new { used = world.PopulationUsed(t),capacity = world.PopulationCapacity(t) },food = world.Economies[t].Food,ore = world.Economies[t].Ore }),
+                    status = _status.Text,digest = world.StateDigest() };
+                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"sandbox-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
+                GD.Print("SANDBOX_MAP_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(passed ? 0 : 1); break;
+        }
+    }
+}

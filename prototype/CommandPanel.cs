@@ -148,6 +148,7 @@ public partial class CommandPanel : Control
         CreateProductionControls();
         CreateResearchControls();
         CreateMatchControls();
+        CreateSandboxTabs();
         _hint = Text("",new(260,-27),new(760,24),13); _content.AddChild(_hint);
         var config = new ConfigFile();
         if (config.Load("user://interface.cfg") == Error.Ok) ScalePercent = Math.Clamp(config.GetValue("hud","scale_percent",100).AsDouble(),75,150);

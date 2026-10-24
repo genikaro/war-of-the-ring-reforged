@@ -73,7 +73,7 @@ public partial class Main
         body.AddChild(new HSeparator()); body.AddChild(DebugText("Cheats"));
         var cheats = new HBoxContainer(); body.AddChild(cheats);
         _debugGrant = DebugButton($"+{CheatGrant} food and ore",() => {
-            _world!.GrantResources(0,CheatGrant);
+            foreach (int team in CheatTeams) _world!.GrantResources(team,CheatGrant);
             if (_skirmish) ApplySkirmishHud(_commands);
             _status.Text = $"Cheat: +{CheatGrant} food and +{CheatGrant} ore";
         });
@@ -81,7 +81,7 @@ public partial class Main
         _debugInstant = new CheckButton { Text = "Build and train instantly", FocusMode = Control.FocusModeEnum.None,
             TooltipText = "Your foundations complete as soon as a worker is assigned, and training finishes on the next tick." };
         _debugInstant.Toggled += on => {
-            if (on) _world!.InstantBuildTeams.Add(0); else _world!.InstantBuildTeams.Remove(0);
+            foreach (int team in CheatTeams) if (on) _world!.InstantBuildTeams.Add(team); else _world!.InstantBuildTeams.Remove(team);
             _status.Text = on ? "Cheat: instant building and training on" : "Cheat: instant building and training off";
         };
         cheats.AddChild(_debugInstant);
@@ -117,6 +117,9 @@ public partial class Main
         foreach (var player in _impactPlayers.Concat(_launchPlayers)) player.StreamPaused = paused;
     }
 
+    /// <summary>The sides the cheats serve: the one you command, or both on the Sandbox map (build-56).</summary>
+    private int[] CheatTeams => _sandboxMap ? SandboxMapTeams : [PlayerTeam];
+
     private void RefreshDebugMenu()
     {
         var viewport = GetViewport().GetVisibleRect().Size;
@@ -127,11 +130,11 @@ public partial class Main
         _debugPause.Disabled = !ready;
         _debugStep.Disabled = !ready || !_paused;
         _debugFocus.Disabled = !ready;
-        bool economy = ready && _world!.Economies.ContainsKey(0);
+        bool economy = ready && CheatTeams.All(_world!.Economies.ContainsKey);
         _debugGrant.Disabled = _debugInstant.Disabled = !economy;
         if (!ready) { _debugSummary.Text = "Encounter unavailable"; _debugSelection.Text = ""; return; }
         var world = _world!;
-        _debugInstant.SetPressedNoSignal(world.InstantBuildTeams.Contains(0));
+        _debugInstant.SetPressedNoSignal(CheatTeams.All(world.InstantBuildTeams.Contains));
         _debugSummary.Text = $"{(_paused ? "Paused" : "Running")} · Tick {world.Tick} · 20 ticks/s"+(_skirmish ? "\n"+AiSummary() : "");
         var units = world.Units.Where(u => u.Health > 0 && _selected.Contains(u.Id)).ToArray();
         _debugSelection.Text = units.Length == 0 ? "No units selected" :

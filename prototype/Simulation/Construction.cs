@@ -194,7 +194,7 @@ public sealed partial class SimWorld
             site.Health = (int)(initial+(rules.MaxHealth-initial)*site.ProgressMicroTicks/duration);
             if (site.ProgressMicroTicks < duration) continue;
             site.Complete = true;
-            if (site.Building != null) CompleteBuilding(site,working.FirstOrDefault() ?? builders[0]);
+            if (site.Building != null) CompleteBuilding(site,(working.FirstOrDefault() ?? builders[0]).Node);
             foreach (var unit in builders)
             {
                 Apply(new(Tick,unit.OrderSequence,unit.Team,[unit.Id],-1,Kind: OrderKind.Stop),activating: true);

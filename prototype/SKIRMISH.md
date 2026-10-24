@@ -2731,3 +2731,98 @@ The tally is derived from the fight and only the HUD reads it, so like the
 gathered totals it stays out of the state digest.
 
 Validation: `SimulationTests` 893 checks (6 new: a lethal hit adds one kill and one loss, rivals add one kill, a friendly kill is a loss only, the tally stays out of the digest, a tower kill counts for its side, a razed building counts for both sides but not as a unit kill). The observer smoke grows to 16 cases: at the result it presses S and checks that each row matches the gathered totals and records, that the losses add up to every fallen unit, and that kills > 0. It now captures `-stats.png` at 14:00, and its captures pick the tab a frame early (since build-36, `-units.png` had shown the Economy tab). Gimli against Aragorn: Gimli wins at 18:19, 79 kills to 27, 10 buildings razed.
+
+## Build-56: the Sandbox test map
+
+The owner asked for a test map, Sandbox, for testing units: one person controls
+both Player 1 and Player 2, both have huge resources, all tech is available and
+every building is built ("tier 5 ready"). Asked mid-build, the owner chose a plain
+empty map over borrowing Bilbo's Bluffs' terrain.
+
+**The field.** `tools/sandbox_map.py` cuts it from the Bilbo's Bluffs source world, so
+the ground art, resource objects and every rule stay original:
+
+- The terrain is level and covered in the map's primary all-grass tiles, scattered
+  per tile (the commonest tile is a grass-to-dirt transition, which repeats as dirt
+  patches). It has one tint, the median vertex colour of the source's level ground.
+- Every cell is walkable and buildable. Scenery, water, editor decals, effects and
+  places of power are gone.
+- Two start points face each other across the middle of the 200 × 200 m field, 80 m
+  apart (110 m at first; the owner asked for them closer). Each has one food well and
+  one ore pile 20 m behind it.
+
+`python tools/prepare_prototype.py --sandbox` (or `--all-maps`) runs the scene through
+the ordinary skirmish importer into `converted/skirmish-maps/Sandbox`. It skips only
+the walker-mask audit, because the source region graphs no longer describe repainted
+ground. The manifest says `"sandbox": true`; the game reads the mode from that flag.
+
+**The bases.** At load, `SimWorld.PrebuildBase` gives each side, free and finished:
+
+- one of every placeable building it lacks, on the free cell nearest its Citadel that
+  keeps a 4 m walking gap around the footprint;
+- a Mill and a Foundry on its nearest well and ore pile;
+- every building promoted to the end of its upgrade line;
+- one rally point for all its producers, on the way from its Citadel to the centre
+  between the Citadels and 12 m short of it (`SimWorld.RallyTowardCentre`; owner
+  request). New units gather in front of their base, the two groups 24 m apart. Idle
+  units here never give chase, so they do not start a fight on their own. A flag in
+  each player's colour (the original gather-point banner) inside a 2.6 m ground ring
+  marks every rally point of either player at all times, moved rally points included;
+  while a building is selected, its own banner stands in for its flag.
+
+Today that is Citadel 2, War Camp, Watchtower, Barracks, Dwarf Hall, Wilderness
+Outpost, Ranger Post and Forge. Only Tier 2 exists in the game so far: Tiers 3–5 will
+appear in the Sandbox by themselves once their buildings and upgrades are imported.
+Every unit and all four techniques are on offer; nothing is researched in advance.
+
+**Rules.**
+
+- Both banks are refilled to the source storage cap (99,999 food and ore, all the
+  resource strip shows) after every tick.
+- Population capacity is the source maximum, 100, from the start.
+- No bots play, and no idle units give chase.
+- The result panel never opens.
+- Selection rings use team colours, as when observing.
+- Instant building and training is on for both players from the start (owner
+  request after the first playtest): foundations, training, upgrades and research
+  finish at once. The debug menu (F4) turns it off and on.
+- The F4 cheats (+1000 food and ore, instant building and training) serve both
+  players. They were hard-coded to team 0, which also missed a human in another
+  lobby slot; elsewhere they now serve the side you command.
+
+**Two players, one person.** `PlayerTeam` switches between the sides. To switch:
+
+- Tab;
+- the Player 1 / Player 2 tabs in the console's two empty slots beside the menu
+  button (the original chat and goals slots);
+- a click on the other player's unit or building;
+- a box around only the other player's units.
+
+A switch clears the selection and targeting, swaps in that player's control groups
+(each side's start workers are its group 1), and recolours the rally banner and
+waypoint flags.
+
+**Lobby.** The Sandbox heads the map list. Both slots read You and are locked, and the
+card explains the map. If the cache is missing, the list shows the `--sandbox` import
+command. `./prototype/run.ps1 -Sandbox` launches it directly.
+
+Refactors: `CanPlaceBuilding` now calls `FootprintClear` for its ground, resource,
+structure and unit tests; `LayFoundation` can lay for free; `CompleteBuilding` takes
+the exit node instead of the builder. Routes and digests are unchanged.
+
+Validation:
+
+- `-SandboxSmoke` (20 checks): every building stands finished and fully upgraded,
+  banks are full, population is 100, instant building is on, every unit and technique
+  is on offer, every producer rallies 12 m short of the centre on its own side under a
+  flag in its colour (the selected Barracks' banner replaces its flag), there are no bots, and the widest unit finds open ground beside every producer. Then Tab
+  switches to Player 2, group 1 recalls Player 2's workers, a Rohan Rider trained as
+  Player 2 appears at once and walks out of its Barracks to the rally point with the
+  bank still full, and a click, a console tab and a box each switch players. The debug
+  menu's instant toggle turns off and on for both players.
+- `-SetupSmoke` grows to 16 checks: the Sandbox heads the list, and choosing it locks
+  both slots to You.
+- `tools/test_sandbox_map.py` has 6 synthetic tests.
+- `SimulationTests` (894 checks), the Python suite, and the skirmish, construction,
+  placement, structure, production, tech, Tier 2, command, minimap and siege smokes
+  all pass.
