@@ -129,7 +129,8 @@ scaled Main collision boxes. [Collision notes](../tools/NOTES-unit-collision.md)
 record the later Aragorn demo adjustment to 800/2347 mm and 112% visual scale.
 Friendly cores use half the combined radii; enemy contact retains full envelopes.
 The collision notes also describe clearance profiles and limits. Default running
-stays at 3 m/s; F2 walking uses the
+uses each unit's [source run speed ratio](MOVEMENT.md#build-60-per-unit-run-speeds)
+with the Gondor Swordsman at 3 m/s; F2 walking uses the
 [source animation ratio](MOVEMENT.md#walkrun-control--october-20-2026). Awareness, spacing and opponent AI
 remain prototype policies.
 

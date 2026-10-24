@@ -57,6 +57,12 @@ class CombatAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'ratio'):
             combat_rules.locomotion(model,skeleton)
 
+    def test_run_scale_is_relative_to_the_reference_runner(self):
+        self.assertEqual(combat_rules.run_scale({'Run': {'SourceSpeed': 7.215122699737549}},4.762779712677002),1514897)
+        self.assertEqual(combat_rules.run_scale({'Run': {'SourceSpeed': 4.762779712677002}},4.762779712677002),1000000)
+        with self.assertRaisesRegex(ValueError,'run speed'):
+            combat_rules.run_scale({'Run': {'SourceSpeed': 20}},4)
+
     def test_type_matrix_resolves_source_ids_and_all_directions(self):
         table = Mock()
         table.get.side_effect = lambda name: SimpleNamespace(id={

@@ -237,7 +237,8 @@ tracks implemented corrections and unresolved comparisons.
   intentional differences do not change the recorded original S/F1–F4 bindings.
   **F2 is implemented** as a persistent player-wide Walk/Run toggle and has a
   matching run-icon button. Source animation ratios determine walking speed;
-  default running retains 3 m/s. No camera shortcut uses F2. Q/W/E/R are
+  default running uses each unit's source run speed ratio, with the Gondor Swordsman
+  at 3 m/s (build-60). No camera shortcut uses F2. Q/W/E/R are
   assigned by source ability slot. Build-2 connects Aragorn's Q Kingsfoil; his
   W/E slots show passive Fury/Immunity and R is empty. See [ability details](ABILITIES.md).
 - Verify Guard for a friendly unit, building and terrain area, plus Patrol

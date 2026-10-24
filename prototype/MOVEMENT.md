@@ -181,7 +181,8 @@ in sequence at the next fixed tick, including after a pause. It changes no route
 queue, target, windup or cooldown. Both team settings and unit modes participate
 in the state digest and survive later orders.
 
-Running keeps the accepted **3 m/s** baseline. Walking scales that speed using
+Running keeps the accepted **3 m/s** baseline (build-60 replaces it with
+[per-unit run speeds](#build-60-per-unit-run-speeds)). Walking scales that speed using
 the first positive Walk/Run state choices' `J_Position` displacement divided by
 clip duration, before prototype root-motion removal. LSK uses XY as its ground
 plane and Z as up; the importer also normalizes the Uruk joint's trailing space.
@@ -261,3 +262,55 @@ Refresh existing skirmish navigation with
 obstacles without the version tag keep their previous mask behavior; Helm's
 Deep is unchanged. Circle sweeps are a deterministic adapter policy, not a
 claim about the original executable's collision formulas.
+
+## Build-60: per-unit run speeds
+
+The original has no speed column. A unit moves as far as the root joint
+(`J_Position`) of its Run or Walk clip travels, so each unit's speed is its own
+animation's. `AIApproximateRunVelocity` is only the AI's estimate for scoring
+units, and for Aragorn, Saruman, Gollum and Qamara it holds the walk speed.
+
+Until now every unit ran at the accepted 3 m/s. The owner chose to keep the
+source ratios between units but scale them so the Gondor Swordsman still runs
+3 m/s, which is 63% of his clip's 4.763 m/s. The rules cache gives each unit
+`RunScale` in parts per million: its first positive Run choice's clip speed over
+the Swordsman's (`combat_rules.RUN_REFERENCE`, `run_scale`). `SimUnit.RunBudget`
+is 150,000 µm per tick times that scale. Walking scales the unit's own run speed
+by its walk/run ratio, as before.
+
+| Unit | Source run clip | RunScale | Run | Walk |
+|---|---:|---:|---:|---:|
+| Rohan Rider | 7.215 | 1,514,897 | 4.54 m/s | 1.01 m/s |
+| Legolas | 6.415 | 1,346,916 | 4.04 m/s | 1.22 m/s |
+| Elven Lightbearer | 6.094 | 1,279,492 | 3.84 m/s | 1.18 m/s |
+| Aragorn | 5.809 | 1,219,693 | 3.66 m/s | 1.33 m/s |
+| Ranger | 5.585 | 1,172,545 | 3.52 m/s | 1.72 m/s |
+| Uruk-Hai | 5.260 | 1,104,488 | 3.31 m/s | 1.43 m/s |
+| Elven Knight | 5.256 | 1,103,607 | 3.31 m/s | 1.55 m/s |
+| Human Worker | 5.084 | 1,067,387 | 3.20 m/s | 1.22 m/s |
+| Beorning | 4.945 | 1,038,316 | 3.11 m/s | 1.59 m/s |
+| Dwarf Axethrower | 4.872 | 1,023,030 | 3.07 m/s | 1.15 m/s |
+| Dwarf Shieldbreaker | 4.870 | 1,022,587 | 3.07 m/s | 1.11 m/s |
+| Elven Archer | 4.798 | 1,007,295 | 3.02 m/s | 1.12 m/s |
+| Gondor Swordsman | 4.763 | 1,000,000 | 3.00 m/s | 1.22 m/s |
+| Gandalf the Grey | 4.553 | 955,982 | 2.87 m/s | 1.22 m/s |
+| Gimli | 4.533 | 951,805 | 2.86 m/s | 1.02 m/s |
+| Frodo | 4.475 | 939,677 | 2.82 m/s | 1.08 m/s |
+| Huorn | 3.369 | 707,353 | 2.12 m/s | 2.12 m/s |
+
+The Huorn's Run state plays its walk clip, so it walks and runs alike. Clips
+still play at their own rate, so every unit now covers the same 63% of its
+clip's stride; before, the Rohan Rider covered 42% and the Huorn 89%.
+
+Not simulated yet: random Run variants (Uruk-Hai 5.26/4.38/4.17 m/s; the first
+is used, matching the clip shown), whether the source model scale (Uruk-Hai 1.2)
+scales root motion, the `ScaleTranslationByZChange` slope flag on both states,
+and the running-speed modifiers (Orc Mask +25%, Steed of Rohan +30%, Legolas's
+Speed gear's 1.2× time scale). Whether carrying workers slow to their walk clip
+is unverified; they keep running.
+
+Refresh with `python tools/content_pack.py` (every skirmish map shares the
+pack) and `python tools/prepare_prototype.py --rules-only` for the demo cache.
+`MovementModeChecks` covers the run scale, walking from a unit's own run speed,
+a mixed-speed squad arriving without overlap and invalid scales; `MeleeChecks`
+pins the cached Aragorn, Elven Knight and Uruk-Hai values.

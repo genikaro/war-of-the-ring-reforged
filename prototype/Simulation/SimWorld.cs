@@ -70,7 +70,9 @@ public sealed class SimUnit(int id, int team, int x, int z)
         && a.BonusTargets?.Contains(targetType) == true)?.BonusScale ?? 1_000_000;
     public int Facing { get; internal set; }
     public int PreviousFacing { get; internal set; }
-    public long MovementBudget => Walking ? Math.Max(1,SimWorld.MovementTickSpan*Definition.WalkScale/1_000_000) : SimWorld.MovementTickSpan;
+    /// <summary>Micrometres run per tick: the source ratio to the Gondor Swordsman, who runs the accepted 3 m/s (build-60).</summary>
+    public long RunBudget => Math.Max(1,SimWorld.MovementTickSpan*Definition.RunScale/1_000_000);
+    public long MovementBudget => Walking ? Math.Max(1,RunBudget*Definition.WalkScale/1_000_000) : RunBudget;
     public int AttackStartTick { get; internal set; } = -1;
     public int AttackVictim { get; internal set; } = -1;
     public int AttackVariant { get; internal set; } = -1;
@@ -726,7 +728,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             {
                 unit.Path.Add(unit.Node); unit.Waypoint = 0;
             }
-            long budget = unit.MovementBudget; // Running retains the accepted 3 m/s baseline.
+            long budget = unit.MovementBudget;
             while (budget > 0 && unit.Waypoint < unit.Path.Count)
             {
                 int nextNode = unit.Path[unit.Waypoint];

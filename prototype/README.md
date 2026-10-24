@@ -196,8 +196,10 @@ and resumes default guarding on the next tick; Hold Position stays stationary.
 between walking and running, including units spawned afterward. It works with
 an empty selection or while inspecting enemies. Each player's setting is
 independent. Orders, queued waypoints and attack timing continue.
-Running retains the accepted 3 m/s speed; walking uses the source animation
-ratio for each unit. See [movement details](MOVEMENT.md#walkrun-control--october-20-2026).
+Each unit runs at its own speed, keeping the original ratios with the Gondor
+Swordsman at 3 m/s (build-60); walking uses the source animation ratio for each
+unit. See [movement details](MOVEMENT.md#walkrun-control--october-20-2026) and
+[run speeds](MOVEMENT.md#build-60-per-unit-run-speeds).
 
 Combat reserves separate reachable attack positions around each target, keeps
 allied spacing, and parks excess attackers outside the melee ring. Settled
@@ -733,8 +735,9 @@ arrival, settled-waiting and interpolated-separation checks.
 
 The three demo types use imported stats and animation-timed melee. Armor math,
 event-scale normalization and effective range remain documented approximations;
-see [combat notes](COMBAT.md). Running remains 3 m/s; walking uses the imported
-walk/run animation ratio. Original world speeds and stamina remain unverified.
+see [combat notes](COMBAT.md). Run speeds keep the source ratios, scaled so the
+Gondor Swordsman runs 3 m/s; walking uses the imported walk/run animation ratio.
+Original world speeds and stamina remain unverified.
 Enemies acquire nearby reachable targets; attacked units retaliate. Attack orders
 retain nearby combat intent after a target dies; move orders clear it. Melee
 requires a supported route between attacker and target, so walls and disconnected

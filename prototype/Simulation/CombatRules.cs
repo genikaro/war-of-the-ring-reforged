@@ -8,7 +8,7 @@ public sealed record MeleeHit(int Tick,int Scale);
 public sealed record MeleeAttack(string Clip,int Weight,int DurationTicks,MeleeHit[] Hits,bool Melee = false);
 public sealed record UnitDefinition(int Id,string Name,string DisplayName,int MaxHealth,int ArmorMilli,int DamageType,
     string DamageTypeName,int MaxAttackers,int DpsMilli,int ReachMm,string ReadyClip,MeleeAttack[] Attacks,int StartingHealthPercent = 100,
-    int WalkScale = 500_000,string WalkClip = "",string RunClip = "",int BodyRadiusMm = 350,int BodyHeightMm = 700,int SelectionRadiusMm = 650,int AttackGapMm = 0,
+    int WalkScale = 500_000,int RunScale = 1_000_000,string WalkClip = "",string RunClip = "",int BodyRadiusMm = 350,int BodyHeightMm = 700,int SelectionRadiusMm = 650,int AttackGapMm = 0,
     int FriendlyCompressionPpm = 1_000_000,int ModelScalePpm = 1_000_000,
     int ProjectileSpeedMmPerSecond = 0,int MinimumRangeMm = 0,
     int MeleeDpsMilli = 0,int MeleeReachMm = 2000,int MeleeGapMm = 0,AbilityDefinition[]? Abilities = null,bool Hero = false,
@@ -36,7 +36,7 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
             || ProjectileSpeedMmPerSecond is < 0 or > 200000 || MinimumRangeMm < 0 || MinimumRangeMm >= ReachMm
             || (!IsRanged && MinimumRangeMm != 0)
             || MeleeDpsMilli is < 0 or > 1_000_000 || MeleeReachMm is < 700 or > 10000 || MeleeGapMm is < 0 or > 10000
-            || WalkScale is <= 0 or > 1_000_000
+            || WalkScale is <= 0 or > 1_000_000 || RunScale is <= 0 or > 3_000_000
             || BodyRadiusMm is < 100 or > 5000 || BodyHeightMm is < 100 or > 15000 || SelectionRadiusMm is < 100 or > 6000
             || AttackGapMm is < 0 or > 10000 || RegenerationPpm is < 0 or > 10_000_000 || SiegePpm is <= 0 or > 10_000_000
             || FriendlyCompressionPpm is < 500_000 or > 1_000_000 || ModelScalePpm is < 500_000 or > 2_000_000

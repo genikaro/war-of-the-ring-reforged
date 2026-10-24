@@ -30,6 +30,14 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-60 (Oct 24):** each unit runs at its own speed. The original has no speed
+column: units move as far as their Run clip's root joint travels. The prototype keeps
+those ratios and scales them so the Gondor Swordsman still runs 3 m/s, so the Rohan
+Rider runs 4.54 m/s, Legolas 4.04, Aragorn 3.66, Frodo 2.82 and the Huorn 2.12.
+Walking scales each unit's own run speed by its walk/run ratio. The bot reference match
+is shorter: Gimli beats Aragorn on Bilbo's Bluffs at tick 16483 (was 21983). See
+[movement notes](../prototype/MOVEMENT.md#build-60-per-unit-run-speeds).
+
 **Build-59 (Oct 24):** training dummies in the Sandbox. Four dummies stand beside the
 blue base, one per damage type (Cutting, Piercing, Blunt, Hero), with 1000 health, no
 regeneration and no attack; they never fight back. Their buttons add 1 armor, set armor

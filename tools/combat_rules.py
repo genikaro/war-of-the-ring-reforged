@@ -132,6 +132,18 @@ def locomotion(model, skeleton):
     return result, scale
 
 
+# Run speeds keep the source ratios, scaled so this unit runs at the accepted 3 m/s (build-60).
+RUN_REFERENCE = 'UNIT_G_GONDOR_SWORDSMAN'
+
+
+def run_scale(motion, reference_speed):
+    """A unit's run clip speed relative to the reference runner's, in parts per million."""
+    scale = quantize(motion['Run']['SourceSpeed']/reference_speed, 1_000_000)
+    if not 0 < scale <= 3_000_000:
+        raise ValueError('run speed outside supported range')
+    return scale
+
+
 def collision_profile(model, skeleton, boxes):
     main = [b for b in boxes if b['layer'] == 0]
     if len(main) != 1:
@@ -221,6 +233,10 @@ def export(output, resolver=None, roster=None):
         path = Path(path).resolve()
         relative = path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) else path.name
         sources[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
+    reference_model = resolver.resolve(RUN_REFERENCE,recurse=False)
+    reference_skeleton = ROOT/reference_model['skeletons'][0]['file']
+    reference_speed = locomotion(reference_model,lsk.parse(reference_skeleton.read_bytes()))[0]['Run']['SourceSpeed']
+    trace(ROOT/reference_model['file']); trace(reference_skeleton)
     units = []
     for name in roster:
         unit = resolver.db['Units'].get(name)
@@ -263,7 +279,8 @@ def export(output, resolver=None, roster=None):
             'ProjectileSpeedMmPerSecond': 25000 if ranged else 0,
             'MeleeDpsMilli': quantize(melee_weapon['CuttingDamagePerSecond']) if ranged else 0,
             'MeleeReachMm': 2000,'MeleeGapMm': quantize(melee_weapon['MaximumRange']) if ranged else 0,
-            'WalkScale': walk_scale,'WalkClip': motion['Walk']['Clip'],'RunClip': motion['Run']['Clip'],
+            'WalkScale': walk_scale,'RunScale': run_scale(motion,reference_speed),
+            'WalkClip': motion['Walk']['Clip'],'RunClip': motion['Run']['Clip'],
             'BodyRadiusMm': radius,'BodyHeightMm': body_height,'SelectionRadiusMm': quantize(unit['SelectionRingRadius']),
             'Abilities': hero_abilities.export(resolver,unit,model,skeleton),
             # Source IsSiege weapons (the Huorn's) multiply their damage against buildings by SiegeMultiplier.
@@ -314,7 +331,7 @@ def export(output, resolver=None, roster=None):
             'Collision': 'Static terrain and enemies use full envelopes. Allies compress personal space to 50% with a solid non-overlapping core; resting formations retain full spacing. Aragorn presentation scales 112%, radius floor 800 mm, height follows scale. Owner-requested feel policy; raw source bounds retained in Source.Collision. Original response semantics remain unverified.',
             'Types': 'Apply TypeMatchups once, then explicit unit-pair multiplier once (absent pairs 1.0). Pair invincibility takes precedence. Stacking remains an adapter policy.',
             'Timing': 'ceil(source duration * event fraction * 20); cycle ceil(duration*20), final hit at most cycle-1.',
-            'Movement': 'Retain accepted 3 m/s run speed. Walk speed uses the source J_Position XY displacement/duration ratio of first positive walk/run choices. Original world speed and stamina remain unverified.',
+            'Movement': 'Run speed keeps the source ratios between units, scaled so the Gondor Swordsman runs at the accepted 3 m/s: RunScale = run clip speed / Swordsman run clip speed, where clip speed is the J_Position XY displacement/duration of the first positive Run choice. Walk speed is the run speed times the same ratio of the first positive Walk/Run choices. Original absolute world speed, random run variants, model scale, slopes and stamina remain unverified.',
             'Ranged': 'Elven Archer and Dwarf Axethrower (the source Uruk-Hai missile weapon stays disabled). Source missile range in center meters; source release event. Target-following arrows use an approximate 25 m/s travel speed, snapshot damage at release and survive shooter death/order replacement. Conservative navigation line of fire at release; no flight collision. Switch to source melee weapon/animations at the same body-based reach as infantry; switch cancellation preserves cooldown. Exact switch threshold/timing and LPO motion semantics remain unverified.',
             'ArrowPresentation': 'Per ranged unit: the weapon projectile model, its launch sound event from LPO event 7/opcode 46; original PCM variants at release with source minimum volume and voice cap, and the trail of its first bound effect (Archer 12, Axethrower 362). Track duration interpreted as point lifetime, key word 3 as full width, word 5 as ARGB. Runtime uses a 70% gray tint, feathered ribbon and smooth age fade; exact legacy blending and trail semantics remain unverified. Presentation never drives hits.',
             'Abilities': 'Aragorn sandbox pre-equips three source abilities without purchase/level progression. Greater Kingsfoil heals 250 HP within 10 m at source toolscript tick 8 of its 21-tick clip, cooldown 340 ticks. Out-of-range targets are approached using normal navigation. Casts replace orders and may be interrupted; spent cooldown is retained. Fury replaces DPS with 30 and applies 150% versus source Wraith/Black Rider types. Immunity records poison/stun/blind/slow protection; no current demo weapon produces these statuses. HealVisual adapts original target-effect sprite layers; poison cleansing and other original particle/effect attachments remain unsupported. Exact legacy range origins, interruption and progression remain unverified. Frodo pre-equips his three source abilities. The One Ring toggles (Q): OnActivate sets 50% visibility, passive and undetectable (enemies cannot target him) and OnContinuous drains 2 HP per second; the drain stops at 1 HP (adapter, the source has no floor); its OnActivate/OnDeactivate actions disable and re-enable regeneration (SPELL_ACTION_ENABLE_REGENERATION). Sting multiplies damage by 1.35 against source Orc Slasher, Orc Bowman, Uruk-Hai and Goblin Spearman; its blade-glow attachment (flag 31) is not shown. Heroic Aura gives allied units within 15 m a 1.5x ability recharge rate; its ground particle effect 148 is not shown.',

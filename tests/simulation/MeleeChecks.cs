@@ -174,6 +174,7 @@ static class MeleeChecks
             "cache applies explicit hero sizing and compressible friendly personal space");
         check((hero.BodyHeightMm,knight.BodyHeightMm,orc.BodyHeightMm) == (2347,2534,2197),"cached body heights include the explicit hero presentation scale");
         check((hero.WalkScale,knight.WalkScale,orc.WalkScale) == (364585,469073,432872),"cached walk/run ratios derive from source root-track displacement and duration");
+        check((hero.RunScale,knight.RunScale,orc.RunScale) == (1219693,1103607,1104488),"cached run speeds keep the source ratios to the Gondor Swordsman's run");
         check(new[] {hero,knight,orc}.All(u => u.WalkClip.EndsWith("_Walk") && u.RunClip.EndsWith("_Run")),"cached locomotion states resolve separate original walk/run clips");
         for (int from = 0; from < 4; from++) for (int to = 0; to < 4; to++)
             check(rules.TypeScale(from,to) == Ratings[from,to]*10000,$"cached type matrix agrees with requested ratings {from}/{to}");

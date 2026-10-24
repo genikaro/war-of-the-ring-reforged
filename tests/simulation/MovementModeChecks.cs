@@ -87,6 +87,29 @@ static class MovementModeChecks
         }
         check(separated && squad.Units.All(u => u.Walking && u.Goal < 0 && u.Order == OrderKind.Idle),
             "a squad with different walking ratios arrives without body overlap between ticks");
+
+        var paced = Open(); var rider = paced.Spawn(0,403,UnitDefinition.Probe with { RunScale = 1_500_000,WalkScale = 400000 });
+        paced.Enqueue(0,[0],OrderKind.Move,425); paced.Step();
+        check(rider.X == 3725 && rider.RunBudget == 225000,"run distance uses the unit's imported run scale");
+        x = rider.X; paced.Enqueue(0,[0],OrderKind.ToggleWalkRun); paced.Step();
+        check(rider.X == x+90,"walking scales the unit's own run speed");
+        var runners = Open(); int[] runScales = [1_514_897,1_000_000,707_473,1_219_694,1_000_000,707_473];
+        foreach (int cell in new[] {403,405,407,483,485,487})
+            runners.Spawn(0,cell,UnitDefinition.Probe with { RunScale = runScales[runners.Units.Count] });
+        runners.Enqueue(0,Enumerable.Range(0,6),OrderKind.Move,425);
+        separated = true;
+        for (int tick = 0; tick < 600; tick++)
+        {
+            runners.Step();
+            foreach (var left in runners.Units) foreach (var right in runners.Units.Where(u => u.Id > left.Id))
+                foreach (double fraction in new[] {.25,.5,.75,1})
+                {
+                    var p = MovementPlayback.Sample(left.Movement,fraction); var q = MovementPlayback.Sample(right.Movement,fraction);
+                    separated &= (p.X-q.X)*(p.X-q.X)+(p.Z-q.Z)*(p.Z-q.Z) >= 700L*700-2;
+                }
+        }
+        check(separated && runners.Units.All(u => u.Goal < 0 && u.Order == OrderKind.Idle),
+            "a squad with different run speeds arrives without body overlap between ticks");
         var replay = Open(); replay.Spawn(0,403);
         replay.Commands.AddRange(JsonSerializer.Deserialize<SimCommand[]>(JsonSerializer.Serialize(world.Commands))!); Advance(replay,world.Tick);
         check(replay.StateDigest() == world.StateDigest(),"pace changes serialize and replay with all orders and queues");
@@ -96,6 +119,11 @@ static class MovementModeChecks
         {
             try { (UnitDefinition.Probe with { WalkScale = scale }).Validate(); check(false,"invalid walk scale must fail"); }
             catch (ArgumentException) { check(true,"invalid walk scale rejected"); }
+        }
+        foreach (int scale in new[] {0,-1,3000001})
+        {
+            try { (UnitDefinition.Probe with { RunScale = scale }).Validate(); check(false,"invalid run scale must fail"); }
+            catch (ArgumentException) { check(true,"invalid run scale rejected"); }
         }
     }
 }
