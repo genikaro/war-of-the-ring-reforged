@@ -41,17 +41,17 @@ public partial class CommandPanel
             _constructionButtons[index] = button;
         }
         _buildButton = ActionButton(0);
-        _buildButton.TooltipText = $"Build [{GridKeys[0]}] (or B)\nShow the basic buildings these workers can construct.";
+        _buildButton.TooltipText = $"Build [{GridKeys[0]} or B]";
         _buildButton.Pressed += () => BuildMenuChosen?.Invoke(true);
         _advancedBuildButton = ActionButton(1);
-        _advancedBuildButton.TooltipText = $"Build advanced [{GridKeys[1]}] (or Shift+B)\nShow the buildings a Citadel upgrade opens: Forge, Ranger Post, Wilderness Outpost, Nature's Haven, Elven Sanctuary and House of Lore.";
+        _advancedBuildButton.TooltipText = $"Build advanced [{GridKeys[1]} or Shift+B]\nForge, Ranger Post, Wilderness Outpost, Nature's Haven, Elven Sanctuary and House of Lore.";
         _advancedBuildButton.Pressed += () => AdvancedBuildMenuChosen?.Invoke();
         var advanced = Text("II",new(4,1),new(20,18),15); _advancedBuildButton.AddChild(advanced);
         _backButton = ActionButton(BackSlot,"Back");
-        _backButton.TooltipText = $"Back [{GridKeys[BackSlot]}] (or Esc)\nReturn to the unit commands.";
+        _backButton.TooltipText = $"Back [{GridKeys[BackSlot]} or Esc]";
         _backButton.Pressed += () => BuildMenuChosen?.Invoke(false);
         _cancelConstructionButton = ActionButton(BackSlot,"Cancel");
-        _cancelConstructionButton.TooltipText = $"Cancel [{GridKeys[BackSlot]}]\nCancel this construction and receive its resource refund";
+        _cancelConstructionButton.TooltipText = $"Cancel construction [{GridKeys[BackSlot]}]";
         _cancelConstructionButton.Pressed += () => ConstructionChosen?.Invoke(null);
     }
 
@@ -83,21 +83,16 @@ public partial class CommandPanel
             {
                 _resourceSlots[kind] = index; var bank = world.Economies[PlayerTeam];
                 button.Disabled = bank.FoodMilli < resource.FoodCost*1000L || bank.OreMilli < resource.OreCost*1000L;
-                button.TooltipText = $"Build {resource.DisplayName} [{GridKeys[index]}]\n{resource.FoodCost} food · {resource.OreCost} ore · {resource.DurationTicks/20}s with one worker\nChoose a {(kind == ResourceKind.Food ? "food well" : "ore pile")}. Additional workers add {resource.ExtraWorkerPpm/10000}% build speed each.\nRight-click an unfinished foundation to resume or assist.";
+                button.TooltipText = $"Build {resource.DisplayName} [{GridKeys[index]}]\n{resource.FoodCost} food · {resource.OreCost} ore · {resource.DurationTicks/20}s with one worker"
+                    + $"\nOn a {(kind == ResourceKind.Food ? "food well" : "ore pile")}. Each extra worker adds {resource.ExtraWorkerPpm/10000}% build speed.";
                 continue;
             }
             var rules = world.BuildingRules[building];
             button.Disabled = !world.CanStartBuilding(PlayerTeam,building,out string reason);
             button.TooltipText = $"Build {rules.DisplayName} [{GridKeys[index]}]\n{rules.FoodCost} food · {rules.OreCost} ore · {rules.DurationTicks/20}s with one worker"
-                + (world.Placements[building].MustBeNear ? "\nChoose open ground near your buildings." : "\nChoose open ground.")
-                + (world.PopulationProvided.GetValueOrDefault(building) is > 0 and var population ? $" Adds {population} population." : "")
-                + "\nThe foundation goes down, and is paid for, when a worker reaches it."
-                + "\nShift-click queues the placement. Right-click an unfinished foundation to resume or assist."
+                + (world.Placements[building].MustBeNear ? "\nMust stand near your buildings." : "")
+                + (world.PopulationProvided.GetValueOrDefault(building) is > 0 and var population ? $"\nAdds {population} population." : "")
                 + (button.Disabled ? "\n"+reason : "");
         }
-        if (NoticeShowing) return;
-        if (targeting && pending != null) _hint.Text = $"Build {(world.BuildingRules.GetValueOrDefault(pending) ?? world.ConstructionRules.Values.First(r => r.Name == pending)).DisplayName}: "
-            + (world.BuildingRules.ContainsKey(pending) ? "choose open ground" : "choose a resource site")+" · Esc/right-click cancels";
-        else if (page) _hint.Text = "Choose a building · Esc returns to unit commands";
     }
 }

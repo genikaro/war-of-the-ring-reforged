@@ -71,7 +71,6 @@ public partial class CommandPanel
             button.TooltipText = $"Train {rules.DisplayName} [{GridKeys[slot]}]\n{rules.FoodCost} food · {rules.OreCost} ore"
                 + (rules.FateCost > 0 ? $" · {rules.FateCost} Fate" : "")+$" · population {rules.Population} · {rules.DurationTicks/20}s"
                 + (rules.UniqueGroup >= 0 ? $"\nHero: your Citadel holds {world.UniqueGroupLimit(PlayerTeam,rules.UniqueGroup)} of Gimli, Aragorn and Legolas at a time" : "")
-                + $"\nClick again to queue up to {SimWorld.ProductionQueueLimit}. Click a portrait in training or press Backspace to cancel for a full refund."
                 + (button.Disabled ? "\n"+reason : "");
         }
         _upgradeButton.Visible = upgrade != null;
@@ -85,7 +84,6 @@ public partial class CommandPanel
             _upgradeButton.TooltipText = $"Upgrade to {upgrade.DisplayName} [{GridKeys[UpgradeSlot]}]\n{upgrade.FoodCost} food · {upgrade.OreCost} ore · {upgrade.DurationTicks/20}s · {upgrade.MaxHealth} health"
                 + (population > 0 ? $" · +{population} population" : "")
                 + (opens.Length > 0 ? "\nOpens "+string.Join(", ",opens) : "")
-                + $"\nTraining waits while the upgrade runs. Click its portrait to cancel for a {upgrade.FoodRefundPpm/10000}% refund."
                 + (_upgradeButton.Disabled ? "\n"+reason : "");
         }
         // An upgrade or a research in progress heads the queue (local skirmish-003): its own portrait, progress and refund.
@@ -96,15 +94,15 @@ public partial class CommandPanel
             : research != null ? ($"Researching {research.DisplayName}",researchPortrait,site!.ResearchTicks,research.DurationTicks,research.FoodCost,research.OreCost) : null;
         _training.Visible = producer is { Queue.Count: > 0 } || head != null;
         if (producer == null && head == null) return;
-        string rally = producer == null ? "" : " · "+(producer.RallyResource >= 0 ? $"New workers gather {world.Resources[producer.RallyResource].Kind.ToString().ToLowerInvariant()} · right-click to move the rally point"
-            : producer.RallyCell >= 0 ? "Rally point set · right-click to move it" : "Right-click the battlefield, or a Mill or Foundry, to set a rally point");
+        string rally = producer == null ? "" : producer.RallyResource >= 0 ? $"Rally: gather {world.Resources[producer.RallyResource].Kind.ToString().ToLowerInvariant()}"
+            : producer.RallyCell >= 0 ? "Rally point set" : "No rally point";
         var queue = producer?.Queue ?? [];
-        if (head == null && queue.Count == 0) { _order.Text = "Your structure"+rally; return; }
+        if (head == null && queue.Count == 0) { _order.Text = rally; return; }
         int done = head?.Done ?? producer!.ProgressTicks;
         int duration = head?.Duration ?? world.ProductionRules[queue[0].Unit].DurationTicks;
         int percent = done*100/duration,waiting = queue.Count-(head != null ? 0 : 1);
         _order.Text = (head != null ? $"{head.Value.Label} {percent}%" : $"Training {world.ProductionRules[queue[0].Unit].DisplayName} {percent}%")
-            + (waiting > 0 ? $" · {waiting} queued" : "")+rally;
+            + (waiting > 0 ? $" · {waiting} queued" : "")+(rally != "" ? " · "+rally : "");
         _trainingBar.Texture ??= _art.GetValueOrDefault("console_g_progressbar");
         _trainingProgress.Size = new(185f*done/duration,6);
         int offset = head != null ? 1 : 0;
@@ -115,13 +113,13 @@ public partial class CommandPanel
             if (index < offset)
             {
                 button.Icon = head!.Value.Portrait == null ? null : _art.GetValueOrDefault(head.Value.Portrait);
-                button.TooltipText = $"{head.Value.Label} · {percent}%\nClick to cancel and receive {head.Value.Food} food and {head.Value.Ore} ore";
+                button.TooltipText = $"{head.Value.Label} · {percent}%\nCancel refunds {head.Value.Food} food and {head.Value.Ore} ore";
                 continue;
             }
             var rules = world.ProductionRules[queue[index-offset].Unit];
             button.Icon = _art.GetValueOrDefault(PortraitName(rules.DisplayName));
             button.TooltipText = (index == 0 ? $"Training {rules.DisplayName} · {percent}%" : $"Queued {rules.DisplayName}")
-                + $"\nClick to cancel and receive {rules.FoodCost} food and {rules.OreCost} ore";
+                + $"\nCancel refunds {rules.FoodCost} food and {rules.OreCost} ore";
         }
     }
 }

@@ -52,7 +52,7 @@ public partial class CommandPanel
             button.TooltipText = $"Research {technique.DisplayName} [{GridKeys[slot]}]\n{technique.FoodCost} food · {technique.OreCost} ore · {technique.DurationTicks/20}s"
                 + (units.Length > 0 ? "\n"+string.Join("\n",units) : "")
                 + (tier ? "\nEach tier of this line replaces the one before." : "")
-                + "\nApplies to units already trained. Click its portrait in the queue to cancel for a full refund."
+                + "\nApplies to units already trained."
                 + (button.Disabled ? "\n"+reason : "");
         }
     }

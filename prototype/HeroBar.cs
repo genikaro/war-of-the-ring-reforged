@@ -72,7 +72,7 @@ public partial class HeroBar : Control
             slot.Experience.Position = new(X(FillLeft),top+ExperienceFill*768*scale); slot.Experience.Size = new Vector2(0,FillHeight*768)*scale;
             slot.Portrait.TooltipText = $"{hero.Definition.DisplayName} · {hero.Health}/{hero.MaxHealth} HP · Level 1"
                 + (hero.RingActive ? "\nWearing the One Ring" : "")
-                + "\nClick to select · double-click to select and center the camera\nExperience and levels are not simulated yet.";
+                + "\nExperience and levels are not simulated yet.";
         }
     }
 

@@ -11,7 +11,7 @@ Select units with a click, drag, or control group. The console now uses the
 original Good faction atlas, portraits, command icons and targeting cursors,
 decoded from source UVA rectangles. It preserves the 1024x212 artwork proportions
 and includes a clickable terrain overview, portrait/health grid, control-group
-strip, current orders and queue hints. Commands support mixed unit
+strip, and each unit's current order (build-67, below). Commands support mixed unit
 selections. Active orders and targeting are highlighted; unit commands hide without
 living friendly units. Dead selections and group members are pruned automatically.
 
@@ -163,6 +163,22 @@ queuing an order preserves the current swing. Health bars use each type's source
 maximum. Single selection shows the original type icon, Attack, Armor and
 Victories beside the portrait and health bar. The type icon's tooltip lists
 the four damage percentages. Group portraits retain these stats in tooltips.
+
+Order readout (build-67, `Presentation/UnitOrderReadout.cs`), a testing aid that
+replaced the console's how-to hints. A single unit, of any side, shows beside its
+portrait the order and its target with the distance (`Attack → Uruk-Hai #19 · 8 m`,
+`Move · 14 m`, `Guard → post · 3 m`, `Repair → Mill · 2 m`); under the health
+bar what it does this tick: a held bot order waiting for the swing, casting,
+striking / fighting / closing on / waiting for room at its combat target (marked
+"acquired" when it picked the target itself), walking or running and for how long
+it has been blocked, making way for another unit, returning to its spot or to the
+march or post, waiting for a foundation spot, its gather phase and cargo; and on
+the bottom line, while observing, the player it belongs to, then a bot's job for
+it (from SkirmishAi's party, raid, place squad, guard posts and recovering lists;
+otherwise builder, worker or home army), and the queued orders. A group has no
+title (the old "N selected" line is gone); its bottom line lists its bots' jobs
+with counts and its queued orders. Portrait tooltips carry the same readout per
+unit. Above the console only refusals and "Paused" remain.
 
 Stop cancels movement at the current position and resumes idle guarding; Hold
 Ground preserves the exact position until replaced. On a constrained

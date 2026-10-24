@@ -38,6 +38,8 @@ static class ExtendedOrderChecks
         queue.Enqueue(0,[0],OrderKind.Move,18*40+12,queued:true);
         queue.Enqueue(0,[0],OrderKind.Move,18*40+25,queued:true); Advance(queue,1);
         check(marcher.OrderDestination == 412 && marcher.OrderQueue.Count == 2,"queued waypoints preserve the active destination");
+        var marching = UnitOrderReadout.From(queue,marcher,_ => "Probe");
+        check(marching is { Order: "Move",Distance: "8.9 m",Activity: "Running",Queue: "Then Move → Move" },$"the console reads a move, its distance, the pace and the queue ({marching})");
         bool first = false,second = false;
         for (int tick = 0; tick < 350; tick++) { Advance(queue,1); first |= marcher.Node == 412; second |= marcher.Node == 732; }
         check(first && second && marcher.Node == 745 && marcher.OrderQueue.Count == 0 && marcher.Order == OrderKind.Idle,"queued waypoints execute in order and finish");
@@ -71,6 +73,9 @@ static class ExtendedOrderChecks
         var ward = guard.Spawn(0,410); ward.Health = 10000;
         guard.Enqueue(0,[sentry.Id],OrderKind.Guard,ward.Node,ward.Id); Advance(guard,90);
         check(sentry.Order == OrderKind.Guard && sentry.OrderTarget == ward.Id && SimWorld.SeparationSquared(sentry,ward) <= 4000L*4000,"guard approaches its friendly ward without occupying its cell");
+        check(UnitOrderReadout.From(guard,sentry,_ => "Probe") is { Order: "Guard → Probe #2",Queue: "" } guarding && guarding.Distance.EndsWith(" m")
+            && UnitOrderReadout.From(guard,ward,_ => "Probe") is { Order: "Idle",Activity: "Standing",Distance: "" },
+            $"the console names a guard's ward by its number ({UnitOrderReadout.From(guard,sentry,_ => "Probe")})");
         guard.Enqueue(0,[ward.Id],OrderKind.Move,425); Advance(guard,220);
         check(sentry.Order == OrderKind.Guard && SimWorld.SeparationSquared(sentry,ward) <= 4000L*4000,"guard follows a moving friendly unit");
         var intruder = guard.Spawn(2,11*40+26); intruder.Health = 12; intruder.Cooldown = 10000;
@@ -92,6 +97,9 @@ static class ExtendedOrderChecks
         attacker.Health = 10000; ally.Cooldown = 10000;
         forced.Enqueue(0,[0],OrderKind.ForceAttack,ally.Node,ally.Id); Advance(forced,120);
         check(ally.Health < 100,"force attack can damage an explicitly targeted friendly unit");
+        check(UnitOrderReadout.From(forced,attacker,_ => "Probe") is { Order: "Force Attack → Probe #2" } striking
+            && (striking.Activity.StartsWith("Striking Probe #2") || striking.Activity.StartsWith("Fighting Probe #2")),
+            $"the console shows whom a force attack is hitting ({UnitOrderReadout.From(forced,attacker,_ => "Probe")})");
         check(ally.Target < 0 && ally.Order == OrderKind.Idle,"a force-attacked friendly unit does not turn on its attacker");
         forced.Enqueue(0,[0],OrderKind.Stop); Advance(forced,1);
         check(attacker.Target < 0 && attacker.Order == OrderKind.Idle,"stop cancels a friendly force attack and returns to idle");

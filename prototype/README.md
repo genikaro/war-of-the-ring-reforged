@@ -4,6 +4,16 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
+**build-67:** the console drops its how-to hints (targeting instructions, the
+group-key line, the "N selected" title, click and Shift-click notes in tooltips)
+and shows orders instead. A single unit shows its order and target with the
+distance beside the portrait, what it is doing this tick under the health bar
+(striking, closing on, waiting for room, blocked, making way, gather phase, cargo),
+and its queue on the bottom line. For a bot's unit that line names the bot's job
+for it: assault and its target and leg, raid, place squad, expansion guard,
+builder, worker or home army; an observer also sees which player it belongs to.
+Restart; no cache rebuild.
+
 **build-48:** skirmish maps share one content pack. Run
 `python tools/content_pack.py`, then re-import each map cache
 (`python tools/prepare_prototype.py --skirmish` and `--all-maps`); older caches still

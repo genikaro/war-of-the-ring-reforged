@@ -31,7 +31,10 @@ public partial class CommandPanel : Control
     private TextureRect _typeIcon = null!, _statsBackground = null!;
     private ColorRect _singleHealth = null!;
     private Label _singleHealthText = null!, _attackName = null!, _attackValue = null!, _armorValue = null!, _victoriesValue = null!;
+    // Build-67: the selected unit's order, beside its portrait, and what it is doing about it, under the health bar.
+    private Label _singleOrder = null!, _singleActivity = null!;
     private CombatRules _rules = CombatRules.Probe;
+    private SimWorld? _world;
     private int _detailUnit = -1;
     private TextureRect _background = null!;
     private Label _title = null!, _order = null!, _hint = null!, _armies = null!;
@@ -64,11 +67,11 @@ public partial class CommandPanel : Control
     private bool NoticeShowing => Time.GetTicksMsec() < _noticeUntil;
     public string DisplayedHint => _hint.Text;
 
-    public static readonly (OrderKind Kind,string Label,string Key,string Tip,string Icon)[] Commands = [
-        (OrderKind.Attack,"Attack","A","Enemy: attack and pursue. Neutral/friendly: force attack. Ground: attack-move to the destination.","console_g_action_forceattack"),
-        (OrderKind.HoldGround,"Hold Position","H","Hold this position and fight within reach without chasing.","console_g_action_standground"),
-        (OrderKind.Guard,"Guard","G","Guard a friendly unit or location; follow the unit and defend its surroundings.","console_g_action_guard"),
-        (OrderKind.Patrol,"Patrol","T","Patrol between here and a destination, fighting enemies along the route.","console_g_action_patrol")
+    public static readonly (OrderKind Kind,string Label,string Key,string Icon)[] Commands = [
+        (OrderKind.Attack,"Attack","A","console_g_action_forceattack"),
+        (OrderKind.HoldGround,"Hold Position","H","console_g_action_standground"),
+        (OrderKind.Guard,"Guard","G","console_g_action_guard"),
+        (OrderKind.Patrol,"Patrol","T","console_g_action_patrol")
     ];
 
     public override void _Ready()
@@ -80,15 +83,15 @@ public partial class CommandPanel : Control
         _content.AddChild(_background);
         _menu = new TextureButton { Position = new(14,5),Size = new(66,17),FocusMode = FocusModeEnum.None,
             IgnoreTextureSize = true,StretchMode = TextureButton.StretchModeEnum.KeepAspectCentered,
-            TooltipText = "Debug tools [F4] · pause, step, camera, interface and controls" };
+            TooltipText = "Debug tools [F4]" };
         _menu.Pressed += () => MenuChosen?.Invoke(); _content.AddChild(_menu);
-        _map = new BattleMinimap { Position = new(14,28),Size = new(174,174),TooltipText = "Click or drag on the map to move the camera." };
+        _map = new BattleMinimap { Position = new(14,28),Size = new(174,174) };
         _map.Chosen += p => MapChosen?.Invoke(p);
         _map.Ordered += (p,queued,march) => MapOrdered?.Invoke(p,queued,march); _content.AddChild(_map);
         _walkRun = new TextureButton { Position = new(198,147),Size = new(34,27),FocusMode = FocusModeEnum.None,
             IgnoreTextureSize = true,StretchMode = TextureButton.StretchModeEnum.KeepAspectCentered,ToggleMode = true };
         _walkRun.Pressed += () => WalkRunChosen?.Invoke(); _content.AddChild(_walkRun);
-        _title = Text("Select your forces",new(265,59),new(505,22),17); _content.AddChild(_title);
+        _title = Text("",new(265,59),new(505,22),17); _content.AddChild(_title);
         _order = Text("",new(265,192),new(505,18),12); _content.AddChild(_order);
         _armies = Text("",new(787,8),new(229,18),12); _content.AddChild(_armies);
         _resources = new Control { Position = new(787,6),Size = new(229,22),Visible = false,MouseFilter = MouseFilterEnum.Ignore }; _content.AddChild(_resources);
@@ -106,6 +109,9 @@ public partial class CommandPanel : Control
         healthFrame.AddThemeStyleboxOverride("panel",Border(new Color("282418"),new Color("bda56b"))); _single.AddChild(healthFrame);
         _singleHealth = new ColorRect { Position = new(2,87),Size = new(244,12),Color = new Color("48972e"),MouseFilter = MouseFilterEnum.Ignore }; _single.AddChild(_singleHealth);
         _singleHealthText = Counter("",new(0,85),new(248,16),11,HorizontalAlignment.Center); _single.AddChild(_singleHealthText);
+        _singleOrder = Text("",new(70,24),new(196,40),14); _singleOrder.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _singleOrder.VerticalAlignment = VerticalAlignment.Top; _singleOrder.AddThemeConstantOverride("line_spacing",-3); _single.AddChild(_singleOrder);
+        _singleActivity = Text("",new(0,105),new(505,22),13); _single.AddChild(_singleActivity);
         _typeIcon = new TextureRect { Position = new(270,28),Size = new(47,48),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Stop }; _single.AddChild(_typeIcon);
         _statsBackground = new TextureRect { Position = new(333,28),Size = new(171,77),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Ignore }; _single.AddChild(_statsBackground);
         string[] statNames = ["Attack","Armor","Victories"];
@@ -130,7 +136,7 @@ public partial class CommandPanel : Control
         {
             var command = Commands[index];
             var button = new Button { Name = command.Kind.ToString(),Position = new(788+index*56,146),Size = new(54,54),
-                TooltipText = $"{command.Label} [{command.Key}]\n{command.Tip}\nShift-click appends an order.",FocusMode = FocusModeEnum.None,ToggleMode = true,Disabled = true,ExpandIcon = true };
+                TooltipText = $"{command.Label} [{command.Key}]",FocusMode = FocusModeEnum.None,ToggleMode = true,Disabled = true,ExpandIcon = true };
             Skin(button); button.Pressed += () => CommandChosen?.Invoke(command.Kind);
             var key = Text(command.Key,new(35,34),new(16,18),13); key.HorizontalAlignment = HorizontalAlignment.Right; button.AddChild(key);
             _buttons.Add(command.Kind,button); _content.AddChild(button);
@@ -237,7 +243,7 @@ public partial class CommandPanel : Control
 
     public void LoadArtwork(string cache,SimWorld world)
     {
-        _rules = world.Rules;
+        _rules = world.Rules; _world = world;
         var index = JsonDocument.Parse(System.IO.File.ReadAllText(System.IO.Path.Combine(cache,"interface/index.json"))).RootElement;
         foreach (var asset in index.GetProperty("assets").EnumerateObject())
         {
@@ -290,19 +296,22 @@ public partial class CommandPanel : Control
         RefreshAbilities(units,pending,tick,pendingAbilitySlot);
         _single.Visible = single; _roster.Visible = !single;
         _title.Position = single ? new(335,59) : new(265,59); _title.Size = single ? new(435,22) : new(505,22);
-        _title.Text = single ? name(units[0].Id) : available
-            ? $"{units.Count} selected   "+string.Join(" · ",units.GroupBy(u => name(u.Id)).Select(g => $"{g.Count()} {g.Key}"))
-            : observing ? "Click any unit or building to inspect it" : "Select your forces";
-        _order.Text = available ? string.Join(" · ",units.GroupBy(u => u.Order).Select(g => $"{OrderName(g.Key)} ({g.Count()})"))
-            + (units.Sum(u => u.OrderQueue.Count) > 0 ? $"   +{units.Sum(u => u.OrderQueue.Count)} queued" : "")
-            : observing ? "Observer · E economy · U units · S stats · Tab folds the overview" : "Ctrl + number: assign group · Shift + number: add units";
+        // Build-67: each unit's order readout. A single unit shows its order beside the portrait and what it is doing
+        // under the health bar; a group's title stays empty and its portrait tooltips carry each readout.
+        Dictionary<int,UnitOrderReadout> readouts = _world == null ? [] : units.ToDictionary(u => u.Id,u => UnitOrderReadout.From(_world,u,name));
+        _title.Text = single ? name(units[0].Id) : "";
+        // The bottom line: while observing, whose units these are; the job a bot gave them (so an observer sees why they
+        // do what they do); then the queue.
+        string side = !available || !observing ? "" : units.All(u => u.Team < 0) ? "Neutral"
+            : units.Any(u => u.Team != units[0].Team) ? "Mixed sides" : $"Player {units[0].Team+1}";
+        int queued = units.Sum(u => u.OrderQueue.Count);
+        var only = single ? readouts.GetValueOrDefault(units[0].Id) : null;
+        _order.Text = string.Join(" · ",(single ? [side,only?.Role ?? "",only?.Queue ?? ""]
+            : new[] { side }.Concat(readouts.Values.Where(r => r.Role != "").GroupBy(r => r.Role).Select(g => g.Count() > 1 ? $"{g.Key} ×{g.Count()}" : g.Key))
+                .Append(queued > 0 ? $"{queued} queued" : "")).Where(part => part != ""));
         _armies.Text = $"Allies {allies}    Enemies {enemies}";
         _walkRun.SetPressedNoSignal(walking);
-        string pace = walking ? "Walking" : "Running";
-        _walkRun.TooltipText = $"Global Walk / Run [F2] · {pace}\nSwitch movement pace for your entire army, including future units.\nWorks with any selection. Current orders and queued waypoints continue.";
-        if (available) _order.Text += " · "+pace;
-        if (available && !controllable) _order.Text = (units.All(u => u.Team < 0) ? "Neutral unit" : PlayerTeam < 0 && units.All(u => u.Team == units[0].Team)
-            ? $"Player {units[0].Team+1} unit" : PlayerTeam < 0 ? "Mixed sides" : "Enemy unit")+" · Inspecting";
+        _walkRun.TooltipText = $"Global Walk / Run [F2] · {(walking ? "Walking" : "Running")}";
         string key = string.Join(',',units.Select(u => u.Id));
         if (_rosterKey != key)
         {
@@ -325,15 +334,15 @@ public partial class CommandPanel : Control
             var stats = UnitHudStats.From(unit,_rules);
             var portrait = _portraits[unit.Id]; portrait.Health.Size = new(46*Math.Clamp(unit.Health/(float)unit.MaxHealth,0,1),4);
             portrait.Health.Color = new Color(unit.Team == PlayerTeam ? "69ae63" : "d05b4c");
-            portrait.Button.TooltipText = $"{name(unit.Id)} #{unit.Id+1} · {unit.Health}/{unit.MaxHealth}\n{OrderName(unit.Order)}"
-                + (unit.Walking ? " · Walking" : " · Running")
-                + $"\nAttack {stats.Attack} per hit · Armor {stats.Armor} · Victories {stats.Victories}\n{stats.Type}\n{stats.Matchups}"
-                  + (unit.CargoMilli > 0 ? $"\nCarrying {unit.CargoMilli/1000.0:0.0} {unit.CargoKind.ToString().ToLowerInvariant()}" : "")
-                + (unit.OrderQueue.Count > 0 ? "\nQueue: "+string.Join(" → ",unit.OrderQueue.Select(o => OrderName(o.Kind))) : "")
-                + "\nClick to select. Shift-click adds/removes. Double-click or Ctrl-click selects all of this type.";
+            var readout = readouts.GetValueOrDefault(unit.Id);
+            portrait.Button.TooltipText = $"{name(unit.Id)} #{unit.Id+1} · {unit.Health}/{unit.MaxHealth}"
+                + (readout == null ? "" : $"\n{readout.Headline}\n{readout.Activity}"+(readout.Queue != "" ? "\n"+readout.Queue : "")
+                    + (readout.Role != "" ? "\n"+readout.Role : ""))
+                + $"\nAttack {stats.Attack} per hit · Armor {stats.Armor} · Victories {stats.Victories}\n{stats.Type}\n{stats.Matchups}";
             if (single)
             {
                 _detailUnit = unit.Id; _singlePortrait.Icon = portrait.Button.Icon; _singlePortrait.TooltipText = portrait.Button.TooltipText;
+                _singleOrder.Text = readout?.Headline ?? ""; _singleActivity.Text = readout?.Activity ?? "";
                 _typeIcon.Texture = _art.GetValueOrDefault(stats.Icon); _typeIcon.TooltipText = stats.Type+" damage\n"+stats.Matchups;
                 _attackValue.Text = stats.Attack; _armorValue.Text = stats.Armor; _victoriesValue.Text = stats.Victories;
                 _attackName.TooltipText = _attackValue.TooltipText = stats.AttackTip;
@@ -353,11 +362,10 @@ public partial class CommandPanel : Control
         {
             string number = slot == 9 ? "0" : (slot+1).ToString(); _groups[slot].Text = number+(groups[slot].Length > 0 ? $"·{groups[slot].Length}" : "");
             _groups[slot].SetPressedNoSignal(available && groups[slot].SequenceEqual(units.Select(u => u.Id)));
-            _groups[slot].TooltipText = $"Group {number}: {groups[slot].Length} units\nCtrl+{number}: assign · Shift+{number}: add selection\n{number}: recall · double-tap: center camera";
+            _groups[slot].TooltipText = $"Group {number}: {groups[slot].Length} units";
         }
-        _hint.Text = NoticeShowing ? _notice : pending == OrderKind.UseAbility ? "Greater Kingsfoil: choose an injured friendly unit or Aragorn · Esc/right-click cancels"
-            : pending == OrderKind.Attack ? "Attack: enemy / neutral / friendly / ground · Shift-click queues · Esc/right-click cancels"
-            : pending != null ? OrderName(pending.Value)+": choose a target · Shift-click queues · Esc/right-click cancels" : paused && !observing ? "Paused · orders will apply when play resumes" : "";
+        // Only refusals and the pause show above the console (build-67 dropped the targeting how-tos).
+        _hint.Text = NoticeShowing ? _notice : paused && !observing ? "Paused" : "";
         _map.QueueRedraw();
         if (pending != OrderKind.UseAbility) UpdateCursor(pending);
     }
@@ -411,15 +419,15 @@ public partial class CommandPanel : Control
                     + string.Create(Invariant,$"Costs {ability.DrainMilliPerTick*SimWorld.TicksPerSecond/1000m:0.#} HP per second while worn (stops at 1 HP)."),
                 AbilityKind.Bane => $"{ability.Name} · Passive\n{ability.BonusScale/10000}% damage against orcs, Uruk-Hai and goblins.",
                 AbilityKind.Aura => $"{ability.Name} · Passive\nAllies within {ability.RangeMm/1000} m recharge abilities {ability.RechargeScalePpm/10000}% as fast.",
-                AbilityKind.Heal => $"{ability.Name} [{key}]\nHeal a friendly unit or Aragorn for up to {ability.HealMilli/1000} HP.\n{ability.RangeMm/1000} m range · {ability.RechargeTicks/20}s cooldown. Target must be below 99% health.\nAragorn approaches distant targets. Moving or issuing another order interrupts the cast.",
-                AbilityKind.Fury => $"{ability.Name} · Passive\nWeapon Attack {ability.DpsMilli/1000}. {ability.BonusScale/10000}% damage against Wraiths and Black Riders.\nEquipped for this sandbox trial.",
+                AbilityKind.Heal => $"{ability.Name} [{key}]\nHeal a friendly unit or Aragorn for up to {ability.HealMilli/1000} HP.\n{ability.RangeMm/1000} m range · {ability.RechargeTicks/20}s cooldown. Target must be below 99% health.",
+                AbilityKind.Fury => $"{ability.Name} · Passive\nWeapon Attack {ability.DpsMilli/1000}. {ability.BonusScale/10000}% damage against Wraiths and Black Riders.",
                 AbilityKind.SiegeAura => $"{ability.Name} · Passive\nAllies within {ability.RangeMm/1000} m of {hero.Definition.DisplayName}, and he himself, deal {ability.BonusScale/10000}% damage to buildings.",
-                AbilityKind.Ward => string.Create(Invariant,$"{ability.Name} [{key}]\nAllies within {ability.RangeMm/1000} m take {ability.BonusScale/10000m:0.#}% damage from missiles for {ability.DurationTicks/20}s.\n{ability.RechargeTicks/20}s cooldown. Cast on the spot; another order interrupts it."),
+                AbilityKind.Ward => string.Create(Invariant,$"{ability.Name} [{key}]\nAllies within {ability.RangeMm/1000} m take {ability.BonusScale/10000m:0.#}% damage from missiles for {ability.DurationTicks/20}s.\n{ability.RechargeTicks/20}s cooldown."),
                 AbilityKind.Unsimulated => $"{ability.Name} · not simulated yet\n{ability.Description}"+(ability.RechargeTicks > 0 ? $"\nSource cooldown {ability.RechargeTicks/20}s." : ""),
-                AbilityKind.ArmorUp => string.Create(Invariant,$"{ability.Name} [{key}] · training dummy\nAdds 1 armor (now {hero.ArmorMilli/1000m:0.#}). Every selected dummy takes it."),
-                AbilityKind.ArmorReset => string.Create(Invariant,$"{ability.Name} [{key}] · training dummy\nSets armor to 0 (now {hero.ArmorMilli/1000m:0.#}). Every selected dummy takes it."),
-                AbilityKind.Restore => $"{ability.Name} [{key}] · training dummy\nRestores full health ({hero.Health}/{hero.MaxHealth}); dummies never regenerate. Every selected dummy takes it.",
-                _ => "Immunity · Passive\nProtection from poison, stun, blind and slow.\nCurrent demo enemies do not inflict these effects. Equipped for this sandbox trial." };
+                AbilityKind.ArmorUp => string.Create(Invariant,$"{ability.Name} [{key}] · training dummy\nAdds 1 armor (now {hero.ArmorMilli/1000m:0.#})."),
+                AbilityKind.ArmorReset => string.Create(Invariant,$"{ability.Name} [{key}] · training dummy\nSets armor to 0 (now {hero.ArmorMilli/1000m:0.#})."),
+                AbilityKind.Restore => $"{ability.Name} [{key}] · training dummy\nRestores full health ({hero.Health}/{hero.MaxHealth}); dummies never regenerate.",
+                _ => "Immunity · Passive\nProtection from poison, stun, blind and slow." };
         }
     }
     private static OrderKind? PanelCommand(OrderKind? kind) => kind is OrderKind.Attack or OrderKind.AttackMove or OrderKind.ForceAttack ? OrderKind.Attack : kind;
@@ -440,5 +448,7 @@ public partial class CommandPanel : Control
     public string DisplayedArmor => _armorValue.Text;
     public string DisplayedName => _title.Text;
     public string DisplayedOrder => _order.Text;
+    public string DisplayedUnitOrder => _singleOrder.Text;
+    public string DisplayedUnitActivity => _singleActivity.Text;
     public string DisplayedHealth => _structureDetails.Visible ? _structureHealthText.Text : _singleHealthText.Text;
 }

@@ -62,7 +62,7 @@ public partial class Main
                 if (_observerStep == 4) PushKey(Key.H); // Hold ground; S opens the Stats tab while observing.
                 if (_observerStep < 6) break;
                 _observerChecks["observer_inspects_either_side_read_only"] = _selected.SetEquals([_observerInspected])
-                    && !_commands.ButtonFor(OrderKind.Attack).Visible && _commands.DisplayedOrder.StartsWith("Player 2 unit");
+                    && !_commands.ButtonFor(OrderKind.Attack).Visible && _commands.DisplayedOrder.StartsWith("Player 2 · Bot ");
                 _observerPhase = 2; _observerStep = 0; break;
             case 2:
                 // The overview's tabs and fold, clicked like a person would: press and release on separate frames.

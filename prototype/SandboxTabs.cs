@@ -14,7 +14,7 @@ public partial class CommandPanel
             int chosen = team;
             var tab = new Button { Position = new(85+team*72,5),Size = new(67,17),Text = $"Player {team+1}",FocusMode = FocusModeEnum.None,
                 ToggleMode = true,Visible = false,
-                TooltipText = $"Command Player {team+1} [Tab]\nSandbox: you command both players. Clicking a unit or building of either one also takes command of it." };
+                TooltipText = $"Command Player {team+1} [Tab]" };
             Skin(tab); tab.AddThemeFontSizeOverride("font_size",11);
             tab.AddThemeStyleboxOverride("normal",Border(new Color(0,0,0,.35f),new Color("6f6040")));
             tab.Pressed += () => { SandboxPlayerChosen?.Invoke(chosen); RefreshSandboxTabs(true); };
