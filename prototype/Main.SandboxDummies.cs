@@ -64,7 +64,7 @@ public partial class Main
         {
             var dummy = _world.Units[hit.Target];
             if (!dummy.Definition.Passive) continue;
-            int scale = hit.Unit >= 0 ? _rules.TypeScale(_world.Units[hit.Unit].Definition.DamageType,dummy.Definition.DamageType) : 1_000_000;
+            int scale = hit.Unit >= 0 ? _rules.DamageScale(_world.Units[hit.Unit].Definition,dummy.Definition) : 1_000_000;
             var label = new Label3D { Text = string.Create(System.Globalization.CultureInfo.InvariantCulture,$"-{hit.DamageMilli/1000m:0.#}")+(scale != 1_000_000 ? $" ({scale/10000}%)" : ""),FontSize = 40,PixelSize = .018f,
                 Modulate = scale > 1_000_000 ? new Color("ff9a3c") : scale < 1_000_000 ? new Color("a9c4dd") : new Color("fff4e0"),
                 OutlineModulate = new Color("2a1408"),OutlineSize = 9,Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,NoDepthTest = true };

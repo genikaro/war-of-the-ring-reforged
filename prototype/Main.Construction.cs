@@ -98,6 +98,7 @@ public partial class Main
             }).ToArray();
             world.Defenses.Add(item.Name,loaded[0]);
             if (loaded.Length > 1) world.ExtraDefenses.Add(item.Name,loaded[1..]);
+            _defenseLabels[item.Name] = weapons.Select(w => w.TryGetProperty("weapon",out var key) && key.GetString()!.EndsWith("_BOLT") ? "Ballista" : "Arrows").ToArray();
         }
         foreach (var radius in construction.GetProperty("placement_radius_mm").EnumerateObject()) world.PlacementRadiusMm.Add(radius.Name,radius.Value.GetInt32());
         var order = construction.GetProperty("order").EnumerateArray().Select(n => n.GetString()!).ToArray();

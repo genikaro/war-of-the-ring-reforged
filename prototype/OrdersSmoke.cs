@@ -128,6 +128,11 @@ public partial class Main
                     && _selected.All(id => world.Units[id].Order == OrderKind.Move);
                 if (_capture != "") _ = CaptureFrame(false);
                 break;
+            case 119:
+                // Build-61: walking shows the walking figure (console_g_run), running the running one.
+                _ordersChecks["pace_button_shows_the_pace"] = _commands.WalkRunButton.ButtonPressed
+                    && _commands.WalkRunButton.TexturePressed == _commands.Art("console_g_run") && _commands.WalkRunButton.TextureNormal == _commands.Art("console_g_run_highlighted");
+                break;
             case 120: Click(_commands.WalkRunButton.GetGlobalRect().GetCenter()); break;
             case 123:
                 _ordersChecks["panel_resumes_run"] = _selected.All(id => !world.Units[id].Walking && world.Units[id].Order == OrderKind.Move)
@@ -144,7 +149,7 @@ public partial class Main
             case 138:
                 _ordersChecks["empty_selection_global_f2"] = world.Commands.Count == _modeCommandCount+1 && !_commands.WalkRunButton.Disabled
                     && world.IsWalking(0) && world.Units.Where(u => u.Team == 0 && u.Health > 0).All(u => u.Walking);
-                var report = new { checks = _ordersChecks,passed = _ordersChecks.Count == 27 && _ordersChecks.Values.All(v => v),commands = world.Commands,
+                var report = new { checks = _ordersChecks,passed = _ordersChecks.Count == 28 && _ordersChecks.Values.All(v => v),commands = world.Commands,
                     final_digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"orders-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("ORDERS_SMOKE "+JsonSerializer.Serialize(report)); GetTree().Quit(report.passed ? 0 : 1); break;

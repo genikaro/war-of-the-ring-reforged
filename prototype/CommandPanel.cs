@@ -245,9 +245,10 @@ public partial class CommandPanel : Control
         _background.Texture = _art["console_g_background"];
         _statsBackground.Texture = _art["console_stats_background_good"];
         _menu.TextureNormal = _art["console_g_menumenu"];
-        _walkRun.TextureNormal = _art["console_g_run"];
-        _walkRun.TexturePressed = _art["console_g_run_highlighted"];
-        _walkRun.TextureHover = _art["console_g_run_highlighted"];
+        // The button shows the army's pace: despite their names, console_g_run draws a walking figure and
+        // console_g_run_highlighted a running one (build-61; they were the wrong way round).
+        _walkRun.TextureNormal = _art["console_g_run_highlighted"];
+        _walkRun.TexturePressed = _art["console_g_run"];
         _populationIcon.Texture = _art.GetValueOrDefault("console_g_resourcepopulation");
         _foodIcon.Texture = _art.GetValueOrDefault("console_g_resourcefood");
         _oreIcon.Texture = _art.GetValueOrDefault("console_g_resourcewater");

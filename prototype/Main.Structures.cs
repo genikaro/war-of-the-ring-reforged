@@ -7,6 +7,8 @@ public partial class Main
 {
     private int? _selectedStructure;
     private readonly Dictionary<string,JsonElement> _structureDefinitions = [];
+    /// <summary>The info panel's name for each weapon of a defended building, in its weapon order.</summary>
+    private readonly Dictionary<string,string[]> _defenseLabels = [];
     private readonly Dictionary<int,StructureVisual> _structureViews = [];
     private sealed record StructureVisual(int Id,int Team,string Type,int Resource,bool Obstacle,Node3D Root,MeshInstance3D Ring,
         (MeshInstance3D Mesh,Vector3[] Faces)[] Meshes);
@@ -181,11 +183,23 @@ public partial class Main
         int progress = site == null || site.Complete ? 100 : (int)(site.ProgressMicroTicks*100/(world.SiteRules(site).DurationTicks*1_000_000L));
         string resource = entry.Resource < 0 ? "" : $"{world.Resources[entry.Resource].Kind} remaining: {(world.Resources[entry.Resource].RemainingMilli+999)/1000}";
         var place = PlaceAt(id);
+        string building = site?.Building ?? entry.Type;
+        // Build-61: a tower lists each of its weapons, the Ballista Tower its arrows and its bolt.
+        string attack = world.Defenses.TryGetValue(building,out var first) ? string.Join("\n",new[] {first}
+            .Concat(world.ExtraDefenses.GetValueOrDefault(building) ?? []).Select((defense,weapon) => DefenseLine(building,weapon,defense))) : "";
         return new(id,entry.Team,place?.Name ?? definition.GetProperty("display_name").GetString()!,definition.GetProperty("portrait").GetString()!,site?.Health ?? max,max,
             definition.GetProperty("armor").GetDouble().ToString("0.##",System.Globalization.CultureInfo.InvariantCulture),progress,place == null ? resource : PlaceSummary(place),entry.Resource,
             !definition.TryGetProperty("has_health",out var hasHealth) || hasHealth.GetBoolean(),site?.Id ?? -1,
             place == null ? "" : place.Owner == PlayerTeam && !_observing ? "Place of power · yours until an enemy stands alone in its zone"
-                : $"Place of power · stand alone within {place.RadiusMm/1000} m to take it");
+                : $"Place of power · stand alone within {place.RadiusMm/1000} m to take it",attack);
+    }
+
+    /// <summary>One tower weapon: its source damage per second and range, e.g. "Ballista  35 dps · 10–22 m".</summary>
+    private string DefenseLine(string building,int weapon,DefenseDefinition defense)
+    {
+        string label = _defenseLabels.TryGetValue(building,out var labels) && weapon < labels.Length ? labels[weapon] : "Attack";
+        string range = defense.MinimumRangeMm > 0 ? $"{defense.MinimumRangeMm/1000m:0.#}–{defense.RangeMm/1000m:0.#} m" : $"{defense.RangeMm/1000m:0.#} m";
+        return string.Create(System.Globalization.CultureInfo.InvariantCulture,$"{label}  {defense.DpsMilli/1000m:0.#} dps · {range}");
     }
 
     private void PresentStructureSelection()

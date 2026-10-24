@@ -42,10 +42,11 @@ public partial class CommandPanel
         _structureHealthBar.Size = new(details.HasHealth ? 244*Math.Clamp(details.Health/(float)details.MaxHealth,0,1) : 0,12);
         _structureHealthBar.Color = new Color(details.Team < 0 ? "b0a375" : details.Team == PlayerTeam ? "48972e" : "b84c3c");
         _structureArmorText.Text = "Armor  "+details.Armor;
-        _structureProgressText.Text = (details.UnderConstruction ? $"Construction {details.ProgressPercent}%\n" : "")+details.Resource;
+        _structureProgressText.Text = string.Join("\n",new[] {details.UnderConstruction ? $"Construction {details.ProgressPercent}%" : "",
+            details.Resource,details.Attack}.Where(line => line != ""));
         // A place of power's holder and benefits take the room the health bar leaves (build-54).
         _structureProgressText.Position = details.Place != "" ? new(0,66) : new(270,61);
-        _structureProgressText.Size = details.Place != "" ? new(505,63) : new(235,43);
+        _structureProgressText.Size = details.Place != "" ? new(505,63) : new(235,66);
         _order.Text = details.Place != "" ? details.Place : details.Team < 0 ? "Neutral structure · Inspecting" : details.Team == PlayerTeam
             ? details.UnderConstruction ? "Under construction · select workers to resume or assist" : "Your structure"
             : PlayerTeam < 0 ? $"Player {details.Team+1} structure · Inspecting" : "Enemy structure · Inspecting";

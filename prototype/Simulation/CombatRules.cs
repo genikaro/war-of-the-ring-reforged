@@ -97,4 +97,9 @@ public sealed class CombatRules
 
     public UnitPairRule Pair(int from,int to) => _pairs.GetValueOrDefault((from,to),new(from,to,1_000_000,false));
     public int TypeScale(int from,int to) => _types.GetValueOrDefault((from,to),1_000_000);
+    /// <summary>The source has no type multipliers: its unit pair rows are the type cycle (150% advantage, 90% reverse,
+    /// 85% against heroes). A pair row therefore replaces the type matchup, which only fills pairs the source leaves
+    /// out (build-61; stacking both gave a Rohan Rider 187.5% against a Gondor Swordsman).</summary>
+    public int DamageScale(UnitDefinition from,UnitDefinition to)
+        => _pairs.TryGetValue((from.Id,to.Id),out var pair) ? pair.Scale : TypeScale(from.DamageType,to.DamageType);
 }

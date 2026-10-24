@@ -6,7 +6,7 @@ import struct
 
 
 def in_place(gltf, binary, center_pivot=False):
-    """Subtract J_Position's horizontal displacement from each skeleton root.
+    """Subtract J_Position's horizontal displacement from its rest position from each skeleton root.
 
     J_Position and the pelvis are independent root joints in the original
     skeletons. Adjusting only the marker would leave the visible body moving.
@@ -46,7 +46,9 @@ def in_place(gltf, binary, center_pivot=False):
                 times = [t[0] for t in times]
             else:
                 times, keys = [0], [gltf['nodes'][marker].get('translation', [0,0,0])[:]]
-            first = [0,0,0] if center_pivot else keys[0][:]
+            # Travel is measured from the marker's rest position, not the clip's first key: some clips start
+            # ahead of it (the Ranger's run by 0.95 m), which would draw the running body off the unit's centre.
+            first = [0,0,0] if center_pivot else gltf['nodes'][marker].get('translation',[0,0,0])[:]
 
             def displacement(time):
                 index = min(max(0, bisect_right(times, time) - 1), len(times) - 1)

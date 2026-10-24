@@ -30,6 +30,14 @@ types now have the melee-event and equipment-visibility subset described below.
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
 Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+**Build-61 (Oct 24):** four fixes from the owner's playtest. The Ranger (and the
+Rohan Rider's and Shieldbreaker's runs) no longer runs ahead of its centre: root motion
+is removed from the rest position, not the clip's first key. A source unit-pair row now
+replaces the type matchup instead of stacking with it, so the Rohan Rider hits a Gondor
+Swordsman for 150%, not 187.5%. Towers list their weapons in the info panel (the
+Ballista Tower its arrows and its bolt). The walk/run button shows the current pace.
+See [skirmish notes](../prototype/SKIRMISH.md#build-61-four-unit-fixes-from-playtesting).
+
 **Build-60 (Oct 24):** each unit runs at its own speed. The original has no speed
 column: units move as far as their Run clip's root joint travels. The prototype keeps
 those ratios and scales them so the Gondor Swordsman still runs 3 m/s, so the Rohan

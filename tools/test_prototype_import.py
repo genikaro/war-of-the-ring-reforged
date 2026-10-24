@@ -93,6 +93,23 @@ class PrototypeImportTests(unittest.TestCase):
         animation['name'] = 'Unit_Attack'
         self.assertEqual(prototype_assets.in_place(gltf, raw), (bytes(raw), []))
 
+    def test_root_motion_starting_ahead_of_the_rest_position_stays_centred(self):
+        # The Ranger's run starts 0.95 m ahead of the marker's rest position.
+        raw = bytearray()
+        raw.extend(struct.pack('<2f', 0, 1)); raw.extend(struct.pack('<6f', 0, 0, .95, 0, 0, 4.95))
+        raw.extend(struct.pack('<6f', 0, 1, .95, 0, 1.1, 4.95))
+        views = [{'byteOffset': 0, 'byteLength': 8}, {'byteOffset': 8, 'byteLength': 24}, {'byteOffset': 32, 'byteLength': 24}]
+        accessors = [{'bufferView': 0, 'componentType': 5126, 'count': 2}, {'bufferView': 1, 'componentType': 5126, 'count': 2},
+                     {'bufferView': 2, 'componentType': 5126, 'count': 2}]
+        animation = {'name': 'G_Ranger_Run', 'samplers': [{'input': 0, 'output': 1}, {'input': 0, 'output': 2}],
+                     'channels': [{'sampler': i, 'target': {'node': i, 'path': 'translation'}} for i in range(2)]}
+        gltf = {'nodes': [{'name': 'J_Position', 'translation': [0, 0, 0]}, {'name': 'J_ Pelvis'}], 'skins': [{'joints': [0, 1]}],
+                'bufferViews': views, 'accessors': accessors, 'animations': [animation]}
+        result, _ = prototype_assets.in_place(gltf, raw)
+        for i in range(2):
+            x, y, z = struct.unpack_from('<3f', result, 32 + i*12)
+            self.assertAlmostEqual(z, 0, places=6)
+
     def test_centered_pivot_aligns_idle_run_and_attack_about_position_marker(self):
         raw = bytearray(); views = []; accessors = []
         def acc(values, width):

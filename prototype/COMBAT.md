@@ -42,11 +42,16 @@ Equal types and attacks against Hero use a documented neutral 100% policy.
 
 Rules format 3 includes per-type bodies, all 16 integer `TypeMatchups` and their provenance in
 the hashed cache. The parser rejects incomplete/duplicate tables; unclassified
-probe types remain neutral. Type scaling precedes explicit pair scaling and
-armor. Pair invincibility overrides damage. Stacking with explicit pair rules
-is an adapter policy; the source table has exceptions elsewhere in the roster,
-so this combination requires validation before expanding the supported units.
-The addendum does not state the numeric percentages or the full damage formula.
+probe types remain neutral. Pair invincibility overrides damage. The addendum
+does not state the numeric percentages or the full damage formula.
+
+**Build-61: a source pair replaces the type matchup.** The source `DamageTypes`
+table has no multipliers. Its 620 `UnitToUnitModifiers` rows are the type cycle:
+150% for the favourable matchup (Rohan Rider against Gondor Swordsman), 90% for
+the reverse and 85% against heroes. Until build-61 the prototype applied both,
+so a Rider hit a Swordsman for 125% × 150% = 187.5%. Now a pair with a source row
+uses that row alone (`CombatRules.DamageScale`), and the table above applies only
+to pairs the source leaves out, such as the Sandbox dummies. Armor follows.
 See [the reference note](../references/original-game/COMBAT-RATINGS-2026-10-19.md).
 
 Refresh an existing cache using `python tools/prepare_prototype.py --rules-only`
@@ -94,8 +99,9 @@ orders and queued primary-target completion have separate regressions. See
 The damage policy is explicitly approximate:
 
 ```
-typedDpsMilli = attackerDpsMilli * typeScale / 1_000_000
-rateMilli = max(0, typedDpsMilli * pairScale / 1_000_000 - victimArmorMilli)
+scale = sourcePairScale if the pair has a source row, else typeScale
+typedDpsMilli = attackerDpsMilli * scale / 1_000_000
+rateMilli = max(0, typedDpsMilli - victimArmorMilli)
 hitDamageMilli = rateMilli * cycleTicks * eventScale / (20 * sumOfClipHitScales)
 ```
 

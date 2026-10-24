@@ -82,7 +82,7 @@ static class MeleeChecks
         }
         check(Rules().TypeScale(-1,0) == 1000000 && Rules().TypeScale(0,99) == 1000000,"unclassified types remain neutral");
         var stacked = Fixture(Profile with { DamageType = 0 },Profile with { DamageType = 1,ArmorMilli = 3000 },PairRules(false));
-        Advance(stacked,6); check(stacked.Units[1].HealthMilli == 65500,"type and explicit pair scales apply once each before armor");
+        Advance(stacked,6); check(stacked.Units[1].HealthMilli == 73000,"an explicit source pair replaces the type matchup instead of stacking with it");
         var typedImmune = Fixture(Profile with { DamageType = 0 },Profile with { DamageType = 1 },PairRules(true));
         Advance(typedImmune,6); check(typedImmune.Units[1].HealthMilli == 100000,"invincibility overrides type advantage");
 

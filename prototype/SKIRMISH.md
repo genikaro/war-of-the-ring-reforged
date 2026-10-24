@@ -3050,3 +3050,43 @@ Validation:
 - The ability, Frodo, command, orders, skirmish, placement, structure, defense and siege
   smokes pass, and the observer match ends exactly as in build-58 (same tick and state
   digest): units that are not dummies behave the same.
+
+## Build-61: four unit fixes from playtesting
+
+The owner reported four bugs after build-60.
+
+**The Ranger ran ahead of his own centre.** The importer pins running and walking in
+place by subtracting the root marker's (`J_Position`) travel from the skeleton roots.
+It measured that travel from the clip's first key. Most clips start at the marker's
+rest position, but the Ranger's Run starts 0.95 m ahead of it (Walk 0.27 m), the Rohan
+Rider's Run 0.55 m and the Shieldbreaker's 0.28/0.30 m, so those bodies were drawn that
+far in front of the unit. Travel is now measured from the rest position
+(`prototype_assets.in_place`). The ranged units, whose pivots were already centred,
+are unchanged.
+
+**The Rohan Rider hit a Gondor Swordsman for 187.5%.** The source has no damage-type
+multipliers; its `UnitToUnitModifiers` rows are the type cycle (150% advantage, 90%
+reverse, 85% against heroes). The prototype applied both the owner's type table (125%)
+and the source row (150%). Now a source row replaces the type table, which only fills
+pairs the source leaves out, such as the Sandbox dummies (`CombatRules.DamageScale`).
+The Rider hits a Swordsman for 150%. See [combat notes](COMBAT.md).
+
+**Towers showed no attack.** The info panel now lists each weapon of a defended
+building under its armor, with its source damage per second and range: the
+Watchtower "Arrows 14 dps · 19 m", the Ballista Tower that line and "Ballista 35 dps ·
+10–22 m". The text box is taller so a tower under construction keeps all three lines.
+
+**The walk/run button showed the other pace.** The two source images are named the
+wrong way round: `console_g_run` draws a walking figure and `console_g_run_highlighted`
+a running one. Running now shows the running figure and walking the walking one. The
+button no longer swaps pictures on hover.
+
+Checks: `test_prototype_import` (a run starting ahead of the rest position stays
+centred), `MeleeChecks` (a source pair replaces the type matchup), the Defense smoke's
+`tower_info_lists_its_attack`, the Sandbox smoke's `ballista_tower_lists_both_weapons`
+and the Orders smoke's `pace_button_shows_the_pace`.
+
+With damage no longer stacked, the Bilbo's Bluffs observer match (Gimli against
+Aragorn) runs longer: Gimli wins at tick 21743 (build-60: 16483), digest 9E0A8988….
+The other smokes pass; the Formation smoke's `attack_move_arrived` failure predates
+both builds.

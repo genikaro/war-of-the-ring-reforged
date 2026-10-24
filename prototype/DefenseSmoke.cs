@@ -72,6 +72,8 @@ public partial class Main
                     _defenseChecks["watchtower_has_its_source_defense"] = world.SiteDefense(tower) is { DpsMilli: 14000,RangeMm: 19000,RatesMilli: [1000,1200,1400,1600,1750] }
                         && tower.Health == 400 && _projectileStyles.ContainsKey(SmokeTower);
                     _defenseChecks["tower_holds_fire_without_enemies"] = !world.Projectiles.Any(p => p.Source == tower.Id) && tower.DefenseTarget < 0;
+                    SelectStructure(tower.Obstacle);
+                    _defenseChecks["tower_info_lists_its_attack"] = SelectedStructureDetails()?.Attack == "Arrows  14 dps · 19 m";
                     _focus = PositionOf(tower.X,tower.Z); UpdateCamera();
                     // Fixture: the builders, who laid the tower beside it, go home, so the swordsmen meet the tower rather than the crew.
                     double away = Math.Atan2(citadel.Z-tower.Z,citadel.X-tower.X);
@@ -118,7 +120,7 @@ public partial class Main
             case 5:
                 if (_defenseStep++ < 3) break; // Let the capture finish writing.
                 var report = new { build = BuildInfo.Label,checks = _defenseChecks,
-                    passed = _defenseChecks.Count == 10 && _defenseChecks.Values.All(v => v),
+                    passed = _defenseChecks.Count == 11 && _defenseChecks.Values.All(v => v),
                     fixture = "Bank top-up, instant construction, enemy swordsmen spawned beside the tower in two waves",
                     tower = _defenseTower,hits = _defenseHits,kills = _defenseKills,provoked = _defenseProvoked,origin_error_m = _defenseOriginError,
                     first_wave = _defenseSnapshot,ruin_tick = _defenseRuinTick,last_release = _defenseLastRelease,

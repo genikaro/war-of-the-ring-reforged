@@ -12,7 +12,7 @@ public partial class Main
     private bool _sandboxMapSmoke;
     private readonly Dictionary<string,bool> _sandboxMapChecks = [];
     private int _sandboxMapHold,_sandboxMapWorker = -1;
-    private const int SandboxMapSmokeChecks = 30;
+    private const int SandboxMapSmokeChecks = 31;
     private const string SandboxGandalf = "UNIT_G_HERO_GANDALF";
     private static readonly string[] SandboxDummyLookalikes = ["UNIT_G_GONDOR_SWORDSMAN","UNIT_G_ELVEN_ARCHER"];
     private static readonly string[] SandboxFateHeroes = ["UNIT_G_HERO_GIMLI","UNIT_G_HERO_ARAGORN","UNIT_G_HERO_LEGOLAS",SandboxGandalf];
@@ -57,6 +57,10 @@ public partial class Main
                     && SandboxFateHeroes.All(hero => world.CanTrain(t,citadel.Id,Array.IndexOf(citadel.Units,hero),out _)))
                     && world.MaxFate == 20 && _commands.FateReadout == "20";
                 _sandboxMapChecks["no_bots_and_no_chasing"] = world.AiPlayers.Count == 0 && world.AggressiveIdleTeams.Count == 0;
+                // Build-61: the Ballista Tower's info lists both its weapons.
+                var shown = _selectedStructure; _selectedStructure = Site(teams[0],"BUILDING_G_TOWER_UPGRADE")!.Obstacle;
+                _sandboxMapChecks["ballista_tower_lists_both_weapons"] = SelectedStructureDetails()?.Attack == "Arrows  14 dps · 19 m\nBallista  35 dps · 10–22 m";
+                _selectedStructure = shown;
                 // The widest trainable body finds open ground beside every producer, connected to its base.
                 var widest = world.ProductionRules.Keys.Select(n => _rules.Units[n]).MaxBy(u => u.BodyRadiusMm)!;
                 var body = world.Navigation.ForBody(widest.BodyRadiusMm,widest.BodyHeightMm);
