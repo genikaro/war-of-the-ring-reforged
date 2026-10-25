@@ -36,6 +36,9 @@ def export(output, resolver=None):
     paths += list((source / 'Console/Unit Abilities/Border').glob('Purchase_*.uva'))
     paths += list((source / 'Console/ObjectPortraits').glob('*.uva'))
     paths += [source / ('Console/Minimap/console_minimap_' + name + '.uva') for name in ['ore', 'well', 'place_of_power']]
+    # The parchment tooltip above the console's right section: backing, title band, cost cells and Description strip.
+    paths += list((source / 'Console/Tooltips/Good').glob('console_tooltip_g_right_*.uva'))
+    paths += [source / 'Console/Tooltips/Good/console_tooltip_global_icon_population.uva']
     paths += [p for p in (source / 'Cursors/Good').glob('*.uva')
               if any(word in p.stem for word in ['attack', 'move', 'guard', 'patrol', 'greater_kingsfoil', 'negative'])]
     target = output / 'interface'; target.mkdir(parents=True, exist_ok=True)

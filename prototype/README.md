@@ -4,6 +4,17 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
+**build-70:** a selected unit has a status bar, the original console's row of effect
+icons under the health bar: Gimli's Siege Aura, Frodo's Heroic Aura, Guardian Wind
+(darkening as it runs out), the worn One Ring and each place of power its side holds.
+The status bar replaces the "Running" / "Standing" activity line, which stays in the
+portrait tooltip. Attack and Armor read the unit's own values with research, place and dummy bonuses
+beside them in green, as the original "+ 9" column. Every console tooltip opens in one
+place, the original parchment box flush right above the console: title band, food, ore,
+Fate and population cells, then Description. See [the console notes](COMMANDS.md#status-bar-bonuses-and-tooltips-build-70).
+The tooltip art is in the content pack (`python tools/content_pack.py`; the local pack
+and Helm's Deep cache are updated); an older pack shows a plain box. Restart.
+
 **build-69:** distant building attacks start moving again. Long approaches and terrain
 detours use directed routing; nearby melee keeps the crowd-aware flanking approach.
 Regression checks cover 6–100 m starts, groups, detours and the real Sandbox Attack

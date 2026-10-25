@@ -51,6 +51,33 @@ its mesh; the anchor itself need not be inside. Depth checks reject hidden mesh
 surfaces. Shift-drag retains friendly units over structures and preserves a
 structure selection when the added box is empty. Units and structures never mix.
 
+### Status bar, bonuses and tooltips (build-70)
+
+A single selected unit, friendly or inspected, shows its effects as a row of icons
+under the health bar, as the original console does under its health and level bars
+(local capture `campaign-004`, Gimli with two). The row replaces build-67's activity
+line ("Running", "Standing"); what the unit is doing stays in its portrait tooltip.
+Each effect comes from the simulation as it applies, helpful ones first:
+Gimli's Siege Aura and Frodo's Heroic Aura (the strongest of each kind within its
+radius, the hero included), Guardian Wind (its icon darkens as the 12 s run out), the
+worn One Ring, and each place of power the unit's side holds whose rules cover it.
+An icon's tooltip says what the effect does, which unit it comes from and how far
+away it is, or the time left. A group's portrait tooltips list the effects by name.
+Harmful effects will follow the helpful ones once poison and slows are simulated.
+
+Attack and Armor show the unit's own table values (a Fury weapon included); research,
+places of power and a training dummy's buttons appear beside them in green, red below
+zero, like the original "+ 9" column. Hovering the row splits base and bonus.
+
+Every console tooltip opens in one place: the original parchment box, flush with the
+console's right edge on top of it, growing upward
+([reference](../references/original-game/TOOLTIPS-2026-10-21.md)), as Warcraft III
+shows tooltips above its command card. It follows the hovered control at once, never
+the pointer. The first line sits in the dark title band; a cost line becomes food,
+ore, Fate and population cells; the rest follows the Description strip. Godot's own
+pointer tooltip is hidden over the console. Hero portraits, the observer overview and
+the setup screen keep pointer tooltips.
+
 The console scales uniformly with screen height, clamps to narrow windows and
 stays centered on ultrawide screens. **Menu/F4 → Interface size** adjusts it from 75% to
 150%; the setting persists in `user://interface.cfg`. Resize updates are live.
@@ -167,8 +194,9 @@ the four damage percentages. Group portraits retain these stats in tooltips.
 Order readout (build-67, `Presentation/UnitOrderReadout.cs`), a testing aid that
 replaced the console's how-to hints. A single unit, of any side, shows beside its
 portrait the order and its target with the distance (`Attack → Uruk-Hai #19 · 8 m`,
-`Move · 14 m`, `Guard → post · 3 m`, `Repair → Mill · 2 m`); under the health
-bar what it does this tick: a held bot order waiting for the swing, casting,
+`Move · 14 m`, `Guard → post · 3 m`, `Repair → Mill · 2 m`); its portrait tooltip
+(under the health bar until build-70, which gave that row to the status bar) what it
+does this tick: a held bot order waiting for the swing, casting,
 striking / fighting / closing on / waiting for room at its combat target (marked
 "acquired" when it picked the target itself), walking or running and for how long
 it has been blocked, making way for another unit, returning to its spot or to the

@@ -30,9 +30,10 @@ public partial class CommandPanel : Control
     private Button _singlePortrait = null!;
     private TextureRect _typeIcon = null!, _statsBackground = null!;
     private ColorRect _singleHealth = null!;
-    private Label _singleHealthText = null!, _attackName = null!, _attackValue = null!, _armorValue = null!, _victoriesValue = null!;
-    // Build-67: the selected unit's order, beside its portrait, and what it is doing about it, under the health bar.
-    private Label _singleOrder = null!, _singleActivity = null!;
+    private Label _singleHealthText = null!, _attackName = null!, _attackValue = null!, _armorName = null!, _armorValue = null!, _victoriesValue = null!;
+    // Build-67: the selected unit's order, beside its portrait. Build-70 drops the activity line under the health bar
+    // (the status bar's row); the portrait tooltip keeps what the unit is doing.
+    private Label _singleOrder = null!;
     private CombatRules _rules = CombatRules.Probe;
     private SimWorld? _world;
     private int _detailUnit = -1;
@@ -111,21 +112,23 @@ public partial class CommandPanel : Control
         _singleHealthText = Counter("",new(0,85),new(248,16),11,HorizontalAlignment.Center); _single.AddChild(_singleHealthText);
         _singleOrder = Text("",new(70,24),new(196,40),14); _singleOrder.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _singleOrder.VerticalAlignment = VerticalAlignment.Top; _singleOrder.AddThemeConstantOverride("line_spacing",-3); _single.AddChild(_singleOrder);
-        _singleActivity = Text("",new(0,105),new(505,22),13); _single.AddChild(_singleActivity);
         _typeIcon = new TextureRect { Position = new(270,28),Size = new(47,48),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Stop }; _single.AddChild(_typeIcon);
         _statsBackground = new TextureRect { Position = new(333,28),Size = new(171,77),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Ignore }; _single.AddChild(_statsBackground);
         string[] statNames = ["Attack","Armor","Victories"];
         var statValues = new Label[3];
         for (int row = 0; row < statNames.Length; row++)
         {
-            var name = Text(statNames[row],new(345,33+row*22),new(102,22),13); _single.AddChild(name);
-            var value = Text("",new(447,33+row*22),new(44,22),13); value.HorizontalAlignment = HorizontalAlignment.Right;
+            // Build-70: values end before the green bonus column (StatusBar.cs).
+            var name = Text(statNames[row],new(345,33+row*22),new(64,22),13); _single.AddChild(name);
+            var value = Text("",new(409,33+row*22),new(48,22),13); value.HorizontalAlignment = HorizontalAlignment.Right;
             _single.AddChild(value); statValues[row] = value;
             if (row == 0) _attackName = name;
+            if (row == 1) _armorName = name;
         }
         (_attackValue,_armorValue,_victoriesValue) = (statValues[0],statValues[1],statValues[2]);
         // Build-62: Attack shows damage per hit; hovering the row gives the damage per second and attack speed.
-        foreach (var label in new[] {_attackName,_attackValue}) label.MouseFilter = MouseFilterEnum.Pass;
+        foreach (var label in new[] {_attackName,_attackValue,_armorName,_armorValue}) label.MouseFilter = MouseFilterEnum.Pass;
+        CreateStatusBar();
         for (int slot = 0; slot < 10; slot++)
         {
             int group = slot;
@@ -161,10 +164,13 @@ public partial class CommandPanel : Control
         CreateMatchControls();
         CreateSandboxTabs();
         _hint = Text("",new(260,-27),new(760,24),13); _content.AddChild(_hint);
+        CreateTooltip();
         var config = new ConfigFile();
         if (config.Load("user://interface.cfg") == Error.Ok) ScalePercent = Math.Clamp(config.GetValue("hud","scale_percent",100).AsDouble(),75,150);
         ResizeConsole(); GetViewport().SizeChanged += ResizeConsole;
     }
+
+    public override void _Process(double delta) => UpdateTooltip();
 
     private void ResizeConsole()
     {
@@ -263,6 +269,7 @@ public partial class CommandPanel : Control
         _oreIcon.Texture = _art.GetValueOrDefault("console_g_resourcewater");
         _fateIcon.Texture = _art.GetValueOrDefault("console_g_powerchit");
         foreach (var command in Commands) _buttons[command.Kind].Icon = _art[command.Icon];
+        LoadTooltipArt();
         _map.Configure(world);
     }
 
@@ -296,8 +303,8 @@ public partial class CommandPanel : Control
         RefreshAbilities(units,pending,tick,pendingAbilitySlot);
         _single.Visible = single; _roster.Visible = !single;
         _title.Position = single ? new(335,59) : new(265,59); _title.Size = single ? new(435,22) : new(505,22);
-        // Build-67: each unit's order readout. A single unit shows its order beside the portrait and what it is doing
-        // under the health bar; a group's title stays empty and its portrait tooltips carry each readout.
+        // Build-67: each unit's order readout. A single unit shows its order beside the portrait; a group's title stays
+        // empty. Portrait tooltips carry each full readout, what the unit is doing included.
         Dictionary<int,UnitOrderReadout> readouts = _world == null ? [] : units.ToDictionary(u => u.Id,u => UnitOrderReadout.From(_world,u,name));
         _title.Text = single ? name(units[0].Id) : "";
         // The bottom line: while observing, whose units these are; the job a bot gave them (so an observer sees why they
@@ -338,14 +345,18 @@ public partial class CommandPanel : Control
             portrait.Button.TooltipText = $"{name(unit.Id)} #{unit.Id+1} · {unit.Health}/{unit.MaxHealth}"
                 + (readout == null ? "" : $"\n{readout.Headline}\n{readout.Activity}"+(readout.Queue != "" ? "\n"+readout.Queue : "")
                     + (readout.Role != "" ? "\n"+readout.Role : ""))
-                + $"\nAttack {stats.Attack} per hit · Armor {stats.Armor} · Victories {stats.Victories}\n{stats.Type}\n{stats.Matchups}";
+                + $"\nAttack {stats.Attack}{stats.AttackBonus} per hit · Armor {stats.Armor}{stats.ArmorBonus} · Victories {stats.Victories}"
+                + (StatusLine(unit,name) is { Length: > 0 } effects ? "\nUnder "+effects : "")+$"\n{stats.Type}\n{stats.Matchups}";
             if (single)
             {
                 _detailUnit = unit.Id; _singlePortrait.Icon = portrait.Button.Icon; _singlePortrait.TooltipText = portrait.Button.TooltipText;
-                _singleOrder.Text = readout?.Headline ?? ""; _singleActivity.Text = readout?.Activity ?? "";
+                _singleOrder.Text = readout?.Headline ?? "";
                 _typeIcon.Texture = _art.GetValueOrDefault(stats.Icon); _typeIcon.TooltipText = stats.Type+" damage\n"+stats.Matchups;
                 _attackValue.Text = stats.Attack; _armorValue.Text = stats.Armor; _victoriesValue.Text = stats.Victories;
                 _attackName.TooltipText = _attackValue.TooltipText = stats.AttackTip;
+                _armorName.TooltipText = _armorValue.TooltipText = stats.ArmorTip;
+                ShowBonus(_attackBonus,stats.AttackBonus,stats.AttackTip); ShowBonus(_armorBonus,stats.ArmorBonus,stats.ArmorTip);
+                RefreshStatusBar(unit,name);
                 _singleHealthText.Text = stats.Health;
                 _singleHealth.Color = new Color(unit.Team == PlayerTeam ? "48972e" : "b84c3c");
                 _singleHealth.Size = new(244*Math.Clamp(unit.HealthMilli/(float)(unit.MaxHealth*1000L),0,1),12);
@@ -449,6 +460,5 @@ public partial class CommandPanel : Control
     public string DisplayedName => _title.Text;
     public string DisplayedOrder => _order.Text;
     public string DisplayedUnitOrder => _singleOrder.Text;
-    public string DisplayedUnitActivity => _singleActivity.Text;
     public string DisplayedHealth => _structureDetails.Visible ? _structureHealthText.Text : _singleHealthText.Text;
 }

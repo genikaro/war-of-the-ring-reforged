@@ -46,6 +46,7 @@ public partial class Main
                 SelectedOwnSite()?.Research is { } research ? _techniquePortraits.GetValueOrDefault(research) : null);
             hud.RefreshResearch(_world,SelectedOwnSite(),name => _techniquePortraits.GetValueOrDefault(name));
         }
+        hud.MirrorTooltip(_commands);
         await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
         await ToSignal(RenderingServer.Singleton,RenderingServer.SignalName.FramePostDraw);
         using var image = viewport.GetTexture().GetImage();

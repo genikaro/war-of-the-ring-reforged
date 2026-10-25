@@ -101,6 +101,7 @@ MovementModeChecks.Run(Check);
 SelectionChecks.Run(Check);
 AbilityChecks.Run(Check);
 FrodoChecks.Run(Check);
+StatusChecks.Run(Check);
 RegenerationChecks.Run(Check);
 PlacesOfPowerChecks.Run(Check);
 HealingPlaybackChecks.Run(Check);

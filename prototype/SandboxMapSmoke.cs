@@ -11,11 +11,11 @@ public partial class Main
 {
     private bool _sandboxMapSmoke;
     private readonly Dictionary<string,bool> _sandboxMapChecks = [];
-    private int _sandboxMapHold,_sandboxMapWorker = -1;
+    private int _sandboxMapHold,_sandboxMapWorker = -1,_sandboxHoverFrame;
     private int _sandboxDistanceUnit=-1,_sandboxDistanceSite=-1,_sandboxDistanceStart,_sandboxDistanceHealth,_sandboxDistanceX,_sandboxDistanceZ;
     private bool _sandboxDistanceMoved;
-    private const int SandboxMapSmokeChecks = 34;
-    private const string SandboxGandalf = "UNIT_G_HERO_GANDALF";
+    private const int SandboxMapSmokeChecks = 40;
+    private const string SandboxGandalf = "UNIT_G_HERO_GANDALF",SandboxGimli = "UNIT_G_HERO_GIMLI";
     private static readonly string[] SandboxDummyLookalikes = ["UNIT_G_GONDOR_SWORDSMAN","UNIT_G_ELVEN_ARCHER"];
     private static readonly string[] SandboxFateHeroes = ["UNIT_G_HERO_GIMLI","UNIT_G_HERO_ARAGORN","UNIT_G_HERO_LEGOLAS",SandboxGandalf];
     private const string SandboxRider = "UNIT_G_ROHAN_RIDER",SandboxBarracks = "BUILDING_G_GONDORIAN_BARRACKS";
@@ -126,9 +126,24 @@ public partial class Main
                 Press(_commands.TrainButton(Array.IndexOf(SelectedProducer()!.Units,SandboxGandalf)).GetGlobalRect().GetCenter()); break;
             case 19: Release(_commands.TrainButton(Array.IndexOf(SelectedProducer()!.Units,SandboxGandalf)).GetGlobalRect().GetCenter()); break;
             // A capture run shows the Citadel 5 training grid, away from the button's press and release frames.
-            case 20: if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-citadel.png"); break;
+            // Build-70: with the pointer on the first training button, whose tooltip shows in the box above the console.
+            case 20:
+                HoverAbilityPoint(_commands.TrainButton(0).GetGlobalRect().GetCenter());
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-citadel.png"); break;
             case 21:
             {
+                if (!_sandboxMapChecks.ContainsKey("tooltip_box_flush_right_above_the_console"))
+                {
+                    Rect2 box = _commands.TooltipRect,console = _commands.GetGlobalRect();
+                    _sandboxMapChecks["tooltip_box_flush_right_above_the_console"] = _commands.DisplayedTooltip == _commands.TrainButton(0).TooltipText
+                        && Math.Abs(box.End.X-console.End.X) < 1 && Math.Abs(box.End.Y-console.Position.Y) < 1
+                        && Math.Abs(box.Size.X-CommandPanel.TooltipWidth*_commands.EffectiveScale) < 1 && _commands.DefaultTooltipsHidden;
+                    // The source layout: the first line in the title band, food, ore and population as cells, the rest under Description.
+                    var rules = world.ProductionRules[SelectedProducer()!.Units[0]];
+                    _sandboxMapChecks["train_tooltip_title_cost_cells_and_description"] = _commands.DisplayedTooltipTitle == $"Train {rules.DisplayName} [Q]"
+                        && _commands.DisplayedTooltipCosts.SequenceEqual([$"food {rules.FoodCost}",$"ore {rules.OreCost}",$"population {rules.Population}"])
+                        && _commands.DisplayedTooltipBody.StartsWith($"{rules.DurationTicks/20}s");
+                }
                 var gandalf = world.Units.FirstOrDefault(u => u.Team == 0 && u.Present && u.Definition.Name == SandboxGandalf);
                 // Rendered frames and simulation ticks do not pair one to one: wait for him to step out.
                 if (Hold((gandalf == null || _heroBar.HeroIn(0) != gandalf.Id) && _sandboxMapHold < 400)) break;
@@ -233,6 +248,48 @@ public partial class Main
                 break;
             case 45:
             {
+                // Build-70: Gimli, called with Fate, stands under his own Siege Aura.
+                var citadel = world.Producers.Values.Single(p => p.Team == 0 && p.Units.Contains(SandboxGimli));
+                world.Enqueue(0,[],OrderKind.Train,Array.IndexOf(citadel.Units,SandboxGimli),citadel.Id); break;
+            }
+            case 47:
+            {
+                var gimli = world.Units.FirstOrDefault(u => u.Team == 0 && u.Present && u.Definition.Name == SandboxGimli);
+                if (Hold((gimli == null || !_views.ContainsKey(gimli.Id) || gimli.SiegeAuraPpm == 1_000_000) && _sandboxMapHold < 400)) break;
+                if (gimli != null) ChooseHero(gimli.Id,center: true,append: false);
+                break;
+            }
+            case 49:
+                _sandboxMapChecks["gimli_shows_his_siege_aura_on_the_status_bar"] = _commands.DisplayedStatuses.Contains("Siege Aura")
+                    && _commands.StatusIcon(0) is { Visible: true,Texture: not null }
+                    && _commands.StatusIcon(0).TooltipText.StartsWith("Siege Aura\nDeals 150% damage to buildings.");
+                HoverAbilityPoint(_commands.StatusIcon(0).GetGlobalRect().GetCenter()); _sandboxHoverFrame = _frames; break;
+            case 51:
+            {
+                // Past Godot's half-second tooltip delay: any pointer tooltip it opened for the icon is themed invisible.
+                if (Hold(_frames-_sandboxHoverFrame < 24)) break;
+                static IEnumerable<Node> Tree(Node node) => node.GetChildren(true).SelectMany(child => Tree(child).Prepend(child));
+                var popups = Tree(GetTree().Root).OfType<PopupPanel>().Where(p => p.Visible).ToArray();
+                GD.Print($"SANDBOX_POINTER_TOOLTIPS {popups.Length}");
+                _sandboxMapChecks["pointer_tooltip_hidden_over_the_console"] = popups.All(p => p.GetThemeStylebox("panel") is StyleBoxEmpty
+                    && Tree(p).OfType<Label>().All(l => l.GetThemeColor("font_color").A == 0));
+                // Point at the icon again: a real pointer over a windowed run may have moved the hover meanwhile.
+                HoverAbilityPoint(_commands.StatusIcon(0).GetGlobalRect().GetCenter()); break;
+            }
+            case 52:
+                _sandboxMapChecks["status_tooltip_in_the_box"] = _commands.DisplayedTooltip == _commands.StatusIcon(0).TooltipText
+                    && _commands.DisplayedTooltipTitle == "Siege Aura" && _commands.DisplayedTooltipCosts.Length == 0
+                    && _commands.DisplayedTooltipBody.StartsWith("Deals 150% damage to buildings.");
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-status.png");
+                // The Hero Dummy alone, one armor up from its own 0.
+                _selected.Clear(); _selected.Add(_sandboxDummies[3]); PushKey(Key.Q); break;
+            case 54:
+                _sandboxMapChecks["dummy_armor_reads_base_and_green_bonus"] = world.Units[_sandboxDummies[3]].ArmorMilli == SimWorld.DummyArmorStepMilli
+                    && _commands.DisplayedArmor == "0" && _commands.DisplayedArmorBonus == "+1" && _commands.SingleUnitDetailsVisible;
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-bonus.png");
+                break;
+            case 55:
+            {
                 // Build-69: the real sandbox Attack command must also work from beyond the local siege flood.
                 CommandSandboxPlayer(0);
                 var site=Site(0,SandboxBarracks)!;
@@ -245,18 +302,18 @@ public partial class Main
                 _selected.Clear(); _selectedStructure=null; _selected.Add(unit.Id);
                 Focus(site.X,site.Z); break;
             }
-            case 47:
+            case 57:
                 _sandboxDistanceStart=world.Tick;
                 PushKey(Key.A); Click(StructureSmokePoint(_sandboxDistanceSite)); break;
-            case 49:
+            case 59:
             {
                 var unit=world.Units[_sandboxDistanceUnit]; var site=world.ConstructionSites[_sandboxDistanceSite];
                 _sandboxMapChecks["long_range_building_attack_is_accepted"] = unit.Order==OrderKind.AttackStructure
                     && unit.SiegeForced && unit.OrderTarget==site.Id
                     && SimWorld.DistanceSquared(_sandboxDistanceX,_sandboxDistanceZ,site.X,site.Z)>=24000L*24000;
-                goto case 51;
+                goto case 61;
             }
-            case 51:
+            case 61:
             {
                 var unit=world.Units[_sandboxDistanceUnit]; var site=world.ConstructionSites[_sandboxDistanceSite];
                 if(world.Tick-_sandboxDistanceStart<=20) _sandboxDistanceMoved|=unit.Moving
@@ -266,7 +323,7 @@ public partial class Main
                 _sandboxMapChecks["long_range_building_attack_reaches_and_damages"] = site.Health<_sandboxDistanceHealth;
                 world.Enqueue(0,[unit.Id],OrderKind.Stop); break;
             }
-            case 53:
+            case 63:
                 bool passed = _sandboxMapChecks.Count == SandboxMapSmokeChecks && _sandboxMapChecks.Values.All(v => v);
                 var report = new { build = BuildInfo.Label,checks = _sandboxMapChecks,passed,held_frames = _sandboxMapHold,missing = _sandboxMapMissing,
                     bases = teams.Select(t => new { team = t,buildings = world.ConstructionSites.Values.Where(s => s.Team == t).Select(s => new { world.SiteRules(s).Name,s.X,s.Z,s.Health }),

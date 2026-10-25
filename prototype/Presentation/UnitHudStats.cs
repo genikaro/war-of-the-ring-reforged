@@ -3,8 +3,12 @@ using Reforged.Simulation;
 
 namespace Reforged.Presentation;
 
-/// <summary>Attack is damage per hit (build-62); AttackTip holds the damage per second and attack speed behind it.</summary>
-public sealed record UnitHudStats(string Type,string Icon,string Matchups,string Attack,string Armor,string Victories,string Health,string AttackTip = "")
+/// <summary>Attack is damage per hit (build-62); AttackTip holds the damage per second and attack speed behind it.
+/// Build-70: Attack and Armor are the unit's own table values (a Fury weapon included) and the bonuses read beside
+/// them in green, red below zero, as the source console's "+ 9" column (local capture campaign-004) and its tooltip
+/// split into base and bonus: research, places of power and a training dummy's buttons.</summary>
+public sealed record UnitHudStats(string Type,string Icon,string Matchups,string Attack,string Armor,string Victories,string Health,string AttackTip = "",
+    string AttackBonus = "",string ArmorBonus = "",string ArmorTip = "")
 {
     public static string TypeName(int type) => type switch { 0 => "Cutting",1 => "Piercing",2 => "Blunt",3 => "Hero",_ => "Unclassified" };
     public static UnitHudStats From(SimUnit unit,CombatRules rules)
@@ -14,13 +18,23 @@ public sealed record UnitHudStats(string Type,string Icon,string Matchups,string
         string matchups = string.Join("\n",Enumerable.Range(0,4).Select(target =>
             $"{rules.TypeScale(type,target)/10_000m:0.##}% vs {TypeName(target)}"));
         decimal dps = unit.MeleeDamageRate/1000m,seconds = SecondsPerHit(unit.Definition);
-        string perHit = Whole(dps*seconds);
+        decimal baseDps = (unit.Definition.Abilities?.FirstOrDefault(a => a.Passive && a.Kind == AbilityKind.Fury)?.DpsMilli ?? unit.Definition.DpsMilli)/1000m;
+        string perHit = Whole(dps*seconds),basePerHit = Whole(baseDps*seconds);
+        decimal hitBonus = decimal.Parse(perHit,CultureInfo.InvariantCulture)-decimal.Parse(basePerHit,CultureInfo.InvariantCulture);
         string tip = dps <= 0 ? "No attack" : string.Create(CultureInfo.InvariantCulture,
-            $"Damage per hit: {perHit}\nDamage per second: {dps:0.###}\nAttack speed: {SpeedName(seconds)} (a hit every {seconds:0.##} s)");
-        return new(TypeName(type),icon == "" ? "" : "counter_marker_G_"+icon,matchups,perHit,
-            (unit.ArmorMilli/1000m).ToString("0.###",CultureInfo.InvariantCulture),
-            unit.KillCount.ToString(CultureInfo.InvariantCulture),$"{unit.Health}/{unit.MaxHealth}",tip);
+            $"Damage per hit: {perHit}{(dps != baseDps ? $" ({basePerHit} base {Signed(hitBonus)} bonus)" : "")}\nDamage per second: {dps:0.###}\nAttack speed: {SpeedName(seconds)} (a hit every {seconds:0.##} s)");
+        decimal armor = unit.ArmorMilli/1000m,baseArmor = unit.Definition.ArmorMilli/1000m;
+        var sources = new[] {("research",unit.TechniqueArmorMilli),("places of power",unit.PlaceArmorMilli),("dummy buttons",unit.BonusArmorMilli)}
+            .Where(s => s.Item2 != 0).Select(s => $"{Signed(s.Item2/1000m)} {s.Item1}");
+        string armorTip = armor == baseArmor ? "" : string.Create(CultureInfo.InvariantCulture,$"Armor {armor:0.###}: {baseArmor:0.###} base\n")+string.Join("\n",sources);
+        return new(TypeName(type),icon == "" ? "" : "counter_marker_G_"+icon,matchups,dps <= 0 ? perHit : basePerHit,
+            baseArmor.ToString("0.###",CultureInfo.InvariantCulture),
+            unit.KillCount.ToString(CultureInfo.InvariantCulture),$"{unit.Health}/{unit.MaxHealth}",tip,
+            dps <= 0 || hitBonus == 0 ? "" : Signed(hitBonus),armor == baseArmor ? "" : Signed(armor-baseArmor),armorTip);
     }
+
+    /// <summary>A bonus as the console's green column reads it: "+1", "-3".</summary>
+    public static string Signed(decimal value) => (value >= 0 ? "+" : "")+value.ToString("0.###",CultureInfo.InvariantCulture);
 
     /// <summary>Damage per hit as the owner asked to see it: whole numbers, with a decimal kept only below 1 so a
     /// scratch never reads 0.</summary>

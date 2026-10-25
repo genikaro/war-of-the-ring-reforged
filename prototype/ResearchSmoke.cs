@@ -93,9 +93,10 @@ public partial class Main
             case 27: Click(_camera.UnprojectPosition(UnitPosition(world.Units[_researchSwordsman])+Vector3.Up)); break;
             case 29:
                 // Captured baseline Attack 10 (local skirmish-005); Iron Blades adds the source TechniqueUnitModifiers +1.
-                // Build-62: the panel shows that 11 per second as 11 per hit (10.6 rounded).
+                // Build-62: the panel shows that 11 per second as 11 per hit (10.6 rounded). Build-70: as the base 10 and a green +1.
                 _researchChecks["swordsman_panel_shows_attack_11"] = _selected.SetEquals([_researchSwordsman]) && _commands.DisplayedName == "Gondor Swordsman"
-                    && _commands.DisplayedAttack == "11" && _commands.DisplayedAttackTip.Contains("Damage per second: 11\n") && _commands.DisplayedArmor == "0";
+                    && _commands.DisplayedAttack == "10" && _commands.DisplayedAttackBonus == "+1" && _commands.DisplayedAttackTip.Contains("Damage per second: 11\n")
+                    && _commands.DisplayedArmor == "0" && _commands.DisplayedArmorBonus == "";
                 if (_capture != "") _ = CaptureFrame(false);
                 break;
             case 31:
