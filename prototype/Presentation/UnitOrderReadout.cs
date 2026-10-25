@@ -56,7 +56,7 @@ public sealed record UnitOrderReadout(string Order,string Distance,string Activi
         else if (unit.Target >= 0)
             doing.Add((unit.StrikeActive ? "striking " : unit.Attacking ? "fighting " : unit.CombatWaiting ? "waiting for room at " : unit.Moving ? "closing on " : "facing ")
                 + Unit(unit.Target)+(unit.AutoEngage ? " (acquired)" : ""));
-        else if (siege >= 0 && unit.Order == OrderKind.AttackMove) doing.Add("heading for "+Site(siege));
+        else if (siege >= 0) doing.Add((unit.CombatWaiting ? "waiting for room at " : "heading for ")+Site(siege));
         if (unit.Moving) doing.Add((unit.Walking ? "walking" : "running")+(unit.BlockedTicks > 0
             ? ", blocked "+(unit.BlockedTicks/(decimal)SimWorld.TicksPerSecond).ToString("0.#",CultureInfo.InvariantCulture)+" s" : ""));
         if (unit.YieldFor >= 0) doing.Add("making way for "+Unit(unit.YieldFor));

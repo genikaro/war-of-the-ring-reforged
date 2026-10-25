@@ -140,7 +140,7 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public bool AttackMoveReturning { get; internal set; }
     public int AttackMoveIgnoredTarget { get; internal set; } = -1;
     public int AttackMoveIgnoreUntil { get; internal set; }
-    /// <summary>An enemy building this attack-move came across and is razing, or -1; and one it could not reach.</summary>
+    /// <summary>An enemy building acquired by attack-move or idle guarding, or -1.</summary>
     public int SiteTarget { get; internal set; } = -1;
     /// <summary>The bot party's committed building, including members temporarily waiting without an attack spot.</summary>
     public int AiSiegeObjective { get; internal set; } = -1;
@@ -566,7 +566,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     /// <summary>A local repair rejoins the route within this many nodes ahead, closing at most RepairBudget nodes.</summary>
     private const int RepairReach = 24,RepairBudget = 1024;
 
-    private HashSet<int> OccupiedNodes(int except,IEnumerable<SimUnit>? candidates = null)
+    private HashSet<int> OccupiedNodes(int except,IEnumerable<SimUnit>? candidates = null,bool combatSpacing = false)
     {
         using var time = SimProfiler.Time("OccupiedNodes");
         var self = except >= 0 && except < Units.Count ? Units[except] : null;
@@ -581,7 +581,10 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             nodes.Add(other.Node);
             if (other.TransitNode >= 0 && !other.GroundSegment) nodes.Add(other.TransitNode);
             if (uniform) continue;
-            int separation = self != null ? BodySeparation(self,other) : radius+other.Definition.BodyRadiusMm;
+            // Combat routes and shortcuts must leave the same room as local
+            // approaches; ordinary movement keeps its compressed passing space.
+            int separation = self != null ? (combatSpacing ? PositionSpacing(self,other) : BodySeparation(self,other))
+                : radius+other.Definition.BodyRadiusMm;
             Navigation.AddBodyNodes(nodes,other.X,other.Y,other.Z,other.Definition.BodyHeightMm,separation,height);
         }
         return nodes;

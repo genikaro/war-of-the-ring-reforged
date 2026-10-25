@@ -168,6 +168,11 @@ enemies within 10 m, and support allies fighting within 10 m against a target up
 its resting position (or settles nearby if that position is occupied). Move
 completion establishes the new guard origin. This requires no Guard command;
 the displayed order stays Idle. The red demo opponent retains its aggressive AI.
+Since build-74, idle guards also acquire enemy buildings within 10 m of the guard
+origin, measured to their footprint. Units take priority; building approaches
+stay inside the guard leash, and the guard returns after destruction or a change
+to friendly ownership. Ranged units use the same awareness radius even when their
+weapon reaches farther. See [the checks](ENGAGEMENT.md#build-74-idle-building-guard).
 Move suppresses retaliation while travelling. Stop returns to Idle and restores
 default guarding, while Hold Ground acquires enemies within reach
 automatically. Attack and Attack-move acquire connected enemies within the

@@ -1,6 +1,16 @@
 using Reforged.Simulation;
 using System.Text.Json;
 
+if (Array.IndexOf(args,"--siege-spacing-benchmark") is int siegeSpacing && siegeSpacing>=0)
+{
+    SiegeSpacingChecks.Benchmark(args[siegeSpacing+1]); return;
+}
+
+if (Array.IndexOf(args,"--melee-spacing-benchmark") is int spacing && spacing>=0)
+{
+    MeleeSpacingChecks.Benchmark(args[spacing+1]); return;
+}
+
 if (Array.IndexOf(args,"--flanking-benchmark") is int flank && flank>=0)
 {
     FlankingChecks.Benchmark(args[flank+1]); return;
@@ -54,6 +64,23 @@ if (Array.IndexOf(args,"--movement-benchmark") is int benchmark && benchmark >= 
 
 int passed = 0;
 void Check(bool value, string name) { if (!value) throw new Exception(name); passed++; }
+if (args.Contains("--idle-building-checks"))
+{
+    IdleBuildingChecks.Run(Check); IdleGuardChecks.Run(Check); SiegeChecks.Run(Check);
+    Console.WriteLine($"{passed} idle building and guard checks passed"); return;
+}
+if (args.Contains("--siege-spacing-checks"))
+{
+    SiegeSpacingChecks.Run(Check); SiegeChecks.Run(Check); SiegeDistanceChecks.Run(Check);
+    Console.WriteLine($"{passed} siege spacing and approach checks passed"); return;
+}
+if (args.Contains("--ranged-spacing-checks"))
+{
+    RangedChecks.Run(Check); RangedSpacingChecks.Run(Check);
+    int rangedCache=Array.IndexOf(args,"--cache");
+    if(rangedCache>=0) RangedSpacingChecks.Cached(Check,args[rangedCache+1]);
+    Console.WriteLine($"{passed} ranged combat and spacing checks passed"); return;
+}
 if (args.Contains("--siege-distance-checks"))
 {
     SiegeDistanceChecks.Run(Check);
@@ -71,7 +98,7 @@ if (args.Contains("--target-priority-checks"))
 }
 if (args.Contains("--combat-checks"))
 {
-    EngagementChecks.Run(Check); CloseCombatChecks.Run(Check); IdleGuardChecks.Run(Check); CrowdMotionChecks.Run(Check); ArmyScaleChecks.Run(Check); MeleeQueueChecks.Run(Check);
+    EngagementChecks.Run(Check); CloseCombatChecks.Run(Check); IdleGuardChecks.Run(Check); CrowdMotionChecks.Run(Check); ArmyScaleChecks.Run(Check); MeleeQueueChecks.Run(Check); MeleeSpacingChecks.Run(Check); RangedSpacingChecks.Run(Check);
     Console.WriteLine($"{passed} combat and crowd checks passed"); return;
 }
 if (Array.IndexOf(args,"--worker-cache") is int workerCache && workerCache >= 0)
@@ -79,6 +106,7 @@ if (Array.IndexOf(args,"--worker-cache") is int workerCache && workerCache >= 0)
     WorkerTrafficChecks.Run(Check);
     WorkerTrafficChecks.RunCached(Check,args[workerCache+1]);
     RangedChecks.Cached(Check,args[workerCache+1]);
+    RangedSpacingChecks.Cached(Check,args[workerCache+1]);
     if (JsonDocument.Parse(File.ReadAllText(Path.Combine(args[workerCache+1],"navigation.json"))).RootElement.TryGetProperty("footprint_collision",out _))
         Check(JsonSerializer.SerializeToElement(FootprintChecks.Gap(args[workerCache+1])).GetProperty("passed").GetBoolean(),"worker takes the direct route through the reported Citadel/Foundry gap");
     Console.WriteLine($"{passed} worker traffic checks passed"); return;
@@ -95,6 +123,7 @@ OrderChecks.Run(Check);
 ExtendedOrderChecks.Run(Check);
 MeleeChecks.Run(Check);
 RangedChecks.Run(Check);
+RangedSpacingChecks.Run(Check);
 FacingChecks.Run(Check);
 ProjectileTrailChecks.Run(Check);
 MovementModeChecks.Run(Check);
@@ -114,6 +143,7 @@ ResearchChecks.Run(Check);
 TechTreeChecks.Run(Check);
 SandboxDummyChecks.Run(Check);
 SiegeChecks.Run(Check);
+SiegeSpacingChecks.Run(Check);
 SiegeDistanceChecks.Run(Check);
 DefenseChecks.Run(Check);
 OutcomeChecks.Run(Check);
@@ -124,9 +154,11 @@ BodyCollisionChecks.Run(Check);
 EngagementChecks.Run(Check);
 CloseCombatChecks.Run(Check);
 IdleGuardChecks.Run(Check);
+IdleBuildingChecks.Run(Check);
 CrowdMotionChecks.Run(Check);
 ArmyScaleChecks.Run(Check);
 MeleeQueueChecks.Run(Check);
+MeleeSpacingChecks.Run(Check);
 FlankingChecks.Run(Check);
 
 var allowed = Enumerable.Repeat(true, 80).ToArray();
@@ -383,6 +415,7 @@ if (cacheArg >= 0)
 {
     string cache = args[cacheArg+1];
     MeleeChecks.Cached(Check,cache);
+    RangedSpacingChecks.Cached(Check,cache);
     var nav = JsonDocument.Parse(File.ReadAllText(Path.Combine(cache, "navigation.json"))).RootElement;
     var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(cache, "manifest.json"))).RootElement;
     byte[] rawHeights = File.ReadAllBytes(Path.Combine(cache, "heights.bin"));

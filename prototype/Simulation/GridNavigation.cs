@@ -807,8 +807,8 @@ public sealed partial class GridNavigation
 
     /// <summary>A* toward a group of destinations. The bounds of the goals supply an admissible lower bound,
     /// so a distant building does not require flooding every cell between the unit and its attack perimeter.</summary>
-    public List<int> FindPathToAnyDirected(int start,IEnumerable<int> destinations,IReadOnlySet<int>? blocked,int maxVisited)
-        => FindPathToAny(start,destinations,[],blocked,maxVisited,directed:true).Path;
+    public List<int> FindPathToAnyDirected(int start,IEnumerable<int> destinations,IReadOnlySet<int>? blocked,int maxVisited,Func<int,bool>? allowed = null)
+        => FindPathToAny(start,destinations,[],blocked,maxVisited,allowed,directed:true).Path;
 
     /// <summary>The preferred search, and failing it the fallback one, in a single pass. By default the expansion
     /// order does not depend on the goals, so the first fallback goal closed is exactly what a second search

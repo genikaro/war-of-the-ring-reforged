@@ -85,7 +85,10 @@ static class FlankingChecks
         var closed=JsonSerializer.SerializeToElement(Measure(false,true));
         int Contributors(JsonElement value)=>value.GetProperty("rear_hitters").GetInt32();
         Console.WriteLine($"FLANKING rear={Contributors(without)}->{Contributors(battle)} siege={Contributors(siege)} sealed={Contributors(closed)}");
-        check(Contributors(battle)>=16 && Contributors(battle)>=Contributors(without)+10,
+        // Wider personal space leaves fewer slots around this held, immortal
+        // enemy block. Still require a third of the reserves and a clear gain
+        // over the exact same geometry with flanking disabled.
+        check(Contributors(battle)>=12 && Contributors(battle)>=Contributors(without)+10,
             "waiting melee routes around a held friendly line to enemy ranks beyond it");
         check(battle.GetProperty("side_samples").GetInt32()>0 && battle.GetProperty("front_moved").GetInt32()==0,
             "flankers use the sides without moving Hold Position's front rank");

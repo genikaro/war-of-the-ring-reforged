@@ -211,11 +211,11 @@ public sealed partial class SimWorld
         return true;
     }
 
-    private IEnumerable<int> EconomyRouteCandidates(SimUnit unit,WorkArea area,Func<int,bool>? allowed = null)
+    private IEnumerable<int> EconomyRouteCandidates(SimUnit unit,WorkArea area,Func<int,bool>? allowed = null,bool ignoreUnits = false)
     {
         var nav = Nav(unit);
-        var reserved = OccupiedNodes(unit.Id);
-        reserved.UnionWith(Units.Where(u => u.Id != unit.Id && u.Present && u.Goal >= 0).Select(u => u.Goal));
+        var reserved = ignoreUnits ? [] : OccupiedNodes(unit.Id);
+        if(!ignoreUnits) reserved.UnionWith(Units.Where(u => u.Id != unit.Id && u.Present && u.Goal >= 0).Select(u => u.Goal));
         int minX = Math.Max(0,(area.X-area.RadiusMm)/nav.CellSize),maxX = Math.Min(nav.Width-1,(area.X+area.RadiusMm)/nav.CellSize);
         int minZ = Math.Max(0,(area.Z-area.RadiusMm)/nav.CellSize),maxZ = Math.Min(nav.Height-1,(area.Z+area.RadiusMm)/nav.CellSize);
         var candidates = new List<int>();

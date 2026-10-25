@@ -85,6 +85,7 @@ public sealed partial class SimWorld
     {
         if (!victim.Present || victim.Order is not (OrderKind.Idle or OrderKind.Stop) || victim.Target >= 0 || victim.RingActive
             || victim.Definition.DpsMilli <= 0 || Workers.ContainsKey(victim.Definition.Name) || !CanAttackSite(victim.Team,site)) return;
+        if(IdleGuardEnabled(victim) && victim.SiteTarget==site) return;
         victim.Order = OrderKind.AttackStructure; victim.OrderTarget = site; victim.SiegeForced = false; victim.SiegePlanTick = -1;
     }
 

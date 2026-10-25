@@ -147,3 +147,52 @@ simulation steps, plus roughly 1 second of region-cache setup during loading.
 ./prototype/run.ps1 -EngagementSmoke
 ./prototype/run.ps1 -EngagementSmoke -Resolution 3840x2160 -CapturePath converted/prototype/engagement-fixed-4k.png
 ```
+
+## Build-74: idle building guard
+
+The owner noticed that idle units would fight nearby soldiers but ignore
+buildings. The idle acquisition path only considered units; automatic building
+combat was limited to attack-move. Idle guards now acquire nearby enemy buildings
+when there is no unit target to fight.
+
+Building awareness is 10 m from the original guard post to the footprint,
+including the boundary. A large building can qualify by its nearby wall even
+when its centre is farther away. Legacy circular building envelopes retain their
+radius-based test. Friendly and neutral structures, disconnected approaches,
+passive units, units without attack damage and a Ring wearer are excluded.
+Acquisition is checked twice a second. Bow range does not extend awareness.
+
+The standing order remains Idle, and the guard post is preserved. These are
+automatic actions rather than an injected AttackStructure command. Guards use
+the shared siege spacing and planning budget. Their attack positions, route
+nodes, local approach steps and settling moves respect the existing pursuit
+leash (12 m for the player, 20 m for bots). A deliberate Attack remains free to
+take a longer detour.
+
+Enemy units take priority. A new unit threat can interrupt a building attack;
+the stored building objective resumes afterwards. A destroyed or newly friendly
+building releases that objective and the guard returns near its original post.
+Move establishes a new post upon arrival and suppresses building acquisition en
+route. Stop cancels immediately and restores idle guarding; even a Shift-queued
+player command can take over immediately from this automatic Idle activity.
+Hold Position remains stationary and does not gain building pursuit.
+
+`IdleBuildingChecks` covers melee and ranged acquisition, radius boundaries,
+large footprints, unit priority and interruptions, return after destruction and
+ownership change, Move/Stop/Hold, passive/unarmed/Ring units, sealed terrain and
+reopening it, leash-limited detours, explicit attack overrides, group collision,
+the six-search cap and deterministic replay. Building-versus-unit classification
+also keeps the selection readout correct while the guard fights an intruder.
+
+Validation passes all 1,207 simulation checks with the Helm's Deep cache and
+64 focused idle-building/guard checks. The native Sandbox smoke now temporarily
+makes a nearby Barracks hostile after Stop and verifies that the source Gondor
+Swordsman acquires and damages it without another order. Native siege and AI
+assault/razing smokes also pass.
+
+```powershell
+.\converted\tooling\dotnet\dotnet.exe run --project tests/simulation -c Release -- --idle-building-checks
+.\prototype\run.ps1 -SandboxSmoke
+```
+
+Restart to load build-74; no cache rebuild.

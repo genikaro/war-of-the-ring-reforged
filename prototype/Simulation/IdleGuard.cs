@@ -42,6 +42,12 @@ public sealed partial class SimWorld
         // Traffic yielding is temporary movement, not a new place to guard.
         if (unit.YieldFor>=0 || unit.ReturningToRest) return;
         var anchor=Navigation.Center(unit.IdleGuardOrigin);
+        if(unit.SiteTarget>=0)
+        {
+            if(!ConstructionSites.TryGetValue(unit.SiteTarget,out var site) || !CanAttackSite(unit.Team,site.Id)
+                || !NearGuardSite(unit,site) || !InIdleGuardLeash(unit,unit.X,unit.Z)) ReleaseIdleSiege(unit);
+            else if(unit.Target<0 && !unit.IdleGuardReturning) return;
+        }
         if (unit.IdleGuardReturning && unit.Target<0 && unit.Goal<0 && unit.Path.Count>0 && unit.Waypoint>=unit.Path.Count)
         {
             unit.IdleGuardOrigin=unit.Node; unit.IdleGuardReturning=false; return;

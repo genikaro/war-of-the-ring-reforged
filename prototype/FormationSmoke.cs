@@ -66,11 +66,19 @@ public partial class Main
         }
         if (!_formationCaptured && world.Tick>=520 && _capture!="") { _formationCaptured=true; _=CaptureFrame(false); }
         if (world.Tick<2400 || _finishing) return;
-        _finishing=true; bool arrived=allies.All(u=>u.Goal<0 && u.Target<0 && u.Order==OrderKind.Idle);
-        var report=new {selected_allies=_engagementSelected,move_dispatch=_formationMoveDispatch,first_formation_arrived=_formationFirstArrival,
+        bool arrived=allies.All(u=>u.Goal<0 && u.Target<0 && u.Order==OrderKind.Idle);
+        // A wider firing line can leave one final bow target and its return leg.
+        // Keep all arrival checks, with at most ten seconds for that tail to finish.
+        if(!arrived && world.Tick<2600) return;
+        _finishing=true;
+        var report=new {completion_tick=world.Tick,selected_allies=_engagementSelected,move_dispatch=_formationMoveDispatch,first_formation_arrived=_formationFirstArrival,
             attack_move_dispatch=_formationMarchDispatch,engaged_enemies=_formationEngaged,attack_move_arrived=arrived,living_allies=allies.Length,
             maximum_march_width_m=_formationWidth,maximum_width_including_idle_guards_m=_formationIdleWidth,rapid_yaw_changes=_formationFastYawChanges,body_spacing=_engagementSafe,
-            unsettled=allies.Where(u=>u.Goal>=0 || u.Target>=0).Select(u=>new {u.Id,u.X,u.Z,u.Goal,u.Target,u.Order,u.AttackMoveOrigin,u.AttackMoveForward,u.AttackMoveReturning}).ToArray(),
+            unsettled=allies.Where(u=>u.Goal>=0 || u.Target>=0).Select(u=>new {u.Id,u.Definition.Name,u.X,u.Z,u.Goal,u.Target,u.Order,u.AttackMoveOrigin,u.AttackMoveForward,u.AttackMoveReturning,
+                u.CombatWaiting,u.BlockedTicks,u.CombatTrafficQueued,u.AttackNode,u.CombatPlanTick,u.CombatTarget,u.CombatRequestTick,path=u.Path.Count,
+                enemy=u.Target<0 ? null : new {world.Units[u.Target].X,world.Units[u.Target].Z,world.Units[u.Target].Health},
+                nearby=world.Units.Where(a=>a.Present && a.Team==u.Team && a.Id!=u.Id && SimWorld.SeparationSquared(u,a)<4000000)
+                    .Select(a=>new {a.Id,a.X,a.Z,a.Target,a.Order}).ToArray()}).ToArray(),
             unique_hitters=_engagementHitters.Select(h=>h.Count).ToArray(),
             average_step_ms=_engagementStepTimes.Average(),p95_step_ms=_engagementStepTimes.Order().ElementAt((int)(_engagementStepTimes.Count*.95)),digest=world.StateDigest(),
             passed=_engagementSelected && _formationMoveDispatch && _formationFirstArrival && _formationMarchDispatch && _formationEngaged

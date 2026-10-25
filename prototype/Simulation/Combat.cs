@@ -66,10 +66,12 @@ public sealed partial class SimWorld
         return true;
     }
 
-    // Imported bodies use physical clearance for approach slots and strikes;
-    // the legacy probe's extra comfort margin traps dense larger formations.
+    // Passing allies may compress to their solid cores; combat needs room for
+    // readable silhouettes and swings. Use the same spacing for reservations,
+    // approach steps and strikes so a rear rank cannot fill the fighters' gaps.
+    // Keep the tiny navigation fixtures' original comfort margin.
     private static int StrikeSpacing(SimUnit a,SimUnit b) => a.Definition.BodyRadiusMm > 350 || b.Definition.BodyRadiusMm > 350
-        ? BodySeparation(a,b) : FightSpacing(a,b);
+        ? Math.Max(BodySeparation(a,b),(a.Definition.BodyRadiusMm+b.Definition.BodyRadiusMm)*85/100) : FightSpacing(a,b);
 
     private int PositionSpacing(SimUnit unit,SimUnit other) => other.Team == unit.Team ? StrikeSpacing(unit,other) : BodySeparation(unit,other);
 
@@ -167,7 +169,9 @@ public sealed partial class SimWorld
         List<(int Node,bool Waiting,long Cost)> candidates;
         using (SimProfiler.Time("CombatCandidates")) candidates=CombatCandidates(unit,target,flank);
         int start = unit.TransitNode >= 0 && !unit.GroundSegment ? unit.TransitNode : PlanningNode(unit);
-        var blocked = OccupiedNodes(unit.Id); blocked.Remove(unit.Node); blocked.Remove(start);
+        // Missile units may pass between allies to reach their firing area;
+        // the firing endpoint still reserves the full combat comfort distance.
+        var blocked = OccupiedNodes(unit.Id,combatSpacing:!UsesMissile(unit,target)); blocked.Remove(unit.Node); blocked.Remove(start);
         if (unit.Definition.BodyRadiusMm > 350)
         {
             using var wide = SimProfiler.Time("CombatPosition wide");
@@ -225,20 +229,26 @@ public sealed partial class SimWorld
         return path.Count > 0 ? (goal,path,false,target.Id) : (-1,[],true,target.Id);
     }
 
-    private bool ClearCombatStep(SimUnit unit, int x, int y, int z)
+    private bool ClearCombatStep(SimUnit unit, int x, int y, int z,bool spreading = false)
     {
         using var time = SimProfiler.Time("ClearCombatStep");
         int approachMargin=unit.Target>=0 ? AttackRange(unit,Units[unit.Target]) : 0;
         if (unit.Order==OrderKind.AttackMove && (unit.Target>=0 || unit.AttackMoveReturning) && unit.Definition.BodyRadiusMm>350 && unit.AttackMoveOrigin>=0
             && !InAttackMoveArea(unit,x,z,approachMargin) && InAttackMoveArea(unit,unit.X,unit.Z,approachMargin)) return false;
+        if(IdleGuardEnabled(unit) && unit.SiteTarget>=0 && !unit.IdleGuardReturning && !InIdleGuardLeash(unit,x,z)) return false;
+        // A spreading step already reduces total crowding. Let it redistribute
+        // compressed personal space; ClearGroundStep still enforces solid cores.
+        if (spreading) return true;
+        bool passingToFire=unit.Target>=0 && UsesMissile(unit,Units[unit.Target]);
         foreach (var other in Grid.AlongMovement(unit.X,unit.Z,x,z,unit.Definition.BodyRadiusMm+Grid.MaxBodyRadiusMm+400,_combatStepNeighbors))
         {
-            if (other.Id==unit.Id || other.Team!=unit.Team || !other.Present || unit.Target<0 && other.Target<0) continue;
+            if (other.Id==unit.Id || other.Team!=unit.Team || !other.Present
+                || unit.Target<0 && other.Target<0 && !MeleeSiegeSpacing(unit)) continue;
             if (!VerticalOverlap(y,unit.Definition.BodyHeightMm,other.Y,other.Definition.BodyHeightMm)) continue;
             long current = DistanceSquared(unit.X,unit.Z,other.X,other.Z);
             long next = DistanceSquared(x,z,other.X,other.Z);
             int spacing = unit.Definition.BodyRadiusMm > 350 || other.Definition.BodyRadiusMm > 350
-                ? BodySeparation(unit,other) : ApproachSpacing(unit,other);
+                ? (passingToFire ? BodySeparation(unit,other) : StrikeSpacing(unit,other)) : ApproachSpacing(unit,other);
             if (current < (long)spacing*spacing)
             {
                 // A new fight may start inside an already packed formation.
@@ -310,9 +320,11 @@ public sealed partial class SimWorld
         {
             if (released) ResumeAttackMove(unit);
             if (AttackMoveSiege(unit)) return true;
+            if (IdleGuardSiege(unit)) return true;
             if (unit.Order == OrderKind.Attack) { unit.Order = OrderKind.Idle; unit.AutoEngage = true; }
             return HoldsPosition(unit);
         }
+        if (SpreadFiringLine(unit)) return true;
         using (SimProfiler.Time("combat redirect")) RedirectCrowdedAttacker(unit);
         var target = Units[unit.Target];
         bool inReach, canFight, slot;

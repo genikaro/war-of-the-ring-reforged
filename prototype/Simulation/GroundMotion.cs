@@ -74,10 +74,10 @@ public sealed partial class SimWorld
         unit.TransitNode = -1; unit.TravelProgress = 0; unit.GroundSegment = false;
     }
 
-    private bool ClearGroundStep(SimUnit unit, int x, int y, int z)
+    private bool ClearGroundStep(SimUnit unit, int x, int y, int z,bool spreading = false)
     {
         using var time = SimProfiler.Time("ClearGroundStep");
-        if (!ClearCombatStep(unit,x,y,z)) return false;
+        if (!ClearCombatStep(unit,x,y,z,spreading)) return false;
         foreach (var other in Grid.AlongMovement(unit.X,unit.Z,x,z,unit.Definition.BodyRadiusMm+Grid.MaxBodyRadiusMm,_groundStepNeighbors))
         {
             if (other.Id==unit.Id || !other.Present) continue;
@@ -201,6 +201,7 @@ public sealed partial class SimWorld
         }
         // Include inflated body nodes and the cell centers of units between waypoints.
         int padding=unit.Definition.BodyRadiusMm+Grid.MaxBodyRadiusMm+2*Navigation.CellSize;
-        return OccupiedNodes(unit.Id,Grid.InRectangle(x0-padding,z0-padding,x1+padding,z1+padding,_routeOccupants));
+        return OccupiedNodes(unit.Id,Grid.InRectangle(x0-padding,z0-padding,x1+padding,z1+padding,_routeOccupants),
+            combatSpacing:MeleeSiegeSpacing(unit) || unit.Target>=0 && !UsesMissile(unit,Units[unit.Target]));
     }
 }

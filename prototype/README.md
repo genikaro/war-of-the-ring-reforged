@@ -4,6 +4,32 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
+**build-74:** idle guards now attack nearby enemy buildings as well as units.
+Building awareness is 10 m from the guard post to the footprint; unit threats
+take priority. Guards keep their original post, use bounded siege approaches,
+and return after the building falls or becomes friendly. Hold Position stays
+stationary. See [idle building guarding](ENGAGEMENT.md#build-74-idle-building-guard).
+Restart; no cache rebuild.
+
+**build-73:** building attacks now keep the same combat spacing. Melee units
+reserve wider spots around the footprint and need swing room before attacking.
+Packed attackers spread within reach; reserves keep the siege order and show
+"Waiting for room" until a gap opens. Ranged building attacks also keep their
+firing space. See the [siege spacing checks](MELEE-SPACING.md#build-73-building-attacks).
+Restart; no cache rebuild.
+
+**build-72:** ranged groups keep the same combat spacing. Packed archers and
+axethrowers spread within firing range so the whole group can shoot; shorter-range
+units can pass friendly ranks to reach a free firing position. Hold Position keeps
+its anchors, and melee weapon switches retain the existing melee rules. See the
+[ranged spacing checks](MELEE-SPACING.md#build-72-ranged-groups). Restart; no cache rebuild.
+
+**build-71:** combat leaves more room between allied bodies. Attack positions,
+waiting ranks, approach routes and local steering use the same wider spacing;
+ordinary movement still lets allies squeeze past each other. Large battles form
+a clearer front, with reserves advancing as room opens. See the
+[spacing measurements and checks](MELEE-SPACING.md). Restart; no cache rebuild.
+
 **build-70:** a selected unit has a status bar, the original console's row of effect
 icons under the health bar: Gimli's Siege Aura, Frodo's Heroic Aura, Guardian Wind
 (darkening as it runs out), the worn One Ring and each place of power its side holds.
@@ -219,8 +245,8 @@ bar, a black strip with a green fill at its foot. A foundation's health climbs
 with the work done, so the same bar is its construction progress bar.
 Selection rings show the full body envelope: Aragorn **0.800 m**, Elven Knight
 **0.927 m**, Uruk-hai **0.693 m** radius. Aragorn's demo model is enlarged 12%,
-with a wider hitbox; raw source bounds remain recorded. Friendly personal space
-can compress to half the combined envelope so units can squeeze between allies.
+with a wider hitbox; raw source bounds remain recorded. Friendly personal space while
+travelling can compress to half the combined envelope so units can squeeze between allies.
 Solid cores still prevent stacking; enemies and terrain retain full clearance.
 Resting formations keep full spacing. Large formations retain continuous movement and exchange
 blocked arrival slots. See [collision details](../tools/NOTES-unit-collision.md).
@@ -236,6 +262,8 @@ a passing side, and approach routes obey the same limits as movement. See the
 
 Idle player units automatically watch a 10 m radius and help nearby allies fight.
 They pursue within a 12 m limit and return near their resting position afterward.
+With no unit to fight, they also attack enemy buildings whose footprint is within
+10 m of that position, keeping the same approach limit and combat spacing.
 Completing Move starts guarding the new position. Stop cancels the current action
 and resumes default guarding on the next tick; Hold Position stays stationary.
 
@@ -249,7 +277,8 @@ unit. See [movement details](MOVEMENT.md#walkrun-control--october-20-2026) and
 [run speeds](MOVEMENT.md#build-60-per-unit-run-speeds).
 
 Combat reserves separate reachable attack positions around each target, keeps
-allied spacing, and parks excess attackers outside the melee ring. Settled
+at least 85% of the combined allied body envelope for imported units, and parks
+excess attackers outside the melee ring. Settled
 fighters hold position and face their target. Attack orders continue onto nearby
 enemies when their target dies. These are prototype rules, not recovered original
 combat formulas.

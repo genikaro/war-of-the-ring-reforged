@@ -17,14 +17,20 @@ public sealed partial class SimWorld
     public bool CanAttackSite(int team,int site) => ConstructionSites.TryGetValue(site,out var target)
         && target.Team >= 0 && target.Team != team && target.Health > 0;
 
-    /// <summary>The building a unit is razing: its explicit target, or one its attack-move came across; -1 for none.</summary>
+    /// <summary>The building a unit is razing: its explicit target, or one acquired by attack-move or idle guarding.</summary>
     public static int SiegeTarget(SimUnit unit) => unit.Order == OrderKind.AttackStructure ? unit.OrderTarget
-        : unit.Order == OrderKind.AttackMove ? unit.SiteTarget : -1;
+        : unit.Order==OrderKind.AttackMove || unit.Order==OrderKind.Idle && !unit.IdleGuardReturning ? unit.SiteTarget : -1;
 
     /// <summary>Standing at a building and striking it, rather than still walking there.</summary>
-    public bool IsBesieging(SimUnit unit) => unit.Present && unit.Attacking && ConstructionSites.ContainsKey(SiegeTarget(unit));
+    public bool IsBesieging(SimUnit unit) => unit.Present && unit.Attacking && unit.Target<0 && ConstructionSites.ContainsKey(SiegeTarget(unit));
 
-    private enum SiegeStep { Walking, Striking, Unreachable }
+    private enum SiegeStep { Walking, Striking, Positioning, Unreachable }
+
+    private static bool MeleeSiegeSpacing(SimUnit unit)=>unit.Definition.BodyRadiusMm>350
+        && !unit.Definition.IsRanged && SiegeTarget(unit)>=0;
+
+    private bool UsesSiegePlanner(SimUnit unit)=>unit.Definition.BodyRadiusMm>350
+        && (!unit.Definition.IsRanged || IdleGuardEnabled(unit));
 
     public bool NeedsRepair(ConstructionSite site) => site.Team >= 0 && site.Complete
         && site.Health > 0 && site.Health < SiteMaxHealth(site);
@@ -66,12 +72,12 @@ public sealed partial class SimWorld
             || (site.Team == unit.Team && !unit.SiegeForced))
         {
             CancelStrike(unit); unit.Order = OrderKind.Idle; unit.OrderTarget = -1; unit.SiegePlanTick = -1; unit.SiegeForced = false;
-            unit.Goal = -1; unit.Path.Clear(); unit.Waypoint = 0; return false;
+            unit.Goal = -1; unit.Path.Clear(); unit.Waypoint = 0; unit.CombatWaiting=false; return false;
         }
         unit.Target = -1; unit.AutoEngage = false;
         var step = Besiege(unit,site);
-        if (step == SiegeStep.Unreachable) { unit.Order = OrderKind.Idle; unit.OrderTarget = -1; }
-        return step == SiegeStep.Striking;
+        if (step == SiegeStep.Unreachable) { unit.Order = OrderKind.Idle; unit.OrderTarget = -1; unit.CombatWaiting=false; }
+        return step is SiegeStep.Striking or SiegeStep.Positioning;
     }
 
     /// <summary>Attack-move razes the enemy buildings it passes, as in Warcraft: units first, then the nearest building
@@ -81,7 +87,7 @@ public sealed partial class SimWorld
     {
         if (unit.Order != OrderKind.AttackMove || unit.Target >= 0 || unit.AttackMoveReturning || unit.RingActive || unit.Definition.DpsMilli <= 0) return false;
         if (unit.SiteTarget >= 0 && !CanAttackSite(unit.Team,unit.SiteTarget))
-        { CancelStrike(unit); unit.SiteTarget = -1; ResumeAttackMove(unit); return false; }
+        { CancelStrike(unit); unit.SiteTarget = -1; unit.CombatWaiting=false; ResumeAttackMove(unit); return false; }
         if (unit.SiteTarget < 0)
         {
             // Twice a second is often enough to notice a building that does not move.
@@ -90,8 +96,8 @@ public sealed partial class SimWorld
             RebaseCombatGround(unit); unit.Goal=-1; unit.Path.Clear(); unit.Waypoint=0;
         }
         var step = Besiege(unit,ConstructionSites[unit.SiteTarget],keepDestination: true);
-        if (step == SiegeStep.Unreachable) { unit.AttackMoveIgnoredSite = unit.SiteTarget; unit.SiteTarget = -1; ResumeAttackMove(unit); }
-        return step == SiegeStep.Striking;
+        if (step == SiegeStep.Unreachable) { unit.AttackMoveIgnoredSite = unit.SiteTarget; unit.SiteTarget = -1; unit.CombatWaiting=false; ResumeAttackMove(unit); }
+        return step is SiegeStep.Striking or SiegeStep.Positioning;
     }
 
     private int NearbyEnemySite(SimUnit unit)
@@ -108,17 +114,22 @@ public sealed partial class SimWorld
     {
         var (x,z) = SitePosition(site);
         var area = SiegeArea(unit,site);
+        bool needsSpace=unit.Definition.BodyRadiusMm>350;
+        if(needsSpace && SpreadCombatArea(unit,null,area))
+        { unit.SiegePlanTick=-1; return SiegeStep.Positioning; }
+        bool ready=Reaches(area,unit.X,unit.Z) && (!needsSpace || RoomToFight(unit));
+        if(!ready) CancelStrike(unit);
         if (unit.Goal >= 0 || unit.TransitNode >= 0 || unit.YieldFor >= 0)
         {
-            // Still travelling: let movement finish, but stop short once the building is in reach.
-            if (!Reaches(area,unit.X,unit.Z))
+            // A fighter may stop short only when it has both reach and swing room.
+            if (!ready)
             {
                 // A wide body (the Rider) can be held short of its spot for good by fighters already striking beside it:
                 // once a second, a spot such a fighter blocks is traded for one the body fits (build-45).
                 if (unit.Goal >= 0 && unit.YieldFor < 0 && (unit.SiegePlanTick < 0 || Tick-unit.SiegePlanTick >= TicksPerSecond)
                     && (!FitsAmongStanding(unit,unit.Goal) || unit.BlockedTicks>=3 || unit.AvoidanceTicks>=12))
                 {
-                    if(unit.Definition.BodyRadiusMm>350 && !unit.Definition.IsRanged)
+                    if(UsesSiegePlanner(unit))
                         return PlanSiegeApproach(unit,site,keepDestination);
                     unit.SiegePlanTick = Tick;
                     PlanEconomyRoute(unit,area,keepDestination,n => FitsAmongStanding(unit,n));
@@ -127,28 +138,31 @@ public sealed partial class SimWorld
             }
             RebaseCombatGround(unit); unit.Goal = -1; unit.Path.Clear(); unit.Waypoint = 0; unit.FreeMovement = false;
         }
-        if (!Reaches(area,unit.X,unit.Z))
+        if (!ready)
         {
-            CancelStrike(unit);
             if (unit.SiegePlanTick < 0 || Tick-unit.SiegePlanTick >= TicksPerSecond)
             {
-                if(unit.Definition.BodyRadiusMm>350 && !unit.Definition.IsRanged)
+                if(UsesSiegePlanner(unit))
                     return PlanSiegeApproach(unit,site,keepDestination);
                 unit.SiegePlanTick = Tick;
-                if (!PlanEconomyRoute(unit,area,keepDestination)) return SiegeStep.Unreachable;
+                if (!PlanEconomyRoute(unit,area,keepDestination,n=>FitsAmongStanding(unit,n))) return UnavailableSiegePosition(unit,area);
+                unit.CombatWaiting=false;
             }
             return SiegeStep.Walking;
         }
-        unit.Attacking = true; unit.SiegePlanTick = -1;
+        unit.Attacking = true; unit.CombatWaiting=false; unit.SiegePlanTick = -1;
         if (FaceForPoint(unit,x,z) || unit.StrikeActive) StrikeSite(unit,site);
         return SiegeStep.Striking;
     }
 
-    /// <summary>Whether the unit's body fits at the node beside every unit standing still (not walking anywhere).</summary>
+    /// <summary>Imported attackers reserve swing room beside standing units; tiny legacy bodies retain core clearance.</summary>
     private bool FitsAmongStanding(SimUnit unit,int node)
     {
         var (x,z) = Nav(unit).Center(node); int y = Nav(unit).NodeHeight(node);
-        return !Units.Any(other => other.Id != unit.Id && other.Present && other.Goal < 0 && other.TransitNode < 0 && BodyOverlapAt(unit,x,y,z,other));
+        int Spacing(SimUnit other)=>unit.Definition.BodyRadiusMm>350 ? PositionSpacing(unit,other) : BodySeparation(unit,other);
+        return !Units.Any(other => other.Id != unit.Id && other.Present && other.Goal < 0 && other.TransitNode < 0
+            && VerticalOverlap(y,unit.Definition.BodyHeightMm,other.Y,other.Definition.BodyHeightMm)
+            && DistanceSquared(x,z,other.X,other.Z)<(long)Spacing(other)*Spacing(other));
     }
 
     /// <summary>The unit's own attack clips and cadence, aimed at a building instead of a unit.</summary>
@@ -207,7 +221,7 @@ public sealed partial class SimWorld
     private void DestroySite(ConstructionSite site,SimUnit? killer)
     {
         foreach (var unit in Units.Where(u => u.Order == OrderKind.AttackStructure && u.OrderTarget == site.Id))
-        { CancelStrike(unit); unit.Order = OrderKind.Idle; unit.OrderTarget = -1; unit.SiegePlanTick = -1; unit.SiegeForced = false; unit.AutoEngage = true; }
+        { CancelStrike(unit); unit.Order = OrderKind.Idle; unit.OrderTarget = -1; unit.SiegePlanTick = -1; unit.SiegeForced = false; unit.AutoEngage = true; unit.CombatWaiting=false; }
         foreach (var unit in Units.Where(u => u.Order == OrderKind.Build && u.OrderTarget == site.Id))
         { unit.Order = OrderKind.Idle; unit.OrderTarget = -1; unit.GatherPlanTick = -1; }
         foreach (var unit in Units.Where(u => u.InsideSite == site.Id)) { LeaveBuilding(unit); FinishGather(unit); }

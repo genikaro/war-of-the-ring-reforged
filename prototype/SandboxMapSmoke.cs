@@ -14,7 +14,9 @@ public partial class Main
     private int _sandboxMapHold,_sandboxMapWorker = -1,_sandboxHoverFrame;
     private int _sandboxDistanceUnit=-1,_sandboxDistanceSite=-1,_sandboxDistanceStart,_sandboxDistanceHealth,_sandboxDistanceX,_sandboxDistanceZ;
     private bool _sandboxDistanceMoved;
-    private const int SandboxMapSmokeChecks = 40;
+    private int _sandboxIdleStart,_sandboxIdleSequence,_sandboxIdleHealth;
+    private bool _sandboxIdleAcquired,_sandboxIdleHit;
+    private const int SandboxMapSmokeChecks = 42;
     private const string SandboxGandalf = "UNIT_G_HERO_GANDALF",SandboxGimli = "UNIT_G_HERO_GIMLI";
     private static readonly string[] SandboxDummyLookalikes = ["UNIT_G_GONDOR_SWORDSMAN","UNIT_G_ELVEN_ARCHER"];
     private static readonly string[] SandboxFateHeroes = ["UNIT_G_HERO_GIMLI","UNIT_G_HERO_ARAGORN","UNIT_G_HERO_LEGOLAS",SandboxGandalf];
@@ -324,6 +326,24 @@ public partial class Main
                 world.Enqueue(0,[unit.Id],OrderKind.Stop); break;
             }
             case 63:
+            {
+                // Fixture: make the nearby Barracks hostile after Stop. No attack
+                // order is issued: the source Swordsman must acquire it as an idle guard.
+                var unit=world.Units[_sandboxDistanceUnit]; var site=world.ConstructionSites[_sandboxDistanceSite];
+                _sandboxIdleStart=world.Tick; _sandboxIdleSequence=unit.OrderSequence; _sandboxIdleHealth=site.Health;
+                site.Team=1; break;
+            }
+            case 65:
+            {
+                var unit=world.Units[_sandboxDistanceUnit]; var site=world.ConstructionSites[_sandboxDistanceSite];
+                _sandboxIdleAcquired|=unit.Order==OrderKind.Idle && unit.SiteTarget==site.Id && unit.OrderSequence==_sandboxIdleSequence;
+                _sandboxIdleHit|=world.CombatEvents.Any(e=>e.Unit==unit.Id && e.Target<0 && e.Kind==CombatEventKind.Hit && e.DamageMilli>0);
+                if(Hold(!_sandboxIdleHit && world.Tick-_sandboxIdleStart<120)) break;
+                _sandboxMapChecks["idle_guard_acquires_a_nearby_enemy_building"]=_sandboxIdleAcquired;
+                _sandboxMapChecks["idle_guard_damages_the_building_without_an_attack_order"]=_sandboxIdleHit && site.Health<_sandboxIdleHealth;
+                site.Team=0; world.Enqueue(0,[unit.Id],OrderKind.Stop); break;
+            }
+            case 67:
                 bool passed = _sandboxMapChecks.Count == SandboxMapSmokeChecks && _sandboxMapChecks.Values.All(v => v);
                 var report = new { build = BuildInfo.Label,checks = _sandboxMapChecks,passed,held_frames = _sandboxMapHold,missing = _sandboxMapMissing,
                     bases = teams.Select(t => new { team = t,buildings = world.ConstructionSites.Values.Where(s => s.Team == t).Select(s => new { world.SiteRules(s).Name,s.X,s.Z,s.Health }),
