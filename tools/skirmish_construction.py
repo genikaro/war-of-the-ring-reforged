@@ -109,6 +109,7 @@ def defense_data(output, resolver):
                     hashlib.sha256(path.read_bytes()).hexdigest()
             defenses.setdefault(name, []).append({'defense': defense.name, 'weapon': weapon.name,
                 'dps_milli': round((weapon['CuttingDamagePerSecond']+weapon['FireDamagePerSecond'])*1000),
+                'fate_ppm': round(weapon['FateModifier']*1_000_000),
                 'minimum_range_mm': round(weapon['MinimumRange']*1000), 'range_mm': round(weapon['MaximumRange']*1000),
                 'rates_milli': [round(defense[rate]*1000) for rate in rates],
                 'max_garrison': record['MaxGarrisonedUnits'],

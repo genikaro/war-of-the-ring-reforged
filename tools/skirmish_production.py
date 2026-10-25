@@ -44,7 +44,7 @@ def production_data(resolver, roster):
                 for record in [buildings.get(name)] if record['UniqueGroupBuildingAffects'] >= 0}
     return {'format_version': 1, 'ticks_per_second': 20, 'producers': producers, 'units': rules,
             'population_provided': {name: buildings.get(name)['AdditionalPopAdded'] for name in skirmish_map.SKIRMISH_BUILDINGS},
-            'unique_group_capacity': capacity, 'max_fate': variables['MaxPowerPoints'],
+            'unique_group_capacity': capacity, 'max_fate': variables['MaxPowerPoints'], 'fate': fate_data(resolver),
             'initial_population_capacity': variables['DefaultInitialPopulationCapacity'],
             'max_population': variables['MaxPopulationCap'], 'rally_banner': RALLY_BANNER_FILE,
             'adapter': 'UnitTrainingTime milliseconds round up to 20 Hz ticks. Cost, Fate included, is paid and population reserved '
@@ -53,7 +53,32 @@ def production_data(resolver, roster):
                        '(source IsUnique) cannot be queued while one is alive or queued; the source HeroDeathRefreshTime is not applied. '
                        'Heroes of a unique group (Gimli, Aragorn, Legolas) are capped by the best standing building of the team that '
                        'holds that group (source AmountBuildingAffectsUniqueGroup: Citadel 2-5 hold 1, 2, 3, 3); whether several '
-                       'Citadels add up is unverified. Fate is not earned yet: a team starts with none, the Sandbox map keeps it full.'}
+                       'Citadels add up is unverified. A team starts with no Fate and earns it in battle (see fate); the Sandbox map keeps it full.'}
+
+
+def ppm(value):
+    return round(value * 1_000_000)
+
+
+def fate_data(resolver):
+    """How battle earns Fate, as Rings.exe (SHA-256 7d9e30a7...) applies the source WorldVariables: damage a player's unit
+    or building deals to an enemy (at most the victim's health) times PowerByDamageRate and the weapon's FateModifier is
+    divided by (Fate held + Fate paid into training queues + 1) x PowerReductionScalar, then scaled by the attacker's
+    distance from the centre of the player's town centres (1 there, MaxPowerDistanceMultiplier at the farthest map corner;
+    that maximum with no town centre), by the Power Acquisition setting and by places of power (FATE_GATHER_RATE).
+    PowerLevelPerPoint of that power makes a Fate point; MaxPowerPoints caps it. Training spends whole points and keeps
+    the progress. Evil Warposts also earn power by corrupted area (WarpostPowerAcquisitionRate); Good has no Warposts."""
+    variables = resolver.db['WorldVariables'].records[0]
+    buildings = resolver.db['Buildings']
+    return {'max_points': variables['MaxPowerPoints'], 'level_per_point': variables['PowerLevelPerPoint'],
+            'by_damage_ppm': ppm(variables['PowerByDamageRate']), 'reduction_ppm': ppm(variables['PowerReductionScalar']),
+            'max_distance_ppm': ppm(variables['MaxPowerDistanceMultiplier']),
+            'acquisition_ppm': {'low': ppm(variables['PowerAcquisitionRateLow']), 'medium': ppm(variables['PowerAcquisitionRateMedium']),
+                                'high': ppm(variables['PowerAcquisitionRateHigh'])},
+            'town_centers': [name for name in skirmish_map.SKIRMISH_BUILDINGS if buildings.get(name)['IsTownCenter']],
+            'adapter': 'The Power Acquisition setting is Medium (no lobby choice yet); every Good unit weapon has FateModifier 1, so '
+                       'only building defenses carry their own (fate_ppm); fixed-point millionths replace the source floats, and '
+                       'the bots\' difficulty bonus to Fate (x0.85 to x1.5 in Rings.exe) is not applied.'}
 
 
 def export(output, resolver, roster):

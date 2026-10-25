@@ -1,15 +1,16 @@
 namespace Reforged.Simulation;
 
 /// <summary>A building's source BuildingDefenses entry: its weapon's damage and range, the rate of fire for zero
-/// to four garrisoned units, and the projectile joint relative to the building's origin (x across, y up).</summary>
+/// to four garrisoned units, the projectile joint relative to the building's origin (x across, y up), and the weapon's
+/// FateModifier in millionths (build-76: tower arrows earn a quarter of the Fate).</summary>
 public sealed record DefenseDefinition(int DpsMilli,int MinimumRangeMm,int RangeMm,int[] RatesMilli,int OriginXMm,int OriginYMm,int OriginZMm,
-    int ProjectileSpeedMmPerSecond = 25000)
+    int ProjectileSpeedMmPerSecond = 25000,int FatePpm = 1_000_000)
 {
     public void Validate()
     {
         if (DpsMilli is < 0 or > 1_000_000 || RangeMm is <= 0 or > 100_000 || MinimumRangeMm < 0 || MinimumRangeMm >= RangeMm
             || RatesMilli is not { Length: 5 } || RatesMilli.Any(r => r is <= 0 or > 100_000) || ProjectileSpeedMmPerSecond is <= 0 or > 200_000
-            || OriginYMm is < 0 or > 50_000) throw new ArgumentException("Invalid building defense");
+            || OriginYMm is < 0 or > 50_000 || FatePpm is < 0 or > 10_000_000) throw new ArgumentException("Invalid building defense");
     }
 }
 
@@ -27,6 +28,10 @@ public sealed partial class SimWorld
     public Dictionary<string,DefenseDefinition[]> ExtraDefenses { get; } = [];
 
     public DefenseDefinition? SiteDefense(ConstructionSite site) => site.Building is { } name ? Defenses.GetValueOrDefault(name) : null;
+
+    /// <summary>The building's weapon that fired a projectile: its first (Attack 0) or a further one (Attack 1, 2...).</summary>
+    private DefenseDefinition? DefenseWeapon(ConstructionSite site,int attack) => attack == 0 ? SiteDefense(site)
+        : site.Building is { } name && ExtraDefenses.TryGetValue(name,out var extra) && attack <= extra.Length ? extra[attack-1] : null;
 
     private bool DefenseCanTarget(ConstructionSite site,DefenseDefinition defense,SimUnit unit)
     {

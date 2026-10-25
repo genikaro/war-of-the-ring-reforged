@@ -64,6 +64,11 @@ if (Array.IndexOf(args,"--movement-benchmark") is int benchmark && benchmark >= 
 
 int passed = 0;
 void Check(bool value, string name) { if (!value) throw new Exception(name); passed++; }
+if (args.Contains("--fate-checks"))
+{
+    FateChecks.Run(Check); TechTreeChecks.Run(Check); DefenseChecks.Run(Check); PlacesOfPowerChecks.Run(Check);
+    Console.WriteLine($"{passed} Fate, tech tree, defense and place checks passed"); return;
+}
 if (args.Contains("--idle-building-checks"))
 {
     IdleBuildingChecks.Run(Check); IdleGuardChecks.Run(Check); SiegeChecks.Run(Check);
@@ -141,6 +146,7 @@ PlacementChecks.Run(Check);
 UpgradeChecks.Run(Check);
 ResearchChecks.Run(Check);
 TechTreeChecks.Run(Check);
+FateChecks.Run(Check);
 SandboxDummyChecks.Run(Check);
 SiegeChecks.Run(Check);
 SiegeSpacingChecks.Run(Check);

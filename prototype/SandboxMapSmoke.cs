@@ -59,7 +59,9 @@ public partial class Main
                 _sandboxMapChecks["fate_full_and_every_hero_on_offer"] = teams.All(t => world.Economies[t].Fate == world.MaxFate
                     && world.Producers.Values.Single(p => p.Team == t && p.Units.Contains(SandboxGandalf)) is var citadel
                     && SandboxFateHeroes.All(hero => world.CanTrain(t,citadel.Id,Array.IndexOf(citadel.Units,hero),out _)))
-                    && world.MaxFate == 20 && _commands.FateReadout == "20";
+                    && world.MaxFate == 20 && _commands.FateReadout == "20"
+                    // Build-76: the Fate cell's tooltip states the count and that nothing more can be earned.
+                    && _commands.FateTooltip.StartsWith("Fate 20/20 · pays for heroes · full");
                 _sandboxMapChecks["no_bots_and_no_chasing"] = world.AiPlayers.Count == 0 && world.AggressiveIdleTeams.Count == 0;
                 // Build-61: the Ballista Tower's info lists both its weapons.
                 var shown = _selectedStructure; _selectedStructure = Site(teams[0],"BUILDING_G_TOWER_UPGRADE")!.Obstacle;

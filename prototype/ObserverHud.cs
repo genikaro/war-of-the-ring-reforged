@@ -15,10 +15,11 @@ public partial class ObserverHud : Control
     public bool Collapsed { get; private set; }
     /// <summary>Delivered food and ore per team, sampled each game second; shared with offscreen captures.</summary>
     public IncomeHistory Income { get; set; } = new();
-    private const float NameWidth = 66,BodyWidth = 348;
+    private const float NameWidth = 66,BodyWidth = 376;
     private static readonly (string Tip,float Width)[] EconomyColumns = [
         ("Food in the bank",44),("Ore in the bank",44),("Income · food and ore delivered per game minute",46),
-        ("Population · used / capacity",48),("Workers",28),("Army · every unit that is not a worker",28),("Buildings, including foundations",26)];
+        ("Population · used / capacity",48),("Workers",28),("Army · every unit that is not a worker",28),("Buildings, including foundations",26),
+        ("Fate · earned in battle, pays for heroes",26)];
     private static readonly (string Tip,float Width)[] StatsColumns = [
         ("Food gathered · everything workers delivered this match",64),("Ore gathered · everything workers delivered this match",64),
         ("Kills · enemy units slain by this player's units and towers",64),("Losses · this player's units slain",64)];
@@ -145,7 +146,7 @@ public partial class ObserverHud : Control
         Income.Sample(world);
         if (_headerIcons[0].Texture == null)
             foreach (var (column,name) in new[] {(0,"console_g_resourcefood"),(1,"console_g_resourcewater"),(3,"console_g_resourcepopulation"),
-                (4,"Portrait_G_Human_Worker"),(5,"Portrait_G_Gondor_Swordsman"),(6,"Building_G_Keep_1")}) _headerIcons[column].Texture = art(name);
+                (4,"Portrait_G_Human_Worker"),(5,"Portrait_G_Gondor_Swordsman"),(6,"Building_G_Keep_1"),(7,"console_g_powerchit")}) _headerIcons[column].Texture = art(name);
         _statsIcons[0].Texture ??= _headerIcons[0].Texture; _statsIcons[1].Texture ??= _headerIcons[1].Texture;
         _teams.Clear(); _teams.AddRange(world.Contenders);
         _economyTab.SetPressedNoSignal(!Collapsed && Tab == Page.Economy); _unitsTab.SetPressedNoSignal(!Collapsed && Tab == Page.Units);
@@ -208,8 +209,12 @@ public partial class ObserverHud : Control
             values[6].Text = sites.Length.ToString();
             values[6].TooltipText = sites.Length == 0 ? "No buildings" : string.Join("\n",sites.GroupBy(s => world.SiteRules(s).DisplayName+(s.Complete ? "" : " (foundation)"))
                 .OrderBy(g => g.Key,StringComparer.Ordinal).Select(g => $"{g.Count()} {g.Key}"));
+            values[7].Text = (bank?.Fate ?? 0).ToString();
+            values[7].TooltipText = bank == null ? EconomyColumns[7].Tip : Main.FateTip(world,team);
         }
     }
+    /// <summary>The Economy tab's Fate cell for a row.</summary>
+    public string DisplayedFate(int index) => _economyRows[index].Values[7].Text;
 
     private void RefreshStats(SimWorld world,Func<int,Color> color)
     {

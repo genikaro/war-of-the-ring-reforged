@@ -868,6 +868,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         if (Units.Any(u => u.MissileWardUntil >= 0)) text += ":ward:"+string.Join(';',Units.Select(u => $"{u.MissileWardPpm},{u.MissileWardUntil}"));
         if (Units.Any(u => u.BonusArmorMilli != 0)) text += ":bonus-armor:"+string.Join(';',Units.Select(u => u.BonusArmorMilli));
         text += EconomyDigest();
+        text += FateDigest();
         text += ConstructionDigest();
         text += ProductionDigest();
         text += PlacementDigest();

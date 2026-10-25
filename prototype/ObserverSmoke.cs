@@ -13,7 +13,7 @@ public partial class Main
     private readonly Dictionary<string,bool> _observerChecks = [];
     private int _observerPhase,_observerStep,_observerTickMark,_observerFrameMark,_observerBurst,_observerInspected = -1,_observerSnapshotTick,_observerCaptures;
     private bool _observerOk = true; // the running result of a check spread over several frames
-    private const int ObserverSmokeChecks = 16;
+    private const int ObserverSmokeChecks = 17;
     private readonly List<string> _observerTimeline = [];
     /// <summary>A report key per bot: the player as well as the bot, so a mirror match (Gimli against Gimli) keeps both.</summary>
     private static string BotKey(AiPlayer bot) => $"Player {bot.Team+1} {bot.Personality.Id}";
@@ -146,6 +146,9 @@ public partial class Main
                     // A unit killed on the final tick has no presented death yet (DeathTick -1).
                     && _views.Where(p => !p.Value.Buried && world.Units[p.Key].Health <= 0 && p.Value.DeathTick >= 0)
                         .All(p => world.Tick-p.Value.DeathTick < CorpseTicks+CorpseSinkTicks+SimWorld.TicksPerSecond);
+                // Build-76: battle earns both sides Fate (bots do not spend it), within the source cap of 20.
+                _observerChecks["bots_earn_fate_in_battle"] = world.Contenders.All(t => world.Economies[t] is var bank
+                    && (bank.Fate > 0 || bank.FateProgressMicro > 0) && bank.Fate == bank.FateEarned && bank.Fate <= world.MaxFate);
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-result.png");
                 _observerPhase = 5; _observerStep = 0; break;
             case 5:
@@ -172,7 +175,8 @@ public partial class Main
                     stats = world.AiPlayers.Values.ToDictionary(BotKey,a => {
                         var r = world.Records.GetValueOrDefault(a.Team) ?? MatchRecord.Empty; var bank = world.Economies[a.Team];
                         return $"gathered food {bank.GatheredFoodMilli/1000} ore {bank.GatheredOreMilli/1000} · units killed {r.UnitKills.Values.Sum()} lost {r.UnitLosses.Values.Sum()}"
-                            +$" · buildings razed {r.BuildingKills.Values.Sum()} lost {r.BuildingLosses.Values.Sum()}";
+                            +$" · buildings razed {r.BuildingKills.Values.Sum()} lost {r.BuildingLosses.Values.Sum()}"
+                            +$" · Fate {bank.Fate} and {world.FateProgressPercent(a.Team)}%";
                     }),
                     corpses_buried = _corpsesBuried,winner = world.Winner,outcome_tick = world.OutcomeTick,ticks_per_frame_at_16x = _observerBurst,
                     bots = world.AiPlayers.Values.Select(a => $"{a.Personality.Id}: {a.Status}").ToArray(),

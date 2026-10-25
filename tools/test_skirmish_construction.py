@@ -103,6 +103,8 @@ class ConstructionImportTests(unittest.TestCase):
             self.assertEqual((tower['defense'], tower['weapon']), ('BUILDING_DEFENSES_G_WATCHTOWER', 'WEAPON_BUILDING_G_TOWER_MISSILE'))
             self.assertEqual((tower['dps_milli'], tower['minimum_range_mm'], tower['range_mm'], tower['max_garrison']), (14000, 0, 19000, 4))
             self.assertEqual(tower['rates_milli'], [1000, 1200, 1400, 1600, 1750])
+            # Build-76: tower arrows earn a quarter of the Fate (Weapons FateModifier 0.25), the bolt the full share.
+            self.assertEqual((tower['fate_ppm'], arrows['fate_ppm'], bolt['fate_ppm']), (250_000, 250_000, 1_000_000))
             # J_Projectiles carries JointFlags bit 11 (Building Projectile), at the model's 0.8 scale.
             self.assertEqual(tower['origin_mm'], [94, 3434, 159])
             self.assertEqual(tower['projectile']['Visual'], 'combat/projectile_evil_tower_arrow.glb')

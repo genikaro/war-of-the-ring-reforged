@@ -34,8 +34,9 @@ public sealed record PlaceCapture(int Tick,int Place,int Team,int Previous);
 /// heroes included, and stays after they leave, until another team is alone there. Simulated modifiers: ARMOR_CLASS
 /// (+armor points), HEALTH_REGENERATION_RATE (+HP per second), MAX_HEALTH (x, current health keeping its share),
 /// DAMAGE_ADDITIVE (+damage per second, as techniques' +1 attack), MELEE_DAMAGE, RANGED_DAMAGE, DAMAGE (x),
-/// SIEGE_DAMAGE (x against buildings) and COOL_DOWN (x hero ability recharge). Not simulated yet: gather rates, fate,
-/// line of sight, experience, costs, running speed, build rate and added or removed abilities. A random place of power
+/// SIEGE_DAMAGE (x against buildings), COOL_DOWN (x hero ability recharge) and, since build-76, FATE_GATHER_RATE (x Fate
+/// earned in battle, Fate.cs). Not simulated yet: resource gather rates, line of sight, experience, costs, running speed,
+/// build rate and added or removed abilities. A random place of power
 /// takes one source place allowed random placement, chosen from the match seed and the object's id.</summary>
 public sealed partial class SimWorld
 {
@@ -43,7 +44,7 @@ public sealed partial class SimWorld
         DamageAdditiveModifier = "DAMAGE_ADDITIVE",MeleeDamageModifier = "MELEE_DAMAGE",RangedDamageModifier = "RANGED_DAMAGE",
         DamageModifier = "DAMAGE",SiegeDamageModifier = "SIEGE_DAMAGE",CoolDownModifier = "COOL_DOWN";
     public static readonly IReadOnlySet<string> SimulatedPlaceModifiers = new HashSet<string> { ArmorModifier,RegenerationModifier,MaxHealthModifier,
-        DamageAdditiveModifier,MeleeDamageModifier,RangedDamageModifier,DamageModifier,SiegeDamageModifier,CoolDownModifier };
+        DamageAdditiveModifier,MeleeDamageModifier,RangedDamageModifier,DamageModifier,SiegeDamageModifier,CoolDownModifier,FateGatherModifier };
 
     /// <summary>Every source place of power by id, and every place-of-power object type with its display name and default places.</summary>
     public Dictionary<int,PlaceOfPowerRule> PlaceRules { get; } = [];

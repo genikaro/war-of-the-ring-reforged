@@ -31,6 +31,12 @@ public partial class Main
             foreach (var building in capacity.EnumerateObject())
                 world.UniqueGroupCapacity.Add(building.Name,(building.Value.GetProperty("group").GetInt32(),building.Value.GetProperty("amount").GetInt32()));
         if (production.TryGetProperty("max_fate",out var maxFate)) world.MaxFate = maxFate.GetInt32();
+        // Build-76: battle earns Fate by the source WorldVariables, at the Medium Power Acquisition rate.
+        if (production.TryGetProperty("fate",out var earning))
+            world.FateRules = new(earning.GetProperty("level_per_point").GetInt32(),earning.GetProperty("by_damage_ppm").GetInt32(),
+                earning.GetProperty("reduction_ppm").GetInt32(),earning.GetProperty("max_distance_ppm").GetInt32(),
+                earning.GetProperty("acquisition_ppm").GetProperty("medium").GetInt32(),
+                earning.GetProperty("town_centers").EnumerateArray().Select(t => t.GetString()!).ToArray());
         foreach (var building in production.GetProperty("population_provided").EnumerateObject()) world.PopulationProvided.Add(building.Name,building.Value.GetInt32());
         world.InitialPopulationCapacity = production.GetProperty("initial_population_capacity").GetInt32();
         world.MaxPopulation = production.GetProperty("max_population").GetInt32();

@@ -103,7 +103,9 @@ public partial class Main
                 var origin = weapon.GetProperty("origin_mm");
                 var defense = new DefenseDefinition(weapon.GetProperty("dps_milli").GetInt32(),weapon.GetProperty("minimum_range_mm").GetInt32(),
                     weapon.GetProperty("range_mm").GetInt32(),weapon.GetProperty("rates_milli").EnumerateArray().Select(r => r.GetInt32()).ToArray(),
-                    origin[0].GetInt32(),origin[1].GetInt32(),origin[2].GetInt32());
+                    origin[0].GetInt32(),origin[1].GetInt32(),origin[2].GetInt32(),
+                    // Build-76 exports the weapon's FateModifier.
+                    FatePpm: weapon.TryGetProperty("fate_ppm",out var fate) ? fate.GetInt32() : 1_000_000);
                 defense.Validate();
                 LoadProjectileStyle(index == 0 ? item.Name : item.Name+"#"+index,weapon.GetProperty("projectile"));
                 return defense;

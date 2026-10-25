@@ -74,7 +74,16 @@ public partial class Main
         panel.ShowResources(!_observing,armies: !_observing);
         if (_observing) return;
         var bank = _world!.Economies.GetValueOrDefault(PlayerTeam);
-        panel.SetResources(_world.PopulationUsed(PlayerTeam),_world.PopulationCapacity(PlayerTeam),bank?.Food ?? _startState.Food,bank?.Ore ?? _startState.Ore,bank?.Fate ?? 0);
+        panel.SetResources(_world.PopulationUsed(PlayerTeam),_world.PopulationCapacity(PlayerTeam),bank?.Food ?? _startState.Food,bank?.Ore ?? _startState.Ore,bank?.Fate ?? 0,
+            bank == null ? null : FateTip(_world,PlayerTeam));
+    }
+
+    /// <summary>Build-76: the Fate cell's state, the progress toward the next point and what battle has earned.</summary>
+    public static string FateTip(SimWorld world,int team)
+    {
+        var bank = world.Economies[team];
+        string progress = world.FateRules == null ? "not earned" : bank.Fate >= world.MaxFate ? "full" : $"next point {world.FateProgressPercent(team)}%";
+        return $"Fate {bank.Fate}/{world.MaxFate} · pays for heroes · {progress} · {bank.FateEarned} earned in battle";
     }
 
     private void LoadSkirmishEconomy(JsonElement data)

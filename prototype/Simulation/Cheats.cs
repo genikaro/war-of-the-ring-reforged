@@ -11,6 +11,6 @@ public sealed partial class SimWorld
         if (!Economies.TryGetValue(team,out var bank)) return;
         bank.FoodMilli = Math.Min(bank.FoodCapacityMilli,bank.FoodMilli+amount*1000L);
         bank.OreMilli = Math.Min(bank.OreCapacityMilli,bank.OreMilli+amount*1000L);
-        bank.Fate = Math.Min(MaxFate,bank.Fate+fate);
+        AddFate(bank,fate);
     }
 }

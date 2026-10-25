@@ -212,6 +212,7 @@ public sealed partial class SimWorld
         site.ProgressMicroTicks = Math.Min(site.ProgressMicroTicks,(long)rules.DurationTicks*1_000_000);
         var (x,z) = SitePosition(site);
         if (before>site.Health) RecordHostileDamage(unit,site.Team,x,z,asset:true);
+        EarnFate(unit.Team,site.Team,unit.X,unit.Z,(before-site.Health)*1000L);
         CombatEvents.Add(new(Tick,CombatEventKind.Hit,unit.Id,-1,attack,hit,(before-site.Health)*1000L,startTick,x,Navigation.GroundHeight(x,z),z));
         if (site.Health <= 0) DestroySite(site,unit);
     }

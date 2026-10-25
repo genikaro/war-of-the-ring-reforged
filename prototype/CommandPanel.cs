@@ -99,7 +99,7 @@ public partial class CommandPanel : Control
         (_populationIcon,_populationText) = ResourceCell(0,10,"Population · units / capacity",52);
         (_foodIcon,_foodText) = ResourceCell(65,21,"Food",40);
         (_oreIcon,_oreText) = ResourceCell(130,24,"Ore",40);
-        // Build-58: Fate points pay for the heroes Gimli, Aragorn, Legolas and Gandalf (not earned yet; the Sandbox keeps them full).
+        // Build-58: Fate points pay for the heroes Gimli, Aragorn, Legolas and Gandalf; build-76 earns them in battle (tooltip: progress).
         (_fateIcon,_fateText) = ResourceCell(198,13,"Fate · pays for heroes (at most 20)",16);
         _roster = new Control { Position = new(265,84),Size = new(505,104),MouseFilter = MouseFilterEnum.Ignore }; _content.AddChild(_roster);
         _single = new Control { Position = new(265,59),Size = new(505,129),Visible = false,MouseFilter = MouseFilterEnum.Ignore }; _content.AddChild(_single);
@@ -199,11 +199,13 @@ public partial class CommandPanel : Control
 
     /// <summary>Skirmish resource strip: population, food and ore, in the original icon order, then Fate.</summary>
     public void ShowResources(bool visible,bool armies = true) { _resources.Visible = visible; _armies.Visible = !visible && armies; }
-    public void SetResources(int population,int capacity,int food,int ore,int fate = 0)
+    public void SetResources(int population,int capacity,int food,int ore,int fate = 0,string? fateTip = null)
     {
         _populationText.Text = $"{population}/{capacity}"; _foodText.Text = food.ToString(); _oreText.Text = ore.ToString(); _fateText.Text = fate.ToString();
+        if (fateTip != null && _fateText.TooltipText != fateTip) _fateText.TooltipText = _fateIcon.TooltipText = fateTip;
     }
     public string FateReadout => _fateText.Text;
+    public string FateTooltip => _fateText.TooltipText;
     public bool ResourcesVisible => _resources.Visible;
     public string ResourceReadout => $"{_populationText.Text} {_foodText.Text} {_oreText.Text}";
     public bool ResourceIconsLoaded => _populationIcon.Texture != null && _foodIcon.Texture != null && _oreIcon.Texture != null;

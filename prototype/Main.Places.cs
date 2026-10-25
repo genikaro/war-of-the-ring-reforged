@@ -84,7 +84,7 @@ public partial class Main
             "RUNNING_SPEED" => Percent(rule.FloatPpm)+" running speed",
             "LINE_OF_SIGHT" => Percent(rule.FloatPpm)+" sight",
             "EXPERIENCE" => Percent(rule.FloatPpm)+" experience",
-            "FATE_GATHER_RATE" => Percent(rule.FloatPpm)+" Fate gathering",
+            SimWorld.FateGatherModifier => Percent(rule.FloatPpm)+" Fate gathering",
             "COST" => Percent(rule.FloatPpm)+" cost",
             "FATE_COST_ADDITIVE" => Signed(rule.Long)+" Fate cost",
             "FOOD_COST_ADDITIVE" => Signed(rule.Long)+" food cost",

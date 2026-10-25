@@ -44,6 +44,10 @@ public sealed partial class SimWorld
     {
         damage = Math.Min(damage,target.HealthMilli); target.HealthMilli -= damage;
         if (unit!=null && damage>0) RecordHostileDamage(unit,target.Team,target.X,target.Z,IsAiWorker(target));
+        // Build-76: the damage earns the attacker's side Fate, measured where the unit or tower stands.
+        if (unit != null) EarnFate(unit.Team,target.Team,unit.X,unit.Z,damage);
+        else if (ConstructionSites.TryGetValue(source,out var tower) && DefenseWeapon(tower,attack) is { } weapon)
+            EarnFate(tower.Team,target.Team,tower.X,tower.Z,damage,weapon.FatePpm);
         CombatEvents.Add(new(Tick,CombatEventKind.Hit,unit?.Id ?? -1,target.Id,attack,hit,damage,startTick,target.X,target.Y,target.Z,source));
         if (target.Health <= 0)
         {

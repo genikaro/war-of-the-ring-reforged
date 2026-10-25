@@ -3142,3 +3142,72 @@ setting the same check fails.
 The Rohan Rider's idle keys all 49 bones, so this change does not alter the horse.
 Its idle matches its bind pose apart from small weight shifts; the reported hind-leg
 fault was not reproduced from the data.
+
+## Build-76: Fate earned in battle
+
+The owner asked for Fate point generation. The manual says Fate is "obtained by
+Exploring, Expanding your camp, and Battling"; the rules themselves are in Rings.exe,
+which reads the source `WorldVariables`. Decoded from the shipped executable (SHA-256
+`7d9e30a7...`, see `tools/NOTES-levels.md`):
+
+| Address | Role |
+|---|---|
+| `0x55c477` | Battle grant: reduction, distance, acquisition rate, places, bot bonus |
+| `0x55c3d3`, `0x55c30d` | Add power, clamp to 20 x 500, whole points = power / 500 |
+| `0x55c0c4` | Spend: power minus points x 500, progress kept |
+| `0x55c62a`, `0x55c713`, `0x55c855` | Town-centre centroid, farthest map corner, distance bonus |
+| `0x55c555` | Warpost grant: corrupted area x `WarpostPowerAcquisitionRate` per second |
+| `0x436ce3`, `0x51ab40` | Unit and building damage handlers calling the grant |
+| `0x416095` | Power Acquisition setting: Low 0.75, Medium 1, High 1.35 |
+| `0x5480ec` | Product of held places with `FATE_GATHER_RATE` |
+| `0x4efd01` | Bot bonus by difficulty: x0.85, 1.15, 1.3, 1.5 |
+
+**The rule.** Every hit a team's unit or tower lands on an enemy unit or building turns
+the damage dealt (at most the victim's remaining health) into power:
+
+    power = damage x 0.8 (PowerByDamageRate) x weapon FateModifier
+            / ((Fate held + Fate paid into training queues + 1) x 1.1 (PowerReductionScalar))
+            x distance bonus x acquisition rate x places of power
+
+500 power (`PowerLevelPerPoint`) make a Fate point, up to 20 (`MaxPowerPoints`). The
+distance bonus is the "exploring": 1 at the centre of the team's town centres (the
+Citadels, foundations included) and rising linearly to 1.45 (`MaxPowerDistanceMultiplier`)
+at the map corner farthest from that centre, measured where the attacker stands; a team
+without a Citadel gets 1.45. The "expanding" term is the Evil Warposts' corruption
+(`BUILDING_E_TERRITORY_MARKER` is the only building with `CreatesCorruption`), so Good
+earns Fate by battle alone. Training pays whole points and keeps the progress; a refund
+up to 20 leaves none. Every Good unit weapon has `FateModifier` 1; tower arrows have 0.25
+(the Ballista bolt 1), and the Soulfire Monolith place of power multiplies its holder's
+Fate by 1.4.
+
+What it costs: fighting at home, the first Fate point takes 687.5 damage, the second
+1375 more, the third 2062.5, so the first 3-Fate hero takes about 4100 damage dealt
+(up to a third less fought far from home), and all 20 points about 144,000.
+
+**Simulation.** `prototype/Simulation/Fate.cs` holds the rule in integer millionths
+(`TeamEconomy.FateProgressMicro`, in the state digest); `ApplyHit` (units and tower
+arrows) and `DamageSite` (buildings) call it. The pack's production table gains a
+`fate` block (the source values and the town centres) and each building defense its
+`fate_ppm`, from `tools/skirmish_production.py` and `tools/skirmish_construction.py`;
+rebuild with `python tools/content_pack.py`. Without the block Fate is not earned.
+
+**HUD.** The Fate cell's tooltip states the count, the progress toward the next point
+and what battle has earned ("Fate 3/20 · pays for heroes · next point 42% · 3 earned in
+battle"). The observer's Economy tab has a Fate column with the same tooltip.
+
+**Adapters and open points.** The Power Acquisition setting is fixed at Medium (no
+lobby choice yet); the bots' difficulty bonus is not applied (the owner prefers
+difficulty without resource bonuses); bots still never train the Fate heroes, so their
+Fate only accumulates; hits from a unit that died while its arrow flew still count.
+
+Validation:
+
+- `SimulationTests` 1146 checks (`FateChecks`, also `--fate-checks`: the distance bonus,
+  0.727 power per damage at home, a kill's exact earnings, crossing a point, held and
+  queued Fate dividing the rate, tower arrows at a quarter, Citadel damage at x1.45,
+  the Soulfire Monolith, the cap, no rules no Fate, the digest).
+- Python suite (194 tests), with the source values and tower `fate_ppm` checked against
+  the install; the content pack rebuild changed only the new fields.
+- `-ObserverSmoke` (17 checks, new `bots_earn_fate_in_battle`): the Bilbo's Bluffs match
+  is the same as build-75 (Aragorn wins at tick 25020, identical kills and gathering),
+  and ends with Gimli at 4 Fate and Aragorn at 8.

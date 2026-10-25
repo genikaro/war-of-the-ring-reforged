@@ -100,7 +100,7 @@ public sealed partial class SimWorld
         // ponytail: no source field states a training refund; cancellation returns the full cost, capped by storage.
         bank.FoodMilli = Math.Min(bank.FoodCapacityMilli,bank.FoodMilli+rules.FoodCost*1000L);
         bank.OreMilli = Math.Min(bank.OreCapacityMilli,bank.OreMilli+rules.OreCost*1000L);
-        bank.Fate = Math.Min(MaxFate,bank.Fate+rules.FateCost);
+        AddFate(bank,rules.FateCost);
         producer.Queue.RemoveAt(index);
         if (index == 0) producer.ProgressTicks = 0;
     }

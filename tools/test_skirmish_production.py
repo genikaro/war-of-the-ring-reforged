@@ -27,8 +27,8 @@ class FakeTable:
 class ProductionImportTests(unittest.TestCase):
     def test_producers_keep_source_order_and_split_unavailable_units(self):
         produced = {'UnitProduced%d' % i: -1 for i in range(1, 7)}
-        buildings = {i: (name, {'IsUnitProducer': 0, 'AdditionalPopAdded': 0, **produced}) for i, name in enumerate(skirmish_map.SKIRMISH_BUILDINGS)}
-        buildings[0] = (skirmish_map.CITADEL, {'IsUnitProducer': 1, 'AdditionalPopAdded': 7, **produced,
+        buildings = {i: (name, {'IsUnitProducer': 0, 'AdditionalPopAdded': 0, 'IsTownCenter': 0, **produced}) for i, name in enumerate(skirmish_map.SKIRMISH_BUILDINGS)}
+        buildings[0] = (skirmish_map.CITADEL, {'IsUnitProducer': 1, 'AdditionalPopAdded': 7, 'IsTownCenter': 1, **produced,
                                                'UnitProduced1': 2, 'UnitProduced2': 1, 'UnitProduced3': 3, 'UnitProduced4': 4})
         buildings[99] = ('BUILDING_G_ELSEWHERE', {})
         required = {'BuildingRequired%d' % i: -1 for i in range(1, 5)}
@@ -41,7 +41,10 @@ class ProductionImportTests(unittest.TestCase):
                                       3: ('UNIT_G_CALLED', {**required, 'PowerCost': 3, 'Name': 'Called', 'FoodCost': 0, 'OreCost': 0,
                                           'PopulationCost': 0, 'UnitTrainingTime': 36000, 'IsUnique': 1, 'UniqueGroup': 0}),
                                       4: ('UNIT_G_LATER', {**required, 'BuildingRequired1': 99, 'PowerCost': 0})}),
-                  'WorldVariables': FakeTable({0: ('world', {'DefaultInitialPopulationCapacity': 1, 'MaxPopulationCap': 90, 'MaxPowerPoints': 20})})}
+                  'WorldVariables': FakeTable({0: ('world', {'DefaultInitialPopulationCapacity': 1, 'MaxPopulationCap': 90, 'MaxPowerPoints': 20,
+                      'PowerLevelPerPoint': 500, 'PowerByDamageRate': 0.7999999523162842, 'PowerReductionScalar': 1.0999999046325684,
+                      'MaxPowerDistanceMultiplier': 1.4499999284744263, 'PowerAcquisitionRateLow': 0.75, 'PowerAcquisitionRateMedium': 1.0,
+                      'PowerAcquisitionRateHigh': 1.3499999046325684})})}
         for name, values in FakeResolver.db['Buildings'].by_key.items():
             values.setdefault('UniqueGroupBuildingAffects', -1); values.setdefault('AmountBuildingAffectsUniqueGroup', 0)
         data = skirmish_production.production_data(FakeResolver(), ['UNIT_G_WORKER', 'UNIT_G_CALLED', 'UNIT_G_LATER'])
@@ -53,6 +56,12 @@ class ProductionImportTests(unittest.TestCase):
         self.assertEqual((data['units']['UNIT_G_CALLED']['fate_cost'], data['units']['UNIT_G_CALLED']['unique_group'], data['max_fate']), (3, 0, 20))
         self.assertEqual(data['population_provided'][skirmish_map.CITADEL], 7)
         self.assertEqual((data['initial_population_capacity'], data['max_population']), (1, 90))
+        # Build-76: the source floats become millionths; only buildings flagged IsTownCenter centre the distance bonus.
+        fate = data['fate']
+        self.assertEqual((fate['max_points'], fate['level_per_point'], fate['by_damage_ppm'], fate['reduction_ppm'], fate['max_distance_ppm']),
+                         (20, 500, 800_000, 1_100_000, 1_450_000))
+        self.assertEqual(fate['acquisition_ppm'], {'low': 750_000, 'medium': 1_000_000, 'high': 1_350_000})
+        self.assertEqual(fate['town_centers'], [skirmish_map.CITADEL])
 
     @unittest.skipUnless((wor.ROOT / 'TLOTR - War of the Ring/Database/Units.lqr').exists(), 'owner install not available')
     def test_original_citadel_training(self):
@@ -73,6 +82,11 @@ class ProductionImportTests(unittest.TestCase):
         self.assertEqual(data['unique_group_capacity'], {'BUILDING_G_TOWN_CENTER_LEVEL_%d' % level: {'group': 0, 'amount': amount}
                                                          for level, amount in [(2, 1), (3, 2), (4, 3), (5, 3)]})
         self.assertEqual(data['max_fate'], 20)
+        # Build-76: Rings.exe reads these WorldVariables when battle earns Fate; Citadels 1-5 are the Good town centres.
+        self.assertEqual({key: value for key, value in data['fate'].items() if key != 'adapter'}, {
+            'max_points': 20, 'level_per_point': 500, 'by_damage_ppm': 800_000, 'reduction_ppm': 1_100_000, 'max_distance_ppm': 1_450_000,
+            'acquisition_ppm': {'low': 750_000, 'medium': 1_000_000, 'high': 1_350_000},
+            'town_centers': ['BUILDING_G_TOWN_CENTER_LEVEL_%d' % level for level in range(1, 6)]})
         # Tier 3-4 recruitment (atlas): Archer 80/75/3, Lightbearer 100/85/3 at Citadel 4, Beorning 100/70/3, Huorn 235/200/5 at Citadel 4.
         self.assertEqual(data['producers']['BUILDING_G_ELF_BARRACKS']['units'], ['UNIT_G_ELVEN_ARCHER', 'UNIT_G_ELVEN_LIGHTBRINGER'])
         self.assertEqual(data['producers']['BUILDING_G_STABLES']['units'], ['UNIT_G_BEORNING', 'UNIT_G_HUORN'])
