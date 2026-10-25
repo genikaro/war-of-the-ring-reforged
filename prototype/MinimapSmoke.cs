@@ -17,9 +17,9 @@ public partial class Main
     /// <summary>Normalized minimap position of the view outline's center.</summary>
     private Vector2 MinimapViewCenter()
     {
-        var nav = _world!.Navigation; var view = ViewFootprint();
+        var view = ViewFootprint();
         var center = view.Aggregate(Vector2.Zero,(sum,p) => sum+p)/view.Length;
-        return new(1-center.X/(nav.Width*nav.CellSize),center.Y/(nav.Height*nav.CellSize));
+        return _commands.Minimap.MapPoint(center.X,center.Y)/_commands.Minimap.Size;
     }
 
     private static bool Inside(Vector2[] polygon,Vector2 point)

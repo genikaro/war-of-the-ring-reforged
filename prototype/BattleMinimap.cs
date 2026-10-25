@@ -33,18 +33,26 @@ public partial class BattleMinimap : Control
         for (int z = 0; z < nav.Height; z++) for (int x = 0; x < nav.Width; x++)
         {
             int node = z*nav.Width+x; float shade = Math.Clamp(nav.NodeHeight(node)/30000f,0,.45f);
-            image.SetPixel(nav.Width-1-x,z,nav.CanStand(node) ? new Color(.18f+shade,.25f+shade,.10f+shade) : new Color(.12f+shade,.14f+shade,.10f+shade));
+            image.SetPixel(x,nav.Height-1-z,nav.CanStand(node) ? new Color(.18f+shade,.25f+shade,.10f+shade) : new Color(.12f+shade,.14f+shade,.10f+shade));
         }
         _terrain = ImageTexture.CreateFromImage(image);
     }
 
     public void SetMarkers(IEnumerable<(Texture2D Icon,float X,float Z)> markers) => _markers = markers.ToArray();
 
-    /// <summary>Minimap position of a map point in millimetres (the map's X axis is mirrored).</summary>
+    /// <summary>Minimap position of a map point in millimetres. North (source +y, the map's Z) is up, as on the
+    /// original minimap and in the default camera view (build-75).</summary>
     public Vector2 MapPoint(float x,float z)
     {
         var nav = _world!.Navigation;
-        return new((1-x/(nav.Width*nav.CellSize))*Size.X,z/(nav.Height*nav.CellSize)*Size.Y);
+        return new(x/(nav.Width*nav.CellSize)*Size.X,(1-z/(nav.Height*nav.CellSize))*Size.Y);
+    }
+
+    /// <summary>Map point in millimetres of a normalized minimap position; the inverse of MapPoint.</summary>
+    public Vector2 MapPosition(Vector2 point)
+    {
+        var nav = _world!.Navigation;
+        return new(point.X*nav.Width*nav.CellSize,(1-point.Y)*nav.Height*nav.CellSize);
     }
 
     /// <summary>Every standing building and foundation as its footprint outline on the minimap, with its team.</summary>

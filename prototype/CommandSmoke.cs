@@ -192,6 +192,9 @@ public partial class Main
             case 173: PushKey(Key.Key1); break;
             case 176: _commandChecks["friendly_group_restores_control"] = _selected.Count == 5 && _selected.All(LivingFriendly) && _commands.CommandsAvailable; break;
             case 178:
+                // An enemy no other unit covers now; the one inspected at frame 150 may have walked behind another.
+                _inspectedEnemy = world.Units.First(u => u.Team == 1 && u.Health > 0
+                    && UnitAt(_camera.UnprojectPosition(UnitPosition(u)+Vector3.Up))?.Id == u.Id).Id;
                 var point = _camera.UnprojectPosition(UnitPosition(world.Units[_inspectedEnemy])+Vector3.Up);
                 foreach (bool pressed in new[] {true,false}) GetViewport().PushInput(new InputEventMouseButton {
                     ButtonIndex = MouseButton.Left,Pressed = pressed,Position = point,GlobalPosition = point,ShiftPressed = true },true);

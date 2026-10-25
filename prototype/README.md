@@ -4,6 +4,23 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
+**build-75:** the camera looks straight from south to north, as in the original game. The
+view and the minimap had been turned half way round from the original: on Bilbo's
+Bluffs the original minimap shows your base bottom left and each inner ore pile left of
+its well (local captures local-008, local-018), while ours showed them rotated 180°.
+North is now source +y (Godot +Z), up on the minimap and the setup map, and the camera
+faces it, so every building shows its front: the Camp's door flap, the Dwarf Hall's
+torch-lit stairs, the Barracks' open arcade on the right. Building models and their
+placement are unchanged. Menu camera views reset to north; Rotate left / right still
+turn it. The preview sun turned with the camera, so the lit sides are the ones in view.
+The Barracks lost its black blocks where the wings meet the tower: its Shadow_Alpha
+overlays are dark texels at 18-58% opacity, and the converter's 0.5 alpha cutoff drew them
+solid. A mesh that samples mostly partly transparent texels now converts with alpha
+blending (only the Barracks overlays and the Ranger's hidden web mesh qualify); rebuild
+the pack with `python tools/content_pack.py`. Building models can take an owner-chosen
+turn that leaves footprint and selection border as placed: the Mill's blades now face
+south-east, toward the camera.
+
 **build-74:** idle guards now attack nearby enemy buildings as well as units.
 Building awareness is 10 m from the guard post to the footprint; unit threats
 take priority. Guards keep their original post, use bounded siege approaches,

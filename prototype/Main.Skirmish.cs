@@ -42,7 +42,7 @@ public partial class Main
                 // Source metres are Z-up; the map export uses (-x, z, y) for placements.
                 Position = new(-at[0].GetSingle(),at[2].GetSingle(),at[1].GetSingle()) };
             string file = files.GetProperty(start.GetProperty("building").GetString()!).GetString()!;
-            var model = LoadGlb(file,_teamColors[team]); root.AddChild(model);
+            var model = TurnModel(LoadGlb(file,_teamColors[team]),start.GetProperty("building").GetString()!); root.AddChild(model);
             // Restored building models carry every source state; show the healthy one.
             var appearance = Reforged.Rendering.UnitAppearance.Read(CachePath(file));
             new Reforged.Rendering.UnitAppearance(model,appearance).Apply(BuildingStateClips(appearance)[3],0);

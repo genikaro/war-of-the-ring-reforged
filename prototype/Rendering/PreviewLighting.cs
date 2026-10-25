@@ -14,7 +14,8 @@ public static class PreviewLighting
         AmbientLightSource = Godot.Environment.AmbientSource.Color, AmbientLightColor = new Color(AmbientColor),
         AmbientLightEnergy = AmbientEnergy, TonemapMode = Godot.Environment.ToneMapper.Linear } };
 
-    public static DirectionalLight3D CreateSun() => new() { RotationDegrees = new Vector3(-55,-25,0),
+    // Turned with the north-facing camera (build-75), so the lit sides stay the ones in view.
+    public static DirectionalLight3D CreateSun() => new() { RotationDegrees = new Vector3(-55,155,0),
         LightEnergy = SunEnergy, ShadowEnabled = true, DirectionalShadowMaxDistance = 500 };
 
     public static object Metadata => new { ambient_energy = AmbientEnergy,ambient_color = AmbientColor,

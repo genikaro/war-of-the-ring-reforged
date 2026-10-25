@@ -31,6 +31,18 @@ public partial class Main
         public int Stage = -1;
     }
 
+    /// <summary>Owner-chosen turns of building models about their origin, in degrees counterclockwise seen from above
+    /// (build-75). Only the model turns: footprint, picking ring and selection border stay as placed. The Mill's blades
+    /// sit 18° west of north in the source model; -153° points them south-east, toward the camera. Tower arrow origins
+    /// are unturned model offsets, so towers stay unturned.</summary>
+    private static readonly Dictionary<string,float> ModelYawDegrees = new() { ["BUILDING_G_FOOD_STRUCTURE"] = -153 };
+
+    private static Node3D TurnModel(Node3D model,string building)
+    {
+        if (ModelYawDegrees.TryGetValue(building,out float yaw)) model.RotationDegrees = new(0,yaw,0);
+        return model;
+    }
+
     private IEnumerable<int> SelectedWorkers() => _world!.Units.Where(u => u.Team == PlayerTeam && u.Health > 0
         && _selected.Contains(u.Id) && _world.Workers.ContainsKey(u.Definition.Name)).Select(u => u.Id);
 
@@ -196,7 +208,7 @@ public partial class Main
     /// <summary>The finished building drawn in one translucent colour.</summary>
     private Node3D BuildingGhost(string building,StandardMaterial3D material)
     {
-        var ghost = LoadGlb(_constructionFiles[building],TeamColor(Math.Max(0,PlayerTeam))); AddChild(ghost);
+        var ghost = TurnModel(LoadGlb(_constructionFiles[building],TeamColor(Math.Max(0,PlayerTeam))),building); AddChild(ghost);
         var data = UnitAppearance.Read(CachePath(_constructionFiles[building]));
         new UnitAppearance(ghost,data).Apply(BuildingStateClips(data)[3],0);
         foreach (var mesh in Descendants(ghost).OfType<MeshInstance3D>()) mesh.MaterialOverride = material;
@@ -301,7 +313,7 @@ public partial class Main
     private void SwapBuildingModel(ConstructionSite site,BuildingVisual view,string building)
     {
         view.Model.QueueFree();
-        var model = LoadGlb(_constructionFiles[building],_teamColors[site.Team]); view.Root.AddChild(model);
+        var model = TurnModel(LoadGlb(_constructionFiles[building],_teamColors[site.Team]),building); view.Root.AddChild(model);
         var data = UnitAppearance.Read(CachePath(_constructionFiles[building]));
         view.Model = model; view.Appearance = new UnitAppearance(model,data); view.Clips = BuildingStateClips(data);
         view.Player = Descendants(model).OfType<AnimationPlayer>().FirstOrDefault();
@@ -326,7 +338,7 @@ public partial class Main
             var rules = _world.SiteRules(site); var (x,z) = _world.SitePosition(site);
             if (!_constructionViews.TryGetValue(site.Id,out var view))
             {
-                var model = LoadGlb(_constructionFiles[rules.Name],_teamColors[site.Team]);
+                var model = TurnModel(LoadGlb(_constructionFiles[rules.Name],_teamColors[site.Team]),rules.Name);
                 var root = new Node3D { Position = PositionOf(x,z),Name = "Building_"+site.Id };
                 root.AddChild(model); AddChild(root);
                 var appearanceData = UnitAppearance.Read(CachePath(_constructionFiles[rules.Name]));

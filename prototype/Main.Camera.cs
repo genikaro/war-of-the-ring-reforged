@@ -52,10 +52,10 @@ public partial class Main
     /// <summary>Moves the camera so the minimap view outline is centered on a normalized minimap point.</summary>
     private void CenterViewOn(Vector2 point)
     {
-        var nav = _world!.Navigation; var view = ViewFootprint();
+        var view = ViewFootprint();
         var center = view.Aggregate(Vector2.Zero,(sum,p) => sum+p)/view.Length;
         var pivot = new Vector2(-_focus.X*1000,_focus.Z*1000);
-        var target = new Vector2((1-point.X)*nav.Width*nav.CellSize,point.Y*nav.Height*nav.CellSize)-(center-pivot);
+        var target = _commands.Minimap.MapPosition(point)-(center-pivot);
         _focus = new(-target.X/1000,0,target.Y/1000); ClampFocus(); UpdateCamera();
     }
 }

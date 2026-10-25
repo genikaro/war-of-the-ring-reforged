@@ -39,7 +39,9 @@ public partial class Main : Node3D
     private readonly List<int[]> _friendlySquads = [];
     private readonly HashSet<int> _primarySquad = [];
     private bool _hideHud;
-    private float _distance = 48, _yaw = 0.25f;
+    // The original camera looks from south to north, toward source +y (Godot +Z); its buildings face it (build-75).
+    private const float NorthYaw = Mathf.Pi;
+    private float _distance = 48, _yaw = NorthYaw;
     private Vector2 _dragStart;
     private bool _dragging, _panning, _paused, _selectSameType;
     private string _cache = "", _capture = "";
@@ -612,9 +614,9 @@ public partial class Main : Node3D
         ClearConstructionTargeting();
         if (!_world.Units.Any(u => u.Team == PlayerTeam && u.Health > 0 && _selected.Contains(u.Id)))
         { _status.Text = "Select your forces first"; return; }
-        var nav = _world.Navigation;
-        int x = Math.Clamp((int)((1-point.X)*nav.Width*nav.CellSize),0,nav.Width*nav.CellSize-1);
-        int z = Math.Clamp((int)(point.Y*nav.Height*nav.CellSize),0,nav.Height*nav.CellSize-1);
+        var nav = _world.Navigation; var at = _commands.Minimap.MapPosition(point);
+        int x = Math.Clamp((int)at.X,0,nav.Width*nav.CellSize-1);
+        int z = Math.Clamp((int)at.Y,0,nav.Height*nav.CellSize-1);
         int goal = nav.Nearest(nav.Cell(x,z));
         if (goal < 0) { _status.Text = "No walkable space at this point"; return; }
         if (march) _orders.Begin(OrderKind.AttackMove);
@@ -942,13 +944,13 @@ public partial class Main : Node3D
         switch (view)
         {
             case "squad":
-                _focus = _squadFocus; _distance = _squadDistance; _yaw = .25f; break;
+                _focus = _squadFocus; _distance = _squadDistance; _yaw = NorthYaw; break;
             case "fortress":
-                _focus = _fortressFocus; _distance = 120; _yaw = -.45f; break;
+                _focus = _fortressFocus; _distance = 120; _yaw = NorthYaw; break;
             case "overview":
                 _focus = new Vector3(-_world.Navigation.Width * _world.Navigation.CellSize / 2000f, 0,
                     _world.Navigation.Height * _world.Navigation.CellSize / 2000f);
-                _distance = 340; _yaw = -.5f; break;
+                _distance = 340; _yaw = NorthYaw; break;
             default: throw new InvalidOperationException("Unknown camera view: " + view);
         }
         UpdateCamera();
@@ -1056,11 +1058,11 @@ public partial class Main : Node3D
             _squadViewPassed = _view == "squad" && _focus.DistanceTo(_squadFocus) < 1;
             Click(_cameraButtons["rotate-left"].GetGlobalRect().GetCenter());
         }
-        if (_frames == 152) _inputCameraPassed &= Mathf.IsEqualApprox(_yaw,0);
+        if (_frames == 152) _inputCameraPassed &= Mathf.IsEqualApprox(_yaw,NorthYaw-.25f);
         if (_frames == 154) Click(_cameraButtons["rotate-right"].GetGlobalRect().GetCenter());
         if (_frames == 156)
         {
-            _inputCameraPassed &= Mathf.IsEqualApprox(_yaw,.25f);
+            _inputCameraPassed &= Mathf.IsEqualApprox(_yaw,NorthYaw);
             _toolsPanel.Visible = false;
         }
     }

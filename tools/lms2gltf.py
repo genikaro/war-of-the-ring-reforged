@@ -133,6 +133,7 @@ class Exporter:
         self.scene = []
         self._material_for = {}
         self._texture_for = {}
+        self._alpha_for = {}
         self._frames = {}
         self.log = []
         self.appearance = None
@@ -184,8 +185,28 @@ class Exporter:
             self._texture_for[path] = (len(self.textures) - 1, has_alpha)
         return self._texture_for[path]
 
-    def material(self, texture_path, mask_path=None):
-        key = (texture_path, mask_path)
+    def translucent(self, texture_path, uv, tris):
+        """Whether most triangles sample partly transparent texels: a soft overlay to blend, not cut out.
+        The Barracks' Shadow_Alpha meshes are dark texels at alpha 47-149 that shade the walls under its
+        roofs; a 0.5 alpha cutoff turned them into solid black blocks (build-75)."""
+        if not tris:
+            return False
+        if texture_path not in self._alpha_for:
+            img = Image.open(texture_path)
+            self._alpha_for[texture_path] = img.convert('RGBA').getchannel('A') if img.mode in ('RGBA', 'LA') else None
+        alpha = self._alpha_for[texture_path]
+        if alpha is None:
+            return False
+        w, h = alpha.size
+        partial = 0
+        for t in tris:
+            u = sum(uv[k][0] for k in t) / 3
+            v = sum(uv[k][1] for k in t) / 3
+            partial += 8 < alpha.getpixel((int(u * w) % w, int(v * h) % h)) < 247
+        return partial * 2 > len(tris)
+
+    def material(self, texture_path, mask_path=None, blend=False):
+        key = (texture_path, mask_path, blend)
         if key in self._material_for:
             return self._material_for[key]
         if texture_path:
@@ -193,7 +214,9 @@ class Exporter:
             mat = {'name': os.path.splitext(os.path.basename(texture_path))[0],
                    'pbrMetallicRoughness': {'baseColorTexture': {'index': index},
                                             'metallicFactor': 0.0, 'roughnessFactor': 0.9}}
-            if has_alpha:
+            if has_alpha and blend:
+                mat.update(name=mat['name'] + ' blend', alphaMode='BLEND', doubleSided=True)
+            elif has_alpha:
                 mat.update(alphaMode='MASK', alphaCutoff=0.5, doubleSided=True)
             if mask_path:       # Team Color.lmt, see the module docstring; the mask's alpha is unused
                 mat['name'] += ' team'
@@ -333,7 +356,8 @@ class Exporter:
         self.meshes.append({'name': m.name, 'primitives': [{
             'attributes': attrs,
             'indices': self.accessor([i for t in tris for i in t], 'H', 'SCALAR', 5123, 34963),
-            'material': self.material(texture_path, mask_path)}]})
+            'material': self.material(texture_path, mask_path,
+                                      blend=bool(texture_path) and self.translucent(texture_path, uv, tris))}]})
         self.node(node, parent)
         return len(tris)
 

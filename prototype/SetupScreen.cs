@@ -368,7 +368,7 @@ public partial class SetupScreen : Control
             Sandbox: manifest.TryGetProperty("sandbox",out var sandbox) && sandbox.GetBoolean());
     }
 
-    /// <summary>The map's walkable ground shaded by height, mirrored like the in-game minimap.</summary>
+    /// <summary>The map's walkable ground shaded by height, north up like the in-game minimap.</summary>
     private static ImageTexture? Terrain(string cache)
     {
         try
@@ -382,7 +382,7 @@ public partial class SetupScreen : Control
             {
                 int vertex = (z*(width+1)+x)*4;
                 float shade = vertex+4 <= heights.Length ? Math.Clamp(BitConverter.ToInt32(heights,vertex)/30000f,0,.45f) : 0;
-                image.SetPixel(width-1-x,z,allowed[z*width+x] != 0 ? new Color(.18f+shade,.25f+shade,.10f+shade) : new Color(.10f+shade,.11f+shade,.09f+shade));
+                image.SetPixel(x,height-1-z,allowed[z*width+x] != 0 ? new Color(.18f+shade,.25f+shade,.10f+shade) : new Color(.10f+shade,.11f+shade,.09f+shade));
             }
             return ImageTexture.CreateFromImage(image);
         }
@@ -510,7 +510,7 @@ public partial class MapPreview : Control
         float aspect = map.WidthMm/(float)map.HeightMm;
         var area = aspect >= 1 ? new Rect2(0,(Size.Y-Size.X/aspect)/2,Size.X,Size.X/aspect) : new Rect2((Size.X-Size.Y*aspect)/2,0,Size.Y*aspect,Size.Y);
         if (_terrain != null) DrawTextureRect(_terrain,area,false);
-        Vector2 Point(int x,int z) => area.Position+new Vector2((1-x/(float)map.WidthMm)*area.Size.X,z/(float)map.HeightMm*area.Size.Y);
+        Vector2 Point(int x,int z) => area.Position+new Vector2(x/(float)map.WidthMm*area.Size.X,(1-z/(float)map.HeightMm)*area.Size.Y);
         foreach (var (food,x,z) in map.Resources) DrawCircle(Point(x,z),2.5f,food ? new Color("7fc6e8") : new Color("c8c0b0"));
         var font = GetThemeDefaultFont();
         for (int slot = 0; slot < map.Bases.Length; slot++)
