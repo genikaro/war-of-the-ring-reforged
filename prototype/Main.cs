@@ -712,7 +712,7 @@ public partial class Main : Node3D
                 view.DesiredYaw = Mathf.Atan2(-(target.X-unit.X),target.Z-unit.Z);
             }
             else if (unit.Definition.IsRanged) view.DesiredYaw = (float)UnitFacing.Sample(unit.Facing,unit.Facing,1);
-            else if (unit.Attacking && unit.Target >= 0)
+            else if ((unit.Attacking || unit.CombatTrafficQueued && !unit.Moving) && unit.Target >= 0)
             {
                 var target = _world.Units[unit.Target];
                 view.Heading.Reset();
@@ -732,7 +732,8 @@ public partial class Main : Node3D
                 int dx = next.X-previous.X, dz = next.Z-previous.Z;
                 if (view.Heading.Update(dx,dz,unit.MovementBudget,unit.OrderSequence) is float heading) view.DesiredYaw=heading;
             }
-            string state = unit.Health <= 0 ? "death" : unit.Casting ? "cast" : unit.StrikeActive ? "attack" : unit.Moving ? (unit.Walking ? "walk" : "run") : unit.Target >= 0 ? "ready" : "idle";
+            bool locomotion=unit.Moving && (unit.Target<0 || MovementPlayback.HasLocomotion(unit.Movement,unit.MovementBudget));
+            string state = unit.Health <= 0 ? "death" : unit.Casting ? "cast" : unit.StrikeActive ? "attack" : locomotion ? (unit.Walking ? "walk" : "run") : unit.Target >= 0 ? "ready" : "idle";
             if (unit.Moving) _movingSeen++;
             if (unit.Moving && unit.FreeMovement) _freeMovementSeen++;
             if (unit.Attacking) _attackingSeen++;

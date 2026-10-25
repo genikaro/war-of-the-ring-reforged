@@ -4,6 +4,16 @@ First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
 
+**build-69:** distant building attacks start moving again. Long approaches and terrain
+detours use directed routing; nearby melee keeps the crowd-aware flanking approach.
+Regression checks cover 6–100 m starts, groups, detours and the real Sandbox Attack
+command. See [the fix notes](FLANKING.md#build-69-building-attacks-from-a-distance). Restart.
+
+**build-68:** queued melee units try reachable flanks against nearby enemy ranks.
+Melee sieges choose free attack positions around the whole building and keep the
+route around friendly blockers. Searches share the existing six-per-tick budget.
+See [flanking behavior and regression results](FLANKING.md). Restart; no cache rebuild.
+
 **build-67:** the console drops its how-to hints (targeting instructions, the
 group-key line, the "N selected" title, click and Shift-click notes in tooltips)
 and shows orders instead. A single unit shows its order and target with the
@@ -13,6 +23,22 @@ and its queue on the bottom line. For a bot's unit that line names the bot's job
 for it: assault and its target and leg, raid, place squad, expansion guard,
 builder, worker or home army; an observer also sees which player it belongs to.
 Restart; no cache rebuild.
+
+**build-66:** armies keep their siege objective when passive workers appear. Local
+screens answer nearby threats while the rest continue the attack. Bots recall
+field soldiers when their buildings or nearby workers are attacked, hold that reserve
+through short lulls, and escalate when a Citadel is close to falling. See the
+[target priority and base defense notes](TARGET-PRIORITIES.md). Restart; no cache rebuild.
+
+**build-65:** rear melee ranks detect repeated walking without progress, wait in a ready
+stance and advance when space opens. Attack-move boundary targets no longer cause
+alternating pursuit/regroup turns. Tiny combat corrections do not play locomotion.
+See the [reproduction, behavior and verification](MELEE-QUEUE.md). Restart; no cache rebuild.
+
+**build-64:** combat planning now serves actual waiting units, caps search work per tick,
+and lets clear explicit attacks start while route searches wait. Local movement and
+combat use spatial queries and shared terrain candidates. See the
+[RTS research, architecture, benchmarks and limits](RTS-RESEARCH.md).
 
 **build-48:** skirmish maps share one content pack. Run
 `python tools/content_pack.py`, then re-import each map cache

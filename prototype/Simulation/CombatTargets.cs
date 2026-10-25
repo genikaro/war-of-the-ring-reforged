@@ -2,11 +2,13 @@ namespace Reforged.Simulation;
 
 public sealed partial class SimWorld
 {
-    // Spread expensive approach searches across ticks. Strikes and existing
-    // movement continue every tick; only three large-body planners take a turn.
-    private bool CombatPlanningTurn(SimUnit unit)
-        => unit.Definition.BodyRadiusMm <= 350 || (unit.Id-(int)((long)Tick*3%Units.Count)+Units.Count)%Units.Count < 3;
-
+    private IEnumerable<SimUnit> FlankOpponents(SimUnit unit,SimUnit target)
+        => NearUnits(target.X,target.Z,8000).Where(e=>e.Id!=target.Id && e.Team!=unit.Team && e.Present
+            && !IsAiWorker(e) && e.Definition.DpsMilli>0 && MayAcquire(unit,e,flank:true)
+            && DistanceSquared(target.X,target.Z,e.X,e.Z)<=8000L*8000
+            && Nav(unit).IsConnected(PlanningNode(unit),e.Node))
+            .Select(e=>(Enemy:e,Assigned:AssignedAttackers(unit,e),Capacity:ApproachCapacity(unit,e)))
+            .Where(e=>e.Assigned<e.Capacity).OrderBy(e=>e.Assigned).ThenBy(e=>SeparationSquared(unit,e.Enemy)).ThenBy(e=>e.Enemy.Id).Select(e=>e.Enemy);
     private int ApproachCapacity(SimUnit unit,SimUnit target)
     {
         if (UsesMissile(unit,target)) return int.MaxValue;
@@ -15,7 +17,7 @@ public sealed partial class SimWorld
     }
 
     private int AssignedAttackers(SimUnit unit,SimUnit target,bool earlierOnly = false)
-        => Units.Count(u => u.Id != unit.Id && u.Team == unit.Team && u.Present && u.Target == target.Id
+        => Grid.Targeters(target.Id).Count(u => u.Id != unit.Id && u.Team == unit.Team && u.Present
             && (UsesMissile(unit,target) || !UsesMissile(u,target))
             && (!earlierOnly || u.Id < unit.Id));
 
@@ -80,7 +82,7 @@ public sealed partial class SimWorld
     {
         if (!unit.Definition.HasMelee || unit.Order is OrderKind.Move or OrderKind.ForceAttack) return;
         if (unit.Target >= 0 && Units[unit.Target].Present && !UsesMissile(unit,Units[unit.Target])) return;
-        var threat = NearestUnit(unit,Units,u => u.Team != unit.Team && u.Present
+        var threat = NearestUnit(unit,NearUnits(unit.X,unit.Z,Math.Max(ReachBound(unit),AnyReachBound)),u => u.Team != unit.Team && u.Present
             && !UsesMissile(unit,u) && MayAcquire(unit,u));
         if (threat == null) return;
         ReleaseCombat(unit); unit.Target = threat.Id; unit.AttackMoveReturning = false;
@@ -105,21 +107,27 @@ public sealed partial class SimWorld
 
     private void RedirectCrowdedAttacker(SimUnit unit)
     {
-        if (unit.Definition.BodyRadiusMm <= 350 || unit.Target < 0 || unit.StrikeActive || HoldsPosition(unit) || unit.Order == OrderKind.ForceAttack
-            || !CombatPlanningTurn(unit)) return;
+        if (unit.Definition.BodyRadiusMm <= 350 || unit.Target < 0 || unit.StrikeActive || HoldsPosition(unit) || unit.Order == OrderKind.ForceAttack) return;
         var target=Units[unit.Target];
         if (unit.Definition.HasMelee && !UsesMissile(unit,target)) return;
+        if(unit.CombatFlankTarget==target.Id && Tick<=unit.CombatFlankUntil && unit.Goal>=0 && unit.BlockedTicks<TicksPerSecond) return;
         if (AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,target) && RoomToFight(unit) && AttackerSlot(unit,target)) return;
         if (!unit.CombatWaiting && unit.BlockedTicks < 3 && unit.AvoidanceTicks < 12 && AssignedAttackers(unit,target,true) < ApproachCapacity(unit,target)) return;
-        foreach (var other in Opponents(unit,target.Id,requireSpace:true).Take(12))
+        if (!CombatPlanningAvailable(unit)) return;
+        var alternatives=Opponents(unit,target.Id,requireSpace:true).Take(12).ToArray();
+        if (alternatives.Length>0)
         {
+            if (!TryCombatPlanning(unit)) return;
+            var other=alternatives[unit.CombatAlternativeAttempt%alternatives.Length];
             var plan=CombatPosition(unit,other);
-            if (plan.Waiting || plan.Path.Count == 0) continue;
+            if (plan.Waiting || plan.Path.Count == 0) { unit.CombatAlternativeAttempt++; return; }
             RebaseCombatGround(unit);
-            unit.Target=other.Id; unit.Goal=unit.AttackNode=plan.Node; unit.CombatTarget=other.Id; unit.CombatPlanTick=Tick;
+            unit.Target=plan.Target; unit.Goal=unit.AttackNode=plan.Node; unit.CombatTarget=plan.Target; unit.CombatPlanTick=Tick;
             unit.Path=plan.Path; unit.Waypoint=0; unit.BlockedTicks=0; unit.CombatWaiting=false; unit.AvoidanceTicks=0;
             unit.FreeMovement=plan.Path.All(FreeGround) && unit.TransitNode < 0;
+            unit.CombatAlternativeAttempt=0;
             return;
         }
+        if (unit.CombatSearchTick!=Tick) unit.CombatRequestTick=-1;
     }
 }

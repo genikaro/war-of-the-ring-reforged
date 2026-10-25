@@ -63,6 +63,9 @@ public sealed class AiPlayer(int team,AiPersonality personality,AiStyle? style =
     /// <summary>The intruder the home army is answering, and since when.</summary>
     public int Intruder { get; internal set; } = -1;
     public int IntruderSince { get; internal set; }
+    /// <summary>Soldiers recalled from field missions to protect assets, held briefly after the last attack.</summary>
+    public SortedSet<int> HomeDefenders { get; } = [];
+    public int HomeDefenseUntil { get; internal set; } = -1;
     /// <summary>Since when each enemy unit has been near the base, or near the party, without a break and without
     /// losing health; it is given up on after 30 s even when the nearest one keeps changing.</summary>
     public SortedDictionary<int,AiSighting> IntruderSeen { get; } = [];
@@ -214,7 +217,7 @@ public sealed partial class SimWorld
         var home = mine.Where(u => IsAiSoldier(u) && !ai.Party.Contains(u.Id) && !ai.Raid.Contains(u.Id) && !ai.PlaceSquad.Contains(u.Id)
             && !ai.Guards.Values.Any(g => g.Units.Contains(u.Id))).ToArray();
         var (bx,bz) = AiBase(ai);
-        bool threatened = AiDefend(ai,home);
+        bool threatened = AiDefend(ai,ref home);
         if (strategic)
         {
             if (!threatened) AiRepair(ai,workers);
@@ -230,13 +233,18 @@ public sealed partial class SimWorld
         home = AiRaid(ai,[.. home.Where(u => !ai.Party.Contains(u.Id))],bx,bz,threatened);
         home = AiCapturePlaces(ai,home,bx,bz,threatened);
         AiRally(ai,home,bx,bz);
+        var members = ai.Party.ToHashSet();
+        bool committed = CanAttackSite(ai.Team,ai.PartyTarget) && ai.Party.Any(id => SiegeTarget(Units[id]) == ai.PartyTarget
+            || Units[id].AiSiegeObjective == ai.PartyTarget);
+        foreach (var unit in mine) unit.AiSiegeObjective = committed && members.Contains(unit.Id) ? ai.PartyTarget : -1;
         int guards = ai.Guards.Values.Sum(g => g.Units.Count),gate = ai.Profile.AssaultFromTicks/TicksPerSecond;
+        string defense = ai.HomeDefenders.Count > 0 ? $" · base defense {ai.HomeDefenders.Count}" : "";
         string march = ai.Party.Count > 0 && ai.Leg < ai.Legs.Count ? $" · regrouping {ai.Leg+1}/{ai.Legs.Count}" : "";
         string waits = ai.PartiesSent == 0 && Tick < ai.Profile.AssaultFromTicks ? $" · attacks from {gate/60}:{gate%60:00}" : "";
         string raid = ai.Raid.Count > 0 ? $" · raid {ai.Raid.Count}/{ai.RaidStart}" : "";
         int held = PlacesOfPower.Count(p => p.Owner == ai.Team);
         string places = (ai.PlaceSquad.Count > 0 ? $" · to a place {ai.PlaceSquad.Count}/{ai.PlaceSquadStart}" : "")+(held > 0 ? $" · places {held}" : "");
-        ai.Status = $"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)}{march}{waits}{raid}{places}{(guards > 0 ? $" · guards {guards}" : "")} · {ai.Plan}{(ai.TechPlan != "" ? " · "+ai.TechPlan : "")} · parties {ai.PartiesSent}{(ai.RaidsSent > 0 ? $" · raids {ai.RaidsSent}" : "")}";
+        ai.Status = $"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)}{march}{waits}{raid}{places}{defense}{(guards > 0 ? $" · guards {guards}" : "")} · {ai.Plan}{(ai.TechPlan != "" ? " · "+ai.TechPlan : "")} · parties {ai.PartiesSent}{(ai.RaidsSent > 0 ? $" · raids {ai.RaidsSent}" : "")}";
     }
 
     /// <summary>The bot's Citadels away from its start (foundations too), with the guards of fallen ones released and
@@ -328,11 +336,12 @@ public sealed partial class SimWorld
         return Navigation.Cell(site.X,site.Z);
     }
 
-    /// <summary>Every home soldier answers enemies near the base, soldiers before workers, except one it could not kill in
-    /// 30 s. Only enemy soldiers count as a threat that holds the assault back: workers gathering by an expansion do not.</summary>
-    private bool AiDefend(AiPlayer ai,SimUnit[] home)
+    /// <summary>Home soldiers answer intruders, with only a small screen for workers. Actual attacks on assets can recall
+    /// field soldiers; visibility alone does not. Unreachable enemies are given up on after 30 s without damage.</summary>
+    private bool AiDefend(AiPlayer ai,ref SimUnit[] home)
     {
         var buildings = ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Health > 0).Select(SitePosition).ToArray();
+        bool alarm = AiRecallDefenders(ai,buildings,ref home);
         // Soldiers still locked on an intruder given up as unreachable stand down, and so do those chasing an enemy out
         // of reach (build-40): beyond 12 m of the soldier and 10 m past the defence radius of every building. Explicit
         // attacks and a bot's idle units pursue across the map, and one that finds no way there stands still on the
@@ -344,14 +353,16 @@ public sealed partial class SimWorld
         AiOrder(ai,home.Where(u => ai.Unreachable.ContainsKey(u.Target) || Gone(u,u.Target)
             || u.Order == OrderKind.Attack && (ai.Unreachable.ContainsKey(u.OrderTarget) || Gone(u,u.OrderTarget))).Select(u => u.Id),OrderKind.Stop);
         var intruders = Units.Where(u => u.Present && u.Team != ai.Team && !u.RingActive && !ai.Unreachable.ContainsKey(u.Id)
-                && buildings.Any(b => DistanceSquared(b.X,b.Z,u.X,u.Z) <= (long)AiDefenseRadiusMm*AiDefenseRadiusMm))
-            .OrderBy(u => IsAiWorker(u) ? 1 : 0).ThenBy(u => buildings.Min(b => DistanceSquared(b.X,b.Z,u.X,u.Z))).ThenBy(u => u.Id).ToArray();
+                && (AiAttacksAssets(ai,u,buildings) || buildings.Any(b => DistanceSquared(b.X,b.Z,u.X,u.Z) <= (long)AiDefenseRadiusMm*AiDefenseRadiusMm)))
+            .OrderBy(u => AiAttacksAssets(ai,u,buildings) ? 0 : 1).ThenBy(u => IsAiWorker(u) ? 1 : 0)
+            .ThenBy(u => buildings.Min(b => DistanceSquared(b.X,b.Z,u.X,u.Z))).ThenBy(u => u.Id).ToArray();
         var intruder = AiStalled(ai,ai.IntruderSeen,intruders);
-        if (intruder == null) { ai.Intruder = -1; return false; }
+        if (intruder == null) { ai.Intruder = -1; return alarm; }
         ai.Intruder = intruder.Id; ai.IntruderSince = ai.IntruderSeen[intruder.Id].Since;
         // An explicit attack: attack-move's pursuit rules let a moving worker lead a squad in circles.
-        AiAttackSpread(ai,home,intruders,ai.IntruderSeen);
-        return !IsAiWorker(intruder);
+        if (!alarm && intruders.Any(e => !IsAiWorker(e))) AiAttackSpread(ai,home,intruders,ai.IntruderSeen);
+        else AiScreenThreats(ai,home,intruders,ai.IntruderSeen,urgent: alarm);
+        return alarm || !IsAiWorker(intruder);
     }
 
     /// <summary>The first of these enemies (in priority order) not yet given up on. Each is timed from when it first came
@@ -782,7 +793,7 @@ public sealed partial class SimWorld
         int[] reinforcements = [];
         if (!threatened)
         {
-            var ready = home.Where(u => AiIdle(u) && !AiTrapped(u) && !ai.Recovering.Contains(u.Id)).OrderBy(u => u.Id).Take(AiAssaultParty.MaxSize).ToArray();
+            var ready = home.Where(u => AiIdle(u) && !AiTrapped(u) && !ai.Recovering.Contains(u.Id) && !ai.HomeDefenders.Contains(u.Id)).OrderBy(u => u.Id).Take(AiAssaultParty.MaxSize).ToArray();
             if (ai.Party.Count == 0)
             {
                 // The style's patience (build-49): no assault before (100 - Aggression) x 6 s; a Defender (build-51) waits
@@ -840,7 +851,8 @@ public sealed partial class SimWorld
     private void AiRally(AiPlayer ai,SimUnit[] home,int bx,int bz)
     {
         var buildings = ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Health > 0).Select(SitePosition).ToArray();
-        var away = home.Where(u => AiIdle(u) && !AiTrapped(u) && buildings.All(b => DistanceSquared(b.X,b.Z,u.X,u.Z) > (long)AiStrayMm*AiStrayMm)).ToArray();
+        var away = home.Where(u => AiIdle(u) && !AiTrapped(u) && !ai.HomeDefenders.Contains(u.Id)
+            && buildings.All(b => DistanceSquared(b.X,b.Z,u.X,u.Z) > (long)AiStrayMm*AiStrayMm)).ToArray();
         foreach (int id in ai.StraySince.Keys.Where(id => !away.Any(u => u.Id == id)).ToArray()) ai.StraySince.Remove(id);
         foreach (var unit in away) ai.StraySince.TryAdd(unit.Id,Tick);
         int[] stray = [.. away.Where(u => Tick-ai.StraySince[u.Id] >= AiStrayTicks).Select(u => u.Id)];
@@ -856,15 +868,13 @@ public sealed partial class SimWorld
         AiOrder(ai,stray,OrderKind.AttackMove,Navigation.Cell(bx,bz));
     }
 
-    /// <summary>Threats first (owner request, build-50): a unit razing a building ignores whatever hits it, so before
-    /// build-50 a party went on razing a Barracks while the enemy army and a Watchtower cut it down; only defenders
-    /// within 12 m of the party's centre drew it off. Now every enemy within 12 m of any member, or hitting one from
-    /// farther away, is fought first, by the profile's target order (soldiers before workers) and then distance; one the
-    /// party cannot hurt for 30 s (tucked in a pocket beyond melee reach) is given up on. With no such enemy left, a tower
-    /// shooting any member becomes the party's target in place of an unarmed building. Returns whether it acted.</summary>
+    /// <summary>Answer real attackers and nearby military obstacles with a local screen. Once committed to a building,
+    /// passive workers do not interrupt it and ambient military contacts must be closer. Recent damage bridges attack
+    /// cadence gaps. Unreachable threats time out; a covering tower can still replace an unarmed building objective.</summary>
     private bool AiAnswerThreats(AiPlayer ai,SimUnit[] party,SimUnit widest,ConstructionSite[] enemyBuildings,ConstructionSite target)
     {
         var members = ai.Party.ToHashSet();
+        bool committed = party.Any(u => SiegeTarget(u) == target.Id);
         var nearest = new SortedDictionary<int,long>();
         int scan = Math.Max(AiEngageRadiusMm,AnyReachBound);
         foreach (var member in party)
@@ -872,7 +882,11 @@ public sealed partial class SimWorld
             {
                 if (enemy.Team == ai.Team || !enemy.Present || enemy.RingActive || ai.Unreachable.ContainsKey(enemy.Id)) continue;
                 long distance = DistanceSquared(enemy.X,enemy.Z,member.X,member.Z);
-                if ((distance <= (long)AiEngageRadiusMm*AiEngageRadiusMm || members.Contains(enemy.Target) && (enemy.Attacking || enemy.StrikeActive))
+                bool danger = AttackingUnit(enemy,ai.Team) && members.Contains(enemy.Target)
+                    || RecentDamageTo(enemy,ai.Team) && DistanceSquared(member.X,member.Z,enemy.LastHostileDamageX,enemy.LastHostileDamageZ) <= (long)SiegeSupportMm*SiegeSupportMm;
+                int contact = committed ? SiegeContactMm : AiEngageRadiusMm;
+                bool obstacle = !IsAiWorker(enemy) && enemy.Definition.DpsMilli > 0 && distance <= (long)contact*contact;
+                if ((danger || obstacle)
                     && (!nearest.TryGetValue(enemy.Id,out long best) || distance < best)) nearest[enemy.Id] = distance;
             }
         var defenders = nearest.OrderBy(p => AiRank(ai,AiClassOf(Units[p.Key]))).ThenBy(p => p.Value).ThenBy(p => p.Key).Select(p => Units[p.Key]).ToArray();
@@ -881,7 +895,11 @@ public sealed partial class SimWorld
         if (defender != null)
         {
             ai.ChaseSince = ai.ChaseSeen[defender.Id].Since;
-            AiAttackSpread(ai,party,defenders,ai.ChaseSeen);
+            // Release obsolete chases even while another enemy is still being answered.
+            var stale = party.Where(u => u.Order == OrderKind.Attack && !defenders.Any(e => e.Id == u.OrderTarget)).Select(u => u.Id).ToArray();
+            if (ai.Leg < ai.Legs.Count) AiOrder(ai,stale,OrderKind.AttackMove,AiLegCell(ai,target));
+            else AiOrder(ai,stale,OrderKind.AttackStructure,target: target.Id);
+            AiScreenThreats(ai,party,defenders,ai.ChaseSeen);
             return true;
         }
         if (SiteDefense(target) != null) return false;
@@ -1004,6 +1022,7 @@ public sealed partial class SimWorld
         $"{a.Team},{a.Personality.Id}+{string.Join('+',a.Traits)},{a.Profile.Style.Aggression}/{a.Profile.Style.Expansion}/{a.Profile.Style.Tech},{a.Thinks},{a.PartyTarget},{a.PartiesSent},{a.Project},{a.ProjectProgress},{a.ProjectMovedTick},{a.Chase},{a.ChaseSince},{a.Intruder},{a.IntruderSince},"
         +$"{a.LastArmyTick},{a.AllIn},{a.CitadelSite.X},{a.CitadelSite.Z},{a.CrewDistance},{string.Join('/',a.IntruderSeen)},{string.Join('/',a.ChaseSeen)}:{string.Join(',',a.Unreachable)}:{string.Join(',',a.Party)}:{string.Join(',',a.RefusedCells.Order())}"
         +":guards:"+string.Join('|',a.Guards.Select(g => $"{g.Key}@{g.Value.Cell}={string.Join(',',g.Value.Units)}/{string.Join('/',g.Value.Seen)}"))
+        +$":home-defense:{a.HomeDefenseUntil}:{string.Join(',',a.HomeDefenders)}"
         +$":legs:{a.Leg},{a.LegMovedTick},{a.LegGap}:{string.Join(',',a.Legs)}:wounded:{string.Join('/',a.WoundedRolls)}:recovering:{string.Join(',',a.Recovering)}:raid:{a.RaidStart},{a.RaidCell},{a.RaidSite},{a.RaidsSent},{a.NextRaidTick}:{string.Join(',',a.Raid)}:stray:{string.Join('/',a.StraySince)}"
         +$":place:{a.PlaceSquadStart},{a.PlaceTarget},{a.PlaceCell},{a.PlaceSince},{a.PlaceSquadsSent},{a.NextPlaceTick}:{string.Join(',',a.PlaceSquad)}"));
 }

@@ -87,6 +87,7 @@ public sealed partial class SimWorld
             // Twice a second is often enough to notice a building that does not move.
             if ((Tick+unit.Id)%(TicksPerSecond/2) != 0 || (unit.SiteTarget = NearbyEnemySite(unit)) < 0) return false;
             unit.SiegePlanTick = -1;
+            RebaseCombatGround(unit); unit.Goal=-1; unit.Path.Clear(); unit.Waypoint=0;
         }
         var step = Besiege(unit,ConstructionSites[unit.SiteTarget],keepDestination: true);
         if (step == SiegeStep.Unreachable) { unit.AttackMoveIgnoredSite = unit.SiteTarget; unit.SiteTarget = -1; ResumeAttackMove(unit); }
@@ -115,8 +116,10 @@ public sealed partial class SimWorld
                 // A wide body (the Rider) can be held short of its spot for good by fighters already striking beside it:
                 // once a second, a spot such a fighter blocks is traded for one the body fits (build-45).
                 if (unit.Goal >= 0 && unit.YieldFor < 0 && (unit.SiegePlanTick < 0 || Tick-unit.SiegePlanTick >= TicksPerSecond)
-                    && !FitsAmongStanding(unit,unit.Goal))
+                    && (!FitsAmongStanding(unit,unit.Goal) || unit.BlockedTicks>=3 || unit.AvoidanceTicks>=12))
                 {
+                    if(unit.Definition.BodyRadiusMm>350 && !unit.Definition.IsRanged)
+                        return PlanSiegeApproach(unit,site,keepDestination);
                     unit.SiegePlanTick = Tick;
                     PlanEconomyRoute(unit,area,keepDestination,n => FitsAmongStanding(unit,n));
                 }
@@ -129,6 +132,8 @@ public sealed partial class SimWorld
             CancelStrike(unit);
             if (unit.SiegePlanTick < 0 || Tick-unit.SiegePlanTick >= TicksPerSecond)
             {
+                if(unit.Definition.BodyRadiusMm>350 && !unit.Definition.IsRanged)
+                    return PlanSiegeApproach(unit,site,keepDestination);
                 unit.SiegePlanTick = Tick;
                 if (!PlanEconomyRoute(unit,area,keepDestination)) return SiegeStep.Unreachable;
             }
@@ -192,6 +197,7 @@ public sealed partial class SimWorld
         site.Health = Math.Max(0,site.Health-(int)Math.Max(1,(damage+999)/1000));
         site.ProgressMicroTicks = Math.Min(site.ProgressMicroTicks,(long)rules.DurationTicks*1_000_000);
         var (x,z) = SitePosition(site);
+        if (before>site.Health) RecordHostileDamage(unit,site.Team,x,z,asset:true);
         CombatEvents.Add(new(Tick,CombatEventKind.Hit,unit.Id,-1,attack,hit,(before-site.Health)*1000L,startTick,x,Navigation.GroundHeight(x,z),z));
         if (site.Health <= 0) DestroySite(site,unit);
     }

@@ -23,14 +23,18 @@ public sealed partial class SimWorld
     {
         CancelStrike(unit);
         RebaseCombatGround(unit);
-        unit.Target = unit.Goal = unit.AttackNode = unit.CombatTarget = unit.CombatPlanTick = -1;
+        unit.Target = unit.Goal = unit.AttackNode = unit.CombatTarget = unit.CombatPlanTick = unit.CombatRequestTick = unit.CombatRequestRenewedTick = -1;
         unit.CombatWaiting = false; unit.Path.Clear(); unit.Waypoint = 0;
+        unit.CombatAlternativeAttempt=0;
+        unit.CombatFlankTarget=unit.CombatFlankUntil=-1;
     }
 
     private void ResumeAttackMove(SimUnit unit)
     {
         if (unit.Order is not (OrderKind.AttackMove or OrderKind.Patrol or OrderKind.Guard) || unit.OrderDestination < 0) return;
         if (unit.Order==OrderKind.AttackMove) unit.AttackMoveOrigin=unit.AttackMoveForward=-1;
+        if (unit.Order==OrderKind.AttackMove && CanAttackSite(unit.Team,unit.SiteTarget))
+        { unit.Goal=-1; unit.Path.Clear(); unit.Waypoint=0; unit.SiegePlanTick=-1; return; }
         PlanOrderRoute(unit,unit.OrderDestination);
     }
 
@@ -150,10 +154,11 @@ public sealed partial class SimWorld
         if (goal >= 0 && (goal != unit.Goal || unit.Path.Count == 0)) { unit.OrderDestination = goal; PlanOrderRoute(unit,goal); }
     }
 
-    private bool MayAcquire(SimUnit unit,SimUnit enemy)
+    private bool MayAcquire(SimUnit unit,SimUnit enemy,bool flank=false)
     {
         // The Ring-bearer neither picks fights nor can be found by enemies; a training dummy picks none.
         if (unit.RingActive || enemy.RingActive || unit.Definition.Passive) return false;
+        if (!MayInterruptSiege(unit,enemy)) return false;
         if (IdleGuardEnabled(unit)) return IdleGuardMayAcquire(unit,enemy);
         if (unit.Order==OrderKind.AttackMove && unit.Definition.BodyRadiusMm>350)
         {
@@ -161,11 +166,14 @@ public sealed partial class SimWorld
             if (unit.AttackMoveReturning) return false;
             // A marching lane limits pursuit of fleeing bait, not participation
             // in the nearby battle already occupying the rest of the squad.
-            var origin=unit.AttackMoveOrigin>=0 ? Navigation.Center(unit.AttackMoveOrigin) : (unit.X,unit.Z);
-            if (FightingAlly(unit,enemy) && DistanceSquared(origin.Item1,origin.Item2,enemy.X,enemy.Z)<=8000L*8000) return true;
             if (enemy.Id==unit.AttackMoveIgnoredTarget && Tick<unit.AttackMoveIgnoreUntil
                 && !(enemy.Target==unit.Id && AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,enemy))) return false;
-            if (!InAttackMoveArea(unit,enemy.X,enemy.Z))
+            // Test a prospective encounter from the same anchor BeginAttackMoveEncounter will store.
+            // Switching from physical position to cell center after acquisition could instantly invalidate
+            // a boundary target and reverse the unit every other tick.
+            var origin=Navigation.Center(unit.AttackMoveOrigin>=0 ? unit.AttackMoveOrigin : unit.Node);
+            if (FightingAlly(unit,enemy) && DistanceSquared(origin.X,origin.Z,enemy.X,enemy.Z)<=8000L*8000) return true;
+            if (!InAttackMoveArea(unit,enemy.X,enemy.Z,flank ? AttackRange(unit,enemy)+FlankDetourMm : 0,enemy.Id))
                 return enemy.Target==unit.Id && AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,enemy);
         }
         if (unit.Order == OrderKind.Guard)
@@ -179,9 +187,11 @@ public sealed partial class SimWorld
 
     private bool InAttackMoveArea(SimUnit unit,int x,int z,int approachMargin = 0,int encounterTarget = -1)
     {
-        var origin=unit.AttackMoveOrigin>=0 ? Navigation.Center(unit.AttackMoveOrigin) : (unit.X,unit.Z);
-        if (DistanceSquared(origin.Item1,origin.Item2,x,z)>(long)(8000+approachMargin)*(8000+approachMargin)) return false;
         int target=encounterTarget>=0 ? encounterTarget : unit.Target;
+        if(unit.CombatFlankTarget==target && Tick<=unit.CombatFlankUntil && target>=0)
+            approachMargin=Math.Max(approachMargin,AttackRange(unit,Units[target])+FlankDetourMm);
+        var origin=Navigation.Center(unit.AttackMoveOrigin>=0 ? unit.AttackMoveOrigin : unit.Node);
+        if (DistanceSquared(origin.Item1,origin.Item2,x,z)>(long)(8000+approachMargin)*(8000+approachMargin)) return false;
         if (approachMargin>0 && target>=0 && FightingAlly(unit,Units[target])) return true;
         int forward=unit.AttackMoveRouteStart>=0 ? unit.OrderDestination : unit.AttackMoveForward>=0 ? unit.AttackMoveForward : MarchForward(unit);
         if (forward<0) return true;
@@ -204,8 +214,7 @@ public sealed partial class SimWorld
         : unit.Path.Skip(unit.Waypoint).Take(6).LastOrDefault(unit.OrderDestination);
     private static void BeginAttackMoveEncounter(SimUnit unit)
     {
-        // Units come first: a building being razed is dropped, and found again once the fight is over.
-        if (unit.Order==OrderKind.AttackMove) unit.SiteTarget=-1;
+        // Keep a committed building objective while a local screen handles the encounter.
         if (unit.Order!=OrderKind.AttackMove || unit.AttackMoveOrigin>=0) return;
         unit.AttackMoveOrigin=unit.Node; unit.AttackMoveForward=MarchForward(unit);
     }

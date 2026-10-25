@@ -78,8 +78,9 @@ public sealed partial class SimWorld
     {
         using var time = SimProfiler.Time("ClearGroundStep");
         if (!ClearCombatStep(unit,x,y,z)) return false;
-        foreach (var other in Units.Where(u => u.Id != unit.Id && u.Present))
+        foreach (var other in Grid.AlongMovement(unit.X,unit.Z,x,z,unit.Definition.BodyRadiusMm+Grid.MaxBodyRadiusMm,_groundStepNeighbors))
         {
+            if (other.Id==unit.Id || !other.Present) continue;
             bool Near(int ax,int ay,int az,int bx,int by,int bz)
                 => Math.Min(unit.Y,y) < Math.Max(ay,by)+other.Definition.BodyHeightMm && Math.Min(ay,by) < Math.Max(unit.Y,y)+unit.Definition.BodyHeightMm
                 && IntegerMotion.SegmentsNear(unit.X,unit.Z,x,z,ax,az,bx,bz,BodySeparation(unit,other));
@@ -102,11 +103,13 @@ public sealed partial class SimWorld
     private void SmoothGroundRoute(SimUnit unit)
     {
         using var time = SimProfiler.Time("SmoothGroundRoute");
-        if (StableArrival(unit) && unit.Waypoint == 0 && unit.Path.Count > 1 && unit.Path[0] == unit.Node)
+        if ((StableArrival(unit) || unit.CombatTrafficQueued) && unit.Waypoint == 0 && unit.Path.Count > 1 && unit.Path[0] == unit.Node)
             unit.Waypoint=1;
-        var occupied = OccupiedNodes(unit.Id);
+        // Moving bodies belong to the local swept collision solver. Baking their occupied cells into each
+        // shortcut turns passing allies into temporary walls and repeatedly bends an otherwise straight route.
         int end = unit.Waypoint;
         while (end < unit.Path.Count && FreeGround(unit.Path[end])) end++;
+        var occupied = unit.Definition.BodyRadiusMm>350 && unit.Target<0 && SiegeTarget(unit)<0 ? null : OccupiedRouteNodes(unit,end);
         // Try the farthest point first: an unobstructed route needs one body
         // sweep, rather than repeating it for every intervening graph node.
         for (int i = end-1; i >= unit.Waypoint; i--)
@@ -130,6 +133,7 @@ public sealed partial class SimWorld
         foreach (var (cos,sin) in SteeringDirections)
         {
             if (StableArrival(unit) && cos < 0) continue;
+            if (unit.CombatTrafficQueued && cos<=0) continue;
             if (unit.Definition.BodyRadiusMm > 350 && unit.AvoidanceLockTicks > 0 && sin*unit.AvoidanceSide < 0) continue;
             int vx = (int)(((long)dx*cos-(long)dz*sin)/1000);
             int vz = (int)(((long)dx*sin+(long)dz*cos)/1000);
@@ -182,5 +186,21 @@ public sealed partial class SimWorld
         if (progress < length) return false;
         unit.Node = target; unit.TransitNode = -1; unit.TravelProgress = 0; unit.GroundSegment = false;
         return true;
+    }
+
+    private readonly List<SimUnit> _groundStepNeighbors = [];
+    private readonly List<SimUnit> _routeOccupants = [];
+
+    private HashSet<int> OccupiedRouteNodes(SimUnit unit,int end)
+    {
+        int x0=unit.X,z0=unit.Z,x1=unit.X,z1=unit.Z;
+        for (int i=unit.Waypoint;i<end;i++)
+        {
+            var (x,z)=Navigation.Center(unit.Path[i]);
+            x0=Math.Min(x0,x); x1=Math.Max(x1,x); z0=Math.Min(z0,z); z1=Math.Max(z1,z);
+        }
+        // Include inflated body nodes and the cell centers of units between waypoints.
+        int padding=unit.Definition.BodyRadiusMm+Grid.MaxBodyRadiusMm+2*Navigation.CellSize;
+        return OccupiedNodes(unit.Id,Grid.InRectangle(x0-padding,z0-padding,x1+padding,z1+padding,_routeOccupants));
     }
 }

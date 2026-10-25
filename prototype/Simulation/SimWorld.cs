@@ -15,7 +15,8 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int Z { get => _z; internal set { _z = value; Grid?.Moved(this); } }
     public int Y { get; internal set; }
     public int Node { get; internal set; }
-    public int TransitNode { get; internal set; } = -1;
+    private int _transitNode = -1;
+    public int TransitNode { get => _transitNode; internal set { _transitNode=value; Grid?.TransitChanged(this); } }
     public long TravelProgress { get; internal set; }
     public List<MovementSample> Movement { get; } = [];
     private long _healthMilli = 100_000;
@@ -79,8 +80,14 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int AttackSerial { get; internal set; }
     public int NextHit { get; internal set; }
     public bool StrikeActive => AttackStartTick >= 0;
-    public int Target { get; internal set; } = -1;
+    private int _target = -1;
+    public int Target { get => _target; internal set { int previous=_target; _target=value; Grid?.Retargeted(this,previous); } }
     public int Cooldown { get; internal set; }
+    public int LastHostileDamageTick { get; internal set; } = -1;
+    public int LastHostileDamageTeam { get; internal set; } = -1;
+    public int LastHostileDamageX { get; internal set; }
+    public int LastHostileDamageZ { get; internal set; }
+    public bool LastHostileDamageAsset { get; internal set; }
     public List<int> Path { get; internal set; } = [];
     public int Waypoint { get; internal set; }
     public bool Moving { get; internal set; }
@@ -92,7 +99,8 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int OrderSequence { get; internal set; } = -1;
     public bool ReturningToRest { get; internal set; }
     public bool FreeMovement { get; internal set; }
-    public bool GroundSegment { get; internal set; }
+    private bool _groundSegment;
+    public bool GroundSegment { get => _groundSegment; internal set { _groundSegment=value; Grid?.TransitChanged(this); } }
     public int GroundStartX { get; internal set; }
     public int GroundStartY { get; internal set; }
     public int GroundStartZ { get; internal set; }
@@ -100,9 +108,24 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int AvoidanceTicks { get; internal set; }
     public int AvoidanceSide { get; internal set; }
     public int AvoidanceLockTicks { get; internal set; }
-    public int AttackNode { get; internal set; } = -1;
+    private int _attackNode = -1;
+    internal int AttackBucket = -1;
+    public int AttackNode { get => _attackNode; internal set { _attackNode=value; Grid?.AttackPositionChanged(this); } }
     public int CombatTarget { get; internal set; } = -1;
     public int CombatPlanTick { get; internal set; } = -1;
+    public int CombatRequestTick { get; internal set; } = -1;
+    public int CombatRequestRenewedTick { get; internal set; } = -1;
+    public int CombatSearchTick { get; internal set; } = -1;
+    public int CombatAlternativeAttempt { get; internal set; }
+    public int CombatMotionTick { get; internal set; } = -1;
+    public int CombatMotionX { get; internal set; }
+    public int CombatMotionZ { get; internal set; }
+    public long CombatMotionTravel { get; internal set; }
+    public bool CombatTrafficQueued { get; internal set; }
+    public int CombatFlankTarget { get; internal set; } = -1;
+    public int CombatFlankUntil { get; internal set; } = -1;
+    public bool CombatFlankTried { get; internal set; }
+    public int CombatTrafficPauseUntil { get; internal set; } = -1;
     public bool CombatWaiting { get; internal set; }
     public bool AutoEngage { get; internal set; }
     public int IdleGuardOrigin { get; internal set; } = -1;
@@ -119,6 +142,8 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int AttackMoveIgnoreUntil { get; internal set; }
     /// <summary>An enemy building this attack-move came across and is razing, or -1; and one it could not reach.</summary>
     public int SiteTarget { get; internal set; } = -1;
+    /// <summary>The bot party's committed building, including members temporarily waiting without an attack spot.</summary>
+    public int AiSiegeObjective { get; internal set; } = -1;
     public int AttackMoveIgnoredSite { get; internal set; } = -1;
     /// <summary>Where a worker walking to lay a foundation puts it, and since when it has waited there for units to clear.</summary>
     public int PlacementCell { get; internal set; } = -1;
@@ -168,7 +193,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     private readonly Dictionary<int,bool> _walkingTeams = [];
     public bool IsWalking(int team) => _walkingTeams.GetValueOrDefault(team);
     private int _navigationRevision = navigation.Revision;
-    private readonly UnitGrid _grid = new(navigation.Width*navigation.CellSize,navigation.Height*navigation.CellSize);
+    private readonly UnitGrid _grid = new(navigation);
     // Spawn files new units; tests that edit Units directly get a full refile on the next query.
     private UnitGrid Grid { get { if (_grid.Count != Units.Count) _grid.Rebuild(Units); return _grid; } }
     /// <summary>A superset of the units, dead or alive, within this horizontal radius of the point.</summary>
@@ -316,7 +341,11 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             unit.PatrolEnd = -1; unit.PatrolForward = true; unit.GuardPlanTick = -1;
             unit.GuardOrigin = command.Kind == OrderKind.Guard ? anchor : -1;
             unit.AutoEngage = unit.Target >= 0;
-            unit.AttackNode = unit.CombatTarget = unit.CombatPlanTick = -1; unit.CombatWaiting = false;
+            unit.AttackNode = unit.CombatTarget = unit.CombatPlanTick = unit.CombatRequestTick = unit.CombatRequestRenewedTick = -1; unit.CombatWaiting = false;
+            unit.CombatAlternativeAttempt=0;
+            ResetCombatTraffic(unit);
+            unit.CombatFlankTarget=unit.CombatFlankUntil=-1;
+            unit.CombatFlankTried=false;
             unit.Path.Clear(); unit.Goal = -1; unit.BlockedTicks = 0;
             unit.Waypoint = 0; unit.Moving = unit.Attacking = false;
             unit.OrderSequence = command.Sequence;
@@ -537,7 +566,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     /// <summary>A local repair rejoins the route within this many nodes ahead, closing at most RepairBudget nodes.</summary>
     private const int RepairReach = 24,RepairBudget = 1024;
 
-    private HashSet<int> OccupiedNodes(int except)
+    private HashSet<int> OccupiedNodes(int except,IEnumerable<SimUnit>? candidates = null)
     {
         using var time = SimProfiler.Time("OccupiedNodes");
         var self = except >= 0 && except < Units.Count ? Units[except] : null;
@@ -546,7 +575,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         foreach (var u in Units) if (uniform && u.Definition.BodyRadiusMm != 350) uniform = false;
         // Plain loops in the order the set was always filled: callers may enumerate it.
         var nodes = new HashSet<int>();
-        foreach (var other in Units)
+        foreach (var other in candidates ?? Units)
         {
             if (other.Id == except || !other.Present) continue;
             nodes.Add(other.Node);
@@ -640,6 +669,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             unit.PreviousFacing = unit.Facing;
             unit.Movement.Clear(); unit.Movement.Add(new(0,unit.X,unit.Y,unit.Z)); unit.MovementTick = Tick;
         }
+        PrepareCombatPlanning();
         foreach (var unit in Units)
         {
             unit.Moving = unit.Attacking = false;
@@ -702,7 +732,8 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 { AdvanceWideFormation(unit); unit.AvoidanceTicks = 0; unit.BlockedTicks = 3; }
                 else { unit.FreeMovement = false; RebaseGround(unit); unit.BlockedTicks = 10; }
             }
-            if (unit.Target < 0 && unit.Goal >= 0 && unit.BlockedTicks >= (unit.FreeMovement ? 3 : 10))
+            if (unit.Target < 0 && unit.Goal >= 0 && unit.BlockedTicks >= (unit.FreeMovement ? 3 : 10)
+                && !(unit.Definition.BodyRadiusMm>350 && !unit.Definition.IsRanged && SiegeTarget(unit)>=0))
             {
                 using var replanTime = SimProfiler.Time("blocked replan");
                 RebaseGround(unit);
@@ -802,6 +833,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 else unit.BlockedTicks = unit.Moving ? 0 : unit.BlockedTicks + 1;
             }
         }
+        MonitorCombatTraffic();
         using (SimProfiler.Time("facing")) FaceMovement();
         using (SimProfiler.Time("projectiles")) AdvanceProjectiles();
         using (SimProfiler.Time("places of power")) UpdatePlacesOfPower();
@@ -822,6 +854,11 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             + ":" + string.Join(";", Units.Select(u => $"{u.Id},{u.Team},{u.X},{u.Y},{u.Z},{u.Node},{u.TransitNode},{u.TravelProgress},{u.Health},{u.Target},{u.Cooldown},{u.Waypoint},{u.Goal},{u.BlockedTicks},{u.YieldFor},{u.YieldGoal},{u.OrderSequence},{u.ReturningToRest},{u.FreeMovement},{u.GroundSegment},{u.GroundStartX},{u.GroundStartY},{u.GroundStartZ},{u.AvoidanceTicks},{u.AttackNode},{u.CombatTarget},{u.CombatPlanTick},{u.CombatWaiting},{u.AutoEngage},{u.Order},{u.OrderDestination},{u.OrderTarget},{u.PatrolStart},{u.PatrolEnd},{u.PatrolForward},{u.GuardPlanTick},{u.GuardOrigin}:{string.Join(',', u.Path)}:{string.Join('|',u.OrderQueue.Select(o => $"{o.Kind},{o.Cell},{o.Target},{o.Sequence}"))}:{u.HeldOrder?.Kind},{u.HeldOrder?.Cell},{u.HeldOrder?.Target},{u.HeldOrder?.Sequence},{u.OrderCell}"));
         text += ":"+string.Join(';',Units.Select(u => $"{u.Definition.Id},{u.HealthMilli},{u.KillCount},{u.Walking},{u.AttackStartTick},{u.AttackVictim},{u.AttackVariant},{u.AttackSerial},{u.NextHit},{u.AvoidanceSide},{u.AvoidanceLockTicks},{u.AttackMoveOrigin},{u.AttackMoveForward},{u.AttackMoveRouteStart},{u.AttackMoveReturning},{u.AttackMoveIgnoredTarget},{u.AttackMoveIgnoreUntil},{u.IdleGuardOrigin},{u.IdleGuardReturning},{u.LastStopTick}"));
         text += ":"+string.Join(';',Units.Select(u => $"{u.Facing},{u.PreviousFacing}"));
+        text += ":combat-planning:"+string.Join(';',Units.Select(u => $"{u.CombatRequestTick},{u.CombatRequestRenewedTick},{u.CombatSearchTick},{u.CombatAlternativeAttempt}"));
+        text += ":combat-traffic:"+string.Join(';',Units.Select(u => $"{u.CombatMotionTick},{u.CombatMotionX},{u.CombatMotionZ},{u.CombatMotionTravel},{u.CombatTrafficQueued},{u.CombatTrafficPauseUntil}"));
+        text += ":combat-flank:"+string.Join(';',Units.Select(u=>$"{u.CombatFlankTarget},{u.CombatFlankUntil},{u.CombatFlankTried}"));
+        text += ":hostile-damage:"+string.Join(';',Units.Select(u=>$"{u.LastHostileDamageTick},{u.LastHostileDamageTeam},{u.LastHostileDamageX},{u.LastHostileDamageZ},{u.LastHostileDamageAsset}"));
+        text += ":siege-commitment:"+string.Join(',',Units.Select(u=>u.AiSiegeObjective));
         text += ":pace:"+string.Join(';',_walkingTeams.OrderBy(p => p.Key).Select(p => $"{p.Key},{p.Value}"));
         text += ":abilities:"+string.Join(';',Units.Select(u => $"{u.AbilitySlot},{u.CastStartTick},{u.CastSerial},{u.CastApplied}:{string.Join(',',u.AbilityReadyAt)}"));
         text += ":ring:"+string.Join(';',Units.Select(u => $"{u.RingActive}:{string.Join(',',u.AbilityRechargeCarry)}"));

@@ -2,6 +2,7 @@ namespace Reforged.Simulation;
 
 public sealed partial class SimWorld
 {
+    private const int FlankDetourMm=8000;
 
     private void RebaseCombatGround(SimUnit unit)
     {
@@ -55,9 +56,15 @@ public sealed partial class SimWorld
         return path.Count is > 0 and <= 4;
     }
 
-    private bool RoomToFight(SimUnit unit) => !NearUnits(unit.X,unit.Z,unit.Definition.BodyRadiusMm+Grid.MaxBodyRadiusMm+400).Any(other => other.Id != unit.Id && other.Team == unit.Team
-        && other.Present && VerticalOverlap(unit.Y,unit.Definition.BodyHeightMm,other.Y,other.Definition.BodyHeightMm)
-        && DistanceSquared(unit.X,unit.Z,other.X,other.Z) < (long)StrikeSpacing(unit,other)*StrikeSpacing(unit,other));
+    private readonly List<SimUnit> _fightNeighbors = [];
+    private bool RoomToFight(SimUnit unit)
+    {
+        foreach (var other in Grid.Near(unit.X,unit.Z,unit.Definition.BodyRadiusMm+Grid.MaxBodyRadiusMm+400,_fightNeighbors))
+            if (other.Id!=unit.Id && other.Team==unit.Team && other.Present
+                && VerticalOverlap(unit.Y,unit.Definition.BodyHeightMm,other.Y,other.Definition.BodyHeightMm)
+                && DistanceSquared(unit.X,unit.Z,other.X,other.Z)<(long)StrikeSpacing(unit,other)*StrikeSpacing(unit,other)) return false;
+        return true;
+    }
 
     // Imported bodies use physical clearance for approach slots and strikes;
     // the legacy probe's extra comfort margin traps dense larger formations.
@@ -66,18 +73,23 @@ public sealed partial class SimWorld
 
     private int PositionSpacing(SimUnit unit,SimUnit other) => other.Team == unit.Team ? StrikeSpacing(unit,other) : BodySeparation(unit,other);
 
+    private static bool HasAttackReservation(SimUnit unit) => unit.Target>=0 && unit.AttackNode>=0;
+
     // The units that can make a position within outer of the target unavailable:
     // a body or a claimed attack node closer than its spacing to such a position.
     private List<SimUnit> CombatBlockers(SimUnit unit,SimUnit target,int outer)
     {
         bool Near(int x,int z,int spacing) => DistanceSquared(target.X,target.Z,x,z) < (long)(outer+spacing)*(outer+spacing);
         var blockers = new List<SimUnit>();
-        foreach (var other in Units)
+        int bound=outer+unit.Definition.BodyRadiusMm+Grid.MaxBodyRadiusMm+400;
+        var nearby=NearUnits(target.X,target.Z,bound);
+        nearby.AddRange(Grid.NearAttackPositions(target.X,target.Z,bound,[]));
+        foreach (var other in nearby.DistinctBy(u=>u.Id))
         {
             if (other.Id == unit.Id || !other.Present) continue;
             int spacing = PositionSpacing(unit,other);
             if (Near(other.X,other.Z,spacing)) blockers.Add(other);
-            else if (other.Team == unit.Team && other.Target >= 0 && other.AttackNode >= 0)
+            else if (other.Team == unit.Team && HasAttackReservation(other))
             {
                 var (ox,oz) = Navigation.Center(other.AttackNode);
                 if (Near(ox,oz,spacing)) blockers.Add(other);
@@ -86,17 +98,17 @@ public sealed partial class SimWorld
         return blockers;
     }
 
-    private bool CombatPositionFree(SimUnit unit, SimUnit target,int node,List<SimUnit> blockers)
+    private bool CombatPositionFree(SimUnit unit, SimUnit target,int node,List<SimUnit> blockers,bool flank=false)
     {
         var (x,z) = Navigation.Center(node); int y = Navigation.NodeHeight(node);
         if (unit.Order==OrderKind.AttackMove && unit.Definition.BodyRadiusMm>350 && unit.AttackMoveOrigin>=0
-            && !InAttackMoveArea(unit,x,z,AttackRange(unit,target),target.Id)) return false;
+            && !InAttackMoveArea(unit,x,z,AttackRange(unit,target)+(flank ? FlankDetourMm : 0),target.Id)) return false;
         foreach (var other in blockers)
         {
             int spacing = PositionSpacing(unit,other);
             if (VerticalOverlap(y,unit.Definition.BodyHeightMm,other.Y,other.Definition.BodyHeightMm)
                 && DistanceSquared(x,z,other.X,other.Z) < (long)spacing*spacing) return false;
-            if (other.Team != unit.Team || other.Target < 0 || other.AttackNode < 0) continue;
+            if (other.Team != unit.Team || !HasAttackReservation(other)) continue;
             var (ox,oz) = Navigation.Center(other.AttackNode); int oy = Navigation.NodeHeight(other.AttackNode);
             if (VerticalOverlap(y,unit.Definition.BodyHeightMm,oy,other.Definition.BodyHeightMm)
                 && DistanceSquared(x,z,ox,oz) < (long)spacing*spacing) return false;
@@ -104,37 +116,56 @@ public sealed partial class SimWorld
         return Nav(unit).CanStand(node) && (node >= Navigation.GroundCount || Nav(unit).CanTraverseGroundPoints(x,z,x,z));
     }
 
-    private List<(int Node,bool Waiting,long Cost)> CombatCandidates(SimUnit unit,SimUnit target)
+    private List<(int Node,bool Waiting,long Cost)> CombatCandidates(SimUnit unit,SimUnit target,bool flank=false)
     {
         var candidates = new List<(int Node,bool Waiting,long Cost)>();
-        var queue = new Queue<(int Node,int Depth)>(); queue.Enqueue((target.Node,0));
-        var seen = new HashSet<int> { target.Node };
-        int minimum = Math.Max(1100,BodySeparation(unit,target));
         int outer = Math.Max(4500,AttackRange(unit,target)+2000);
         var blockers = CombatBlockers(unit,target,outer);
         int from = PlanningNode(unit);
+        foreach (var (node,x,y,z) in CombatGeometry(unit,target))
+            if (Nav(unit).IsConnected(from,node) && CombatPositionFree(unit,target,node,blockers,flank))
+                candidates.Add((node,!AttackReach(unit,node,x,y,z,target),DistanceSquared(x,z,unit.X,unit.Z)+(long)(y-unit.Y)*(y-unit.Y)));
+        return candidates;
+    }
+
+    // The terrain ring is shared by attackers of the same body/range profile. Occupancy, reservations,
+    // connectivity from this attacker, line of fire and weapon choice are still checked against live state.
+    private readonly Dictionary<(GridNavigation Nav,int Target,int Minimum,int Outer,int Depth),
+        (int X,int Y,int Z,int Node,int Revision,List<(int Node,int X,int Y,int Z)> Points)> _combatGeometry = [];
+
+    private List<(int Node,int X,int Y,int Z)> CombatGeometry(SimUnit unit,SimUnit target)
+    {
+        var nav=Nav(unit);
+        int minimum=Math.Max(1100,BodySeparation(unit,target)),outer=Math.Max(4500,AttackRange(unit,target)+2000);
+        int depth=Math.Max(5,(AttackRange(unit,target)+2000)/Navigation.CellSize+2);
+        var key=(nav,target.Id,minimum,outer,depth);
+        if (_combatGeometry.TryGetValue(key,out var cached) && (cached.X,cached.Y,cached.Z,cached.Node,cached.Revision)
+            == (target.X,target.Y,target.Z,target.Node,Navigation.Revision)) return cached.Points;
+        if (_combatGeometry.Count>=256) _combatGeometry.Clear();
+        var points=new List<(int Node,int X,int Y,int Z)>();
+        var queue = new Queue<(int Node,int Depth)>(); queue.Enqueue((target.Node,0));
+        var seen = new HashSet<int> { target.Node };
         while (queue.TryDequeue(out var item))
         {
             var (x,z) = Navigation.Center(item.Node); int y = Navigation.NodeHeight(item.Node);
             long range = DistanceSquared(x,z,target.X,target.Z)+(long)(y-target.Y)*(y-target.Y);
-            if (range >= (long)minimum*minimum && range <= (long)outer*outer
-                && Nav(unit).IsConnected(from,item.Node) && CombatPositionFree(unit,target,item.Node,blockers))
-            {
-                bool waiting = !AttackReach(unit,item.Node,x,y,z,target);
-                candidates.Add((item.Node,waiting,DistanceSquared(x,z,unit.X,unit.Z)+(long)(y-unit.Y)*(y-unit.Y)));
-            }
-            if (item.Depth >= Math.Max(5,(AttackRange(unit,target)+2000)/Navigation.CellSize+2)) continue;
-            foreach (int next in Nav(unit).Neighbors(item.Node))
-                if (Nav(unit).CanStand(next) && seen.Add(next)) queue.Enqueue((next,item.Depth+1));
+            if (range >= (long)minimum*minimum && range <= (long)outer*outer) points.Add((item.Node,x,y,z));
+            if (item.Depth >= depth) continue;
+            foreach (int next in nav.Neighbors(item.Node))
+                if (nav.CanStand(next) && seen.Add(next)) queue.Enqueue((next,item.Depth+1));
         }
-        return candidates;
+        _combatGeometry[key]=(target.X,target.Y,target.Z,target.Node,Navigation.Revision,points);
+        return points;
     }
 
-    private (int Node,List<int> Path,bool Waiting) CombatPosition(SimUnit unit, SimUnit target)
+    private (int Node,List<int> Path,bool Waiting,int Target) CombatPosition(SimUnit unit, SimUnit target)
     {
         using var time = SimProfiler.Time("CombatPosition");
+        bool flank = !unit.CombatFlankTried && unit.Definition.BodyRadiusMm>350 && unit.CombatPlanTick>=0 && !UsesMissile(unit,target)
+            && unit.Order is not (OrderKind.Attack or OrderKind.ForceAttack)
+            && (unit.CombatTrafficQueued || unit.CombatWaiting && unit.Goal<0 && Tick-unit.CombatPlanTick>=TicksPerSecond);
         List<(int Node,bool Waiting,long Cost)> candidates;
-        using (SimProfiler.Time("CombatCandidates")) candidates=CombatCandidates(unit,target);
+        using (SimProfiler.Time("CombatCandidates")) candidates=CombatCandidates(unit,target,flank);
         int start = unit.TransitNode >= 0 && !unit.GroundSegment ? unit.TransitNode : PlanningNode(unit);
         var blocked = OccupiedNodes(unit.Id); blocked.Remove(unit.Node); blocked.Remove(start);
         if (unit.Definition.BodyRadiusMm > 350)
@@ -144,21 +175,34 @@ public sealed partial class SimWorld
             {
                 if (unit.Order != OrderKind.AttackMove || unit.AttackMoveOrigin < 0) return true;
                 var (x,z)=Navigation.Center(node);
-                return InAttackMoveArea(unit,x,z,AttackRange(unit,target),target.Id);
+                return InAttackMoveArea(unit,x,z,AttackRange(unit,target)+(flank ? FlankDetourMm : 0),target.Id);
             }
-            // Positions in reach first, else the nearest waiting position.
-            var (path,waiting)=Nav(unit).FindPathToAny(start,candidates.Where(c => !c.Waiting).Select(c => c.Node),
-                candidates.Where(c => c.Waiting).Select(c => c.Node),blocked,PositionSearchBudget,Allowed);
-            if (path.Count > 0) return (path[^1],path,waiting);
+            // A settled rear rank may route to an exposed enemy's attack ring, around the friendly line. Search
+            // all those endpoints in one bounded pass, rather than trying a full path search for each enemy.
+            var owners=candidates.Where(c=>!c.Waiting).ToDictionary(c=>c.Node,_=>target.Id);
+            if(flank)
+                foreach(var other in FlankOpponents(unit,target).Take(8))
+                    foreach(var point in CombatCandidates(unit,other,flank:true).Where(c=>!c.Waiting)) owners.TryAdd(point.Node,other.Id);
+            // Positions in reach first, else wait near the original target. No target changes without a route.
+            var (path,waiting)=Nav(unit).FindPathToAny(start,owners.Keys,
+                candidates.Where(c => c.Waiting).Select(c => c.Node),blocked,flank ? 2*PositionSearchBudget : PositionSearchBudget,Allowed);
+            if(flank && !waiting && path.Count>1) unit.CombatFlankTried=true;
+            if (path.Count > 0)
+            {
+                int chosen=waiting ? target.Id : owners[path[^1]];
+                if(flank && !waiting && path.Count>1 && unit.Order==OrderKind.AttackMove)
+                { unit.CombatFlankTarget=chosen; unit.CombatFlankUntil=Tick+12*TicksPerSecond; }
+                return (path[^1],path,waiting,chosen);
+            }
         }
         else foreach (var candidate in candidates.OrderBy(c => c.Waiting).ThenBy(c => c.Cost).ThenBy(c => c.Node))
         {
             using var small = SimProfiler.Time("CombatPosition small");
             var path=Nav(unit).FindPath(start,candidate.Node,blocked);
-            if (path.Count > 0) return (candidate.Node,path,candidate.Waiting);
+            if (path.Count > 0) return (candidate.Node,path,candidate.Waiting,target.Id);
         }
         SimProfiler.Record("CombatPosition failed",SimProfiler.Start());
-        return (-1,[],true);
+        return (-1,[],true,target.Id);
     }
 
     // Nodes a wide body's attack-position search may close (about an 18 m walk).
@@ -172,13 +216,13 @@ public sealed partial class SimWorld
     // Such a unit first walks a full route toward the target, re-planned as it moves.
     private const int PursuitRangeMm = 12000;
 
-    private (int Node,List<int> Path,bool Waiting) Pursuit(SimUnit unit,SimUnit target)
+    private (int Node,List<int> Path,bool Waiting,int Target) Pursuit(SimUnit unit,SimUnit target)
     {
         int from = PlanningNode(unit),goal = Nav(unit).Nearest(target.Node,connectedTo: from);
         // Off its graph, the ground-position route search found no start either.
         var path = goal < 0 ? [] : from == unit.Node ? PathFromCurrentPosition(unit,goal,maxVisited: BlockedReplanBudget)
             : Nav(unit).FindPath(from,goal,maxVisited: BlockedReplanBudget);
-        return path.Count > 0 ? (goal,path,false) : (-1,[],true);
+        return path.Count > 0 ? (goal,path,false,target.Id) : (-1,[],true,target.Id);
     }
 
     private bool ClearCombatStep(SimUnit unit, int x, int y, int z)
@@ -187,9 +231,9 @@ public sealed partial class SimWorld
         int approachMargin=unit.Target>=0 ? AttackRange(unit,Units[unit.Target]) : 0;
         if (unit.Order==OrderKind.AttackMove && (unit.Target>=0 || unit.AttackMoveReturning) && unit.Definition.BodyRadiusMm>350 && unit.AttackMoveOrigin>=0
             && !InAttackMoveArea(unit,x,z,approachMargin) && InAttackMoveArea(unit,unit.X,unit.Z,approachMargin)) return false;
-        foreach (var other in Units.Where(u => u.Id != unit.Id && u.Team == unit.Team && u.Present
-            && (unit.Target >= 0 || u.Target >= 0)))
+        foreach (var other in Grid.AlongMovement(unit.X,unit.Z,x,z,unit.Definition.BodyRadiusMm+Grid.MaxBodyRadiusMm+400,_combatStepNeighbors))
         {
+            if (other.Id==unit.Id || other.Team!=unit.Team || !other.Present || unit.Target<0 && other.Target<0) continue;
             if (!VerticalOverlap(y,unit.Definition.BodyHeightMm,other.Y,other.Definition.BodyHeightMm)) continue;
             long current = DistanceSquared(unit.X,unit.Z,other.X,other.Z);
             long next = DistanceSquared(x,z,other.X,other.Z);
@@ -222,7 +266,7 @@ public sealed partial class SimWorld
             using (SimProfiler.Time("EngageImmediateOpponent")) EngageImmediateOpponent(unit);
         }
         if (unit.Order==OrderKind.AttackMove && unit.AttackMoveReturning) return false;
-        if (unit.Order==OrderKind.AttackMove && unit.Definition.BodyRadiusMm>350 && unit.Target>=0 && unit.AttackMoveOrigin>=0
+        if (unit.Order==OrderKind.AttackMove && (unit.Definition.BodyRadiusMm>350 || unit.SiteTarget>=0 || unit.AiSiegeObjective>=0) && unit.Target>=0 && unit.AttackMoveOrigin>=0
             && !MayAcquire(unit,Units[unit.Target]))
         {
             int origin=unit.AttackMoveOrigin; unit.AttackMoveIgnoredTarget=unit.Target; unit.AttackMoveIgnoreUntil=Tick+80;
@@ -240,6 +284,7 @@ public sealed partial class SimWorld
         if (unit.Target >= 0 && (!Units[unit.Target].Present || (HoldsPosition(unit)
             && !AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,Units[unit.Target]))))
         {
+            if(!Units[unit.Target].Present) unit.CombatFlankTried=false;
             bool explicitForce = unit.Order == OrderKind.ForceAttack && unit.OrderTarget >= 0;
             if (unit.OrderTarget == unit.Target) unit.OrderTarget = -1;
             ReleaseCombat(unit); released = true;
@@ -280,16 +325,20 @@ public sealed partial class SimWorld
         if (canFight && !slot) { CancelStrike(unit); unit.CombatWaiting = true; return true; }
         if (canFight)
         {
+            unit.CombatFlankTarget=unit.CombatFlankUntil=-1;
+            unit.CombatFlankTried=false;
             RebaseCombatGround(unit);
             unit.Path.Clear(); unit.Waypoint = 0; unit.Goal = -1;
             unit.FreeMovement = false; unit.AttackNode = unit.Node; unit.CombatTarget = target.Id;
             unit.CombatWaiting = false; unit.BlockedTicks = 0; unit.Attacking = true;
+            unit.CombatRequestTick=-1;
             if (!FaceForAttack(unit,target) && !unit.StrikeActive) return true;
             Strike(unit,target);
             return true;
         }
         CancelStrike(unit);
         if (HoldsPosition(unit)) return true;
+        if (unit.CombatTrafficQueued && Tick<unit.CombatTrafficPauseUntil) return true;
         bool valid = unit.AttackNode >= 0 && Nav(unit).CanStand(unit.AttackNode);
         if (valid && !unit.CombatWaiting)
         {
@@ -297,22 +346,40 @@ public sealed partial class SimWorld
             valid = AttackReach(unit,unit.AttackNode,x,Navigation.NodeHeight(unit.AttackNode),z,target);
         }
         bool far = unit.Definition.BodyRadiusMm > 350 && SeparationSquared(unit,target) > (long)PursuitRangeMm*PursuitRangeMm;
+        bool committedFlank=unit.CombatFlankTarget==target.Id && Tick<=unit.CombatFlankUntil && unit.Goal>=0 && unit.Path.Count>0;
         bool replan = unit.CombatTarget != target.Id || unit.CombatPlanTick < 0
             || (Tick-unit.CombatPlanTick >= (unit.Definition.BodyRadiusMm > 350 && (far || unit.CombatWaiting && unit.Goal < 0) ? 20 : 6)
-                && (!valid || unit.CombatWaiting || unit.BlockedTicks >= 3
-                    || (unit.Definition.BodyRadiusMm > 350 && unit.AvoidanceTicks >= 12) || unit.Goal < 0));
+                && (!valid || unit.CombatWaiting || unit.BlockedTicks >= (committedFlank ? TicksPerSecond : 3)
+                    || (!committedFlank && unit.Definition.BodyRadiusMm > 350 && unit.AvoidanceTicks >= 12) || unit.Goal < 0));
         if (replan)
         {
-            // A pursuer with no route left plans now: waiting for its turn (Units.Count/3 ticks) halted it for seconds.
-            if (!CombatPlanningTurn(unit) && !(far && unit.Goal < 0)) return unit.Path.Count == 0;
+            if (!TryCombatPlanning(unit))
+            {
+                if (unit.Path.Count>0) return false;
+                // A new explicit attack can react before its graph-search turn. Only use a clear terrain
+                // corridor; the usual local swept checks still enforce bodies, passing sides and leashes.
+                if (unit.Order is OrderKind.Attack or OrderKind.ForceAttack && unit.OrderTarget==target.Id
+                    && unit.CombatTarget!=target.Id && unit.Node<Navigation.GroundCount && target.Node<Navigation.GroundCount
+                    && SeparationSquared(unit,target)>(long)AttackRange(unit,target)*AttackRange(unit,target)
+                    && (unit.TransitNode<0 || unit.GroundSegment)
+                    && Nav(unit).CanTraverseGroundPoints(unit.X,unit.Z,target.X,target.Z))
+                {
+                    long budget=unit.MovementBudget;
+                    SteerGround(unit,target.X,target.Z,ref budget);
+                }
+                return true;
+            }
             RebaseCombatGround(unit);
             unit.AttackNode = -1;
             var plan = far ? Pursuit(unit,target) : CombatPosition(unit,target);
             unit.Goal = plan.Node; unit.AttackNode = far ? -1 : plan.Node; unit.Path = plan.Path;
-            unit.CombatWaiting = plan.Waiting; unit.CombatTarget = target.Id; unit.CombatPlanTick = Tick;
+            unit.Target=plan.Target;
+            unit.CombatWaiting = plan.Waiting; unit.CombatTarget = plan.Target; unit.CombatPlanTick = Tick;
             unit.Waypoint = 0; unit.BlockedTicks = 0; unit.AvoidanceTicks = 0;
             unit.FreeMovement = plan.Path.Count > 0 && plan.Path.All(FreeGround) && unit.TransitNode < 0;
         }
         return unit.Path.Count == 0;
     }
+
+    private readonly List<SimUnit> _combatStepNeighbors = [];
 }

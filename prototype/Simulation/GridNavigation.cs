@@ -805,22 +805,42 @@ public sealed partial class GridNavigation
     public List<int> FindPathToAny(int start,IEnumerable<int> destinations,IReadOnlySet<int>? blocked,int maxVisited = 2048,Func<int,bool>? allowed = null)
         => FindPathToAny(start,destinations,[],blocked,maxVisited,allowed).Path;
 
-    /// <summary>The preferred search, and failing it the fallback one, in a single pass. The expansion order does
-    /// not depend on the goals, so the first fallback goal closed within the budget is exactly what a second search
+    /// <summary>A* toward a group of destinations. The bounds of the goals supply an admissible lower bound,
+    /// so a distant building does not require flooding every cell between the unit and its attack perimeter.</summary>
+    public List<int> FindPathToAnyDirected(int start,IEnumerable<int> destinations,IReadOnlySet<int>? blocked,int maxVisited)
+        => FindPathToAny(start,destinations,[],blocked,maxVisited,directed:true).Path;
+
+    /// <summary>The preferred search, and failing it the fallback one, in a single pass. By default the expansion
+    /// order does not depend on the goals, so the first fallback goal closed is exactly what a second search
     /// for the fallback destinations would return; this saves repeating a failed search's whole budget.</summary>
     public (List<int> Path,bool Fallback) FindPathToAny(int start,IEnumerable<int> preferred,IEnumerable<int> fallback,IReadOnlySet<int>? blocked,
-        int maxVisited = 2048,Func<int,bool>? allowed = null)
+        int maxVisited = 2048,Func<int,bool>? allowed = null,bool directed = false)
     {
         using var time = SimProfiler.Time("FindPathToAny");
         bool Usable(int n) => CanStand(n) && blocked?.Contains(n) != true && IsConnected(start,n);
         var goals=preferred.Where(Usable).ToHashSet();
         var others=fallback.Where(Usable).ToHashSet();
         if (goals.Count == 0 && others.Count == 0) return ([],false);
+        // Keep the original goal-independent ordering whenever a fallback is requested.
+        directed &= goals.Count>0 && others.Count==0;
+        int minX=0,maxX=0,minZ=0,maxZ=0;
+        if(directed)
+        {
+            minX=goals.Min(n=>Column(n)%Width); maxX=goals.Max(n=>Column(n)%Width);
+            minZ=goals.Min(n=>Column(n)/Width); maxZ=goals.Max(n=>Column(n)/Width);
+        }
+        int Heuristic(int node)
+        {
+            if(!directed) return 0;
+            int column=Column(node),x=column%Width,z=column/Width;
+            int dx=Math.Max(minX-x,Math.Max(0,x-maxX)),dz=Math.Max(minZ-z,Math.Max(0,z-maxZ));
+            return 1000*Math.Max(dx,dz)+414*Math.Min(dx,dz);
+        }
         int reserve = -1;
         long began = SimProfiler.Start();
         BeginSearch();
         int stamp=_searchStamp,closedCount=0; var neighbors=new List<int>(8);
-        var open=new PriorityQueue<int,(int Cost,int Id)>(); open.Enqueue(start,(0,start));
+        var open=new PriorityQueue<int,(int Cost,int Id)>(); open.Enqueue(start,(Heuristic(start),start));
         _searchSeen[start]=stamp; _searchCost[start]=0; _searchPrevious[start]=-1;
         while (open.TryDequeue(out int node,out _) && closedCount < maxVisited)
         {
@@ -839,7 +859,7 @@ public sealed partial class GridNavigation
                 if (!StandCached(next) || blocked?.Contains(next) == true || _searchClosed[next] == stamp || allowed?.Invoke(next) == false) continue;
                 int score=_searchCost[node]+EdgeCost(node,next);
                 if (_searchSeen[next] == stamp && _searchCost[next] <= score) continue;
-                _searchSeen[next]=stamp; _searchCost[next]=score; _searchPrevious[next]=node; open.Enqueue(next,(score,next));
+                _searchSeen[next]=stamp; _searchCost[next]=score; _searchPrevious[next]=node; open.Enqueue(next,(score+Heuristic(next),next));
             }
         }
         if (reserve >= 0) return (SearchPath(reserve),true);

@@ -1,6 +1,26 @@
 using Reforged.Simulation;
 using System.Text.Json;
 
+if (Array.IndexOf(args,"--flanking-benchmark") is int flank && flank>=0)
+{
+    FlankingChecks.Benchmark(args[flank+1]); return;
+}
+
+if (Array.IndexOf(args,"--melee-queue-benchmark") is int queue && queue>=0)
+{
+    MeleeQueueChecks.Benchmark(args[queue+1]); return;
+}
+
+if (Array.IndexOf(args,"--army-soak") is int soak && soak>=0)
+{
+    ArmySoakChecks.Run(args[soak+1],args[soak+2],args.Length>soak+3 ? args[soak+3] : null); return;
+}
+
+if (Array.IndexOf(args,"--army-benchmark") is int armyBenchmark && armyBenchmark >= 0)
+{
+    ArmyScaleChecks.Benchmark(args.Length>armyBenchmark+2 ? args[armyBenchmark+2] : null,args[armyBenchmark+1]); return;
+}
+
 if (Array.IndexOf(args,"--crossing-probe") is int crossingProbe && crossingProbe >= 0) { CrossingProbe.Run(args[crossingProbe+1]); return; }
 if (Array.IndexOf(args,"--building-gap-probe") is int gapProbe && gapProbe >= 0)
 {
@@ -34,6 +54,26 @@ if (Array.IndexOf(args,"--movement-benchmark") is int benchmark && benchmark >= 
 
 int passed = 0;
 void Check(bool value, string name) { if (!value) throw new Exception(name); passed++; }
+if (args.Contains("--siege-distance-checks"))
+{
+    SiegeDistanceChecks.Run(Check);
+    Console.WriteLine($"{passed} building attack distance checks passed"); return;
+}
+if (args.Contains("--flanking-checks"))
+{
+    FlankingChecks.Run(Check); MeleeQueueChecks.Run(Check);
+    Console.WriteLine($"{passed} flanking and traffic checks passed"); return;
+}
+if (args.Contains("--target-priority-checks"))
+{
+    SiegeChecks.Run(Check); AiChecks.Run(Check);
+    Console.WriteLine($"{passed} siege and AI checks passed"); return;
+}
+if (args.Contains("--combat-checks"))
+{
+    EngagementChecks.Run(Check); CloseCombatChecks.Run(Check); IdleGuardChecks.Run(Check); CrowdMotionChecks.Run(Check); ArmyScaleChecks.Run(Check); MeleeQueueChecks.Run(Check);
+    Console.WriteLine($"{passed} combat and crowd checks passed"); return;
+}
 if (Array.IndexOf(args,"--worker-cache") is int workerCache && workerCache >= 0)
 {
     WorkerTrafficChecks.Run(Check);
@@ -73,6 +113,7 @@ ResearchChecks.Run(Check);
 TechTreeChecks.Run(Check);
 SandboxDummyChecks.Run(Check);
 SiegeChecks.Run(Check);
+SiegeDistanceChecks.Run(Check);
 DefenseChecks.Run(Check);
 OutcomeChecks.Run(Check);
 AiChecks.Run(Check);
@@ -83,6 +124,9 @@ EngagementChecks.Run(Check);
 CloseCombatChecks.Run(Check);
 IdleGuardChecks.Run(Check);
 CrowdMotionChecks.Run(Check);
+ArmyScaleChecks.Run(Check);
+MeleeQueueChecks.Run(Check);
+FlankingChecks.Run(Check);
 
 var allowed = Enumerable.Repeat(true, 80).ToArray();
 for (int z = 0; z < 7; z++) allowed[z * 10 + 4] = false;

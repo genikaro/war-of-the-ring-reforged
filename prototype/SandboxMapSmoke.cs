@@ -12,7 +12,9 @@ public partial class Main
     private bool _sandboxMapSmoke;
     private readonly Dictionary<string,bool> _sandboxMapChecks = [];
     private int _sandboxMapHold,_sandboxMapWorker = -1;
-    private const int SandboxMapSmokeChecks = 31;
+    private int _sandboxDistanceUnit=-1,_sandboxDistanceSite=-1,_sandboxDistanceStart,_sandboxDistanceHealth,_sandboxDistanceX,_sandboxDistanceZ;
+    private bool _sandboxDistanceMoved;
+    private const int SandboxMapSmokeChecks = 34;
     private const string SandboxGandalf = "UNIT_G_HERO_GANDALF";
     private static readonly string[] SandboxDummyLookalikes = ["UNIT_G_GONDOR_SWORDSMAN","UNIT_G_ELVEN_ARCHER"];
     private static readonly string[] SandboxFateHeroes = ["UNIT_G_HERO_GIMLI","UNIT_G_HERO_ARAGORN","UNIT_G_HERO_LEGOLAS",SandboxGandalf];
@@ -230,6 +232,41 @@ public partial class Main
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-damage.png");
                 break;
             case 45:
+            {
+                // Build-69: the real sandbox Attack command must also work from beyond the local siege flood.
+                CommandSandboxPlayer(0);
+                var site=Site(0,SandboxBarracks)!;
+                var opposite=world.StartStructures.First(s=>s.Team==1);
+                var definition=_rules.Units[SmokeSwordsman];
+                int anchor=world.Navigation.Cell((site.X+opposite.X)/2,(site.Z+opposite.Z)/2);
+                var unit=world.Spawn(0,SkirmishSpawnCell(0,definition,anchor),definition);
+                _sandboxDistanceUnit=unit.Id; _sandboxDistanceSite=site.Id; _sandboxDistanceHealth=site.Health;
+                _sandboxDistanceX=unit.X; _sandboxDistanceZ=unit.Z;
+                _selected.Clear(); _selectedStructure=null; _selected.Add(unit.Id);
+                Focus(site.X,site.Z); break;
+            }
+            case 47:
+                _sandboxDistanceStart=world.Tick;
+                PushKey(Key.A); Click(StructureSmokePoint(_sandboxDistanceSite)); break;
+            case 49:
+            {
+                var unit=world.Units[_sandboxDistanceUnit]; var site=world.ConstructionSites[_sandboxDistanceSite];
+                _sandboxMapChecks["long_range_building_attack_is_accepted"] = unit.Order==OrderKind.AttackStructure
+                    && unit.SiegeForced && unit.OrderTarget==site.Id
+                    && SimWorld.DistanceSquared(_sandboxDistanceX,_sandboxDistanceZ,site.X,site.Z)>=24000L*24000;
+                goto case 51;
+            }
+            case 51:
+            {
+                var unit=world.Units[_sandboxDistanceUnit]; var site=world.ConstructionSites[_sandboxDistanceSite];
+                if(world.Tick-_sandboxDistanceStart<=20) _sandboxDistanceMoved|=unit.Moving
+                    || SimWorld.DistanceSquared(unit.X,unit.Z,_sandboxDistanceX,_sandboxDistanceZ)>100L*100;
+                if(Hold(site.Health>=_sandboxDistanceHealth && world.Tick-_sandboxDistanceStart<2000)) break;
+                _sandboxMapChecks["long_range_building_attack_starts_walking"]=_sandboxDistanceMoved;
+                _sandboxMapChecks["long_range_building_attack_reaches_and_damages"] = site.Health<_sandboxDistanceHealth;
+                world.Enqueue(0,[unit.Id],OrderKind.Stop); break;
+            }
+            case 53:
                 bool passed = _sandboxMapChecks.Count == SandboxMapSmokeChecks && _sandboxMapChecks.Values.All(v => v);
                 var report = new { build = BuildInfo.Label,checks = _sandboxMapChecks,passed,held_frames = _sandboxMapHold,missing = _sandboxMapMissing,
                     bases = teams.Select(t => new { team = t,buildings = world.ConstructionSites.Values.Where(s => s.Team == t).Select(s => new { world.SiteRules(s).Name,s.X,s.Z,s.Health }),

@@ -14,8 +14,7 @@ public sealed class HeadingPlayback
 
     public float? Update(int dx,int dz,long movementBudget,int sequence)
     {
-        double threshold=Math.Max(2,movementBudget/1000d*.2);
-        if ((long)dx*dx+(long)dz*dz<threshold*threshold) return null;
+        if (!MovementPlayback.MeaningfulTravel(dx,dz,movementBudget)) return null;
         var direction=Vector2.Normalize(new(dx,dz));
         bool fresh=_sequence!=sequence || _heading.LengthSquared()<.0001f || !_emitted;
         _heading=fresh ? direction : Vector2.Lerp(_heading,direction,.3f);

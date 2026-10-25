@@ -381,6 +381,113 @@ public static class AiChecks
         int answering2 = flank.AiPlayers[1].Party.Count(id => flank.Units[id].Target == flanker.Id || flank.Units[id].OrderTarget == flanker.Id
             || flank.Units[id].HeldOrder?.Target == flanker.Id);
         check(answering2 >= 3,$"a party razing a building turns on an enemy hitting a member far from its centre: {answering2} answer");
+        check(answering2 <= 4,"a lone soldier draws a local screen while the rest keep their siege orders");
+
+        // Build-66: a replacement worker does not become an army-wide objective. A worker actually fighting the
+        // party draws two responders, whose orders stay stable through the gaps between its swings.
+        var distraction = Assault();
+        distraction.ConstructionSites[Keep0].Health = 10000;
+        var peasant = distraction.Spawn(0,Cell(23,20),worker with { MaxHealth = 20000 });
+        peasant.Order = OrderKind.HoldGround;
+        distraction.Enqueue(0,[peasant.Id],OrderKind.Move,Cell(25,26));
+        Step(distraction,60);
+        int WorkerChasers(SimWorld w,int id) => w.AiPlayers[1].Party.Count(n => w.Units[n].Target == id
+            || w.Units[n].Order == OrderKind.Attack && w.Units[n].OrderTarget == id || w.Units[n].HeldOrder?.Target == id);
+        check(WorkerChasers(distraction,peasant.Id) == 0 && distraction.AiPlayers[1].PartyTarget == Keep0,
+            "a passive worker passing a siege does not redirect the party");
+        int siegeBefore = distraction.ConstructionSites[Keep0].Health;
+        for (int cycle = 0; cycle < 4; cycle++)
+        {
+            var replacement = distraction.Spawn(0,Cell(23,20+cycle),worker with { MaxHealth = 20000 });
+            distraction.Enqueue(0,[replacement.Id],OrderKind.Move,Cell(28,26));
+            Step(distraction,25);
+            check(WorkerChasers(distraction,replacement.Id) == 0,"successive worker arrivals preserve the siege objective");
+        }
+        check(distraction.ConstructionSites[Keep0].Health < siegeBefore,"the army continues damaging the building through worker arrivals");
+
+        var workerFight = Assault();
+        workerFight.ConstructionSites[Keep0].Health = 10000;
+        var rear = workerFight.Spawn(1,Cell(36,20),soldier with { MaxHealth = 20000 }); workerFight.AiPlayers[1].Party.Add(rear.Id);
+        var armedWorker = workerFight.Spawn(0,Cell(37,20),worker with { MaxHealth = 20000 }); armedWorker.Order = OrderKind.HoldGround;
+        Step(workerFight,50);
+        check(WorkerChasers(workerFight,armedWorker.Id) is >= 1 and <= 2
+            && workerFight.AiPlayers[1].PartyTarget == Keep0,"a damaging worker gets a small response without replacing the building objective");
+        armedWorker.Health = 0; Step(workerFight,70);
+        check(workerFight.AiPlayers[1].Party.All(id => workerFight.Units[id].Order != OrderKind.Attack),
+            "responders resume their siege when a local threat dies");
+
+        SimWorld Invaded(bool critical = false,bool workerOnly = false,int difficulty = 2)
+        {
+            var w = Fixture(difficulty: difficulty); w.Units[2].Health = 0; w.Economies[1] = new(0,0);
+            var bot = w.AiPlayers[1];
+            foreach (int i in Enumerable.Range(0,12)) bot.Party.Add(w.Spawn(1,Cell(30+i%6*2,4+i/6*2),soldier).Id);
+            bot.PartyTarget = Keep0; bot.Legs.Add(Cell(15,5));
+            w.Enqueue(1,bot.Party,OrderKind.AttackMove,Cell(15,5));
+            if (critical) w.ConstructionSites[Keep1].Health = 100;
+            var invader = w.Spawn(0,Cell(56,15),workerOnly ? worker with { MaxHealth = 20000 } : soldier with { MaxHealth = 20000 });
+            if (workerOnly) invader.Order = OrderKind.HoldGround;
+            else w.Enqueue(0,[invader.Id],OrderKind.AttackStructure,target: Keep1);
+            return w;
+        }
+        var alarm = Invaded(); var alarmReplay = Invaded();
+        int intruderId = alarm.Units.Count-1;
+        Step(alarm,60); Step(alarmReplay,60);
+        check(alarm.ConstructionSites[Keep1].Health < 400 && alarm.AiPlayers[1].HomeDefenders.Count == 4,
+            $"damage to the home keep recalls four marching soldiers: {alarm.AiPlayers[1].HomeDefenders.Count}");
+        check(alarm.AiPlayers[1].HomeDefenders.All(id => !alarm.AiPlayers[1].Party.Contains(id)
+            && (alarm.Units[id].OrderTarget == intruderId || alarm.Units[id].Target == intruderId))
+            && alarm.AiPlayers[1].Party.Count > 0,"recalled soldiers defend while the remaining assault keeps its objective");
+        check(alarm.StateDigest() == alarmReplay.StateDigest(),"base recall and local threat response simulate deterministically");
+        alarm.Units[intruderId].Health = 0; Step(alarm,20);
+        check(alarm.AiPlayers[1].HomeDefenders.Count == 4,"a short lull holds the defense reserve instead of turning it around");
+        Step(alarm,80);
+        check(alarm.AiPlayers[1].HomeDefenders.Count == 0,"the defense reserve releases after the attack is over");
+        var danger = Invaded(critical: true); Step(danger,30);
+        check(danger.AiPlayers[1].HomeDefenders.Count == 12 && danger.AiPlayers[1].Party.Count == 0,
+            "an almost fallen keep recalls the available marching army");
+        var harmless = Invaded(workerOnly: true); Step(harmless,30);
+        check(harmless.AiPlayers[1].HomeDefenders.Count == 0 && harmless.AiPlayers[1].Party.Count == 12,
+            "a worker merely visible at home does not recall the marching army");
+        var raidedHome = Invaded(); var raidedHomeBot = raidedHome.AiPlayers[1];
+        foreach (int id in raidedHomeBot.Party.ToArray())
+        {
+            (id%2 == 0 ? raidedHomeBot.Raid : raidedHomeBot.PlaceSquad).Add(id);
+            raidedHomeBot.Party.Remove(id);
+        }
+        Step(raidedHome,30);
+        check(raidedHomeBot.HomeDefenders.Count == 4 && raidedHomeBot.HomeDefenders.All(id => !raidedHomeBot.Raid.Contains(id)
+            && !raidedHomeBot.PlaceSquad.Contains(id)),"base defense can recall raiders and objective squads too");
+        var workerRaid = Invaded(workerOnly: true);
+        var baseRaider = workerRaid.Units[^1];
+        workerRaid.Enqueue(0,[baseRaider.Id],OrderKind.AttackStructure,target: Keep1);
+        Step(workerRaid,40);
+        check(workerRaid.AiPlayers[1].HomeDefenders.Count == 2,"a worker actually damaging the keep recalls two soldiers");
+        foreach (int difficulty in new[] {0,1})
+        {
+            var slower = Invaded(difficulty: difficulty); Step(slower,70);
+            check(slower.AiPlayers[1].HomeDefenders.Count == 4,$"difficulty {difficulty} recalls defenders on its normal think cadence");
+        }
+        var foundationAlarm = Invaded(critical: true); foundationAlarm.ConstructionSites[Keep1].Complete = false;
+        Step(foundationAlarm,30);
+        check(foundationAlarm.AiPlayers[1].HomeDefenders.Count <= 4 && foundationAlarm.AiPlayers[1].Party.Count > 0,
+            "a low-health foundation does not trigger a full army recall");
+        var economyAlarm = Invaded(workerOnly: true);
+        var miner = economyAlarm.Spawn(1,Cell(55,15),worker with { MaxHealth = 20000 }); miner.Order = OrderKind.HoldGround;
+        var minerAttacker = economyAlarm.Units[^2];
+        economyAlarm.Enqueue(0,[minerAttacker.Id],OrderKind.Attack,target: miner.Id);
+        Step(economyAlarm,40);
+        check(minerAttacker.LastHostileDamageAsset && economyAlarm.AiPlayers[1].HomeDefenders.Count == 2,
+            "damage to a worker near the base also recalls defenders");
+        var largeSiege = Assault(); largeSiege.ConstructionSites[Keep0].Health = 100000;
+        for (int i = 0; i < 92; i++) largeSiege.AiPlayers[1].Party.Add(largeSiege.Spawn(1,Cell(24+i%16*2,8+i/16*2),soldier).Id);
+        largeSiege.Enqueue(1,largeSiege.AiPlayers[1].Party,OrderKind.AttackStructure,target: Keep0);
+        Step(largeSiege,60);
+        var largeVictim = largeSiege.Spawn(1,Cell(36,25),soldier with { MaxHealth = 20000 }); largeSiege.AiPlayers[1].Party.Add(largeVictim.Id);
+        var largeWorker = largeSiege.Spawn(0,Cell(37,25),worker with { MaxHealth = 20000 }); largeWorker.Order = OrderKind.HoldGround;
+        Step(largeSiege,120);
+        int largeResponse = WorkerChasers(largeSiege,largeWorker.Id);
+        check(largeResponse is >= 1 and <= 2 && largeSiege.AiPlayers[1].Party.Count >= 100,
+            $"a worker attacking a party of over 100 still draws only a local screen: {largeResponse}; "+string.Join(';',largeSiege.AiPlayers[1].Party.Select(id => largeSiege.Units[id]).Where(u => u.Target == largeWorker.Id).Select(u => $"{u.Id}:{u.Order}/{u.OrderTarget}/{u.HeldOrder?.Kind}/{u.HeldOrder?.Target}")));
         var shot = Assault();
         shot.BuildingRules.Add("tower",new("tower","tower",null,0,100,60,300,750000,750000,100000,50000,["keep"]));
         shot.Defenses.Add("tower",new(14000,0,19000,[1000,1200,1400,1600,1750],0,5000,0));
@@ -668,6 +775,8 @@ public static class AiChecks
         SimWorld Raided(bool guarded = false,bool tower = false)
         {
             var w = Fixture(); w.Units[2].Health = 0;
+            // Keep the other assault occupied so only the raid can damage the Mill in this worker-priority check.
+            w.ConstructionSites[Keep0].Health = 10000;
             w.AiPlayers[1] = Bot(1,50,traits: [AiTrait.Raider]); w.AiPlayers[1].Profile = w.AiPlayers[1].Profile with { RaidFromTicks = 0 };
             w.Resources.Add(Well+10,new(Well+10,ResourceKind.Food,18500,3500,4500,0,0,2000,20,1_000_000));
             w.ConstructionSites.Add(Well+10,new(Well+10,20017,2500) { Team = 0,Health = 750,Complete = true });
@@ -701,7 +810,7 @@ public static class AiChecks
             if (millHit < 0 && raided.ConstructionSites[Well+10].Health < 750) millHit = raided.Tick;
         }
         check(left && workerDied > 0 && millHit >= workerDied,
-            $"a raid of four leaves for the enemy Mill, not the keep, kills its worker first (tick {workerDied}) and then razes it (tick {millHit}): {raidBot.Status}");
+            $"a raid of four leaves for the enemy Mill, not the keep, kills its worker first (tick {workerDied}) and then razes it (tick {millHit}): {raidBot.Status}; worker {millerUnit.Health}; "+string.Join(';',raidBot.Raid.Select(id => $"{id}:{raided.Units[id].Order}/{raided.Units[id].OrderTarget}/{raided.Units[id].Target}@{raided.Units[id].X},{raided.Units[id].Z}")));
         // Hit and run: more enemy soldiers than raiders near the raid send it home at once, and the next raid waits a minute.
         var ambush = Raided();
         Step(ambush,25);

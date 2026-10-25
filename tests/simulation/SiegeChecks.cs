@@ -43,13 +43,42 @@ public static class SiegeChecks
         check(replay.StateDigest() == march.StateDigest(),"attack-move razing replays identically");
 
         var guarded = Fixture(); var fighter = guarded.Spawn(0,Cell(5,13));
-        var weak = guarded.Spawn(1,Cell(23,14),UnitDefinition.Probe with { Name = "weak",MaxHealth = 20,DpsMilli = 0 });
+        var weak = guarded.Spawn(1,Cell(16,14),UnitDefinition.Probe with { Name = "weak",MaxHealth = 20,DpsMilli = 0 });
         weak.Order = OrderKind.HoldGround;
         guarded.Enqueue(0,[fighter.Id],OrderKind.AttackMove,Cell(35,13));
         StepUntil(guarded,() => weak.Health <= 0,600);
         check(weak.Health <= 0 && guarded.ConstructionSites[Hall].Health == 60,"units are fought before the building beside them");
         StepUntil(guarded,() => !guarded.ConstructionSites.ContainsKey(Hall),1000);
         check(!guarded.ConstructionSites.ContainsKey(Hall),"after the fight the attack-move goes back to the building");
+
+        // A worker appearing after the army has committed is different from a unit encountered on the approach.
+        var committed = Fixture(); committed.ConstructionSites[Hall].Health = 10000;
+        committed.Workers.Add("worker",new(10,9));
+        int[] army = [.. Enumerable.Range(0,8).Select(i => committed.Spawn(0,Cell(14+i%4,13+i/4)).Id)];
+        committed.Enqueue(0,army,OrderKind.AttackMove,Cell(35,13));
+        StepUntil(committed,() => army.All(id => committed.Units[id].SiteTarget == Hall),120);
+        check(army.All(id => committed.Units[id].SiteTarget == Hall),"the whole attack-move group commits to a nearby building");
+        var passer = committed.Spawn(1,Cell(27,15),UnitDefinition.Probe with { Name = "worker",DpsMilli = 0,MaxHealth = 20000 });
+        passer.Order = OrderKind.HoldGround;
+        int before = committed.ConstructionSites[Hall].Health;
+        Step(committed,80);
+        check(army.All(id => committed.Units[id].Target != passer.Id) && committed.ConstructionSites[Hall].Health < before,
+            "an appearing passive worker does not replace a committed attack-move siege");
+        var aggressor = committed.Spawn(1,Cell(19,15),UnitDefinition.Probe with { Name = "worker",MaxHealth = 20000 });
+        aggressor.Order = OrderKind.HoldGround;
+        committed.Enqueue(1,[aggressor.Id],OrderKind.Attack,target: army[0]);
+        int maximumResponse = 0; bool damaged = false;
+        for (int i = 0; i < 100; i++)
+        {
+            committed.Step();
+            maximumResponse = Math.Max(maximumResponse,army.Count(id => committed.Units[id].Target == aggressor.Id));
+            damaged |= aggressor.LastHostileDamageTeam == 0;
+        }
+        check(damaged && maximumResponse is >= 1 and <= 3,$"a damaging worker draws local attack-move defenders, including its victim: {maximumResponse}");
+        check(army.All(id => committed.Units[id].SiteTarget == Hall),"local attack-move defense retains the building objective");
+        aggressor.Health = 0; Step(committed,100);
+        check(army.All(id => committed.Units[id].Target < 0 && committed.Units[id].SiteTarget == Hall),
+            "attack-move defenders resume the same building after their attacker dies");
 
         var walk = Fixture(); var walker = walk.Spawn(0,Cell(5,13));
         walk.Enqueue(0,[walker.Id],OrderKind.Move,Cell(35,13)); walk.Step();

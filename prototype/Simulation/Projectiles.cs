@@ -43,6 +43,7 @@ public sealed partial class SimWorld
     private void ApplyHit(SimUnit? unit,SimUnit target,int attack,int hit,long damage,int startTick,int source = -1)
     {
         damage = Math.Min(damage,target.HealthMilli); target.HealthMilli -= damage;
+        if (unit!=null && damage>0) RecordHostileDamage(unit,target.Team,target.X,target.Z,IsAiWorker(target));
         CombatEvents.Add(new(Tick,CombatEventKind.Hit,unit?.Id ?? -1,target.Id,attack,hit,damage,startTick,target.X,target.Y,target.Z,source));
         if (target.Health <= 0)
         {

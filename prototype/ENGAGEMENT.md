@@ -1,5 +1,14 @@
 # Crowded army engagement and performance — October 20, 2026
 
+Build-65 corrects oscillating rear ranks and attack-move boundary reacquisition.
+See [the 25 October reproduction and verification](MELEE-QUEUE.md).
+
+Build-64 adds request-based combat scheduling, indexed movement and reservations,
+shared terrain candidates, and 12–100-per-side mixed-army benchmarks. See the
+[24 October research and implementation report](RTS-RESEARCH.md) for current
+measurements and remaining crowd-positioning work. The sections below record
+the earlier acceptance baseline.
+
 The owner reported that only three or four units fought while the others waited,
 on both teams, and that performance worsened after importing collision sizes.
 The existing checks required every squad to fight; they did not require broad
