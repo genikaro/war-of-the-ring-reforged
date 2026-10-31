@@ -8,6 +8,7 @@ public partial class Main
     // constrains a window to the attached monitor's work area.
     private async Task CaptureOffscreenFrame(bool quit,string destination)
     {
+        int selectionScroll = _commands.SelectionScrollOffset;
         var viewport = new SubViewport { Size = _captureResolution,World3D = GetViewport().World3D,
             RenderTargetUpdateMode = SubViewport.UpdateMode.Always };
         AddChild(viewport);
@@ -20,8 +21,8 @@ public partial class Main
         var overlay = new SandboxHud { Size = _captureResolution,MouseFilter = Control.MouseFilterEnum.Ignore,Visible = _hud.Visible }; root.AddChild(overlay);
         overlay.Waypoints.AddRange(_hud.Waypoints.Select(w => (w.From*stretch,w.To*stretch,w.Color)));
         overlay.WaypointMarks.AddRange(_hud.WaypointMarks.Select(m => m*stretch));
-        root.AddChild(new BuildOverlay { Visible = _hud.Visible });
-        var hud = new CommandPanel { ManageCursor = false,BuildMenuOpen = _buildMenu,PlayerTeam = PlayerTeam }; root.AddChild(hud); hud.TeamColors = _teamColors; hud.LoadArtwork(_cacheFiles.Content,_world!);
+        root.AddChild(new DebugToggle { Visible = _hud.Visible }); root.AddChild(new BuildOverlay { Visible = _hud.Visible,Line = 1 });
+        var hud = new CommandPanel { ManageCursor = false,BuildMenuOpen = _buildMenu,PlayerTeam = PlayerTeam }; root.AddChild(hud); hud.TeamColors = _teamColors; hud.LoadArtwork(_cacheFiles.Content,_world!,EvilTeam(PlayerTeam));
         hud.Visible = _hud.Visible;
         var heroes = new HeroBar { Visible = _hud.Visible }; root.AddChild(heroes); heroes.LoadArtwork(hud);
         heroes.Refresh(FriendlyHeroes(),hud.Art,hud.EffectiveScale);
@@ -46,8 +47,11 @@ public partial class Main
                 SelectedOwnSite()?.Research is { } research ? _techniquePortraits.GetValueOrDefault(research) : null);
             hud.RefreshResearch(_world,SelectedOwnSite(),name => _techniquePortraits.GetValueOrDefault(name));
         }
-        hud.MirrorTooltip(_commands);
+        hud.RefreshFatePage("",mirrorOpen: _commands.GlobalAbilitiesOpen);
+        hud.RefreshGlobalPowers(_pendingGlobalPower);
         await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
+        hud.SelectionScrollOffset = selectionScroll;
+        hud.MirrorTooltip(_commands);
         await ToSignal(RenderingServer.Singleton,RenderingServer.SignalName.FramePostDraw);
         using var image = viewport.GetTexture().GetImage();
         var error = image.SavePng(destination);
@@ -55,9 +59,10 @@ public partial class Main
         System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(destination,".json"),JsonSerializer.Serialize(new {
             width = image.GetWidth(),height = image.GetHeight(),offscreen = true,hud_scale_percent = hud.ScalePercent,
             hud_effective_scale = hud.EffectiveScale,hud_bounds = new[] { bounds.Position.X,bounds.Position.Y,bounds.Size.X,bounds.Size.Y },
+            selection_scroll_offset = hud.SelectionScrollOffset,
             preview_lighting = PreviewLighting.Metadata,terrain_shading = _presentation.TerrainShading,
             original_game_fidelity_verified = false },new JsonSerializerOptions { WriteIndented = true }));
         GD.Print("CAPTURE "+destination+" "+error); viewport.QueueFree();
-        if (quit) GetTree().Quit(error == Error.Ok ? 0 : 1);
+        if (quit) _ = FinishCombatAudio(error == Error.Ok ? 0 : 1);
     }
 }

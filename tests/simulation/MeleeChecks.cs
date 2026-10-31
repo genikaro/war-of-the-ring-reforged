@@ -46,7 +46,21 @@ static class MeleeChecks
         replaced.Enqueue(0,[0],OrderKind.Attack,target:2); Advance(replaced,4);
         check(replaced.Units[1].HealthMilli == 100000 && replaced.Units[2].HealthMilli == 100000,"retargeting cancels the previous pending hit");
         var dead = Fixture(); Advance(dead,3); dead.Units[1].Health = 0; Advance(dead,5);
-        check(!dead.Units[0].StrikeActive && dead.Units[1].HealthMilli == 0,"dead target cancels pending hit");
+        check(dead.Units[0].StrikeActive && dead.Units[1].HealthMilli == 0 && dead.CombatEvents.All(e => e.Kind is not (CombatEventKind.Hit or CombatEventKind.Cancel)),
+            "dead target cancels the pending hit while the swing plays out (build-129)");
+        Advance(dead,13);
+        check(!dead.Units[0].StrikeActive || dead.Units[0].AttackVictim != 1,"the swing ends with its clip");
+        // Build-130: a CanCriticallyKill weapon's killing blow critically kills a CanBeCriticallyKilled unit.
+        bool Critical(bool weapon,bool killable)
+        {
+            var w = Fixture(Profile with { CriticalWeapon = weapon },Profile with { CriticallyKillable = killable });
+            w.Units[1].HealthMilli = 1000; Advance(w,6);
+            return w.Units[1].Health <= 0 && w.Units[1].CriticalDeath;
+        }
+        check(Critical(true,true) && !Critical(false,true) && !Critical(true,false),
+            "only a critical weapon's killing blow on a killable unit is a critical death");
+        var survivor = Fixture(Profile with { CriticalWeapon = true },Profile with { CriticallyKillable = true }); Advance(survivor,6);
+        check(survivor.Units[1].Health > 0 && !survivor.Units[1].CriticalDeath,"a critical weapon's blow that does not kill is ordinary");
         var moving = Fixture(); Advance(moving,2); moving.Enqueue(2,[1],OrderKind.Move,94); Advance(moving,6);
         check(moving.Units[1].HealthMilli == 100000,"target leaving reach cancels windup");
         var queued = Fixture(); Advance(queued,2); queued.Enqueue(0,[0],OrderKind.Move,90,queued:true); queued.Step();
@@ -57,7 +71,7 @@ static class MeleeChecks
         Advance(multi,5); check(multi.Units[1].HealthMilli == 80000,"multi-hit clip preserves cycle DPS");
         var armored = Fixture(victim:Profile with { ArmorMilli = 3000 }); Advance(armored,6);
         check(armored.Units[1].HealthMilli == 83000,"documented armor policy applies once to cycle DPS");
-        var fractional = Fixture(Profile with { DpsMilli = 3333 }); Advance(fractional,6);
+        var fractional = Fixture(Profile with { DpsMilli = 3333,DamagePerHitMilli = 3333 }); Advance(fractional,6);
         check(fractional.Units[1].HealthMilli == 96667 && fractional.Units[1].Health == 97,"fractional damage is retained in integer milli-health");
         var start = Fixture(victim:Profile with { MaxHealth = 350,StartingHealthPercent = 50 });
         check(start.Units[1].Health == 175 && start.Units[1].MaxHealth == 350,"spawn uses source health and starting percentage");
@@ -111,7 +125,7 @@ static class MeleeChecks
         MeleeHit hit = new(5,1_000_000);
         var swordsman = Fixture(Profile with { DpsMilli = 10000,Attacks = [new("a",1,21,[hit]),new("b",1,22,[hit]),new("c",1,34,[hit,new(20,1_000_000)])] }).Units[0];
         var swordsmanStats = UnitHudStats.From(swordsman,Rules());
-        check(swordsmanStats.Attack == "10" && swordsmanStats.AttackTip == "Damage per hit: 10\nDamage per second: 10\nAttack speed: very fast (a hit every 0.96 s)",
+        check(swordsmanStats.Attack == "10" && swordsmanStats.AttackTip == "Damage per hit: 10\nDamage per second: 10.39\nAttack speed: very fast (a hit every 0.96 s)",
             "the HUD shows damage per hit, with damage per second and attack speed behind it");
         check((UnitHudStats.Whole(9.625m),UnitHudStats.Whole(10.5m),UnitHudStats.Whole(24.375m),UnitHudStats.Whole(.3m)) == ("10","11","24","0.3"),
             "damage per hit shows whole numbers, keeping a decimal below 1");

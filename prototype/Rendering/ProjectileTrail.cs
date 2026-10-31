@@ -14,12 +14,12 @@ public sealed class ProjectileTrail
     private readonly float _width,_endWidth,_gray;
     private readonly Color _start,_end;
 
-    public ProjectileTrail(SimProjectile arrow,double lifetime,float width,float endWidth,Color start,Color end,float gray,Material material)
+    public ProjectileTrail(SimProjectile arrow,double lifetime,float width,float endWidth,Color start,Color end,float gray,Material material,Vector3? origin = null)
     {
         Arrow = arrow; _history = new(lifetime); _width = width; _endWidth = endWidth; _start = start; _end = end; _gray = gray;
         Root = new() {Name = "ArrowTrail_"+arrow.Id,Mesh = _mesh,MaterialOverride = material,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off};
-        Record(arrow.ReleaseTick/(double)SimWorld.TicksPerSecond,new(-arrow.X/1000f,arrow.Y/1000f,arrow.Z/1000f));
+        Record(arrow.ReleaseTick/(double)SimWorld.TicksPerSecond,origin ?? new(-arrow.X/1000f,arrow.Y/1000f,arrow.Z/1000f));
     }
     public void Record(double time,Vector3 position) => _history.Record(new(time,position.X,position.Y,position.Z));
     public void End(Vector3 position)

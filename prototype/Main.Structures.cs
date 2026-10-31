@@ -11,7 +11,11 @@ public partial class Main
     private readonly Dictionary<string,string[]> _defenseLabels = [];
     private readonly Dictionary<int,StructureVisual> _structureViews = [];
     private sealed record StructureVisual(int Id,int Team,string Type,int Resource,bool Obstacle,Node3D Root,MeshInstance3D Ring,
-        (MeshInstance3D Mesh,Vector3[] Faces)[] Meshes);
+        (MeshInstance3D Mesh,Vector3[] Faces)[] Meshes)
+    {
+        public float CommandBlip;
+        public Color RingColor;
+    }
 
     private void LoadStructureDefinitions(JsonElement data)
     {
@@ -24,14 +28,14 @@ public partial class Main
     {
         if (!data.TryGetProperty("selectable_objects",out var objects))
             throw new InvalidOperationException("Refresh neutral selection: python tools/skirmish_construction.py --cache converted/skirmish");
-        foreach (var item in objects.GetProperty("definitions").EnumerateObject()) _structureDefinitions.Add(item.Name,item.Value.Clone());
+        foreach (var item in objects.GetProperty("definitions").EnumerateObject()) _structureDefinitions[item.Name] = item.Value.Clone();
         foreach (var item in objects.GetProperty("placements").EnumerateArray())
         {
             int id = item.GetProperty("id").GetInt32();
             var root = _obstacleViews.GetValueOrDefault(id) ?? Descendants(this).OfType<Node3D>()
                 .First(n => n.Name.ToString() == item.GetProperty("name").GetString());
-            RegisterStructure(id,-1,item.GetProperty("type").GetString()!,root,_world!.Resources.ContainsKey(id) ? id : -1);
             if (item.GetProperty("type").GetString()!.StartsWith("OBJECT_PLACE_OF_POWER")) AddPlaceOfPower(id,item.GetProperty("type").GetString()!,root);
+            RegisterStructure(id,-1,PlaceAt(id)?.Type ?? item.GetProperty("type").GetString()!,root,_world!.Resources.ContainsKey(id) ? id : -1);
             _minimapMarkers.Add((item.GetProperty("type").GetString()!,-root.GlobalPosition.X*1000,root.GlobalPosition.Z*1000));
         }
         _commands.SetMinimapMarkers(_minimapMarkers);
@@ -39,7 +43,8 @@ public partial class Main
 
     private void RegisterStructure(int id,int team,string type,Node3D root,int resource = -1)
     {
-        var meshes = Descendants(root).OfType<MeshInstance3D>().Where(m => m.Mesh != null).Select(m => (Mesh: m,Faces: m.Mesh!.GetFaces())).ToArray();
+        var meshes = Descendants(root).OfType<MeshInstance3D>().Where(m => m.Mesh != null && !m.HasMeta("place_control_zone"))
+            .Select(m => (Mesh: m,Faces: m.Mesh!.GetFaces())).ToArray();
         var points = new List<Vector3>();
         var layer = _obstacleLayers.EnumerateArray().FirstOrDefault(o => o.GetProperty("id").GetInt32() == id);
         bool obstacle = layer.ValueKind != JsonValueKind.Undefined;
@@ -47,6 +52,14 @@ public partial class Main
         if (obstacle)
             foreach (var box in layer.GetProperty("footprints").EnumerateArray())
                 polygons.Add(box.GetProperty("polygon").EnumerateArray().Select(p => new Vector2(p[0].GetSingle(),p[1].GetSingle())).ToArray());
+        else if (_world!.ConstructionSites.Values.FirstOrDefault(s => s.Obstacle == id) is { Building: { } building } site
+            && _world.Placements.TryGetValue(building,out var placement))
+        {
+            // Runtime buildings have no entry in the map's saved obstacle layers. Use their
+            // placed footprint, rather than the bounds of every hidden construction/ruin mesh.
+            obstacle = true;
+            polygons.Add(placement.Polygon.Select(p => new Vector2((site.X+p.X)/1000f,(site.Z+p.Z)/1000f)).ToArray());
+        }
         else
         {
             // Selectable objects need no pathing obstacle. Outline their projected
@@ -55,6 +68,14 @@ public partial class Main
             if (vertices.Length == 0) throw new InvalidOperationException("Selectable object has no geometry: "+root.Name);
             float left = -vertices.Max(v => v.X),right = -vertices.Min(v => v.X),top = vertices.Min(v => v.Z),bottom = vertices.Max(v => v.Z);
             polygons.Add([new(left,top),new(right,top),new(right,bottom),new(left,bottom)]);
+        }
+        if (type=="BUILDING_E_ORC_BARRACKS")
+        {
+            // The Mound's authored collision box is tilted ~23 degrees inside an unrotated model.
+            // Its selection frame follows the building axes rather than exposing that internal collision angle.
+            var bounds=polygons.SelectMany(p=>p).ToArray();
+            float left=bounds.Min(p=>p.X),right=bounds.Max(p=>p.X),top=bounds.Min(p=>p.Y),bottom=bounds.Max(p=>p.Y);
+            polygons.Clear();polygons.Add([new(left,top),new(right,top),new(right,bottom),new(left,bottom)]);
         }
         foreach (var polygon in polygons)
         {
@@ -70,7 +91,8 @@ public partial class Main
         var arrays = new Godot.Collections.Array(); arrays.Resize((int)Mesh.ArrayType.Max); arrays[(int)Mesh.ArrayType.Vertex] = points.ToArray();
         var ringMesh = new ArrayMesh(); ringMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles,arrays);
         var ring = new MeshInstance3D { Mesh = ringMesh,Visible = false,CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            MaterialOverride = new StandardMaterial3D { AlbedoColor = (_observing || _sandboxMap) && team >= 0 ? TeamColor(team).Lightened(.25f) : new Color(team < 0 ? "ded2a5" : team == PlayerTeam ? "e9c22d" : "e65045"),CullMode = BaseMaterial3D.CullModeEnum.Disabled,ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
+            MaterialOverride = new StandardMaterial3D { AlbedoColor = (_observing || _sandboxMap) && team >= 0 ? TeamColor(team).Lightened(.25f) : new Color(team < 0 ? "ded2a5" : team == PlayerTeam ? "e9c22d" : "e65045"),CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+                Transparency = BaseMaterial3D.TransparencyEnum.Alpha,ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
         root.AddChild(ring); _structureViews.Add(id,new(id,team,type,resource,obstacle,root,ring,meshes));
     }
 
@@ -184,28 +206,38 @@ public partial class Main
         string resource = entry.Resource < 0 ? "" : $"{world.Resources[entry.Resource].Kind} remaining: {(world.Resources[entry.Resource].RemainingMilli+999)/1000}";
         var place = PlaceAt(id);
         string building = site?.Building ?? entry.Type;
-        // Build-61: a tower lists each of its weapons, the Ballista Tower its arrows and its bolt.
-        string attack = world.Defenses.TryGetValue(building,out var first) ? string.Join("\n",new[] {first}
-            .Concat(world.ExtraDefenses.GetValueOrDefault(building) ?? []).Select((defense,weapon) => DefenseLine(building,weapon,defense))) : "";
+        var weapons = world.Defenses.TryGetValue(building,out var first) ? new[] {first}
+            .Concat(world.ExtraDefenses.GetValueOrDefault(building) ?? []).Select((defense,weapon) => DefenseHudStats.From(
+                _defenseLabels.TryGetValue(building,out var labels) && weapon < labels.Length ? labels[weapon] : "Attack",defense)).ToArray() : [];
+        string attack = string.Join(" / ",weapons.Select(w => w.Attack));
         return new(id,entry.Team,place?.Name ?? definition.GetProperty("display_name").GetString()!,definition.GetProperty("portrait").GetString()!,site?.Health ?? max,max,
             definition.GetProperty("armor").GetDouble().ToString("0.##",System.Globalization.CultureInfo.InvariantCulture),progress,place == null ? resource : PlaceSummary(place),entry.Resource,
             !definition.TryGetProperty("has_health",out var hasHealth) || hasHealth.GetBoolean(),site?.Id ?? -1,
             place == null ? "" : place.Owner == PlayerTeam && !_observing ? "Place of power · yours until an enemy stands alone in its zone"
-                : $"Place of power · stand alone within {place.RadiusMm/1000} m to take it",attack);
+                : $"Place of power · stand alone within {place.RadiusMm/1000} m to take it",attack,
+            Burning: site is { FirePpm: > 0,Health: > 0 },Weapons:weapons);
     }
 
-    /// <summary>One tower weapon: its source damage per second and range, e.g. "Ballista  35 dps · 10–22 m".</summary>
-    private string DefenseLine(string building,int weapon,DefenseDefinition defense)
-    {
-        string label = _defenseLabels.TryGetValue(building,out var labels) && weapon < labels.Length ? labels[weapon] : "Attack";
-        string range = defense.MinimumRangeMm > 0 ? $"{defense.MinimumRangeMm/1000m:0.#}–{defense.RangeMm/1000m:0.#} m" : $"{defense.RangeMm/1000m:0.#} m";
-        return string.Create(System.Globalization.CultureInfo.InvariantCulture,$"{label}  {defense.DpsMilli/1000m:0.#} dps · {range}");
-    }
-
-    private void PresentStructureSelection()
+    private void PresentStructureSelection(float dt)
     {
         var details = SelectedStructureDetails(); _commands.RefreshStructure(details);
-        foreach (var entry in _structureViews.Values) entry.Ring.Visible = details?.Id == entry.Id;
+        _commands.RefreshPlacePower(_world!,_selectedStructure is int selectedPlace ? PlaceAt(selectedPlace) : null,_observing);
+        foreach (var entry in _structureViews.Values)
+        {
+            entry.CommandBlip = Math.Max(0,entry.CommandBlip-dt);
+            bool blip = entry.CommandBlip > 0, selected = details?.Id == entry.Id, hovered = _hoveredStructure == entry.Id;
+            int owner = PlaceAt(entry.Id)?.Owner ?? entry.Team;
+            var color = (_observing || _sandboxMap) && owner >= 0 ? TeamColor(owner).Lightened(.25f)
+                : new Color(owner < 0 ? "ded2a5" : owner == PlayerTeam ? "e9c22d" : "e65045");
+            if (hovered && !selected) color = new Color(TeamColor(owner),.5f);
+            color = CommandRingColor(entry.CommandBlip,owner,color,selected || hovered);
+            entry.Ring.Visible = StructureVisible(entry) && (blip ? color.A > .001f : selected || hovered);
+            if (entry.RingColor != color)
+            {
+                ((StandardMaterial3D)entry.Ring.MaterialOverride).AlbedoColor = color;
+                entry.RingColor = color;
+            }
+        }
         PresentPlaceZones(details?.Id);
     }
 }

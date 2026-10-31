@@ -45,6 +45,7 @@ public partial class CommandPanel
         for (int slot = 0; slot < StatusSlots; slot++)
         {
             var (icon,elapsed) = _statusIcons[slot];
+            icon.Position=new(slot*StatusStep,unit.Definition.Hero ? 120 : 86);
             icon.Visible = slot < statuses.Length;
             if (!icon.Visible) { _statusTitles[slot] = ""; continue; }
             var status = statuses[slot]; var text = UnitStatusText.From(_world!,unit,status,name);

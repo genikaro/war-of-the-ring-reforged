@@ -31,7 +31,7 @@ public partial class Main
             // The unit pair modifiers go by unit id: a dummy's own id keeps only the damage-type cycle. The body stays the
             // model unit's (navigation has a clearance profile for each source body); only the drawing grows.
             var dummy = source with { Id = -10-index,Name = name,DisplayName = type+" Dummy",MaxHealth = SandboxDummyHealth,StartingHealthPercent = 100,
-                ArmorMilli = 0,DpsMilli = 0,MeleeDpsMilli = 0,RegenerationPpm = 0,SiegePpm = 1_000_000,Hero = false,Abilities = buttons,Passive = true,
+                ArmorMilli = 0,DpsMilli = 0,MeleeDpsMilli = 0,RegenerationPpm = 0,SiegePpm = 1_000_000,Hero = false,Experience = null,Abilities = buttons,Passive = true,
                 ModelScalePpm = (int)Math.Min(2_000_000L,(long)source.ModelScalePpm*SandboxDummyScalePpm/1_000_000),
                 SelectionRadiusMm = Math.Min(6000,source.SelectionRadiusMm*SandboxDummyScalePpm/1_000_000) };
             dummy.Validate();

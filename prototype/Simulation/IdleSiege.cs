@@ -38,7 +38,7 @@ public sealed partial class SimWorld
     // an unrestricted explicit AttackStructure order.
     private bool IdleGuardSiege(SimUnit unit)
     {
-        if(!IdleGuardEnabled(unit) || unit.Target>=0 || unit.IdleGuardReturning || unit.RingActive
+        if(!IdleGuardEnabled(unit) || unit.Target>=0 || unit.IdleGuardReturning || unit.RingActive || unit.Concealed
             || unit.Definition.DpsMilli<=0 || unit.YieldFor>=0 || unit.ReturningToRest) return false;
         if(unit.SiteTarget<0)
         {

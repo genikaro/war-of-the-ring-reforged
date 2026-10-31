@@ -20,26 +20,19 @@ static class AbilityChecks
     public static void Run(Action<bool,string> check)
     {
         var (world,caster,ally) = Fixture(); world.EnqueueAbility(0,[caster.Id],0,ally.Id); world.Step();
-        check(caster.Casting && caster.AbilityReadyAt[0] == 340 && ally.Health == 40,"cast begins on fixed tick and spends cooldown without instant healing");
+        check(caster.Casting && caster.AbilityReadyAt[0] == 0 && ally.Health == 40,"cast begins on fixed tick without spending cooldown or healing during wind-up");
         Advance(world,7); check(ally.Health == 40,"heal waits for the source toolscript tick");
-        world.Step(); check(ally.Health == 290 && world.AbilityEvents.Single(e => e.Kind == AbilityEventKind.Heal).HealthMilli == 250000,
-            "heal applies exactly once at tick eight");
+        world.Step(); check(ally.Health == 290 && caster.AbilityReadyAt[0] == 348
+            && world.AbilityEvents.Single(e => e.Kind == AbilityEventKind.Heal).HealthMilli == 250000,
+            "heal applies exactly once at tick eight and starts cooldown");
         Advance(world,20); check(ally.Health == 290 && !caster.Casting && caster.Order == OrderKind.Idle,"cast completes and restores idle guard without repeating the heal");
         world.EnqueueAbility(0,[0],0,1); world.Step(); check(!caster.Casting && ally.Health == 290,"cooldown rejects repeat casts");
-        Advance(world,340-world.Tick); world.EnqueueAbility(0,[0],0,1); Advance(world,9);
+        Advance(world,348-world.Tick); world.EnqueueAbility(0,[0],0,1); Advance(world,9);
         check(ally.Health == ally.MaxHealth,"heal clamps to maximum health");
 
         var self = Fixture(); self.Caster.Health = 100; self.World.EnqueueAbility(0,[0],0,0); Advance(self.World,9);
         check(self.Caster.Health == 350,"Greater Kingsfoil can target Aragorn himself");
-        foreach (var order in new[] {OrderKind.Stop,OrderKind.Move,OrderKind.Attack,OrderKind.HoldGround})
-        {
-            var cancelled = Fixture(); cancelled.World.Spawn(1,407).Cooldown = 10000;
-            cancelled.World.EnqueueAbility(0,[0],0,1); Advance(cancelled.World,4);
-            cancelled.World.Enqueue(0,[0],order,410,order == OrderKind.Attack ? 2 : -1); cancelled.World.Step();
-            check(!cancelled.Caster.Casting && cancelled.Caster.AbilityReadyAt[0] == 340
-                && cancelled.World.AbilityEvents.Any(e => e.Kind == AbilityEventKind.Cancel),$"{order} interrupts the cast without refunding cooldown");
-            Advance(cancelled.World,8); check(cancelled.Ally.Health == 40,$"{order} cannot trigger a cancelled heal");
-        }
+        CastOrderChecks.Run(check);
         foreach (bool killCaster in new[] {true,false})
         {
             var killed = Fixture(); killed.World.EnqueueAbility(0,[0],0,1); Advance(killed.World,4);

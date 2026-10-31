@@ -10,6 +10,13 @@ public partial class Main
     private int _commandGoal;
     private int _commandPauseTick;
     private int _inspectedEnemy;
+    private bool _commandMenuPaused;
+
+    /// <summary>With -CapturePath, a window capture of the game menu page (build-96): name-menu.png and so on.</summary>
+    private void CaptureMenu(string page)
+    {
+        if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-"+page+".png");
+    }
 
     private void PushKey(Key key) => GetViewport().PushInput(new InputEventKey { Keycode = key,Pressed = true },true);
     /// <summary>A key with its physical position, as grid hotkeys read it.</summary>
@@ -145,7 +152,9 @@ public partial class Main
                 GetViewport().PushInput(new InputEventMouseMotion { Position = end,GlobalPosition = end,ButtonMask = MouseButtonMask.Left },true);
                 GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left,Pressed = false,Position = end,GlobalPosition = end },true);
                 break;
-            case 113: _commandChecks["drag_release_over_panel"] = !_dragging && _hud.SelectionBox == null; break;
+            case 113:
+                _commandChecks["drag_release_over_panel"] = !_dragging && _hud.SelectionBox == null && _selected.Contains(0);
+                PushKey(Key.Key1); break;
             case 114: world.Units[_primarySquad.Max()].Health = 0; break;
             case 117: _commandChecks["dead_selection_pruned"] = _selected.Count == 5 && !_selected.Contains(_primarySquad.Max()) && _commands.CommandsAvailable; break;
             case 120: PushKey(Key.Escape); _commandsBeforeCancel = world.Commands.Count; break;
@@ -239,25 +248,58 @@ public partial class Main
                 var overlay = _hud.GetChildren().OfType<BuildOverlay>().Single();
                 var viewport = GetViewport().GetVisibleRect();
                 _commandChecks["build_date_fps_top_right"] = overlay.Text.Contains(BuildInfo.Label) && overlay.Text.Contains(DateTime.Now.ToString("yyyy-MM-dd"))
-                    && overlay.Text.Contains("FPS") && overlay.GetGlobalRect().End.X <= viewport.End.X && overlay.GetGlobalRect().Position.Y < 40;
-                Click(_commands.MenuButton.GetGlobalRect().GetCenter()); break;
+                    && overlay.Text.Contains("FPS") && overlay.GetGlobalRect().End.X <= viewport.End.X && overlay.GetGlobalRect().Position.Y < 80;
+                // Build-96: the debug tools' button sits in the top-right corner above the build line.
+                _commandChecks["debug_button_above_build_line"] = _debugToggle.GetGlobalRect().End.X <= viewport.End.X
+                    && _debugToggle.GetGlobalRect().Position.Y < 40 && _debugToggle.GetGlobalRect().End.Y <= overlay.GetGlobalRect().Position.Y+1;
+                Click(_debugToggle.GetGlobalRect().GetCenter()); break;
             case 216:
-                _commandChecks["menu_button_opens"] = _toolsPanel.Visible;
-                Click(_commands.MenuButton.GetGlobalRect().GetCenter()); break;
+                _commandChecks["debug_button_opens_tools"] = _toolsPanel.Visible && _debugToggle.ButtonPressed;
+                Click(_debugToggle.GetGlobalRect().GetCenter()); break;
             case 219:
-                _commandChecks["menu_button_closes"] = !_toolsPanel.Visible;
+                _commandChecks["debug_button_closes_tools"] = !_toolsPanel.Visible && !_debugToggle.ButtonPressed;
+                _commandMenuPaused = _paused;
+                Click(_commands.MenuButton.GetGlobalRect().GetCenter()); break;
+            // A capture shows the frame it is taken in, so each page's click waits for the next frame.
+            case 222:
+                _commandChecks["menu_button_opens_game_menu"] = _gameMenu.Visible && _paused && !_toolsPanel.Visible;
+                CaptureMenu("menu"); break;
+            case 223: Click(_gameMenu.SettingsButton.GetGlobalRect().GetCenter()); break;
+            case 225:
+                _commandChecks["menu_settings_page"] = _gameMenu.SettingsOpen && _gameMenu.PlayerBarsBox.IsVisibleInTree() && _gameMenu.PlayerBarsBox.ButtonPressed;
+                CaptureMenu("settings"); break;
+            case 226: Click(_gameMenu.TabButton(1).GetGlobalRect().GetCenter()); break;
+            case 227: CaptureMenu("controls"); break;
+            case 228: Click(_gameMenu.TabButton(2).GetGlobalRect().GetCenter()); break;
+            case 230:
+                _commandChecks["menu_reforged_tab"] = _gameMenu.EditionBox(GameSettings.Edition.Reforged).IsVisibleInTree()
+                    && _gameMenu.EditionBox(GameSettings.Edition.Reforged).ButtonPressed && _settings.ReforgedEdition == GameSettings.Edition.Reforged;
+                CaptureMenu("reforged"); break;
+            case 231: Click(_gameMenu.EditionBox(GameSettings.Edition.Custom).GetGlobalRect().GetCenter()); Click(_gameMenu.OkButton.GetGlobalRect().GetCenter()); break;
+            case 233:
+                _commandChecks["menu_ok_applies_and_returns"] = _settings.ReforgedEdition == GameSettings.Edition.Custom && _gameMenu.Visible && !_gameMenu.SettingsOpen;
+                Click(_gameMenu.ExitButton.GetGlobalRect().GetCenter()); break;
+            case 235:
+                _commandChecks["menu_exit_asks"] = _gameMenu.ExitOpen && _gameMenu.ExitToMainMenuButton.Disabled == !_setupMode;
+                CaptureMenu("exit"); break;
+            case 236: PushKey(Key.Escape); break;
+            case 237:
+                _commandChecks["menu_escape_backs_out"] = _gameMenu.Visible && !_gameMenu.ExitOpen && !_gameMenu.SettingsOpen;
+                Click(_gameMenu.ResumeButton.GetGlobalRect().GetCenter()); break;
+            case 240:
+                _commandChecks["menu_resume_restores_pause"] = !_gameMenu.Visible && _paused == _commandMenuPaused;
                 var neutral = new SimUnit(999,-1,0,0);
                 _commands.Refresh([neutral],_ => "Neutral unit",null,false);
                 _commandChecks["neutral_unit_palette_empty"] = _commands.CommandPaletteEmpty && _commands.SingleUnitDetailsVisible;
                 _commands.Refresh([],UnitName,null,false);
                 _commandChecks["empty_selection_palette_empty"] = _commands.CommandPaletteEmpty;
                 break;
-            case 225:
+            case 246:
                 var report = new { ticks = world.Tick, checks = _commandChecks, commands = world.Commands,
-                    final_digest = world.StateDigest(), passed = _commandChecks.Count == 49 && _commandChecks.Values.All(v => v) };
+                    final_digest = world.StateDigest(), passed = _commandChecks.Count == 57 && _commandChecks.Values.All(v => v) };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"command-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
-                GD.Print("COMMAND_SMOKE "+JsonSerializer.Serialize(report)); GetTree().Quit(report.passed ? 0 : 1);
+                GD.Print("COMMAND_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1);
                 break;
         }
     }

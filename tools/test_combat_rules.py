@@ -130,10 +130,34 @@ class CombatAdapterTests(unittest.TestCase):
     def test_adpcm_clips_and_trims_fact_samples(self):
         self.assertEqual(self.samples(adpcm(b'\x77',recent=32760,total=3)),(0,32760,32767))
 
+    def test_adpcm_short_final_speech_block_and_odd_sample_count(self):
+        # The header permits a 9-byte block (6 samples), while the final block
+        # contains only 8 bytes (4 samples), as in the shipped Beorning speech.
+        source = bytearray(adpcm())
+        struct.pack_into('<H',source,32,9)  # block align
+        struct.pack_into('<H',source,38,6)  # samples per full block
+        self.assertEqual(self.samples(source),(0,0,16,128))
+        struct.pack_into('<I',source,54,5)  # odd source recording omitted its final nibble
+        self.assertEqual(self.samples(source),(0,0,16,128))
+        struct.pack_into('<I',source,54,7)
+        with self.assertRaisesRegex(ValueError,'sample count'):
+            decode_ms_adpcm(source)
+
     def test_adpcm_rejects_truncation_and_bad_header(self):
         for source in (adpcm()[:-1],adpcm(total=100),adpcm(delta=-1),b'not a wav'):
             with self.assertRaises(ValueError):
                 decode_ms_adpcm(source)
+
+    def test_stereo_group_speech_keeps_channel_seeds_and_nibbles(self):
+        block = struct.pack('<BB6hB',0,0,16,16,10,-10,-20,20,0x18)
+        fmt = struct.pack('<HHIIHHHHHhh',2,2,44100,0,len(block),4,8,3,1,256,0)
+        def chunk(name,data):
+            return name+struct.pack('<I',len(data))+data+b'\0'*(len(data)&1)
+        body = b'WAVE'+chunk(b'fmt ',fmt)+chunk(b'fact',struct.pack('<I',3))+chunk(b'data',block)
+        source = b'RIFF'+struct.pack('<I',len(body))+body
+        with wave.open(io.BytesIO(decode_ms_adpcm(source))) as pcm:
+            self.assertEqual((pcm.getnchannels(),pcm.getnframes()),(2,3))
+            self.assertEqual(struct.unpack('<6h',pcm.readframes(3)),(-20,20,10,-10,26,-138))
 
 
 if __name__ == '__main__':

@@ -1,6 +1,12 @@
 using Reforged.Simulation;
 using System.Text.Json;
 
+using var allocations = args.Contains("--allocation-profile") ? new AllocationProbe() : null;
+if (Array.IndexOf(args,"--late-match-benchmark") is int lateMatch && lateMatch >= 0)
+{
+    LateMatchChecks.Benchmark(args[lateMatch+1],args[lateMatch+2]); return;
+}
+
 if (Array.IndexOf(args,"--siege-spacing-benchmark") is int siegeSpacing && siegeSpacing>=0)
 {
     SiegeSpacingChecks.Benchmark(args[siegeSpacing+1]); return;
@@ -64,9 +70,199 @@ if (Array.IndexOf(args,"--movement-benchmark") is int benchmark && benchmark >= 
 
 int passed = 0;
 void Check(bool value, string name) { if (!value) throw new Exception(name); passed++; }
+if (args.Contains("--evil-upgrade-checks"))
+{
+    EvilUpgradeChecks.Run(Check);
+    int upgradeCache=Array.IndexOf(args,"--cache");
+    if(upgradeCache>=0)EvilUpgradeChecks.Cached(Check,args[upgradeCache+1]);
+    Console.WriteLine($"{passed} Evil upgrade checks passed");return;
+}
+if (args.Contains("--evil-checks"))
+{
+    EvilChecks.Run(Check);
+    Console.WriteLine($"{passed} Evil faction checks passed"); return;
+}
+if (args.Contains("--evil-ai-checks"))
+{
+    EvilAiChecks.Run(Check);
+    int evilCache = Array.IndexOf(args,"--cache");
+    if (evilCache>=0) EvilAiChecks.Cached(Check,args[evilCache+1]);
+    Console.WriteLine($"{passed} Evil bot build checks passed"); return;
+}
+if (args.Contains("--evil-ability-checks"))
+{
+    EvilAbilityChecks.Run(Check);
+    Console.WriteLine($"{passed} Evil hero ability checks passed"); return;
+}
+if (args.Contains("--tower-checks"))
+{
+    DefenseChecks.Run(Check); TechTreeChecks.Run(Check); FateChecks.Run(Check);
+    int towerCache = Array.IndexOf(args,"--cache");
+    if (towerCache>=0) TowerChecks.Cached(Check,args[towerCache+1]);
+    Console.WriteLine($"{passed} tower, tech tree and Fate checks passed"); return;
+}
+if (args.Contains("--global-power-checks"))
+{
+    GlobalPowerChecks.Run(Check);
+    int globalCache=Array.IndexOf(args,"--cache");
+    if(globalCache>=0) GlobalPowerChecks.Cached(Check,args[globalCache+1]);
+    Console.WriteLine($"{passed} global power and bot checks passed");return;
+}
+if (args.Contains("--ai-composition-checks"))
+{
+    AiCompositionChecks.Run(Check);
+    int compositionCache=Array.IndexOf(args,"--cache");
+    if(compositionCache>=0) AiCompositionChecks.Cached(Check,args[compositionCache+1]);
+    Console.WriteLine($"{passed} bot composition checks passed"); return;
+}
+if (args.Contains("--ai-worker-checks"))
+{
+    AiWorkerChecks.Run(Check);
+    Console.WriteLine($"{passed} bot worker staffing checks passed"); return;
+}
+if (args.Contains("--ai-recovery-checks"))
+{
+    AiRecoveryChecks.Run(Check);
+    Console.WriteLine($"{passed} bot economy recovery checks passed"); return;
+}
+if (args.Contains("--retention-checks"))
+{
+    RetentionChecks.Run(Check);
+    Console.WriteLine($"{passed} retention checks passed"); return;
+}
+if (args.Contains("--attack-variant-checks"))
+{
+    AttackVariantChecks.Run(Check);
+    int variantCache=Array.IndexOf(args,"--cache");
+    if(variantCache>=0)AttackVariantChecks.Cached(Check,args[variantCache+1]);
+    Console.WriteLine($"{passed} attack animation variant checks passed");return;
+}
+if (args.Contains("--consistent-hit-checks"))
+{
+    ConsistentHitDamageChecks.Run(Check);
+    int hitCache=Array.IndexOf(args,"--cache");
+    if(hitCache>=0)ConsistentHitDamageChecks.Cached(Check,args[hitCache+1]);
+    Console.WriteLine($"{passed} consistent-hit damage checks passed");return;
+}
+if (args.Contains("--ability-purchase-checks"))
+{
+    HeroAbilityPurchaseChecks.Run(Check);
+    int purchaseCache=Array.IndexOf(args,"--cache");
+    if(purchaseCache>=0)HeroAbilityPurchaseChecks.Cached(Check,args[purchaseCache+1]);
+    Console.WriteLine($"{passed} hero ability purchase checks passed");return;
+}
+if (args.Contains("--music-playlist-checks"))
+{
+    MusicPlaylistChecks.Run(Check);
+    Console.WriteLine($"{passed} music playlist checks passed");return;
+}
+if (args.Contains("--hero-revival-checks"))
+{
+    HeroRevivalChecks.Run(Check);
+    int revivalCache=Array.IndexOf(args,"--cache");
+    if(revivalCache>=0) HeroRevivalChecks.Cached(Check,args[revivalCache+1]);
+    Console.WriteLine($"{passed} hero revival checks passed");return;
+}
+if (args.Contains("--hero-experience-checks"))
+{
+    HeroExperienceChecks.Run(Check);
+    int experienceCache=Array.IndexOf(args,"--cache");
+    if(experienceCache>=0) HeroExperienceChecks.Cached(Check,args[experienceCache+1]);
+    Console.WriteLine($"{passed} hero experience checks passed");return;
+}
+if (args.Contains("--hero-skill-checks"))
+{
+    HeroSkillChecks.Run(Check);
+    int heroCache=Array.IndexOf(args,"--cache");
+    if(heroCache>=0) HeroSkillChecks.Cached(Check,args[heroCache+1]);
+    Console.WriteLine($"{passed} hero skill checks passed");return;
+}
+if (args.Contains("--casting-checks"))
+{
+    AbilityChecks.Run(Check); CastOrderChecks.Run(Check);
+    Console.WriteLine($"{passed} ability casting and order checks passed");return;
+}
+if (args.Contains("--nature-ability-checks"))
+{
+    NatureAbilityChecks.Run(Check);
+    int natureCache=Array.IndexOf(args,"--cache");
+    if(natureCache>=0) NatureAbilityChecks.Cached(Check,args[natureCache+1]);
+    Console.WriteLine($"{passed} Nature's Haven ability checks passed");return;
+}
+if (args.Contains("--ranged-tracking-checks"))
+{
+    int trackingCache = Array.IndexOf(args,"--cache");
+    RangedTrackingChecks.Run(Check,trackingCache >= 0 ? args[trackingCache+1] : null);
+    FacingChecks.Run(Check); RangedChecks.Run(Check);
+    Console.WriteLine($"{passed} ranged tracking, facing and projectile checks passed"); return;
+}
+if (args.Contains("--build95-checks"))
+{
+    ConstructionChecks.Run(Check); SiegeChecks.Run(Check); FateChecks.Run(Check); WorkerCombatChecks.Run(Check);
+    int workerRules = Array.IndexOf(args,"--cache");
+    if (workerRules >= 0) WorkerCombatChecks.Run(Check,args[workerRules+1]);
+    Console.WriteLine($"{passed} construction, worker combat and Fate checks passed"); return;
+}
+if (args.Contains("--elven-ability-checks"))
+{
+    ElvenAbilityChecks.Run(Check);
+    int cache = Array.IndexOf(args,"--cache");
+    if (cache >= 0) ElvenAbilityChecks.Cached(Check,args[cache+1]);
+    Console.WriteLine($"{passed} Elven ability and upgrade checks passed"); return;
+}
+if (args.Contains("--structure-interaction-checks"))
+{
+    StructureInteractionChecks.Run(Check); EconomyChecks.Run(Check);
+    int interactionCache = Array.IndexOf(args,"--cache");
+    if (interactionCache >= 0) StructureInteractionChecks.Cached(Check,args[interactionCache+1]);
+    Console.WriteLine($"{passed} owned building and economy checks passed"); return;
+}
+if (args.Contains("--ranger-ability-checks"))
+{
+    RangerAbilityChecks.Run(Check);
+    int rangerCache = Array.IndexOf(args,"--cache");
+    if (rangerCache >= 0) RangerAbilityChecks.Cached(Check,args[rangerCache+1]);
+    Console.WriteLine($"{passed} Ranger ability and upgrade checks passed"); return;
+}
+if (args.Contains("--projectile-checks"))
+{
+    ProjectileTrailChecks.Run(Check);
+    Console.WriteLine($"{passed} projectile presentation checks passed"); return;
+}
+if (args.Contains("--dwarf-ability-checks"))
+{
+    DwarfAbilityChecks.Run(Check);
+    int dwarfCache = Array.IndexOf(args,"--cache");
+    if (dwarfCache >= 0) DwarfAbilityChecks.Cached(Check,args[dwarfCache+1]);
+    Console.WriteLine($"{passed} Dwarf ability and upgrade checks passed"); return;
+}
+if (args.Contains("--ai-defense-checks"))
+{
+    AiDefenseChecks.Run(Check);
+    int defenseAiCache=Array.IndexOf(args,"--cache");
+    if(defenseAiCache>=0) AiDefenseChecks.Cached(Check,args[defenseAiCache+1]);
+    Console.WriteLine($"{passed} bot defense checks passed"); return;
+}
+if (args.Contains("--ai-expansion-checks"))
+{
+    AiExpansionChecks.Run(Check);
+    Console.WriteLine($"{passed} bot expansion checks passed"); return;
+}
+if (args.Contains("--ai-hero-checks"))
+{
+    AiHeroChecks.Run(Check);
+    int heroAiCache=Array.IndexOf(args,"--cache");
+    if(heroAiCache>=0) AiHeroChecks.Cached(Check,args[heroAiCache+1]);
+    Console.WriteLine($"{passed} bot hero checks passed"); return;
+}
+if (args.Contains("--bot-choice-checks"))
+{
+    BotChoiceChecks.Run(Check);
+    Console.WriteLine($"{passed} bot choice checks passed"); return;
+}
 if (args.Contains("--fate-checks"))
 {
-    FateChecks.Run(Check); TechTreeChecks.Run(Check); DefenseChecks.Run(Check); PlacesOfPowerChecks.Run(Check);
+    GlobalPowerChecks.Run(Check); FateChecks.Run(Check); TechTreeChecks.Run(Check); DefenseChecks.Run(Check); PlacesOfPowerChecks.Run(Check);
     Console.WriteLine($"{passed} Fate, tech tree, defense and place checks passed"); return;
 }
 if (args.Contains("--idle-building-checks"))
@@ -127,26 +323,45 @@ CombatChecks.Run(Check);
 OrderChecks.Run(Check);
 ExtendedOrderChecks.Run(Check);
 MeleeChecks.Run(Check);
+BloodIntensityChecks.Run(Check);
+ConsistentHitDamageChecks.Run(Check);
+AttackVariantChecks.Run(Check);
 RangedChecks.Run(Check);
 RangedSpacingChecks.Run(Check);
 FacingChecks.Run(Check);
+RangedTrackingChecks.Run(Check);
 ProjectileTrailChecks.Run(Check);
 MovementModeChecks.Run(Check);
 SelectionChecks.Run(Check);
 AbilityChecks.Run(Check);
+HeroAbilityPurchaseChecks.Run(Check);
 FrodoChecks.Run(Check);
+HeroSkillChecks.Run(Check);
+HeroExperienceChecks.Run(Check);
+HeroRevivalChecks.Run(Check);
 StatusChecks.Run(Check);
 RegenerationChecks.Run(Check);
 PlacesOfPowerChecks.Run(Check);
 HealingPlaybackChecks.Run(Check);
+MusicPlaylistChecks.Run(Check);
 EconomyChecks.Run(Check);
+StructureInteractionChecks.Run(Check);
 ConstructionChecks.Run(Check);
+WorkerCombatChecks.Run(Check);
 ProductionChecks.Run(Check);
 PlacementChecks.Run(Check);
 UpgradeChecks.Run(Check);
 ResearchChecks.Run(Check);
+RangerAbilityChecks.Run(Check);
+NatureAbilityChecks.Run(Check);
+ElvenAbilityChecks.Run(Check);
+DwarfAbilityChecks.Run(Check);
 TechTreeChecks.Run(Check);
+GlobalPowerChecks.Run(Check);
 FateChecks.Run(Check);
+EvilChecks.Run(Check); EvilAbilityChecks.Run(Check);
+EvilUpgradeChecks.Run(Check);
+EvilAiChecks.Run(Check);
 SandboxDummyChecks.Run(Check);
 SiegeChecks.Run(Check);
 SiegeSpacingChecks.Run(Check);
@@ -154,6 +369,13 @@ SiegeDistanceChecks.Run(Check);
 DefenseChecks.Run(Check);
 OutcomeChecks.Run(Check);
 AiChecks.Run(Check);
+AiWorkerChecks.Run(Check);
+AiRecoveryChecks.Run(Check);
+AiDefenseChecks.Run(Check);
+AiExpansionChecks.Run(Check);
+AiHeroChecks.Run(Check);
+AiCompositionChecks.Run(Check);
+BotChoiceChecks.Run(Check);
 WorkerTrafficChecks.Run(Check);
 FootprintChecks.Run(Check);
 BodyCollisionChecks.Run(Check);
@@ -163,6 +385,7 @@ IdleGuardChecks.Run(Check);
 IdleBuildingChecks.Run(Check);
 CrowdMotionChecks.Run(Check);
 ArmyScaleChecks.Run(Check);
+RetentionChecks.Run(Check);
 MeleeQueueChecks.Run(Check);
 MeleeSpacingChecks.Run(Check);
 FlankingChecks.Run(Check);

@@ -96,5 +96,24 @@ public static class ConstructionChecks
         var dead = Fixture(); dead.Enqueue(0,[0],OrderKind.Build,target: 7); dead.Step(); dead.Units[0].Health = 0;
         progress = dead.ConstructionSites[7].ProgressMicroTicks; Step(dead,100);
         check(dead.ConstructionSites[7].ProgressMicroTicks == progress && !dead.ConstructionSites[7].Complete,"dead builders never contribute construction work");
+
+        var damaged = Fixture(); var intact = Fixture();
+        foreach (var w in new[] {damaged,intact}) { w.Enqueue(0,[0],OrderKind.Build,target: 7); Step(w,20); }
+        damaged.ConstructionSites[7].Health -= 15;
+        foreach (var w in new[] {damaged,intact}) Step(w,10);
+        check(damaged.ConstructionSites[7].ProgressMicroTicks == intact.ConstructionSites[7].ProgressMicroTicks
+            && damaged.ConstructionSites[7].Health == intact.ConstructionSites[7].Health-15,
+            "construction advances without replacing health lost to attacks");
+        Step(damaged,30);
+        check(damaged.ConstructionSites[7].Complete && damaged.ConstructionSites[7].Health == 85,
+            "the final construction tick preserves earlier damage");
+
+        var besieged = Fixture(); besieged.Enqueue(0,[0],OrderKind.Build,target: 7); Step(besieged,30);
+        var raider = besieged.Spawn(1,5*30+18,UnitDefinition.Probe with { DpsMilli = 100000,
+            Attacks = [new("",1,10,[new(9,1_000_000)])] });
+        besieged.Enqueue(1,[raider.Id],OrderKind.AttackStructure,target: 7); Step(besieged,25);
+        check(besieged.ConstructionSites[7].Team < 0 && !besieged.Navigation.IsObstacleActive(20007)
+            && besieged.Units[0].Order != OrderKind.Build,
+            "sustained attacks can destroy a foundation while its builder keeps working");
     }
 }

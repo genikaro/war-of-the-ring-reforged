@@ -202,6 +202,8 @@ class Exporter:
         for t in tris:
             u = sum(uv[k][0] for k in t) / 3
             v = sum(uv[k][1] for k in t) / 3
+            if not (math.isfinite(u) and math.isfinite(v)):
+                continue  # MS_Quarry.lms carries NaN texture coordinates; such a triangle has no texel to sample.
             partial += 8 < alpha.getpixel((int(u * w) % w, int(v * h) % h)) < 247
         return partial * 2 > len(tris)
 

@@ -2,15 +2,19 @@ namespace Reforged.Simulation;
 
 public readonly record struct MovementSample(long Elapsed, int X, int Y, int Z, bool Terrain = false);
 
-public sealed class SimUnit(int id, int team, int x, int z)
+public sealed partial class SimUnit(int id, int team, int x, int z)
 {
     public int Id { get; } = id;
-    public int Team { get; } = team;
+    /// <summary>Build-137: Saruman's Twisting Influence is the one thing that changes a living unit's team.</summary>
+    public int Team { get; internal set; } = team;
     private int _x = x,_z = z;
     private UnitDefinition _definition = UnitDefinition.Probe;
     /// <summary>The spatial index this unit is filed in; position and definition changes keep it current.</summary>
     internal UnitGrid? Grid;
-    internal int GridBucket;
+    internal UnitRoster? Roster;
+    internal bool ActiveInRoster;
+    internal int DeathCleanupTick = -1;
+    internal int GridBucket = -1;
     public int X { get => _x; internal set { _x = value; Grid?.Moved(this); } }
     public int Z { get => _z; internal set { _z = value; Grid?.Moved(this); } }
     public int Y { get; internal set; }
@@ -20,10 +24,19 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public long TravelProgress { get; internal set; }
     public List<MovementSample> Movement { get; } = [];
     private long _healthMilli = 100_000;
-    public int Health { get => (int)((_healthMilli+999)/1000); internal set => _healthMilli = Math.Max(0,(long)value*1000); }
-    public long HealthMilli { get => _healthMilli; internal set => _healthMilli = Math.Max(0,value); }
+    public int Health { get => (int)((_healthMilli+999)/1000); internal set => HealthMilli = Math.Max(0,(long)value*1000); }
+    public long HealthMilli
+    {
+        get => _healthMilli;
+        internal set
+        {
+            bool alive = _healthMilli > 0;
+            _healthMilli = Math.Max(0,value);
+            if (alive != (_healthMilli > 0)) { Grid?.HealthChanged(this); Roster?.HealthChanged(this); }
+        }
+    }
     public UnitDefinition Definition { get => _definition; internal set { _definition = value; Grid?.Measure(value); } }
-    public int MaxHealth => (int)((long)Definition.MaxHealth*PlaceMaxHealthPpm/1_000_000);
+    public int MaxHealth => (int)((long)(Definition.MaxHealth+ExperienceHitPoints)*PlaceMaxHealthPpm/1_000_000*GlobalHealthPpm/1_000_000);
     public int KillCount { get; internal set; }
     /// <summary>Researched bonuses (source TechniqueUnitModifiers) added to weapon DPS and armor.</summary>
     public int TechniqueDpsMilli { get; internal set; }
@@ -33,7 +46,8 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int TechniqueRangePpm { get; internal set; } = 1_000_000;
     public int TechniqueMissileDpsMilli { get; internal set; }
     /// <summary>Attack reach: a ranged unit's missile range with its research.</summary>
-    public int ReachMm => Definition.IsRanged ? (int)((long)Definition.ReachMm*TechniqueRangePpm/1_000_000) : Definition.ReachMm;
+    public int ReachMm => Definition.IsRanged ? (int)((long)Definition.ReachMm*TechniqueRangePpm/1_000_000)
+        : Definition.ReachMm+(ParalyzeSuppressedUntil<0 && Negated==null ? ParalyzeRangeMm : 0);
     /// <summary>The strongest Siege Aura over the unit this tick (Gimli: x1.5 damage against buildings within 10 m).</summary>
     public int SiegeAuraPpm { get; internal set; } = 1_000_000;
     /// <summary>Guardian Wind: missiles hitting the unit deal this share of their damage until the tick (Legolas: 1% for 12 s).</summary>
@@ -49,9 +63,23 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int PlaceRangedPpm { get; internal set; } = 1_000_000;
     public int PlaceSiegePpm { get; internal set; } = 1_000_000;
     public int PlaceCooldownPpm { get; internal set; } = 1_000_000;
+    public int PlaceSpeedPpm { get; internal set; } = 1_000_000;
+    public int PlaceSightPpm { get; internal set; } = 1_000_000;
     /// <summary>Armor a Sandbox training dummy's own buttons add or clear (build-59).</summary>
     public int BonusArmorMilli { get; internal set; }
-    public int ArmorMilli => Definition.ArmorMilli+TechniqueArmorMilli+PlaceArmorMilli+BonusArmorMilli;
+    /// <summary>Build-135: the armour an enemy Aura of Terror (Nazgul King) takes off this unit this tick.</summary>
+    public int TerrorArmorMilli { get; internal set; }
+    public int ArmorMilli => Definition.ArmorMilli+ExperienceArmorMilli+TechniqueArmorMilli+PlaceArmorMilli+BonusArmorMilli+(HeroicLegacy?.ArmorMilli ?? 0)-ShieldBreakArmorMilli-TerrorArmorMilli;
+    public HashSet<string> AbilityResearch { get; } = [];
+    public bool AbilityEnabled(AbilityDefinition ability) => Negated == null && AbilityPurchased(ability)
+        && (ability.RequiredTechnique == null || AbilityResearch.Contains(ability.RequiredTechnique))
+        && (ability.ReplacedByTechnique == null || !AbilityResearch.Contains(ability.ReplacedByTechnique));
+    public IEnumerable<AbilityDefinition> EnabledAbilities => Definition.Abilities is {Length: > 0} abilities
+        ? EnumerateEnabledAbilities(abilities) : Array.Empty<AbilityDefinition>();
+    private IEnumerable<AbilityDefinition> EnumerateEnabledAbilities(AbilityDefinition[] abilities)
+    {
+        foreach (var ability in abilities) if (AbilityEnabled(ability)) yield return ability;
+    }
     public bool Walking { get; internal set; }
     public int[] AbilityReadyAt { get; } = new int[4];
     /// <summary>Thousandths of a tick of extra recharge gained under a recharge aura.</summary>
@@ -62,18 +90,50 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int CastSerial { get; internal set; }
     public bool CastApplied { get; internal set; }
     public bool Casting => CastStartTick >= 0;
-    public AbilityDefinition? Ability(int slot) => Definition.Abilities?.FirstOrDefault(a => a.Slot == slot);
-    public StatusProtection Immunities => (Definition.Abilities ?? []).Where(a => a.Passive)
-        .Aggregate(StatusProtection.None,(flags,a) => flags | a.Immunities);
-    public int MeleeDamageRate => (Definition.Abilities?.FirstOrDefault(a => a.Passive && a.Kind == AbilityKind.Fury)?.DpsMilli
-        ?? Definition.DpsMilli)+TechniqueDpsMilli+PlaceDpsMilli+(Definition.IsRanged ? TechniqueMissileDpsMilli : 0);
-    public int AbilityDamageScale(int targetType) => Definition.Abilities?.FirstOrDefault(a => a.Passive && a.Kind is AbilityKind.Fury or AbilityKind.Bane
-        && a.BonusTargets?.Contains(targetType) == true)?.BonusScale ?? 1_000_000;
+    public AbilityDefinition? Ability(int slot)
+    {
+        foreach (var ability in EnabledAbilities) if (ability.Slot == slot) return ability;
+        foreach (var ability in Definition.Abilities ?? []) if (ability.Slot == slot) return ability;
+        return null;
+    }
+    public StatusProtection Immunities
+    {
+        get
+        {
+            var flags = Definition.NativeImmunities;
+            foreach (var ability in Definition.Abilities ?? [])
+                if (ability.Passive && AbilityEnabled(ability)) flags |= ability.Immunities;
+            return flags;
+        }
+    }
+    public int MeleeDamageRate
+    {
+        get
+        {
+            int dps = Definition.DpsMilli;
+            foreach (var ability in Definition.Abilities ?? [])
+                if (ability.Passive && ability.Kind == AbilityKind.Fury && AbilityEnabled(ability)) { dps = ability.DpsMilli; break; }
+            // Build-141: Gollum's Surprise Attack swaps his weapon while he sneaks.
+            if (Sneaking && EnabledAbilities.FirstOrDefault(a => a.Kind == AbilityKind.SurpriseAttack) is { } surprise) dps = surprise.DpsMilli;
+            return (int)((long)ExperienceDamage(dps+TechniqueDpsMilli+PlaceDpsMilli+(Definition.IsRanged ? TechniqueMissileDpsMilli : 0))*SavageDamagePpm/1_000_000);
+        }
+    }
+    public int AbilityDamageScale(int targetType)
+    {
+        foreach (var ability in Definition.Abilities ?? [])
+            if (ability.Passive && ability.Kind is AbilityKind.Fury or AbilityKind.Bane
+                && ability.BonusTargets?.Contains(targetType) == true && AbilityEnabled(ability)) return ability.BonusScale;
+        return 1_000_000;
+    }
     public int Facing { get; internal set; }
     public int PreviousFacing { get; internal set; }
+    /// <summary>The last unit aim sample, so tracking compares the previous heading with the previous aim.</summary>
+    public int AttackAimTarget { get; internal set; } = -1;
+    public int AttackAimDirection { get; internal set; }
+    public int AttackAimTick { get; internal set; } = -1;
     /// <summary>Micrometres run per tick: the source ratio to the Gondor Swordsman, who runs the accepted 3 m/s (build-60).</summary>
-    public long RunBudget => Math.Max(1,SimWorld.MovementTickSpan*Definition.RunScale/1_000_000);
-    public long MovementBudget => Walking ? Math.Max(1,RunBudget*Definition.WalkScale/1_000_000) : RunBudget;
+    public long RunBudget => Math.Max(1,SimWorld.MovementTickSpan*Definition.RunScale/1_000_000*PlaceSpeedPpm/1_000_000);
+    public long MovementBudget => Math.Max(1,(Walking ? Math.Max(1,RunBudget*Definition.WalkScale/1_000_000) : RunBudget)*TimeScalePpm/1_000_000);
     public int AttackStartTick { get; internal set; } = -1;
     public int AttackVictim { get; internal set; } = -1;
     public int AttackVariant { get; internal set; } = -1;
@@ -149,7 +209,7 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public int PlacementCell { get; internal set; } = -1;
     public int PlacementWaitTick { get; internal set; } = -1;
     public List<PendingOrder> OrderQueue { get; } = [];
-    /// <summary>A patient order (a bot's, build-50) waiting for the swing under way to deal its damage, and the cell the
+    /// <summary>An order waiting for a cast to finish or a patient bot order waiting for swing damage, and the cell the
     /// order in force was given for (its own destination may be a formation slot beside it).</summary>
     public PendingOrder? HeldOrder { get; internal set; }
     public int OrderCell { get; internal set; } = -1;
@@ -165,6 +225,8 @@ public sealed class SimUnit(int id, int team, int x, int z)
     public long CargoMilli { get; internal set; }
     public ResourceKind CargoKind { get; internal set; }
     public bool ReturningCargo { get; internal set; }
+    /// <summary>The gather source to resume after an explicit delivery, or -1.</summary>
+    public int ReturnCargoSource { get; internal set; } = -1;
     public int GatherPlanTick { get; internal set; } = -1;
     public GatherPhase GatherPhase { get; internal set; }
     public int GatherPhaseTick { get; internal set; } = -1;
@@ -175,7 +237,7 @@ public sealed class SimUnit(int id, int team, int x, int z)
 
 /// <summary>An order. A patient one (build-50) waits for each unit's swing to deal its damage before it applies.</summary>
 public sealed record SimCommand(int Tick, int Sequence, int Team, int[] Units, int Cell, int Target = -1,
-    OrderKind Kind = OrderKind.Move, bool Queued = false,int AbilitySlot = 0,bool Patient = false);
+    OrderKind Kind = OrderKind.Move, bool Queued = false,int AbilitySlot = 0,bool Patient = false,int? TargetX = null,int? TargetZ = null);
 public sealed record SimObstacleCommand(int Tick, int Sequence, int Obstacle, bool Active);
 
 /// <summary>20 Hz integer simulation. No renderer, wall clock, random state or Godot APIs.</summary>
@@ -186,6 +248,13 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     public GridNavigation Navigation { get; } = navigation;
     public CombatRules Rules { get; } = rules ?? CombatRules.Probe;
     public List<SimUnit> Units { get; } = [];
+    private readonly UnitRoster _roster = new();
+    /// <summary>Living units and casualties completing death cleanup, in stable id order. The returned snapshot
+    /// is safe to iterate while damage or recruitment changes membership; check Present before acting.</summary>
+    public IReadOnlyList<SimUnit> ActiveUnits
+    {
+        get { if (_roster.Count != Units.Count) _roster.Rebuild(Units); return _roster.Active; }
+    }
     public List<SimCommand> Commands { get; } = [];
     public List<SimObstacleCommand> ObstacleCommands { get; } = [];
     public int Tick { get; private set; }
@@ -196,8 +265,8 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     private readonly UnitGrid _grid = new(navigation);
     // Spawn files new units; tests that edit Units directly get a full refile on the next query.
     private UnitGrid Grid { get { if (_grid.Count != Units.Count) _grid.Rebuild(Units); return _grid; } }
-    /// <summary>A superset of the units, dead or alive, within this horizontal radius of the point.</summary>
-    private List<SimUnit> NearUnits(int x,int z,int radius) => Grid.Near(x,z,radius,[]);
+    /// <summary>A superset of the living units within this horizontal radius of the point.</summary>
+    private IEnumerable<SimUnit> NearUnits(int x,int z,int radius) => Grid.Nearby(x,z,radius);
 
     public SimUnit Spawn(int team, int cell,UnitDefinition? definition = null)
     {
@@ -205,7 +274,10 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         if (!Navigation.ForBody(definition.BodyRadiusMm,definition.BodyHeightMm).CanStand(cell)) throw new ArgumentException("Spawn cell is blocked for this body");
         var candidate = SpawnCandidate(team,cell,definition);
         if (!CanPlace(candidate)) throw new ArgumentException("Spawn cell occupied");
+        RestoreHeroExperience(candidate);
+        RestoreHeroAbilities(candidate);
         Units.Add(candidate);
+        if (_roster.Count == Units.Count-1) _roster.Add(candidate);
         if (_grid.Count == Units.Count-1) _grid.Add(candidate);
         ApplyTechniques(candidate);
         ApplyPlaceBonuses(candidate);
@@ -220,7 +292,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     }
 
     private bool CanPlace(SimUnit candidate) => CanReserveMovement(candidate,candidate.Node) && !OccupiedNodes(-1).Contains(candidate.Node)
-        && !Units.Any(u => u.Present && BodiesOverlap(candidate,u));
+        && !ActiveUnits.Any(u => u.Present && BodiesOverlap(candidate,u));
 
     public void Enqueue(int team, IEnumerable<int> units, int cell, int target = -1)
         => Enqueue(team, units, target >= 0 ? OrderKind.Attack : OrderKind.Move, cell, target);
@@ -241,7 +313,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     {
         if (command.Active)
         {
-            foreach (var unit in Units.Where(u => u.Present))
+            foreach (var unit in ActiveUnits.Where(u => u.Present))
             {
                 if (Navigation.ObstacleCovers(command.Obstacle, unit.Node)) return;
                 if (unit.Node < Navigation.GroundCount && Nav(unit).ObstacleCoversGroundBody(command.Obstacle,unit.X,unit.Z)) return;
@@ -265,16 +337,29 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         if (command.Kind == OrderKind.CancelResearch) { CancelResearch(command); return; }
         if (command.Kind is OrderKind.SetRallyPoint or OrderKind.SetRallyResource) { SetRallyPoint(command); return; }
         if (command.Kind == OrderKind.Gather) { BeginGather(command,activating); return; }
+        if (command.Kind is OrderKind.ApproachStructure or OrderKind.ReturnCargo) { BeginStructureInteraction(command,activating); return; }
         if (command.Kind == OrderKind.AttackStructure) { BeginSiege(command,activating); return; }
-        if (command.Kind == OrderKind.UseAbility) { BeginAbility(command); return; }
+        if (command.Kind == OrderKind.UseAbility) { BeginAbility(command,activating); return; }
+        if (command.Kind == OrderKind.UseGlobalPower) { UseGlobalPower(command); return; }
+        if (command.Kind == OrderKind.UsePlacePower) { UsePlacePower(command); return; }
+        if (command.Kind == OrderKind.PurchaseAbility) { PurchaseAbility(command); return; }
+        if (command.Kind == OrderKind.SetHerbsTargeting) { SetHerbsTargeting(command); return; }
         if (command.Kind == OrderKind.ToggleWalkRun)
         {
             bool walk = !IsWalking(command.Team);
             _walkingTeams[command.Team] = walk;
-            foreach (var unit in Units.Where(u => u.Team == command.Team && u.Health > 0)) unit.Walking = walk;
+            foreach (var unit in ActiveUnits.Where(u => u.Team == command.Team && u.Health > 0)) unit.Walking = walk;
             return;
         }
         var reserved = new HashSet<int>();
+        if (activating)
+        {
+            // Members of a mixed selection may finish casting on different ticks.
+            // Keep destinations already assigned to the rest of that same order.
+            var ids = command.Units.ToHashSet();
+            reserved.UnionWith(ActiveUnits.Where(u => u.Present && u.OrderSequence == command.Sequence && !ids.Contains(u.Id))
+                .Select(u => u.Goal >= 0 ? u.Goal : u.Node));
+        }
         bool travels = command.Kind is OrderKind.Move or OrderKind.AttackMove or OrderKind.Patrol or OrderKind.Guard
             || (command.Kind == OrderKind.ForceAttack && command.Target < 0);
         var members = command.Units.Where(id => id >= 0 && id < Units.Count).Select(id => Units[id])
@@ -303,10 +388,10 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             // An invalid explicit attack cannot silently become a move or erase
             // a valid order (for example a friendly/dead target in a mixed selection).
             if (command.Kind == OrderKind.Attack && (command.Target < 0 || command.Target >= Units.Count
-                || Units[command.Target].Team == unit.Team || !Units[command.Target].Present || Units[command.Target].RingActive)) continue;
+                || Units[command.Target].Team == unit.Team || !Units[command.Target].Present || !CanSeeUnit(unit.Team,Units[command.Target]))) continue;
             if (command.Kind == OrderKind.ForceAttack && command.Target >= 0 && (command.Target >= Units.Count
                 || command.Target == id || !Units[command.Target].Present
-                || Units[command.Target].Team != unit.Team && Units[command.Target].RingActive)) continue;
+                || !CanSeeUnit(unit.Team,Units[command.Target]))) continue;
             // A Ring-bearer is passive: explicit attacks are refused rather than silently becoming moves.
             if (unit.RingActive && command.Kind is OrderKind.Attack or OrderKind.ForceAttack) continue;
             if (command.Kind == OrderKind.Guard && command.Target >= 0 && (command.Target >= Units.Count
@@ -320,6 +405,8 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             }
             if (!activating) unit.OrderQueue.Clear();
             unit.GatherPhase = GatherPhase.None;
+            if (unit.Order == OrderKind.ReturnCargo) unit.ReturningCargo = false;
+            unit.ReturnCargoSource = -1;
             CancelAbility(unit);
             CancelStrike(unit);
             if (free && unit.TransitNode >= 0 && unit.TransitNode < Navigation.GroundCount
@@ -351,7 +438,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             unit.OrderSequence = command.Sequence;
             unit.ReturningToRest = false;
             unit.YieldFor = unit.YieldGoal = -1;
-            foreach (var yielding in Units.Where(u => u.YieldFor == id))
+            foreach (var yielding in ActiveUnits.Where(u => u.YieldFor == id))
             {
                 yielding.YieldFor = yielding.YieldGoal = -1;
                 yielding.Path.Clear(); yielding.Waypoint = 0; yielding.BlockedTicks = 10;
@@ -384,9 +471,9 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         // A squad's early arrivals can seal its remaining formation slots.
         // Exchange slots only within the same explicit order, and only when
         // the parked unit has a clear route to the unfinished slot.
-        foreach (var parked in Units.Where(u => waiting.YieldFor < 0 && u.Id != waiting.Id && u.Team == waiting.Team && u.Present
+        foreach (var parked in ActiveUnits.Where(u => waiting.YieldFor < 0 && u.Id != waiting.Id && u.Team == waiting.Team && u.Present
             && u.Goal < 0 && u.Target < 0 && u.SiteTarget < 0 && u.YieldFor < 0 && u.OrderSequence == waiting.OrderSequence
-            && u.OrderSequence >= 0 && route.Contains(u.Node) && !Units.Any(o => o.Goal == u.Node)))
+            && u.OrderSequence >= 0 && route.Contains(u.Node) && !ActiveUnits.Any(o => o.Goal == u.Node)))
         {
             var occupied = OccupiedNodes(parked.Id);
             var onward = Nav(parked).FindPath(parked.Node, waiting.Goal, occupied);
@@ -426,12 +513,12 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             return false;
         }
         var occupants = new Dictionary<int, SimUnit>();
-        foreach (var u in Units.Where(u => u.Present))
+        foreach (var u in ActiveUnits.Where(u => u.Present))
         {
             occupants.TryAdd(u.Node, u);
             if (u.TransitNode >= 0 && !u.GroundSegment) occupants.TryAdd(u.TransitNode, u);
         }
-        foreach (var other in Units.Where(Eligible))
+        foreach (var other in ActiveUnits.Where(Eligible))
         {
             // Assigned refuges stay stable while reachable. One that units
             // now block (an inherited or since occupied refuge) is replaced.
@@ -439,8 +526,8 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 && Nav(other).FindPath(other.Node, other.YieldGoal, OccupiedNodes(other.Id)).Count > 0))) continue;
             int cell = other.Node;
             if (!route.Contains(cell) || !Blocking(other)) continue;
-            var reserved = Units.Where(u => u.YieldGoal >= 0).Select(u => u.YieldGoal)
-                .Concat(Units.Where(u => u.Goal >= 0).Select(u => u.Goal)).ToHashSet();
+            var reserved = ActiveUnits.Where(u => u.YieldGoal >= 0).Select(u => u.YieldGoal)
+                .Concat(ActiveUnits.Where(u => u.Goal >= 0).Select(u => u.Goal)).ToHashSet();
             // The nearest refuge may lie past other standing friendly units
             // that could also give way. The one closest to it moves first; the
             // chain unwinds on later requests.
@@ -477,7 +564,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                     mover.Goal = giveUpRest ? refuge : resume;
                     // Keep existing refuges held for the new priority unit,
                     // instead of letting a dependent pin this blocker in place.
-                    foreach (var dependent in Units.Where(u => u.YieldFor == mover.Id)) dependent.YieldFor = waiting.Id;
+                    foreach (var dependent in ActiveUnits.Where(u => u.YieldFor == mover.Id)) dependent.YieldFor = waiting.Id;
                     mover.YieldFor = waiting.Id; mover.YieldGoal = refuge;
                     RebaseGround(mover); mover.FreeMovement = false;
                     mover.Path = Nav(mover).FindPath(mover.Node, refuge, occupied);
@@ -519,7 +606,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         if (waiting.Order is not (OrderKind.Move or OrderKind.AttackMove) || waiting.Target >= 0 || waiting.SiteTarget >= 0 || waiting.AttackMoveReturning || waiting.Goal < 0 || waiting.YieldFor >= 0) return false;
         var (gx,gz) = Navigation.Center(waiting.Goal);
         long remaining = DistanceSquared(waiting.X,waiting.Z,gx,gz);
-        foreach (var other in Units.Where(u => u.Id != waiting.Id && u.Team == waiting.Team && u.Present
+        foreach (var other in ActiveUnits.Where(u => u.Id != waiting.Id && u.Team == waiting.Team && u.Present
             && u.Goal >= 0 && u.Target < 0 && u.SiteTarget < 0 && !u.AttackMoveReturning && u.Order == waiting.Order && u.FreeMovement && u.YieldFor < 0
             && u.OrderSequence == waiting.OrderSequence).OrderBy(u => u.Id))
         {
@@ -535,7 +622,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             }
             return true;
         }
-        foreach (var parked in Units.Where(u => u.Id != waiting.Id && u.Team == waiting.Team && u.Present
+        foreach (var parked in ActiveUnits.Where(u => u.Id != waiting.Id && u.Team == waiting.Team && u.Present
             && u.Goal < 0 && u.Target < 0 && u.SiteTarget < 0 && !u.AttackMoveReturning && u.OrderSequence == waiting.OrderSequence
             && u.OrderSequence >= 0 && u.TransitNode < 0).OrderBy(u => DistanceSquared(waiting.X,waiting.Z,u.X,u.Z)).ThenBy(u => u.Id))
         {
@@ -572,10 +659,10 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         var self = except >= 0 && except < Units.Count ? Units[except] : null;
         int radius = self?.Definition.BodyRadiusMm ?? 350, height = self?.Definition.BodyHeightMm ?? 700;
         bool uniform = radius == 350;
-        foreach (var u in Units) if (uniform && u.Definition.BodyRadiusMm != 350) uniform = false;
+        if (uniform) foreach (var u in Units) if (u.Definition.BodyRadiusMm != 350) { uniform = false; break; }
         // Plain loops in the order the set was always filled: callers may enumerate it.
         var nodes = new HashSet<int>();
-        foreach (var other in candidates ?? Units)
+        foreach (var other in candidates ?? ActiveUnits)
         {
             if (other.Id == except || !other.Present) continue;
             nodes.Add(other.Node);
@@ -595,7 +682,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         using var time = SimProfiler.Time("CanReserveMovement");
         var (ax,az) = Navigation.Center(unit.Node); var (bx,bz) = Navigation.Center(to);
         var heights = Navigation.MovementHeights(unit.Node,to);
-        foreach (var other in Units.Where(u => u.Id != unit.Id && u.Present))
+        foreach (var other in ActiveUnits.Where(u => u.Id != unit.Id && u.Present))
         {
             var (cx,cz) = other.TransitNode >= 0 && !other.GroundSegment ? Navigation.Center(other.Node) : (other.X,other.Z);
             var (dx,dz) = other.TransitNode >= 0 && !other.GroundSegment ? Navigation.Center(other.TransitNode) : (other.X,other.Z);
@@ -630,10 +717,16 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         using var stepTime = SimProfiler.Time("step");
         CombatEvents.Clear();
         AbilityEvents.Clear();
+        HeroLevelEvents.Clear();
+        GlobalPowerEvents.Clear();
+        ExpireGlobalPowers();
+        UpdatePlacePowers();
         DestroyedSites.Clear();
         FoundationFailures.Clear();
         NewlyDefeated.Clear();
         PlaceCaptures.Clear();
+        PlacePowerEvents.Clear();
+        ExpireHeroEffects();
         var actions = Commands.Where(c => c.Tick == Tick).Select(c => (c.Sequence, Action: (Action)(() => Dispatch(c))))
             .Concat(ObstacleCommands.Where(c => c.Tick == Tick)
                 .Select(c => (c.Sequence, Action: (Action)(() => ApplyObstacle(c)))));
@@ -646,8 +739,11 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         using (SimProfiler.Time("ai")) UpdateAi();
         using (SimProfiler.Time("construction")) { UpdateConstruction(); UpdateRepairs(); }
         using (SimProfiler.Time("defenses")) UpdateDefenses();
-        using (SimProfiler.Time("production")) { UpdateUpgrades(); UpdateResearch(); UpdateProduction(); }
+        using (SimProfiler.Time("production")) { UpdateUpgrades(); UpdateResearch(); UpdateProduction(); UpdateWarpostFate(); }
         UpdateHeroAbilities();
+        UpdateElvenEffects();
+        UpdateEvilEffects();
+        UpdateHeroSkills();
         using (SimProfiler.Time("route rebase")) if (_navigationRevision != Navigation.Revision)
         {
             using var hit = SimProfiler.Time("route rebase hit");
@@ -656,7 +752,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             // may miss a shortcut a removed building opened, but a building going up on one side of a large map
             // no longer re-plans every moving unit on the other.
             var areas = Navigation.ChangedAreas.ToArray(); Navigation.ChangedAreas.Clear();
-            foreach (var unit in Units.Where(u => u.Present && u.Goal >= 0 && RouteMeetsChange(u,areas)))
+            foreach (var unit in ActiveUnits.Where(u => u.Present && u.Goal >= 0 && RouteMeetsChange(u,areas)))
             {
                 RebaseGround(unit);
                 unit.YieldFor = unit.YieldGoal = -1;
@@ -667,24 +763,30 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             }
             _navigationRevision = Navigation.Revision;
         }
-        foreach (var unit in Units)
+        foreach (var unit in ActiveUnits)
         {
             unit.PreviousFacing = unit.Facing;
             unit.Movement.Clear(); unit.Movement.Add(new(0,unit.X,unit.Y,unit.Z)); unit.MovementTick = Tick;
         }
         PrepareCombatPlanning();
-        foreach (var unit in Units)
+        foreach (var unit in ActiveUnits)
         {
             unit.Moving = unit.Attacking = false;
             if (unit.AvoidanceLockTicks > 0) unit.AvoidanceLockTicks--;
             if (unit.Health <= 0)
             {
-                unit.CargoMilli = 0; unit.ReturningCargo = false;
+                if (unit.DeathCleanupTick < 0) unit.DeathCleanupTick = Tick;
+                RememberHeroExperience(unit);
+                RememberHeroAbilities(unit);
+                unit.HerbsTargeting = false;
+                unit.Dazed = null; unit.TreeformAbility = null; unit.TreeformUntil = unit.TreeformExitUntil = unit.KnockbackUntil = unit.KnockbackRecoverUntil = -1;
+                EndCamouflage(unit);
+                unit.CargoMilli = 0; unit.ReturningCargo = false; unit.ReturnCargoSource = -1;
                 unit.GatherPhase = GatherPhase.None; unit.InsideSite = -1;
                 CancelAbility(unit);
                 CancelStrike(unit);
                 unit.Order = OrderKind.Idle; unit.OrderDestination = unit.OrderTarget = -1;
-                unit.OrderQueue.Clear();
+                unit.OrderQueue.Clear(); unit.HeldOrder = null;
                 unit.Target = unit.Goal = unit.AttackNode = unit.CombatTarget = unit.SiteTarget = unit.PlacementCell = -1;
                 unit.AutoEngage = false; unit.Path.Clear(); continue;
             }
@@ -700,21 +802,25 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 }
             }
             if (unit.ReturningToRest && unit.YieldFor < 0 && unit.Goal >= 0 && unit.Target < 0
-                && (!Nav(unit).CanStand(unit.Goal) || Units.Any(u => u.Id != unit.Id && u.Present
+                && (!Nav(unit).CanStand(unit.Goal) || ActiveUnits.Any(u => u.Id != unit.Id && u.Present
                     && (u.Goal == unit.Goal || (u.Goal < 0 && u.Node == unit.Goal)))))
             {
                 // An idle blocker has no explicit destination to defend. If a
                 // convoy parks in its old spot, settle in nearby free space.
                 var reserved = OccupiedNodes(unit.Id);
-                reserved.UnionWith(Units.Where(u => u.Id != unit.Id && u.Present && u.Goal >= 0).Select(u => u.Goal));
+                reserved.UnionWith(ActiveUnits.Where(u => u.Id != unit.Id && u.Present && u.Goal >= 0).Select(u => u.Goal));
                 int rest = unit.TransitNode < 0 && !reserved.Contains(unit.Node) ? unit.Node
                     : Nav(unit).Nearest(unit.Goal,reserved,connectedTo: unit.Node);
                 unit.Goal = rest >= 0 ? rest : unit.Node;
                 unit.Path = Nav(unit).FindPath(unit.Node,unit.Goal); unit.Waypoint = 0;
             }
             if (unit.Cooldown > 0) unit.Cooldown--;
+            if (UpdateNatureControl(unit)) continue;
+            AutoHealHerbs(unit);
             if (UpdateAbility(unit)) continue;
+            if (FollowThrough(unit)) continue;
             using (SimProfiler.Time("unit gather")) UpdateGather(unit);
+            UpdateStructureInteraction(unit);
             using (SimProfiler.Time("unit construction")) ApproachConstruction(unit);
             using (SimProfiler.Time("unit orders")) UpdatePersistentOrder(unit);
             bool spent;
@@ -741,12 +847,14 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 using var replanTime = SimProfiler.Time("blocked replan");
                 RebaseGround(unit);
                 int start = unit.Node;
-                var blocked = OccupiedNodes(unit.Id);
-                blocked.Remove(start);
                 bool avoid = !(unit.FreeMovement && unit.Definition.BodyRadiusMm > 350);
+                // Wide-ground followers avoid bodies continuously. Their replan does not consume an occupancy
+                // map; building one here needlessly rasterized every body for every blocked unit's retry.
+                var blocked = avoid ? OccupiedNodes(unit.Id) : null;
+                blocked?.Remove(start);
                 // A unit whose last replan already failed keeps no route to repair; it retries on a smaller budget.
                 bool routed = unit.Path.Count > 0 && unit.Path[^1] == unit.Goal;
-                unit.Path = (avoid && unit.YieldGoal < 0 ? RepairRoute(unit,start,blocked) : null)
+                unit.Path = (avoid && unit.YieldGoal < 0 ? RepairRoute(unit,start,blocked!) : null)
                     ?? PathFromCurrentPosition(unit,unit.YieldGoal >= 0 ? unit.YieldGoal : unit.Goal,avoid ? blocked : null,
                         routed ? BlockedReplanBudget : RetryReplanBudget);
                 unit.Waypoint = 0; unit.BlockedTicks = 0;
@@ -809,7 +917,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 if (unit.Node < Navigation.GroundCount && transit < Navigation.GroundCount)
                     ny = Navigation.GroundHeight(nx, nz);
                 if (!ClearCombatStep(unit,nx,ny,nz)) break;
-                using (SimProfiler.Time("body overlap")) if (Units.Any(other => other.Id != unit.Id && other.Present
+                using (SimProfiler.Time("body overlap")) if (ActiveUnits.Any(other => other.Id != unit.Id && other.Present
                     && BodyOverlapAt(unit,nx,ny,nz,other))) break;
                 unit.TransitNode = transit; unit.TravelProgress = progress;
                 unit.X = nx; unit.Z = nz; unit.Y = ny; unit.Moving = true; budget -= movement;
@@ -836,13 +944,18 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 else unit.BlockedTicks = unit.Moving ? 0 : unit.BlockedTicks + 1;
             }
         }
+        foreach (var unit in ActiveUnits.Where(u => u.Camouflaged && u.Moving)) EndCamouflage(unit);
         MonitorCombatTraffic();
         using (SimProfiler.Time("facing")) FaceMovement();
         using (SimProfiler.Time("projectiles")) AdvanceProjectiles();
+        UpdateDwarfEffects();
+        UpdateGlobalPowers();
         using (SimProfiler.Time("places of power")) UpdatePlacesOfPower();
         using (SimProfiler.Time("regeneration")) UpdateRegeneration();
         using (SimProfiler.Time("outcome")) UpdateOutcome();
         Tick++;
+        foreach (var unit in ActiveUnits) unit.ShieldBreaks.RemoveAll(s => s.Until <= Tick || !unit.Present);
+        _roster.RetireSettledCorpses(Tick-1);
     }
 
     public static long DistanceSquared(int ax, int az, int bx, int bz)
@@ -856,7 +969,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         var text = Rules.Hash + ":" + Tick + ":" + Navigation.Revision + ":" + string.Join(',', Navigation.ObstacleIds.Where(Navigation.IsObstacleActive))
             + ":" + string.Join(";", Units.Select(u => $"{u.Id},{u.Team},{u.X},{u.Y},{u.Z},{u.Node},{u.TransitNode},{u.TravelProgress},{u.Health},{u.Target},{u.Cooldown},{u.Waypoint},{u.Goal},{u.BlockedTicks},{u.YieldFor},{u.YieldGoal},{u.OrderSequence},{u.ReturningToRest},{u.FreeMovement},{u.GroundSegment},{u.GroundStartX},{u.GroundStartY},{u.GroundStartZ},{u.AvoidanceTicks},{u.AttackNode},{u.CombatTarget},{u.CombatPlanTick},{u.CombatWaiting},{u.AutoEngage},{u.Order},{u.OrderDestination},{u.OrderTarget},{u.PatrolStart},{u.PatrolEnd},{u.PatrolForward},{u.GuardPlanTick},{u.GuardOrigin}:{string.Join(',', u.Path)}:{string.Join('|',u.OrderQueue.Select(o => $"{o.Kind},{o.Cell},{o.Target},{o.Sequence}"))}:{u.HeldOrder?.Kind},{u.HeldOrder?.Cell},{u.HeldOrder?.Target},{u.HeldOrder?.Sequence},{u.OrderCell}"));
         text += ":"+string.Join(';',Units.Select(u => $"{u.Definition.Id},{u.HealthMilli},{u.KillCount},{u.Walking},{u.AttackStartTick},{u.AttackVictim},{u.AttackVariant},{u.AttackSerial},{u.NextHit},{u.AvoidanceSide},{u.AvoidanceLockTicks},{u.AttackMoveOrigin},{u.AttackMoveForward},{u.AttackMoveRouteStart},{u.AttackMoveReturning},{u.AttackMoveIgnoredTarget},{u.AttackMoveIgnoreUntil},{u.IdleGuardOrigin},{u.IdleGuardReturning},{u.LastStopTick}"));
-        text += ":"+string.Join(';',Units.Select(u => $"{u.Facing},{u.PreviousFacing}"));
+        text += ":"+string.Join(';',Units.Select(u => $"{u.Facing},{u.PreviousFacing},{u.AttackAimTarget},{u.AttackAimDirection},{u.AttackAimTick}"));
         text += ":combat-planning:"+string.Join(';',Units.Select(u => $"{u.CombatRequestTick},{u.CombatRequestRenewedTick},{u.CombatSearchTick},{u.CombatAlternativeAttempt}"));
         text += ":combat-traffic:"+string.Join(';',Units.Select(u => $"{u.CombatMotionTick},{u.CombatMotionX},{u.CombatMotionZ},{u.CombatMotionTravel},{u.CombatTrafficQueued},{u.CombatTrafficPauseUntil}"));
         text += ":combat-flank:"+string.Join(';',Units.Select(u=>$"{u.CombatFlankTarget},{u.CombatFlankUntil},{u.CombatFlankTried}"));
@@ -864,21 +977,37 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         text += ":siege-commitment:"+string.Join(',',Units.Select(u=>u.AiSiegeObjective));
         text += ":pace:"+string.Join(';',_walkingTeams.OrderBy(p => p.Key).Select(p => $"{p.Key},{p.Value}"));
         text += ":abilities:"+string.Join(';',Units.Select(u => $"{u.AbilitySlot},{u.CastStartTick},{u.CastSerial},{u.CastApplied}:{string.Join(',',u.AbilityReadyAt)}"));
+        if (Units.Any(u => u.HeldOrder?.Kind == OrderKind.UseAbility || u.OrderQueue.Any(o => o.Kind == OrderKind.UseAbility)))
+            text += ":pending-abilities:"+string.Join(';',Units.Select(u =>
+                $"{u.HeldOrder?.AbilitySlot},{u.HeldOrder?.TargetX},{u.HeldOrder?.TargetZ}:"
+                +string.Join('|',u.OrderQueue.Select(o => $"{o.AbilitySlot},{o.TargetX},{o.TargetZ}"))));
         text += ":ring:"+string.Join(';',Units.Select(u => $"{u.RingActive}:{string.Join(',',u.AbilityRechargeCarry)}"));
+        text += ":rangers:"+string.Join(';',Units.Select(u => $"{u.Camouflaged}:{u.TechniqueSightPpm}"));
+        text += ElvenDigest();
+        text += NatureDigest();
+        text += HeroSkillsDigest();
+        text += EvilDigest();
+        text += HeroExperienceDigest();
+        text += HeroAbilityPurchasesDigest();
         if (Units.Any(u => u.MissileWardUntil >= 0)) text += ":ward:"+string.Join(';',Units.Select(u => $"{u.MissileWardPpm},{u.MissileWardUntil}"));
         if (Units.Any(u => u.BonusArmorMilli != 0)) text += ":bonus-armor:"+string.Join(';',Units.Select(u => u.BonusArmorMilli));
+        if (Units.Any(u => u.TerrorArmorMilli != 0)) text += ":terror:"+string.Join(';',Units.Select(u => u.TerrorArmorMilli));
         text += EconomyDigest();
         text += FateDigest();
+        text += GlobalPowersDigest();
+        text += FactionDigest();
         text += ConstructionDigest();
         text += ProductionDigest();
         text += PlacementDigest();
         text += UpgradeDigest();
         text += ResearchDigest();
+        text += DwarfEffectsDigest();
         text += PlacesDigest();
         text += SiegeDigest();
         text += DefenseDigest();
         text += OutcomeDigest();
         text += AiDigest();
+        text += EvilUpgradesDigest();
         text += ":"+_projectileSequence+":"+string.Join(';',Projectiles);
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
     }

@@ -24,11 +24,13 @@ public partial class CommandPanel : Control
     private readonly Dictionary<OrderKind,Button> _buttons = [];
     private readonly Dictionary<int,(Button Button,ColorRect Health)> _portraits = [];
     private readonly Dictionary<string,Texture2D> _art = [];
+    private readonly Dictionary<string,Vector2> _cursorHotspots = [];
     private readonly Button[] _groups = new Button[10];
     private Control _content = null!, _roster = null!;
+    private ScrollContainer _rosterScroll = null!;
     private Control _single = null!;
     private Button _singlePortrait = null!;
-    private TextureRect _typeIcon = null!, _statsBackground = null!;
+    private TextureRect _typeIcon = null!, _statsBackground = null!, _singleHealthFrame = null!;
     private ColorRect _singleHealth = null!;
     private Label _singleHealthText = null!, _attackName = null!, _attackValue = null!, _armorName = null!, _armorValue = null!, _victoriesValue = null!;
     // Build-67: the selected unit's order, beside its portrait. Build-70 drops the activity line under the health bar
@@ -47,6 +49,7 @@ public partial class CommandPanel : Control
     private BattleMinimap _map = null!;
     private string _rosterKey = "";
     public string? DisplayedCursorName { get; private set; }
+    public Vector2 DisplayedCursorHotspot { get; private set; }
     public double ScalePercent { get; private set; } = 100;
     public float EffectiveScale { get; private set; }
     public bool ManageCursor { get; set; } = true;
@@ -99,17 +102,16 @@ public partial class CommandPanel : Control
         (_populationIcon,_populationText) = ResourceCell(0,10,"Population · units / capacity",52);
         (_foodIcon,_foodText) = ResourceCell(65,21,"Food",40);
         (_oreIcon,_oreText) = ResourceCell(130,24,"Ore",40);
-        // Build-58: Fate points pay for the heroes Gimli, Aragorn, Legolas and Gandalf; build-76 earns them in battle (tooltip: progress).
-        (_fateIcon,_fateText) = ResourceCell(198,13,"Fate · pays for heroes (at most 20)",16);
-        _roster = new Control { Position = new(265,84),Size = new(505,104),MouseFilter = MouseFilterEnum.Ignore }; _content.AddChild(_roster);
+        CreateSelectionRoster();
         _single = new Control { Position = new(265,59),Size = new(505,129),Visible = false,MouseFilter = MouseFilterEnum.Ignore }; _content.AddChild(_single);
-        _singlePortrait = new Button { Size = new(62,62),ExpandIcon = true,FocusMode = FocusModeEnum.None };
+        _singlePortrait = new Button { Size = new(52,52),ExpandIcon = true,FocusMode = FocusModeEnum.None };
         Skin(_singlePortrait); WirePortrait(_singlePortrait,() => _detailUnit); _single.AddChild(_singlePortrait);
-        _single.AddChild(Text("Health",new(0,66),new(248,18),12));
-        var healthFrame = new Panel { Position = new(0,85),Size = new(248,16),MouseFilter = MouseFilterEnum.Ignore };
-        healthFrame.AddThemeStyleboxOverride("panel",Border(new Color("282418"),new Color("bda56b"))); _single.AddChild(healthFrame);
-        _singleHealth = new ColorRect { Position = new(2,87),Size = new(244,12),Color = new Color("48972e"),MouseFilter = MouseFilterEnum.Ignore }; _single.AddChild(_singleHealth);
-        _singleHealthText = Counter("",new(0,85),new(248,16),11,HorizontalAlignment.Center); _single.AddChild(_singleHealthText);
+        _single.AddChild(Text("Health",new(3,49),new(SelectedBarWidth,16),12));
+        _singleHealthFrame = new TextureRect { Position = new(1,66),Size = new(SelectedBarWidth+6,18),
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Ignore }; _single.AddChild(_singleHealthFrame);
+        _singleHealth = new ColorRect { Position = new(4,69),Size = new(SelectedBarWidth,12),Color = new Color("48972e"),MouseFilter = MouseFilterEnum.Ignore }; _single.AddChild(_singleHealth);
+        _singleHealthText = Counter("",new(4,69),new(SelectedBarWidth,12),11,HorizontalAlignment.Center); _single.AddChild(_singleHealthText);
+        CreateHeroExperience();
         _singleOrder = Text("",new(70,24),new(196,40),14); _singleOrder.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _singleOrder.VerticalAlignment = VerticalAlignment.Top; _singleOrder.AddThemeConstantOverride("line_spacing",-3); _single.AddChild(_singleOrder);
         _typeIcon = new TextureRect { Position = new(270,28),Size = new(47,48),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Stop }; _single.AddChild(_typeIcon);
@@ -133,7 +135,7 @@ public partial class CommandPanel : Control
         {
             int group = slot;
             var button = new Button { Position = new(265+slot*50,33),Size = new(45,22),Text = slot == 9 ? "0" : (slot+1).ToString(),FocusMode = FocusModeEnum.None,ToggleMode = true };
-            Skin(button); button.Pressed += () => GroupChosen?.Invoke(group); _groups[slot] = button; _content.AddChild(button);
+            AtlasButton(button); button.Pressed += () => GroupChosen?.Invoke(group); _groups[slot] = button; _content.AddChild(button);
         }
         for (int index = 0; index < Commands.Length; index++)
         {
@@ -163,6 +165,8 @@ public partial class CommandPanel : Control
         CreateResearchControls();
         CreateMatchControls();
         CreateSandboxTabs();
+        CreateFateControls();
+        CreatePlacePowerControls();
         _hint = Text("",new(260,-27),new(760,24),13); _content.AddChild(_hint);
         CreateTooltip();
         var config = new ConfigFile();
@@ -197,12 +201,16 @@ public partial class CommandPanel : Control
         _resources.AddChild(icon); _resources.AddChild(text); return (icon,text);
     }
 
-    /// <summary>Skirmish resource strip: population, food and ore, in the original icon order, then Fate.</summary>
-    public void ShowResources(bool visible,bool armies = true) { _resources.Visible = visible; _armies.Visible = !visible && armies; }
+    /// <summary>Skirmish resources and the central Fate orb.</summary>
+    public void ShowResources(bool visible,bool armies = true)
+    {
+        _resources.Visible = _fateButton.Visible = visible; _armies.Visible = !visible && armies;
+        if (!visible) CloseGlobalAbilities();
+    }
     public void SetResources(int population,int capacity,int food,int ore,int fate = 0,string? fateTip = null)
     {
         _populationText.Text = $"{population}/{capacity}"; _foodText.Text = food.ToString(); _oreText.Text = ore.ToString(); _fateText.Text = fate.ToString();
-        if (fateTip != null && _fateText.TooltipText != fateTip) _fateText.TooltipText = _fateIcon.TooltipText = fateTip;
+        if (fateTip != null && _fateButton.TooltipText != fateTip) _fateText.TooltipText = _fateIcon.TooltipText = _fateButton.TooltipText = fateTip;
     }
     public string FateReadout => _fateText.Text;
     public string FateTooltip => _fateText.TooltipText;
@@ -236,6 +244,18 @@ public partial class CommandPanel : Control
         button.AddThemeColorOverride("icon_disabled_color",new Color(.4f,.4f,.4f,.65f));
     }
 
+    /// <summary>Controls drawn over existing console art need no rectangular button frame.</summary>
+    private static void AtlasButton(Button button)
+    {
+        foreach (string state in new[] {"normal","hover","pressed","hover_pressed","disabled","focus"})
+            button.AddThemeStyleboxOverride(state,new StyleBoxEmpty());
+        button.AddThemeColorOverride("font_color",new Color("fff3cb"));
+        button.AddThemeColorOverride("font_hover_color",new Color("fff8e6"));
+        button.AddThemeColorOverride("font_pressed_color",new Color("d9c48f"));
+        button.AddThemeColorOverride("font_hover_pressed_color",new Color("fff8e6"));
+        button.AddThemeColorOverride("font_focus_color",new Color("fff3cb"));
+    }
+
     private void WirePortrait(Button button,Func<int> id)
     {
         // Mouse modifiers and double-click belong to the actual click event.
@@ -249,7 +269,30 @@ public partial class CommandPanel : Control
 
     private static StyleBoxFlat Border(Color fill,Color edge) => new() { BgColor = fill,BorderColor = edge,BorderWidthLeft = 2,BorderWidthRight = 2,BorderWidthTop = 2,BorderWidthBottom = 2 };
 
-    public void LoadArtwork(string cache,SimWorld world)
+    /// <summary>Build-133: the Good console art each Evil twin replaces (console_g_x with console_e_x, and the same for the
+    /// tooltip parchment and cursors), kept so the Sandbox can give a player of either side its own console.</summary>
+    private readonly Dictionary<string,(Texture2D Texture,Vector2? Hotspot)> _goodArt = [];
+    public bool EvilSkin { get; private set; }
+
+    /// <summary>Draws the console in the side's art: Evil where the pack has the Evil twin of a Good asset, else Good.</summary>
+    public void UseSkin(bool evil)
+    {
+        if (_goodArt.Count == 0)
+            foreach (var key in _art.Keys.Where(k => k.Contains("_g_") || k == "console_stats_background_good").ToArray())
+                _goodArt[key] = (_art[key],_cursorHotspots.TryGetValue(key,out var hotspot) ? hotspot : null);
+        foreach (var (key,original) in _goodArt)
+        {
+            string twin = key == "console_stats_background_good" ? "console_stats_background_evil" : key.Replace("_g_","_e_");
+            bool swap = evil && _art.TryGetValue(twin,out _);
+            _art[key] = swap ? _art[twin] : original.Texture;
+            if (swap && _cursorHotspots.TryGetValue(twin,out var swapped)) _cursorHotspots[key] = swapped;
+            else if (original.Hotspot is { } restored) _cursorHotspots[key] = restored;
+        }
+        EvilSkin = evil;
+        ApplySkin();
+    }
+
+    public void LoadArtwork(string cache,SimWorld world,bool evil = false)
     {
         _rules = world.Rules; _world = world;
         var index = JsonDocument.Parse(System.IO.File.ReadAllText(System.IO.Path.Combine(cache,"interface/index.json"))).RootElement;
@@ -258,9 +301,21 @@ public partial class CommandPanel : Control
             string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(cache,asset.Value.GetProperty("file").GetString()!));
             if (!path.StartsWith(System.IO.Path.GetFullPath(cache)+System.IO.Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Interface asset escapes cache");
             using var image = Image.LoadFromFile(path); _art[asset.Name] = ImageTexture.CreateFromImage(image);
+            if (asset.Value.TryGetProperty("cursor_hotspot",out var hotspot))
+                _cursorHotspots[asset.Name] = new(hotspot[0].GetSingle(),hotspot[1].GetSingle());
         }
+        UseSkin(evil);
+        foreach (var command in Commands) _buttons[command.Kind].Icon = _art[command.Icon];
+        LoadTooltipArt();
+        _map.Configure(world);
+    }
+
+    private void ApplySkin()
+    {
         _background.Texture = _art["console_g_background"];
         _statsBackground.Texture = _art["console_stats_background_good"];
+        _singleHealthFrame.Texture = _singleExperienceFrame.Texture = _art["console_g_doublebarbackground"];
+        _singleExperience.Texture = _art["console_g_staminabar"];
         _menu.TextureNormal = _art["console_g_menumenu"];
         // The button shows the army's pace: despite their names, console_g_run draws a walking figure and
         // console_g_run_highlighted a running one (build-61; they were the wrong way round).
@@ -269,10 +324,9 @@ public partial class CommandPanel : Control
         _populationIcon.Texture = _art.GetValueOrDefault("console_g_resourcepopulation");
         _foodIcon.Texture = _art.GetValueOrDefault("console_g_resourcefood");
         _oreIcon.Texture = _art.GetValueOrDefault("console_g_resourcewater");
-        _fateIcon.Texture = _art.GetValueOrDefault("console_g_powerchit");
-        foreach (var command in Commands) _buttons[command.Kind].Icon = _art[command.Icon];
-        LoadTooltipArt();
-        _map.Configure(world);
+        _fateIcon.Texture = _art.GetValueOrDefault("console_g_powerbutton") ?? _art.GetValueOrDefault("console_g_powerchit");
+        foreach (var command in Commands) if (_buttons.TryGetValue(command.Kind,out var button) && _art.TryGetValue(command.Icon,out var icon)) button.Icon = icon;
+        if (_world != null) LoadTooltipArt();
     }
 
     /// <summary>Neutral objects on the minimap with their original marker art, positioned in map millimetres.</summary>
@@ -283,17 +337,25 @@ public partial class CommandPanel : Control
     public BattleMinimap Minimap => _map;
     public Texture2D? Art(string name) => _art.GetValueOrDefault(name);
 
-    public static string OrderName(OrderKind kind) => kind switch { OrderKind.AttackMove => "Attack-move",OrderKind.HoldGround => "Hold Position",OrderKind.ForceAttack => "Force Attack",OrderKind.ToggleWalkRun => "Walk / Run",OrderKind.UseAbility => "Greater Kingsfoil",OrderKind.PlaceBuilding => "Build",_ => kind.ToString() };
+    public static string OrderName(OrderKind kind) => kind switch { OrderKind.AttackMove => "Attack-move",OrderKind.HoldGround => "Hold Position",OrderKind.ForceAttack => "Force Attack",OrderKind.ToggleWalkRun => "Walk / Run",OrderKind.UseAbility => "Greater Kingsfoil",OrderKind.PlaceBuilding => "Build",OrderKind.ApproachStructure => "Move to building",OrderKind.ReturnCargo => "Return resources",_ => kind.ToString() };
     /// <summary>Portraits of units the source does not name, such as the Sandbox's training dummies (their model's).</summary>
     public static readonly Dictionary<string,string> ExtraPortraits = [];
     public static string PortraitName(string name) => ExtraPortraits.TryGetValue(name,out var extra) ? extra : name switch { "Aragorn" => "Portrait_G_Aragorn","Frodo" => "Portrait_G_Frodo","Elf Knight" or "Elven Knight" => "Portrait_G_Elven_Knight","Elven Archer" => "Portrait_G_Elven_Archer","Human Worker" => "Portrait_G_Human_Worker","Gondor Swordsman" => "Portrait_G_Gondor_Swordsman","Dwarf Axethrower" => "Portrait_G_Dwarven_Axethrower",
         "Rohan Rider" => "Portrait_G_Rohan_Rider","Dwarf Shieldbreaker" => "Portrait_G_Dwarven_Shieldbreaker","Ranger" => "Portrait_G_Ranger",
         // Build-58: Tier 3-4 units and the Fate heroes (source Units Portrait records).
-        "Elven Lightbearer" => "Portrait_G_Elven_Lightbringer","Beorning" => "Portrait_G_Beorning","Huorn" => "Portrait_G_Huorn",
-        "Gimli" => "Portrait_G_Gimli","Legolas" => "Portrait_G_Legolas","Gandalf the Grey" => "Portrait_G_Gandalf",_ => "Portrait_E_Uruk_Hai" };
+        "Elven Lightbearer" => "Portrait_G_Elven_Lightbringer","Beorning" => "Portrait_G_Beorning","Bear" => "Portrait_G_Bear","Huorn" => "Portrait_G_Huorn",
+        "Gimli" => "Portrait_G_Gimli","Legolas" => "Portrait_G_Legolas","Gandalf the Grey" => "Portrait_G_Gandalf",
+        // Build-133, the Evil side (the source names the Haradrim unit Slayer and Qamara Saleme).
+        "Goblin Slave" => "Portrait_E_Goblin_Slave","Goblin Spearman" => "Portrait_E_Goblin_Spearman","Slave Master" => "Portrait_E_Slave_Master",
+        "Orc Slasher" => "Portrait_E_Orc_Slasher","Orc Bowman" => "Portrait_E_Orc_Bowman","Warg Rider" => "Portrait_E_Warg_Rider",
+        "Giant Spider" => "Portrait_E_Giant_Spider","Wraith" => "Portrait_E_Wraith","Haradrim Slayer" => "Portrait_E_Haradrim_Assassin",
+        "Troll Stonehurler" => "Portrait_E_Troll_Stonehurler","Troll Bonecleaver" => "Portrait_E_Troll_Bonecleaver","Gollum" => "Portrait_E_Gollum",
+        "Nazgul King" => "Portrait_E_Nazgul_King","Saleme" => "Portrait_E_Qamara","Grishnakh" => "Portrait_E_Grishnakh","Saruman" => "Portrait_E_Saruman",
+        _ => "Portrait_E_Uruk_Hai" };
 
     public void Refresh(IReadOnlyList<SimUnit> units,Func<int,string> name,OrderKind? pending,bool paused,IReadOnlyList<int[]>? groups = null,int allies = 0,int enemies = 0,bool walking = false,int tick = 0,int pendingAbilitySlot = -1)
     {
+        _map.ViewerTeam = PlayerTeam;
         bool available = units.Count > 0;
         // Each control's visibility has one owner and is assigned once per frame: hiding a
         // button between a press and its release (separate frames) would drop the click.
@@ -303,7 +365,7 @@ public partial class CommandPanel : Control
         bool observing = PlayerTeam < 0;
         _match.Visible = _matchMap.Visible = observing; _walkRun.Visible = !observing;
         RefreshAbilities(units,pending,tick,pendingAbilitySlot);
-        _single.Visible = single; _roster.Visible = !single;
+        _single.Visible = single; _rosterScroll.Visible = !single;
         _title.Position = single ? new(335,59) : new(265,59); _title.Size = single ? new(435,22) : new(505,22);
         // Build-67: each unit's order readout. A single unit shows its order beside the portrait; a group's title stays
         // empty. Portrait tooltips carry each full readout, what the unit is doing included.
@@ -324,6 +386,8 @@ public partial class CommandPanel : Control
         string key = string.Join(',',units.Select(u => u.Id));
         if (_rosterKey != key)
         {
+            bool sameArmy = units.Count > 1 && units.All(u => _portraits.ContainsKey(u.Id));
+            if (!sameArmy) _rosterScroll.ScrollVertical = 0;
             _rosterKey = key;
             foreach (Node child in _roster.GetChildren()) { _roster.RemoveChild(child); child.QueueFree(); } _portraits.Clear();
             for (int index = 0; index < units.Count; index++)
@@ -337,6 +401,7 @@ public partial class CommandPanel : Control
                 var bar = new ColorRect { Position = empty.Position,Size = new(46,4),Color = new Color("69ae63"),MouseFilter = MouseFilterEnum.Ignore };
                 _roster.AddChild(bar); _portraits[id] = (portrait,bar);
             }
+            _roster.CustomMinimumSize = new(496,Math.Max(0,((units.Count+9)/10)*53-3));
         }
         foreach (var unit in units)
         {
@@ -345,6 +410,7 @@ public partial class CommandPanel : Control
             portrait.Health.Color = new Color(unit.Team == PlayerTeam ? "69ae63" : "d05b4c");
             var readout = readouts.GetValueOrDefault(unit.Id);
             portrait.Button.TooltipText = $"{name(unit.Id)} #{unit.Id+1} · {unit.Health}/{unit.MaxHealth}"
+                + (unit.Definition.Hero ? "\n"+HeroExperienceText.From(unit).Tooltip : "")
                 + (readout == null ? "" : $"\n{readout.Headline}\n{readout.Activity}"+(readout.Queue != "" ? "\n"+readout.Queue : "")
                     + (readout.Role != "" ? "\n"+readout.Role : ""))
                 + $"\nAttack {stats.Attack}{stats.AttackBonus} per hit · Armor {stats.Armor}{stats.ArmorBonus} · Victories {stats.Victories}"
@@ -359,9 +425,10 @@ public partial class CommandPanel : Control
                 _armorName.TooltipText = _armorValue.TooltipText = stats.ArmorTip;
                 ShowBonus(_attackBonus,stats.AttackBonus,stats.AttackTip); ShowBonus(_armorBonus,stats.ArmorBonus,stats.ArmorTip);
                 RefreshStatusBar(unit,name);
+                RefreshHeroExperience(unit);
                 _singleHealthText.Text = stats.Health;
                 _singleHealth.Color = new Color(unit.Team == PlayerTeam ? "48972e" : "b84c3c");
-                _singleHealth.Size = new(244*Math.Clamp(unit.HealthMilli/(float)(unit.MaxHealth*1000L),0,1),12);
+                _singleHealth.Size = new(SelectedBarWidth*Math.Clamp(unit.HealthMilli/(float)(unit.MaxHealth*1000L),0,1),12);
             }
         }
         foreach (var (kind,button) in _buttons)
@@ -383,17 +450,22 @@ public partial class CommandPanel : Control
         if (pending != OrderKind.UseAbility) UpdateCursor(pending);
     }
 
-    public void UpdateCursor(OrderKind? pending,bool? validAbilityTarget = null,bool overInterface = false)
+    public void UpdateCursor(OrderKind? pending,bool? validAbilityTarget = null,bool overInterface = false,string? abilityCursor = null)
     {
         if (!ManageCursor) return;
         string? cursor = overInterface ? null : pending switch {
-            OrderKind.UseAbility => validAbilityTarget == false ? "cursor_g_negative" : "cursor_g_greater_kingsfoil",
+            OrderKind.UseAbility or OrderKind.UseGlobalPower or OrderKind.UsePlacePower => validAbilityTarget == false ? "cursor_g_negative"
+                : abilityCursor != null && _art.ContainsKey(abilityCursor) ? abilityCursor : "cursor_g_greater_kingsfoil",
             OrderKind.Move => "cursor_g_move",OrderKind.Guard => "cursor_g_guard",OrderKind.Patrol => "cursor_g_patrol",
             OrderKind.AttackMove => "cursor_g_attack_move",OrderKind.Attack or OrderKind.ForceAttack => "cursor_g_force_attack",_ => null };
         if (DisplayedCursorName == cursor) return;
         DisplayedCursorName = cursor;
-        if (cursor != null && _art.TryGetValue(cursor,out var texture)) Input.SetCustomMouseCursor(texture,Input.CursorShape.Arrow,new Vector2(texture.GetWidth()/2f,texture.GetHeight()/2f));
-        else Input.SetCustomMouseCursor(null);
+        if (cursor != null && _art.TryGetValue(cursor,out var texture))
+        {
+            DisplayedCursorHotspot = _cursorHotspots.GetValueOrDefault(cursor,new Vector2(texture.GetWidth()/2f,texture.GetHeight()/2f));
+            Input.SetCustomMouseCursor(texture,Input.CursorShape.Arrow,DisplayedCursorHotspot);
+        }
+        else { DisplayedCursorHotspot = Vector2.Zero; Input.SetCustomMouseCursor(null); }
     }
 
     public override void _ExitTree()
@@ -409,38 +481,50 @@ public partial class CommandPanel : Control
     /// <summary>Numbers in tooltips read with a decimal point whatever the system's language.</summary>
     private static readonly System.Globalization.CultureInfo Invariant = System.Globalization.CultureInfo.InvariantCulture;
 
+    public static SimUnit? AbilitySource(IEnumerable<SimUnit> units,int team)
+        => units.All(u => u.Team == team) ? units.OrderByDescending(u => u.Definition.Hero).ThenBy(u => u.Id)
+            .FirstOrDefault(u => u.Definition.Abilities?.Length > 0) : null;
+
     private void RefreshAbilities(IReadOnlyList<SimUnit> units,OrderKind? pending,int tick,int pendingSlot)
     {
-        var hero = units.All(u => u.Team == PlayerTeam) ? units.FirstOrDefault(u => u.Definition.Abilities?.Length > 0) : null;
+        var hero = AbilitySource(units,PlayerTeam);
         for (int slot = 0; slot < 4; slot++)
         {
             var button = _abilities[slot]; var ability = hero?.Ability(slot);
-            button.Visible = ability != null;
+            button.Visible = ability != null && !BuildMenuOpen;
             if (ability == null) continue;
             int remaining = Math.Max(0,hero!.AbilityReadyAt[slot]-tick);
             string key = "QWER"[slot].ToString();
             button.Icon = _art.GetValueOrDefault(ability.Icon);
             bool unsimulated = ability.Kind == AbilityKind.Unsimulated;
-            button.Disabled = ability.Passive || unsimulated || remaining > 0 || hero.Casting;
-            button.SetPressedNoSignal(ability.Kind == AbilityKind.Ring ? hero.RingActive : !ability.Passive && pending == OrderKind.UseAbility && pendingSlot == slot);
-            button.AddThemeColorOverride("icon_disabled_color",ability.Passive && !unsimulated ? Colors.White : new Color(.6f,.6f,.6f,1));
-            _abilityLabels[slot].Text = remaining > 0 && !ability.Passive ? $"{remaining/20f:0.0}s" : "";
-            _abilityHotkeys[slot].Text = ability.Passive || unsimulated ? "" : key;
+            bool researched = hero.AbilityEnabled(ability);
+            bool purchasing = !hero.AbilityPurchased(ability);
+            button.Disabled = purchasing ? unsimulated || _world == null || !_world.CanPurchaseAbility(PlayerTeam,hero.Id,slot,out _)
+                : !researched || ability.Passive || unsimulated || remaining > 0 && !(ability.Kind == AbilityKind.SatchelCharge && _world != null && _world.Satchels.Any(b => b.Owner == hero.Id))
+                    || hero.Casting && !(ability.Kind == AbilityKind.HealingHerbs && hero.RedirectableHerbs) || hero.NatureLocked(tick)
+                    || _world != null && !_world.CanAffordAbility(hero,ability)
+                    || ability.ActivateFateCost > 0 && !(_world != null && _world.Economies.TryGetValue(PlayerTeam,out var bank) && bank.Fate >= ability.ActivateFateCost);
+            button.SetPressedNoSignal(ability.Kind == AbilityKind.Camouflage ? hero.Camouflaged : ability.Kind == AbilityKind.Sneak ? hero.Sneaking : ability.Kind == AbilityKind.Ring ? hero.RingActive : !ability.Passive && pending == OrderKind.UseAbility && pendingSlot == slot);
+            button.AddThemeColorOverride("icon_disabled_color",ability.Passive && researched && !unsimulated ? Colors.White : new Color(.35f,.35f,.35f,1));
+            button.AddThemeColorOverride("icon_normal_color",purchasing ? new Color(.55f,.55f,.55f,1) : Colors.White);
+            _abilityLabels[slot].Text = purchasing ? $"{ability.PurchaseFateCost} Fate" : remaining > 0 && !ability.Passive ? $"{remaining/20f:0.0}s" : "";
+            _abilityHotkeys[slot].Text = ability.Passive && !purchasing || unsimulated ? "" : key;
             _abilityRecharge[slot].Size = new(54,ability.RechargeTicks > 0 ? 54*Math.Clamp(remaining/(float)ability.RechargeTicks,0,1) : 0);
-            button.TooltipText = ability.Kind switch {
-                AbilityKind.Ring => $"{ability.Name} [{key}] · {(hero.RingActive ? "Worn" : "Off")}\nToggle: Frodo turns invisible to enemies and will not fight.\n"
-                    + string.Create(Invariant,$"Costs {ability.DrainMilliPerTick*SimWorld.TicksPerSecond/1000m:0.#} HP per second while worn (stops at 1 HP)."),
-                AbilityKind.Bane => $"{ability.Name} · Passive\n{ability.BonusScale/10000}% damage against orcs, Uruk-Hai and goblins.",
-                AbilityKind.Aura => $"{ability.Name} · Passive\nAllies within {ability.RangeMm/1000} m recharge abilities {ability.RechargeScalePpm/10000}% as fast.",
-                AbilityKind.Heal => $"{ability.Name} [{key}]\nHeal a friendly unit or Aragorn for up to {ability.HealMilli/1000} HP.\n{ability.RangeMm/1000} m range · {ability.RechargeTicks/20}s cooldown. Target must be below 99% health.",
-                AbilityKind.Fury => $"{ability.Name} · Passive\nWeapon Attack {ability.DpsMilli/1000}. {ability.BonusScale/10000}% damage against Wraiths and Black Riders.",
-                AbilityKind.SiegeAura => $"{ability.Name} · Passive\nAllies within {ability.RangeMm/1000} m of {hero.Definition.DisplayName}, and he himself, deal {ability.BonusScale/10000}% damage to buildings.",
-                AbilityKind.Ward => string.Create(Invariant,$"{ability.Name} [{key}]\nAllies within {ability.RangeMm/1000} m take {ability.BonusScale/10000m:0.#}% damage from missiles for {ability.DurationTicks/20}s.\n{ability.RechargeTicks/20}s cooldown."),
-                AbilityKind.Unsimulated => $"{ability.Name} · not simulated yet\n{ability.Description}"+(ability.RechargeTicks > 0 ? $"\nSource cooldown {ability.RechargeTicks/20}s." : ""),
-                AbilityKind.ArmorUp => string.Create(Invariant,$"{ability.Name} [{key}] · training dummy\nAdds 1 armor (now {hero.ArmorMilli/1000m:0.#})."),
-                AbilityKind.ArmorReset => string.Create(Invariant,$"{ability.Name} [{key}] · training dummy\nSets armor to 0 (now {hero.ArmorMilli/1000m:0.#})."),
-                AbilityKind.Restore => $"{ability.Name} [{key}] · training dummy\nRestores full health ({hero.Health}/{hero.MaxHealth}); dummies never regenerate.",
-                _ => "Immunity · Passive\nProtection from poison, stun, blind and slow." };
+            string effect = ability.Kind switch {
+                AbilityKind.Detection => $"Reveals invisible enemies within {hero.SightRangeMm/1000} m. Cannot reveal the One Ring.",
+                AbilityKind.Ring => string.Create(Invariant,$"Turns Frodo invisible to enemies and prevents him from fighting. Drains {ability.DrainMilliPerTick*SimWorld.TicksPerSecond/1000m:0.#} HP per second, stopping at 1 HP."),
+                AbilityKind.Bane => $"Deals {ability.BonusScale/10000}% damage against orcs, Uruk-Hai and goblins.",
+                AbilityKind.Aura => $"Allies within {ability.RangeMm/1000} m recharge abilities {ability.RechargeScalePpm/10000}% as fast.",
+                AbilityKind.Heal => $"Restores up to {ability.HealMilli/1000} HP to a friendly unit within {ability.RangeMm/1000} m.",
+                AbilityKind.Fury => $"Increases weapon damage by {(long)ability.DpsMilli*100/Math.Max(1,hero.Definition.DpsMilli)-100}%. Deals {ability.BonusScale/10000}% damage against Wraiths and Black Riders.",
+                AbilityKind.SiegeAura => $"Allies within {ability.RangeMm/1000} m, including the bearer, deal {ability.BonusScale/10000}% damage to buildings.",
+                AbilityKind.Ward => string.Create(Invariant,$"Allies within {ability.RangeMm/1000} m take {ability.BonusScale/10000m:0.#}% damage from missiles for {ability.DurationTicks/20}s."),
+                AbilityKind.ArmorUp => "Adds 1 armor.",
+                AbilityKind.ArmorReset => "Sets armor to 0.",
+                AbilityKind.Restore => "Restores full health.",
+                AbilityKind.Immunity => "Protects against poison, stun, blind and slow.",
+                _ => ability.Description };
+            button.TooltipText = ability.Name+"\n"+(purchasing ? $"{ability.PurchaseFateCost} Fate\nUnlock [{key}]\n" : "")+effect;
         }
     }
     private static OrderKind? PanelCommand(OrderKind? kind) => kind is OrderKind.Attack or OrderKind.AttackMove or OrderKind.ForceAttack ? OrderKind.Attack : kind;
@@ -452,13 +536,13 @@ public partial class CommandPanel : Control
     public bool CommandPaletteEmpty => !_buttons.Values.Concat(_abilities).Concat(_constructionButtons).Concat(_trainButtons)
         .Concat([_buildButton,_advancedBuildButton,_backButton,_cancelConstructionButton,_upgradeButton]).Concat(_researchButtons).Any(b => b.Visible);
     public bool HealthCounterCentered => Math.Abs(_singleHealthText.GetRect().GetCenter().Y-_singleHealth.GetRect().GetCenter().Y) < .01f;
-    public bool ResourceCountersCentered => new[] {(_populationIcon,_populationText),(_foodIcon,_foodText),(_oreIcon,_oreText),(_fateIcon,_fateText)}
-        .All(p => Math.Abs(p.Item1.GetRect().GetCenter().Y-p.Item2.GetRect().GetCenter().Y) < .01f);
+    public bool ResourceCountersCentered => new[] {(_populationIcon,_populationText),(_foodIcon,_foodText),(_oreIcon,_oreText)}
+        .All(p => Math.Abs(p.Item1.GetRect().GetCenter().Y-p.Item2.GetRect().GetCenter().Y) < .01f) && FateCounterCentered;
     public bool SingleUnitDetailsVisible => _single.Visible;
     public string DisplayedVictories => _victoriesValue.Text;
-    public string DisplayedAttack => _attackValue.Text;
-    public string DisplayedAttackTip => _attackValue.TooltipText;
-    public string DisplayedArmor => _armorValue.Text;
+    public string DisplayedAttack => _structureDetails.Visible ? _structureAttack : _attackValue.Text;
+    public string DisplayedAttackTip => _structureDetails.Visible ? _structureAttackTip : _attackValue.TooltipText;
+    public string DisplayedArmor => _structureDetails.Visible ? _structureArmorText.Text : _armorValue.Text;
     public string DisplayedName => _title.Text;
     public string DisplayedOrder => _order.Text;
     public string DisplayedUnitOrder => _singleOrder.Text;

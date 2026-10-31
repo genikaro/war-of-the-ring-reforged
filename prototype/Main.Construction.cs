@@ -28,7 +28,14 @@ public partial class Main
         public AnimationPlayer? Player = player;
         public string[] Clips = clips;
         public HealthBar Bar = bar;
+        public Vector3[] BarVertices = [];
+        public Vector3 BarPosition;
+        public Transform3D BarCameraTransform;
+        public Projection BarCameraProjection;
+        public Vector2 BarViewport;
+        public bool BarAnchorValid;
         public int Stage = -1;
+        public BuildingFireEffect? Fire;
     }
 
     /// <summary>Owner-chosen turns of building models about their origin, in degrees counterclockwise seen from above
@@ -46,7 +53,19 @@ public partial class Main
     private IEnumerable<int> SelectedWorkers() => _world!.Units.Where(u => u.Team == PlayerTeam && u.Health > 0
         && _selected.Contains(u.Id) && _world.Workers.ContainsKey(u.Definition.Name)).Select(u => u.Id);
 
-    private ResourceKind? ResourceBuildingKind(string building) => _world!.ConstructionRules.Values.FirstOrDefault(r => r.Name == building)?.Kind;
+    private ResourceKind? ResourceBuildingKind(string building)
+        => _world!.FactionConstructionRules.Values.Concat(_world.ConstructionRules.Values).FirstOrDefault(r => r.Name == building)?.Kind;
+
+    /// <summary>The player's selected units that raise foundations: workers, and the Evil Slavemaster for War Posts.</summary>
+    private IEnumerable<int> SelectedBuilders() => _world!.Units.Where(u => u.Team == PlayerTeam && u.Health > 0 && _selected.Contains(u.Id)
+        && _world.IsBuilder(u)).Select(u => u.Id);
+
+    /// <summary>The buildings the selected builders' palettes offer.</summary>
+    private HashSet<string> SelectedPalette() => _world!.Units.Where(u => u.Team == PlayerTeam && u.Health > 0 && _selected.Contains(u.Id) && _world.IsBuilder(u))
+        .SelectMany(u => _world.Palettes.GetValueOrDefault(u.Definition.Name) ?? _worldPalettes(u)).ToHashSet();
+
+    /// <summary>A worker's palette when the pack lists none for its kind: every building choice of its side.</summary>
+    private string[] _worldPalettes(SimUnit unit) => _constructionChoices.Where(c => SimWorld.FactionOfName(c.Building) == _world!.FactionOf(unit.Team)).Select(c => c.Building).ToArray();
 
     private void LoadSkirmishConstruction(JsonElement data)
     {
@@ -55,8 +74,8 @@ public partial class Main
             || !construction.TryGetProperty("defenses",out var defenses) || !construction.TryGetProperty("upgrades",out var upgrades))
             throw new InvalidOperationException("Refresh construction: python tools/skirmish_construction.py --cache converted/skirmish");
         var world = _world!;
-        foreach (var start in OpenBases(data))
-            world.StartBuildings.Add(start.GetProperty("team").GetInt32(),[start.GetProperty("building").GetString()!]);
+        foreach (var start in StartBases(data))
+            world.StartBuildings.Add(start.Team,[start.Building]);
         int Armor(string name) => _structureDefinitions.TryGetValue(name,out var definition)
             ? (int)Math.Round(definition.GetProperty("armor").GetDouble()*1000) : 0;
         ConstructionDefinition Rules(JsonElement rules,ResourceKind? kind) => new(rules.GetProperty("name").GetString()!,rules.GetProperty("display_name").GetString()!,kind,
@@ -65,11 +84,22 @@ public partial class Main
             rules.GetProperty("extra_worker_ppm").GetInt32(),rules.GetProperty("initial_health_ppm").GetInt32(),
             rules.GetProperty("prerequisites").EnumerateArray().Select(p => p.GetString()!).ToArray(),
             Armor(rules.GetProperty("name").GetString()!));
-        foreach (var property in construction.GetProperty("definitions").EnumerateObject())
-        {
-            ResourceKind kind = property.Name == "food" ? ResourceKind.Food : ResourceKind.Ore;
-            world.ConstructionRules.Add(kind,Rules(property.Value,kind));
-        }
+        // Build-133: each side seated gets its own Mill and Foundry (the Slaughterhouse and Smelter); the first loaded stays the default.
+        if (construction.TryGetProperty("faction_definitions",out var sides))
+            foreach (var side in sides.EnumerateObject().Where(s => world.Seated(s.Name)))
+                foreach (var property in side.Value.EnumerateObject())
+                {
+                    ResourceKind kind = property.Name == "food" ? ResourceKind.Food : ResourceKind.Ore;
+                    var rules = Rules(property.Value,kind);
+                    world.FactionConstructionRules[(side.Name,kind)] = rules;
+                    world.ConstructionRules.TryAdd(kind,rules);
+                }
+        else
+            foreach (var property in construction.GetProperty("definitions").EnumerateObject())
+            {
+                ResourceKind kind = property.Name == "food" ? ResourceKind.Food : ResourceKind.Ore;
+                world.ConstructionRules.Add(kind,Rules(property.Value,kind));
+            }
         foreach (var file in data.GetProperty("building_files").EnumerateObject()) _constructionFiles.Add(file.Name,file.Value.GetString()!);
         foreach (var entry in construction.GetProperty("sites").EnumerateArray())
         {
@@ -77,7 +107,7 @@ public partial class Main
             var source = world.Resources[id];
             world.ConstructionSites.Add(id,new(id,obstacle,SkirmishInteractionRadius(obstacle,source.X,source.Z)));
         }
-        foreach (var item in placeable.EnumerateObject())
+        foreach (var item in placeable.EnumerateObject().Where(i => Loaded(i.Name)))
         {
             var footprint = item.Value.GetProperty("footprint");
             var polygon = footprint.GetProperty("polygon_mm").EnumerateArray().Select(p => new FootprintPoint(p[0].GetInt32(),p[1].GetInt32())).ToArray();
@@ -86,7 +116,7 @@ public partial class Main
                 InteractionRadius(polygon.Select(p => Math.Sqrt((double)p.X*p.X+(double)p.Z*p.Z)).Max()),
                 item.Value.GetProperty("must_be_near").GetBoolean(),item.Value.GetProperty("drop_off").GetBoolean()));
         }
-        foreach (var item in upgrades.EnumerateObject())
+        foreach (var item in upgrades.EnumerateObject().Where(i => Loaded(i.Name)))
         {
             string promoted = item.Value.GetProperty("name").GetString()!;
             world.BuildingRules.Add(promoted,Rules(item.Value,null));
@@ -94,7 +124,7 @@ public partial class Main
             // ponytail: the upgraded building keeps the footprint it was placed with (the source boxes match).
             world.Placements.Add(promoted,world.Placements[item.Name]);
         }
-        foreach (var item in defenses.EnumerateObject())
+        foreach (var item in defenses.EnumerateObject().Where(i => Loaded(i.Name)))
         {
             // Build-58 lists every weapon of a building (the Ballista Tower has two); older packs hold one object.
             var weapons = item.Value.ValueKind == JsonValueKind.Array ? item.Value.EnumerateArray().ToArray() : [item.Value];
@@ -105,7 +135,10 @@ public partial class Main
                     weapon.GetProperty("range_mm").GetInt32(),weapon.GetProperty("rates_milli").EnumerateArray().Select(r => r.GetInt32()).ToArray(),
                     origin[0].GetInt32(),origin[1].GetInt32(),origin[2].GetInt32(),
                     // Build-76 exports the weapon's FateModifier.
-                    FatePpm: weapon.TryGetProperty("fate_ppm",out var fate) ? fate.GetInt32() : 1_000_000);
+                    FatePpm: weapon.TryGetProperty("fate_ppm",out var fate) ? fate.GetInt32() : 1_000_000,
+                    // Build-130 exports whether the weapon can critically kill (the Ballista bolt).
+                    CriticalKill: weapon.TryGetProperty("critical_kill",out var critical) && critical.GetBoolean())
+                    .ForGameplay(weapon.GetProperty("weapon").GetString()!);
                 defense.Validate();
                 LoadProjectileStyle(index == 0 ? item.Name : item.Name+"#"+index,weapon.GetProperty("projectile"));
                 return defense;
@@ -115,15 +148,19 @@ public partial class Main
             _defenseLabels[item.Name] = weapons.Select(w => w.TryGetProperty("weapon",out var key) && key.GetString()!.EndsWith("_BOLT") ? "Ballista" : "Arrows").ToArray();
         }
         foreach (var radius in construction.GetProperty("placement_radius_mm").EnumerateObject()) world.PlacementRadiusMm.Add(radius.Name,radius.Value.GetInt32());
-        var order = construction.GetProperty("order").EnumerateArray().Select(n => n.GetString()!).ToArray();
+        var order = construction.GetProperty("order").EnumerateArray().Select(n => n.GetString()!).Where(Loaded).ToArray();
         world.PlaceableBuildings.AddRange(order.Where(world.BuildingRules.ContainsKey));
         _constructionChoices = order.Select(n => (n,_structureDefinitions[n].GetProperty("portrait").GetString()!)).ToArray();
-        foreach (var start in OpenBases(data))
+        // Build-133: the palette of each kind of builder (the Slavemaster raises War Posts only) and the Evil side's corruption.
+        if (construction.TryGetProperty("palettes",out var palettes))
+            foreach (var palette in palettes.EnumerateObject().Where(p => Loaded(p.Name)))
+                world.Palettes[palette.Name] = palette.Value.EnumerateArray().Select(n => n.GetString()!).Where(Loaded).ToArray();
+        if (world.Seated(SimWorld.Evil) && construction.TryGetProperty("corruption",out var corruption) && corruption.ValueKind == JsonValueKind.Object)
         {
-            var at = start.GetProperty("position");
-            world.StartStructures.Add(new(start.GetProperty("team").GetInt32(),start.GetProperty("building").GetString()!,
-                (int)Math.Round(at[0].GetDouble()*1000),(int)Math.Round(at[1].GetDouble()*1000)));
+            Dictionary<string,int> Radii(string key) => corruption.GetProperty(key).EnumerateObject().ToDictionary(p => p.Name,p => p.Value.GetInt32());
+            world.Corruption = new(Radii("creators"),Radii("start_creators"),corruption.GetProperty("only").EnumerateArray().Select(n => n.GetString()!).ToHashSet());
         }
+        foreach (var start in StartBases(data)) world.StartStructures.Add(new(start.Team,start.Building,start.X,start.Z));
     }
 
     /// <summary>A strip across the base of the foundation, from its footprint's mean horizontal span.</summary>
@@ -166,7 +203,11 @@ public partial class Main
 
     /// <summary>The buildings of the open build page, in palette order: Build holds Tier 1, Advanced every building that
     /// asks for an upgraded Citadel.</summary>
-    private (string Building,string Portrait)[] PageChoices() => _constructionChoices.Where(c => AdvancedBuilding(c.Building) == _advancedBuildPage).ToArray();
+    private (string Building,string Portrait)[] PageChoices()
+    {
+        var palette = SelectedPalette();
+        return _constructionChoices.Where(c => AdvancedBuilding(c.Building) == _advancedBuildPage && palette.Contains(c.Building)).ToArray();
+    }
 
     private bool AdvancedBuilding(string building) => _world!.BuildingRules.TryGetValue(building,out var rules) && rules.Prerequisites.Any(_world.Upgrades.ContainsValue);
 
@@ -175,14 +216,14 @@ public partial class Main
     private void OpenBuildMenu(bool open,bool advanced)
     {
         ClearConstructionTargeting(); _orders.Cancel();
-        _buildMenu = open && _skirmish && SelectedWorkers().Any(); _advancedBuildPage = advanced;
+        _buildMenu = open && _skirmish && SelectedBuilders().Any(); _advancedBuildPage = advanced;
         _buildMenuSelection = string.Join(',',_selected.Order());
     }
 
     /// <summary>Close the build page when the selection it was opened for changes.</summary>
     private void SyncBuildMenu()
     {
-        if (_buildMenu && (!SelectedWorkers().Any() || _buildMenuSelection != string.Join(',',_selected.Order()))) { _buildMenu = false; ClearConstructionTargeting(); }
+        if (_buildMenu && (!SelectedBuilders().Any() || _buildMenuSelection != string.Join(',',_selected.Order()))) { _buildMenu = false; ClearConstructionTargeting(); }
         _commands.BuildMenuOpen = _buildMenu;
     }
 
@@ -195,10 +236,10 @@ public partial class Main
             { _world!.Enqueue(PlayerTeam,[],OrderKind.CancelConstruction,target: selected.SiteId); _status.Text = "Construction cancellation queued"; }
             return;
         }
-        if (!_skirmish || !SelectedWorkers().Any()) return;
+        if (!_skirmish || !SelectedBuilders().Any()) return;
         ClearConstructionTargeting(); _orders.Cancel(); _dragging = false; _hud.SelectionBox = null;
         _constructionTargeting = true; _constructionBuilding = building;
-        var rules = _world!.BuildingRules.GetValueOrDefault(building) ?? _world.ConstructionRules[ResourceBuildingKind(building)!.Value];
+        var rules = _world!.BuildingRules.GetValueOrDefault(building) ?? _world.ResourceRules(PlayerTeam,ResourceBuildingKind(building)!.Value)!;
         _status.Text = "Build "+rules.DisplayName+(ResourceBuildingKind(building) != null ? ": choose a resource site" : ": choose open ground near your buildings");
         _previewMaterial = GhostMaterial(new Color(.3f,1,.3f,.45f));
         _constructionPreview = BuildingGhost(building,_previewMaterial);
@@ -267,17 +308,17 @@ public partial class Main
         {
             int cell = PlacementCellAt(mouse);
             if (!_world!.CanPlaceBuilding(PlayerTeam,building,cell,out string blocked,ignoreUnits: true)) { Notify(blocked); return; }
-            _world.Enqueue(PlayerTeam,SelectedWorkers(),OrderKind.PlaceBuilding,cell,_world.PlaceableBuildings.IndexOf(building),queued);
+            _world.Enqueue(PlayerTeam,SelectedBuilders().Where(id => _world.MayPlace(_world.Units[id],building)),OrderKind.PlaceBuilding,cell,_world.PlaceableBuildings.IndexOf(building),queued);
             _status.Text = "Build "+_world.BuildingRules[building].DisplayName+(_paused ? " queued (paused)" : " order issued");
             ClearConstructionTargeting(); _buildMenu = false; return;
         }
         var source = ResourceAt(mouse);
         if (source == null || _constructionBuilding is not { } resourceBuilding) { Notify("Choose a resource site"); return; }
         var kind = ResourceBuildingKind(resourceBuilding)!.Value;
-        if (source.Kind != kind) { Notify(kind == ResourceKind.Food ? "A Mill requires a food well" : "A Foundry requires an ore pile"); return; }
+        if (source.Kind != kind) { Notify($"A {_world!.ResourceRules(PlayerTeam,kind)!.DisplayName} requires {(kind == ResourceKind.Food ? "a food well" : "an ore pile")}"); return; }
         if (!_world!.CanStartConstruction(PlayerTeam,source.Id,out string reason) && reason != SimWorld.UnitBlocksFoundation) { Notify(reason); return; }
         _world.Enqueue(PlayerTeam,SelectedWorkers(),OrderKind.Build,target: source.Id,queued: queued);
-        _status.Text = "Build "+_world.ConstructionRules[kind].DisplayName+(_paused ? " queued (paused)" : " order issued");
+        _status.Text = "Build "+_world.ResourceRules(PlayerTeam,kind)!.DisplayName+(_paused ? " queued (paused)" : " order issued");
         ClearConstructionTargeting(); _buildMenu = false;
     }
 
@@ -319,9 +360,9 @@ public partial class Main
         var data = UnitAppearance.Read(CachePath(_constructionFiles[building]));
         view.Model = model; view.Appearance = new UnitAppearance(model,data); view.Clips = BuildingStateClips(data);
         view.Player = Descendants(model).OfType<AnimationPlayer>().FirstOrDefault();
-        view.Building = building; view.Stage = -1;
+        view.Building = building; view.Stage = -1; view.BarVertices = []; view.BarAnchorValid = false;
         var entry = _structureViews[site.Obstacle];
-        _structureViews[site.Obstacle] = entry with { Type = building,
+        _structureViews[site.Obstacle] = entry with { Type = building,Team = site.Team,
             Meshes = Descendants(model).OfType<MeshInstance3D>().Where(m => m.Mesh != null).Select(m => (Mesh: m,Faces: m.Mesh!.GetFaces())).ToArray() };
     }
 
@@ -329,7 +370,7 @@ public partial class Main
     {
         foreach (int id in _constructionViews.Keys.Where(id => !_world!.ConstructionSites.TryGetValue(id,out var s) || s.Team < 0).ToArray())
         {
-            _constructionViews.Remove(id,out var old);
+            if (!_constructionViews.Remove(id,out var old)) continue;
             int obstacle = _structureViews.Values.First(v => v.Root == old!.Root).Id;
             _structureViews.Remove(obstacle); if (_selectedStructure == obstacle) _selectedStructure = null;
             _obstacleViews.Remove(obstacle); _buildingViews.Remove(old.Root);
@@ -353,18 +394,31 @@ public partial class Main
                 // Added after registration so the strip is not picked as the structure's own geometry.
                 root.AddChild(bar);
             }
-            if (view.Building != rules.Name) SwapBuildingModel(site,view,rules.Name);
+            if (view.Building != rules.Name || _structureViews[site.Obstacle].Team != site.Team) SwapBuildingModel(site,view,rules.Name);
             int stage = site.Complete ? 3 : (int)Math.Min(2,site.ProgressMicroTicks*3/(rules.DurationTicks*1_000_000L));
             if (stage != view.Stage)
             {
+                view.BarVertices = []; view.BarAnchorValid = false;
                 string clip = view.Clips[stage]; view.Appearance.Apply(clip,0);
                 string? animation = view.Player?.GetAnimationList().FirstOrDefault(a => a == clip || a.EndsWith('/'+clip));
-                if (animation != null) { view.Player!.Play(animation); view.Player.Advance(0); }
+                if (animation != null)
+                {
+                    // glTF imports clips as one-shots. Healthy buildings keep running (the Mill's sails),
+                    // including a missing construction state's healthy-clip fallback, shared by other instances.
+                    view.Player!.GetAnimation(animation).LoopMode = clip == view.Clips[3]
+                        ? Animation.LoopModeEnum.Linear : Animation.LoopModeEnum.None;
+                    view.Player.Play(animation); view.Player.Advance(0);
+                }
                 view.Stage = stage;
             }
             if (view.Player != null) view.Player.SpeedScale = _paused ? 0 : 1;
-            // Construction health climbs with the work done, so the health bar doubles as the progress bar.
+            // Health includes damage taken during construction; completion percentage is shown separately in the console.
             view.Bar.Refresh(site.Health,_world!.SiteMaxHealth(site));
+            var barPosition = _overheadBars && view.Bar.Visible ? BuildingBarPosition(_structureViews[site.Obstacle],view) : new Vector3(0,.14f,0);
+            view.Bar.SetStyle(_playerColoredBars ? TeamColor(site.Team) : null,barPosition);
+            int fireIntensity = Math.Max(site.FirePpm,_world.FlameShieldSites.Contains(site.Id) ? 500000 : 0);
+            if (fireIntensity > 0 && _buildingFireLayers.Length > 0) view.Fire ??= new BuildingFireEffect(view.Root,site.RadiusMm/1000f,_buildingFireLayers);
+            view.Fire?.Refresh(fireIntensity,_world.Tick);
         }
     }
 }

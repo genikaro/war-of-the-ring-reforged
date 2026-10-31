@@ -9,6 +9,17 @@ public partial class Main
     private bool UseGridHotkey(int slot)
     {
         if (!_skirmish) return false;
+        if (_commands.GlobalAbilitiesOpen)
+        {
+            if (slot == CommandPanel.BackSlot) _commands.CloseGlobalAbilities();
+            else if (slot < 5) ChooseGlobalPower(slot);
+            return true;
+        }
+        if (_commands.PlacePowerButton.Visible)
+        {
+            if (slot == 0) ChoosePlacePower();
+            return true;
+        }
         if (_buildMenu)
         {
             if (slot == CommandPanel.BackSlot) OpenBuildMenu(false);
@@ -30,10 +41,15 @@ public partial class Main
         if (slot == CommandPanel.BackSlot && _commands.CancelConstructionButton.Visible) { ChooseConstruction(null); return true; }
         if (slot == 0 && _commands.BuildButton.Visible) { OpenBuildMenu(true); return true; }
         if (slot == 1 && _commands.AdvancedBuildButton.Visible) { OpenBuildMenu(true,advanced: true); return true; }
+        if (slot < 4 && _commands.AbilityButton(slot).Visible) { ChooseAbility(slot); return true; }
         return false;
     }
 
-    private void Notify(string text) { _status.Text = text; _commands.ShowNotice(text); }
+    private void Notify(string text)
+    {
+        _status.Text = text; _commands.ShowNotice(text);
+        if (AudioSelection.FirstOrDefault() is { } speaker) _audio.Speak(speaker.Definition.Name,9);
+    }
 
     /// <summary>A worker of the player's that gave up a foundation says why.</summary>
     private void PresentFoundationFailures()

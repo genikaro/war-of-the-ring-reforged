@@ -73,7 +73,8 @@ public partial class Main
                         && tower.Health == 400 && _projectileStyles.ContainsKey(SmokeTower);
                     _defenseChecks["tower_holds_fire_without_enemies"] = !world.Projectiles.Any(p => p.Source == tower.Id) && tower.DefenseTarget < 0;
                     SelectStructure(tower.Obstacle);
-                    _defenseChecks["tower_info_lists_its_attack"] = SelectedStructureDetails()?.Attack == "Arrows  14 dps · 19 m";
+                    _defenseChecks["tower_info_lists_its_attack"] = SelectedStructureDetails() is { Attack: "14",Weapons: [{ Tooltip: var tip }] }
+                        && tip.Contains("a hit every 1 s");
                     _focus = PositionOf(tower.X,tower.Z); UpdateCamera();
                     // Fixture: the builders, who laid the tower beside it, go home, so the swordsmen meet the tower rather than the crew.
                     double away = Math.Atan2(citadel.Z-tower.Z,citadel.X-tower.X);

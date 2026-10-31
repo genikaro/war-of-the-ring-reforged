@@ -4,6 +4,100 @@ Goal: a playable Good faction Tier 1 tech tree with working workers on the
 stock 2-player map captured in the first local original-game session. This file
 tracks what exists; planning lives in `tools/Roadmap.md` (Phase 4 economy).
 
+## Build-123: resource-based bot worker limits
+
+Bot recruitment is capped at five workers per usable Mill or ore source, plus
+one builder on Easy and two on Normal/Hard. The personality's worker preference
+can still choose a smaller workforce. Raw ore counts before a Foundry is built;
+unfinished Mills, exhausted resources and enemy claims add no gathering jobs.
+Recruitment counts living workers and queued recruits across all Citadels.
+
+Each resource receives at most five assigned gatherers, including workers inside
+its building or returning cargo. Spare workers remain available for construction.
+Crowded assignments spread to other available sources; a new completed Mill
+opens more jobs, and lost or exhausted sites stop funding replacement workers.
+No content/cache rebuild is needed. Run the simulation suite with
+`--ai-worker-checks` for the focused staffing regression.
+
+## Build-122: recover from exhausted food
+
+Bots treat the loss of food income as an economic recovery priority. A reachable,
+safe replacement Mill comes before housing, towers, military buildings and timed
+Citadel expansion. Recovery can use food beyond the normal 80 m build radius;
+it pays the ordinary construction cost and still requires a reachable work spot.
+Ore mining can fund the Mill without saving food for a Citadel first. Exhausted
+Mills no longer increase the worker target or the desired food-gatherer count.
+
+After three minutes without a growing army, a bot unable to afford soldiers,
+earn food or claim replacement food sends its surviving healthy heroes against
+enemy working Mills, then other reachable buildings. Surviving ore miners do not
+keep those heroes at home indefinitely. Recovery, abilities, intruder defense and
+ordinary army escorts retain their priority. Workers inside a resource building
+still count as living workers. A worker-only bot with no viable recovery, unit
+training or Citadel rebuild eventually surrenders rather than mining ore forever.
+When no regular army remains and food cannot be replenished, spare food funds
+troops before new food-cost construction or research, and extra ore miners are
+not trained from that last stock. Available Fate can recruit a last hero after
+the recovery grace period. Bots with a living or queued army keep their normal
+construction and research policy.
+
+The regression fixture covers distant-Mill recovery, food delivery and soldier
+training, finite-food training, Fate recruitment, unavailable food, disconnected
+resources, the hero grace period, contested enemy food and worker-only surrender.
+Run `./prototype/run.ps1 -EconomyRecoverySmoke`
+for six bots on Wheel of Fate with exhausted starting wells and one surviving hero
+per side; it verifies central food is claimed, delivered and fought over. No
+content/cache rebuild is needed.
+
+## Build-107: hero progression survives revival
+
+Citadel recruitment restores a defeated hero's level and exact XP, including
+partial progress through the current level. The hero returns at its full restored
+maximum health with its level bonuses, using the team's current places of power.
+Records are separate by player and hero type; repeated defeats and cancelled
+recruitment preserve the latest progress. Restart; no cache rebuild. See
+[hero experience](HERO-EXPERIENCE.md#revival--build-107).
+
+## Build-106: hero experience and levels
+
+Good heroes earn damage-based XP and advance through ten levels using the source
+per-hero thresholds and stat bonuses. XP and level appear beside the selected
+hero's health and on right-edge portraits, with the original level-up effect and
+sound. Health percentage, current orders and cooldowns survive level-up. The Dark
+Orb's experience modifier works. The shared content pack and standalone demo cache
+are refreshed locally; restart. See [hero experience](HERO-EXPERIENCE.md).
+
+## Build-105: remaining Good hero abilities
+
+Gimli, Legolas and Gandalf now use every source ability, completing the current
+Good hero roster alongside Aragorn and Frodo. Skills include targeting previews,
+cooldowns, cast/order discipline, original icons, clips, sound and sprite effects,
+timed status icons and dispelling. Tower Capture approaches the tower, transfers
+ownership and recolors its model while preserving its health. See the full
+[hero controls and source limits](ABILITIES.md#remaining-good-hero-skills--build-105).
+Restart after the locally refreshed shared content pack. Hero levels followed in
+build-106; garrisons remain future work.
+
+## Build-89: contextual right-click on owned buildings
+
+Right-clicking an owned building keeps that building as the target. Units walk
+to clear ground beside its footprint. Workers carrying food or ore deliver to
+the clicked completed drop-off (a Citadel), even when another depot is nearer.
+Empty workers repair damaged buildings, resume foundations, or gather from a
+completed Mill or Foundry. Mixed selections split those jobs; Shift queues each
+group's order. Tower garrison loading remains future work.
+
+Deliveries play the normal put-down clip before crediting resources, respect
+storage capacity, preserve cargo if interrupted or the depot disappears, and
+resume the worker's prior gathering job when no later order is queued. The HUD
+names the building being approached or receiving resources.
+
+Validation: `./converted/tooling/dotnet/dotnet.exe run --project
+tests/simulation/SimulationTests.csproj -- --structure-interaction-checks --cache
+converted/skirmish` exercises simulated and real-map approaches and deliveries.
+`./prototype/run.ps1 -InteractionSmoke -Skirmish -NoAi` tests contextual dispatch,
+mixed selections, feedback and queued jobs through actual mouse events.
+
 ## Try it
 
 ```powershell
@@ -2537,7 +2631,8 @@ observer reference (Gimli against Aragorn) is now Aragorn winning at tick 27344,
 
 The first of the traits that need new bot behaviour (build-51 left Raider, Scout
 and hero use open). Scout waits for fog of war, without which scouting changes
-nothing; hero use would only be Frodo until heroes cost fate points.
+nothing. Build-114 adds hero recruitment and tactics after the Fate heroes and
+their abilities became available.
 
 **Source.** Raids have their own war party, `AIWARPARTY_RAIDING`: 3 to 6 units,
 40% "Raid Building Killer Fire", 40% "Raid Building Killer Siege", 20% "Raid
@@ -2909,8 +3004,9 @@ The shared hero limit follows the source: Gimli, Aragorn and Legolas share
 (`AmountBuildingAffectsUniqueGroup`). Frodo and Gandalf are outside the group, which
 fits the compendium's live branch with four heroes at Citadel 5. Adapter: the team's
 best standing Citadel sets the limit; whether several Citadels add up is unverified.
-Each hero is unique (one at a time); `HeroDeathRefreshTime`, purchases and levels are
-not simulated, so every ability is equipped as before.
+Each hero is unique (one at a time). Hero levels and revival retain progression;
+build-113 adds individual Fate purchases for paid abilities, retained on revival.
+Innate abilities are available immediately. See [ability costs](ABILITIES.md#fate-ability-unlocks--build-113).
 
 Hero abilities. Aragorn and Frodo keep theirs. New:
 
@@ -3197,8 +3293,8 @@ battle"). The observer's Economy tab has a Fate column with the same tooltip.
 
 **Adapters and open points.** The Power Acquisition setting is fixed at Medium (no
 lobby choice yet); the bots' difficulty bonus is not applied (the owner prefers
-difficulty without resource bonuses); bots still never train the Fate heroes, so their
-Fate only accumulates; hits from a unit that died while its arrow flew still count.
+difficulty without resource bonuses). Build-114 lets bots spend Fate on heroes
+and their abilities; hits from a unit that died while its arrow flew still count.
 
 Validation:
 
@@ -3211,3 +3307,269 @@ Validation:
 - `-ObserverSmoke` (17 checks, new `bots_earn_fate_in_battle`): the Bilbo's Bluffs match
   is the same as build-75 (Aragorn wins at tick 25020, identical kills and gathering),
   and ends with Gimli at 4 Fate and Aragorn at 8.
+
+## Build-77: bot order and random choices
+
+The skirmish setup lists bots by difficulty, Easy then Normal then Hard, with names
+alphabetically within each group. Each group starts with `Random (Easy)`,
+`Random (Normal)` or `Random (Hard)`. These draw from the named personalities of
+that difficulty available in the selected map's cache. The card and tooltip explain
+the pending choice; its style triangle appears once a named personality is selected.
+
+Random choices keep the slot's traits. Each Start supplies a fresh match seed;
+the saved seed and player slot determine the named bot when the match loads.
+Restart repeats that draw. Returning to setup retains the Random selection and
+traits, so another Start draws again. Named selections and the default bot retain
+their existing behavior. No cache rebuild is needed.
+
+`SimulationTests --bot-choice-checks` passes 16 checks covering ordering, the
+difficulty pools, trait retention, repeatable draws and source-order independence.
+`-SetupSmoke` passes 23 checks through the native lobby, player and observer matches,
+returning to setup and restarting. The dropdown was also checked in a 1600x900 capture.
+
+## Build-78: Dwarf passives and upgrades
+
+The Forge's Shield Break research is now available (100 food, 100 ore, 90 s,
+Citadel 2). A researched Shieldbreaker removes one armor per melee hit for 20 s,
+up to five independently expiring stacks. The target's status bar and red Armor
+bonus show the effect. Further hits replace the oldest stack.
+
+Razored Edge's upgraded axes continue through one enemy behind the target, within
+5 m at 70% damage. Flaming Axe keeps that follow-through and ignites enemy
+buildings, using their source fire armor, extinguish rate and maximum fire DPS.
+It uses the flame axe projectile and original building-fire atlas textures.
+The documented fire-intensity and line-hit adapters remain subject to original
+engine verification; see [Dwarf abilities](ABILITIES.md#dwarf-units--build-78).
+
+Both Dwarf types show their passive icons before research, dimmed with the cost
+and research state in the tooltip. Completed research lights up the icon and
+applies automatically to existing and later units of that team. Passive icons
+have no cast hotkey. Existing Forge blade/plating bonuses continue to apply.
+The content pack now supports 23 Good techniques; it was rebuilt locally.
+Other installations need `python tools/content_pack.py`.
+
+`SimulationTests --dwarf-ability-checks --cache converted/skirmish` passes 34
+checks; the full suite passes 1,194. `-ResearchSmoke` covers 14 checks, including
+locked/pending/cancelled/researched icons, both axe tiers and building-fire
+presentation. `-DwarfHallSmoke` adds the Axethrower's initially locked passive
+icons (13 checks). Rendered captures were checked at 1600x900.
+
+## Build-79: concise ability tooltips and burning status
+
+Ability tooltips contain the ability name and its effect description. Research
+state stays in the dim/lit icon, and purchase costs stay on the research buttons.
+Burning buildings show the original fire-alert icon beneath their health bar;
+the status disappears automatically when extinguished. Periodic fire damage uses
+a separate Burn event so it does not play weapon impact sounds. Direct axe hits
+still play them. No content cache rebuild is needed.
+
+## Build-80: source flame axe effect on building attacks
+
+Source flame axe projectiles 32/33 share normal axe meshes 1318/1319 and add
+torch effect 252 (`EFFECT_GRISHNAKH_TORCH`). Building-bound flaming axes now show
+that effect's original animated flame, smoke and ember atlas frames. Unit targets
+and follow-through hits keep normal axe visuals, even after Flaming Axe research.
+The normal axe-swipe trail stays in place. Emitter placement is a bounded adapter;
+the source effect frames, keys and durations are retained.
+
+The shared content pack was rebuilt locally. Other installs need
+`python tools/content_pack.py`. Validation passes 40 focused simulation/cache
+checks, 198 Python tests and 19 Research smoke checks, including both projectile
+appearances and the existing burning status and silent fire damage behavior.
+
+## Build-81: fire description and building animation loops
+
+Flaming Axe's description now states its maximum burn damage (7 per second)
+and duration (6.25 seconds after the last hit), without mentioning another ability.
+
+Building animations imported from glTF were played once; completed buildings
+never enabled looping. Prebuilt buildings also marked their healthy stage as
+already presented, so their animation never started. Healthy clips now repeat,
+including healthy-clip fallbacks during construction, and prebuilt buildings go
+through the normal playback setup. Construction clips retain their one-shot
+playback. This applies to newly built and upgraded buildings too.
+
+Construction smoke checks the Mill across multiple complete 2.7 s cycles, pauses
+and resumes its healthy animation, and verifies a prebuilt Citadel is playing.
+Its capture option adds `-mill-paused.png` and `-mill-running.png` beside the
+construction capture. The normal building loop fix needs no cache rebuild.
+
+## Build-82: rotating axe projectiles
+
+Normal and flaming axes now rotate in flight. Their LPO motion data supplies a
+constant 1,080 degrees per second and a local spin axis (-X for the left axe,
++Z for the right, converted to rendering coordinates). Absolute simulation time
+drives the angle, so pause and frame rate do not change the spin. A follow-through
+hit preserves the original release tick and rotation phase. Flame effects remain
+limited to building attacks.
+
+The local content pack is refreshed; other installs need `python tools/content_pack.py`.
+Validation passes 12 projectile presentation checks, 41 Dwarf simulation/cache
+checks, 200 Python tests, 14 Dwarf Hall input checks and 21 Research input checks.
+
+## Build-83: Ranger techniques
+
+Camouflage and Eagle Eye are available at the Wilderness Outpost after Citadel 2,
+each costing 75 food and 75 ore with a 90-second research time. Both update living
+Rangers and future recruits. The existing blade and leather research also applies
+to Rangers. This brings implemented Good research to 25 of 32 techniques.
+
+The Ranger command panel shows Camouflage (Q), passive Eagle Eye (E), and innate
+Detection (R), using original icons and effect-only tooltips. Locked research
+icons are dark. Q hides selected eligible Rangers until moving or attacking;
+the three-second recharge starts when they reveal. The original camouflage pose
+and sound are used, with a status icon and friendly translucency.
+
+Rangers reveal normal invisible enemies within 20 m, extended to 40 m by Eagle
+Eye. Hidden opponents vanish from the world, minimap, selection and attack
+targeting until detected. Detection does not cancel Camouflage and cannot reveal
+the One Ring. Observers retain full visibility. Terrain fog and forest sight
+multipliers remain outside the current visibility adapter; see ABILITIES.md.
+
+The shared content pack is refreshed locally. Rebuild other installs with
+`python tools/content_pack.py`. Validation includes 34 Ranger simulation/cache
+checks, 202 Python tests and 31 Research input checks.
+
+## Build-114: bots recruit and use heroes
+
+`Simulation/AiHeroes.cs` adds hero recruitment, revival and tactical decisions.
+Bots first replace essential workers and field at least five regular soldiers,
+then recruit an affordable hero from an idle producer. Existing construction and
+technology reserves remain protected. Experienced fallen heroes take priority,
+then the highest available Fate tier, with action-grid order breaking ties.
+Training uses the normal prerequisites, uniqueness, Citadel hero capacity,
+population and Fate checks. A side reduced to heroes can still attack or revive
+an affordable hero rather than surrendering prematurely.
+
+Heroes escort the main assault, join its building attacks and answer home
+intruders. They do not replace regular party slots or join raids, expansion
+guards or place scouts. At 30% health they return home to recover; they resume
+duty at 75%. Recovery state is included in the replay digest.
+
+On strategic thinks bots buy affordable paid abilities through the same
+purchase commands as the player. Healing prioritizes wounded nearby allies;
+Guardian Wind answers ranged contacts; Sunder and Blinding Light answer grouped
+enemies; Elven Speed supports nearby fighters; Trueshot prioritizes heroes and
+strong attackers; Flame Shield goes on a front-line ally; Negate Ability and
+Rain of Fire target useful enemy clusters. Capture requires a nearby assault
+escort. Frodo wears the Ring while retreating from nearby enemies and removes
+it when safe or too low on health. Targets must be visible and connected.
+Casts finish before movement changes, and cooldowns start at effect application.
+`UsesHeroes` and `UsesSpecialAbilities` personality flags are respected.
+
+Run focused synthetic and imported-content coverage with:
+
+```powershell
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --ai-hero-checks --cache converted/content/good
+```
+
+## Build-117: growing base defenses and Ballista upgrades
+
+Bots now scale tower construction with each completed Citadel's surrounding
+base. An ordinary base keeps one tower and a Defender keeps at least two;
+every four other completed friendly buildings within 42 m add another tower,
+up to three extra towers per base (four normally, five for Defenders).
+Buildings belong to their nearest Citadel, so nearby bases do not share a
+budget or count the same tower twice. Foundations, ruins and towers do not
+inflate growth. Upgraded Ballista Towers still fill Watchtower slots.
+
+Expansion bases without coverage receive towers before already defended bases
+receive more. Legal placement candidates favor covering buildings that existing
+towers cannot reach, then coverage and separation between towers. Placement
+still respects building proximity, footprints, resources and refused cells.
+Cramped bases with no legal footprint are skipped so other construction,
+expansion defenses, training and upgrades can continue.
+
+`Simulation/AiDefenses.cs` also selects one existing tower at a time for an
+in-place upgrade, prioritizing a tower answering enemies, then the enemy-facing
+tower. The source Watchtower becomes a Ballista Tower at Citadel 4, costing
+150 food and 150 ore over 800 ticks. Normal prerequisites, ownership and
+construction/research state checks apply. Construction and Citadel technology
+reserves take priority. Before a full army stands, upgrades need a bank holding
+twice their cost beyond those reserves; afterward bots save the upgrade price
+before training. Other towers wait for the current promotion to finish.
+
+Restart the game; no cache rebuild is needed. Focused synthetic and imported
+content checks run with:
+
+```powershell
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --ai-defense-checks --cache converted/content/good
+```
+
+## Build-124: varied army compositions and hero preferences
+
+On completing Citadel 2, each bot chooses one army plan for the match: Balanced,
+Riders and Rangers, Dwarf host, Ranger company, Elven host, or Nature host.
+The match seed and player slot determine the choice; restarting repeats it.
+The plan appears at the start of the bot's status readout. This is an adapter
+strategy policy, rather than a recovered original-game AI rule.
+
+Balanced keeps the generalist building and recruitment policy. Focused plans
+prioritize their production buildings, unit prerequisites and relevant research.
+They recruit toward these relative unit counts once all members are unlocked:
+
+| Plan | Composition |
+| --- | --- |
+| Riders and Rangers | 60% Riders, 30% Rangers, 10% Lightbearers |
+| Dwarf host | 50% Shieldbreakers, 40% Axethrowers, 10% Lightbearers |
+| Ranger company | 60% Rangers, 30% Swordsmen, 10% Lightbearers |
+| Elven host | 50% Elven Archers, 25% Shieldbreakers, 15% Rangers, 10% Lightbearers |
+| Nature host | 40% Beornings, 20% Huorns, 25% Rangers, 15% Swordsmen |
+
+Shares are renormalized over the available units. Elven and nature plans use
+their unlocked support at Tier 2, then add their core units at higher tiers.
+Living and queued recruits both count toward the mix. A lost focus producer
+allows fallback recruitment while construction rebuilds it. Normal economy,
+housing, defense, technology, resource and population rules still apply.
+Marksman retains its explicit ranged share and adds off-plan ranged support
+when needed; Rusher keeps buying the cheapest available focus unit in each class.
+
+Heroes with equal experience and Fate cost use a separate stable per-match
+preference instead of button order. Gimli, Aragorn and Legolas can each be the
+first Tier 2 hero. Experienced fallen heroes retain revival priority, and
+normal hero capacity, uniqueness, prerequisites and costs remain in force.
+
+No cache rebuild is needed. Focused synthetic and imported checks:
+
+```powershell
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --ai-composition-checks --cache converted/content/good
+```
+
+## Build-126: compact, supplied expansions
+
+Expansion Citadels rank productive food/ore clusters, legal footprints and short
+delivery walks. The final foundation must be safe and reachable by a worker.
+Among equally useful clusters, the planner leaves room for a nearby Watchtower
+that can cover the Citadel and resource working areas together. Cramped sites
+fall back to the best usable foundation; blocked or exhausted sites are skipped.
+
+A completed expansion claims its local Mill and Foundry before optional base
+growth, even when a Foundry already stands at home. Expansion construction chooses nearby
+empty-handed workers before distant idle workers. Tower candidates start at
+6 m and keep the Citadel at least 3 m inside their firing range. Placement favors
+uncovered resource working areas, including raw miners, before building coverage
+and separation. Towers outside firing range of a Citadel do not fill its budget.
+
+No cache rebuild is needed. Restart to load the new simulation code.
+
+```powershell
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --ai-expansion-checks
+./prototype/run.ps1 -ExpansionSmoke
+./prototype/run.ps1 -ExpansionSmoke -CapturePath artifacts/expansion-126/layout.png -Resolution 3840x2160
+```
+
+The imported-map smoke funds a passive bot on Bilbo's Bluffs, then lets normal
+worker orders complete an expansion Citadel, Mill, Foundry and covering tower.
+
+## Builds 133-135: the Evil faction
+
+One content pack holds both sides, a match seats a side per team and loads the rules of the sides seated, and the Evil side adds its
+own start (Goblin Hovel), builders, corruption, population, tree, bots, Fate powers and hero abilities. Everything about it, the
+adapters and what is still open, is in [EVIL.md](EVIL.md).
+
+```powershell
+./prototype/run.ps1 -EvilSmoke
+./prototype/run.ps1 -EvilSmoke -Sandbox
+./prototype/run.ps1 -EvilSmoke -Observe -Factions evil,good -Bots Saruman,Gimli -Speed 16
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --evil-checks
+```

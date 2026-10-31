@@ -13,14 +13,23 @@ RALLY_BANNER = 'MODEL_G_GATHER_POINT'
 RALLY_BANNER_FILE = 'objects/' + RALLY_BANNER + '.glb'
 
 
-def production_data(resolver, roster):
+def added_population(units, name):
+    """Population a living unit adds (the Evil Slavemaster's 12); 0 for a record that has no such column."""
+    try:
+        return units.get(name)['AdditionalPopAdded']
+    except KeyError:
+        return 0
+
+
+def production_data(resolver, roster, factions=('good', 'evil')):
     """Source UnitProduced order per skirmish producer, with each unit's source BuildingRequired list, its Fate cost
     (source PowerCost) and its hero group. Units needing a building beyond the skirmish set and units outside the
     exported roster are listed as unavailable with the reason."""
     units, buildings = resolver.db['Units'], resolver.db['Buildings']
     variables = resolver.db['WorldVariables'].records[0]
     producers, rules = {}, {}
-    for name in skirmish_map.SKIRMISH_BUILDINGS:
+    in_scope = [name for name in skirmish_map.SKIRMISH_BUILDINGS if skirmish_map.faction_of(name) in factions]
+    for name in in_scope:
         record = buildings.get(name)
         if not record['IsUnitProducer']:
             continue
@@ -40,11 +49,14 @@ def production_data(resolver, roster):
                            'unique': bool(source['IsUnique']), 'unique_group': source['UniqueGroup'], 'prerequisites': required}
     # Citadel levels 2-5 hold 1, 2, 3 and 3 heroes of the source unique group 0 (Gimli, Aragorn, Legolas).
     capacity = {name: {'group': record['UniqueGroupBuildingAffects'], 'amount': record['AmountBuildingAffectsUniqueGroup']}
-                for name in skirmish_map.SKIRMISH_BUILDINGS
+                for name in in_scope
                 for record in [buildings.get(name)] if record['UniqueGroupBuildingAffects'] >= 0}
     return {'format_version': 1, 'ticks_per_second': 20, 'producers': producers, 'units': rules,
-            'population_provided': {name: buildings.get(name)['AdditionalPopAdded'] for name in skirmish_map.SKIRMISH_BUILDINGS},
-            'unique_group_capacity': capacity, 'max_fate': variables['MaxPowerPoints'], 'fate': fate_data(resolver),
+            'population_provided': {name: buildings.get(name)['AdditionalPopAdded'] for name in in_scope},
+            # Build-133: the Goblin Slavemaster adds 12 population while it lives (source Units.AdditionalPopAdded), 15 at most.
+            'population_by_unit': {name: {'added': units.get(name)['AdditionalPopAdded'], 'max': units.get(name)['MaxPopulation']}
+                                   for name in roster if added_population(units, name) and skirmish_map.faction_of(name) in factions},
+            'unique_group_capacity': capacity, 'max_fate': variables['MaxPowerPoints'], 'fate': fate_data(resolver, factions),
             'initial_population_capacity': variables['DefaultInitialPopulationCapacity'],
             'max_population': variables['MaxPopulationCap'], 'rally_banner': RALLY_BANNER_FILE,
             'adapter': 'UnitTrainingTime milliseconds round up to 20 Hz ticks. Cost, Fate included, is paid and population reserved '
@@ -60,7 +72,7 @@ def ppm(value):
     return round(value * 1_000_000)
 
 
-def fate_data(resolver):
+def fate_data(resolver, factions=('good', 'evil')):
     """How battle earns Fate, as Rings.exe (SHA-256 7d9e30a7...) applies the source WorldVariables: damage a player's unit
     or building deals to an enemy (at most the victim's health) times PowerByDamageRate and the weapon's FateModifier is
     divided by (Fate held + Fate paid into training queues + 1) x PowerReductionScalar, then scaled by the attacker's
@@ -73,9 +85,11 @@ def fate_data(resolver):
     return {'max_points': variables['MaxPowerPoints'], 'level_per_point': variables['PowerLevelPerPoint'],
             'by_damage_ppm': ppm(variables['PowerByDamageRate']), 'reduction_ppm': ppm(variables['PowerReductionScalar']),
             'max_distance_ppm': ppm(variables['MaxPowerDistanceMultiplier']),
+            # Build-133: Evil War Posts earn power by the ground they corrupt, per square metre per second.
+            'warpost_ppm': ppm(variables['WarpostPowerAcquisitionRate']),
             'acquisition_ppm': {'low': ppm(variables['PowerAcquisitionRateLow']), 'medium': ppm(variables['PowerAcquisitionRateMedium']),
                                 'high': ppm(variables['PowerAcquisitionRateHigh'])},
-            'town_centers': [name for name in skirmish_map.SKIRMISH_BUILDINGS if buildings.get(name)['IsTownCenter']],
+            'town_centers': [name for name in skirmish_map.SKIRMISH_BUILDINGS if buildings.get(name)['IsTownCenter'] and skirmish_map.faction_of(name) in factions],
             'adapter': 'The Power Acquisition setting is Medium (no lobby choice yet); every Good unit weapon has FateModifier 1, so '
                        'only building defenses carry their own (fate_ppm); fixed-point millionths replace the source floats, and '
                        'the bots\' difficulty bonus to Fate (x0.85 to x1.5 in Rings.exe) is not applied.'}

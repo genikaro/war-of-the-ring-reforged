@@ -45,7 +45,7 @@ class ConstructionImportTests(unittest.TestCase):
 
     @unittest.skipUnless((wor.ROOT / 'TLOTR - War of the Ring/Database/Buildings.lqr').exists(), 'owner install not available')
     def test_original_open_ground_placement(self):
-        data = skirmish_construction.placement_data(Resolver())
+        data = skirmish_construction.placement_data(Resolver(), ('good',))
         self.assertEqual(data['order'][:3], ['BUILDING_G_TOWN_CENTER_LEVEL_1', 'BUILDING_G_FOOD_STRUCTURE', 'BUILDING_G_BLACKSMITH'])
         self.assertEqual(sorted(data['placeable']), ['BUILDING_G_ARMORY', 'BUILDING_G_DWARF_BARRACKS', 'BUILDING_G_ELF_BARRACKS',
                          'BUILDING_G_GONDORIAN_BARRACKS', 'BUILDING_G_HOSPITAL', 'BUILDING_G_RANGER_BARRACKS', 'BUILDING_G_SKILLS_STRUCTURE',
@@ -92,7 +92,7 @@ class ConstructionImportTests(unittest.TestCase):
     @unittest.skipUnless((wor.ROOT / 'TLOTR - War of the Ring/Database/Buildings.lqr').exists(), 'owner install not available')
     def test_original_watchtower_defense(self):
         with tempfile.TemporaryDirectory(dir=wor.ROOT / 'converted') as output:
-            data = skirmish_construction.defense_data(Path(output), Resolver())
+            data = skirmish_construction.defense_data(Path(output), Resolver(), ('good',))
             self.assertEqual(sorted(data), ['BUILDING_G_TOWER', 'BUILDING_G_TOWER_UPGRADE'])
             tower = data['BUILDING_G_TOWER'][0]
             # The Ballista Tower keeps the arrows (BuildingDefenses1) and adds the bolt (BuildingDefenses2): 35 DPS, 10-22 m, 0.1 a second.

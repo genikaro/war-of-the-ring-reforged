@@ -55,6 +55,6 @@ public partial class Main
             slowest_steps=_engagementStepTimes.Select((ms,tick)=>new {tick,ms}).OrderByDescending(t=>t.ms).Take(5).ToArray(),
             passed=_engagementSelected && _engagementOrdered && _engagementSafe && _engagementHitters.All(h=>h.Count>=14)};
         System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,_attackMoveEngagementSmoke?"attack-move-engagement-smoke-report.json":"engagement-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented=true}));
-        GD.Print("ENGAGEMENT_SMOKE "+JsonSerializer.Serialize(report)); GetTree().Quit(report.passed?0:1);
+        GD.Print("ENGAGEMENT_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed?0:1);
     }
 }

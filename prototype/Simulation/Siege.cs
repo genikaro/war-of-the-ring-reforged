@@ -67,6 +67,7 @@ public sealed partial class SimWorld
     /// <summary>Walk to the building, then swing at it. Returns true when the unit's tick is spent here.</summary>
     private bool UpdateSiege(SimUnit unit)
     {
+        if (unit.BlindUntil > Tick) return false;
         if (unit.Order != OrderKind.AttackStructure) return false;
         if (!ConstructionSites.TryGetValue(unit.OrderTarget,out var site) || site.Team < 0 || site.Health <= 0
             || (site.Team == unit.Team && !unit.SiegeForced))
@@ -85,7 +86,7 @@ public sealed partial class SimWorld
     /// Returns true when the unit's tick is spent striking.</summary>
     private bool AttackMoveSiege(SimUnit unit)
     {
-        if (unit.Order != OrderKind.AttackMove || unit.Target >= 0 || unit.AttackMoveReturning || unit.RingActive || unit.Definition.DpsMilli <= 0) return false;
+        if (unit.Order != OrderKind.AttackMove || unit.Target >= 0 || unit.AttackMoveReturning || unit.RingActive || unit.Concealed || unit.Definition.DpsMilli <= 0) return false;
         if (unit.SiteTarget >= 0 && !CanAttackSite(unit.Team,unit.SiteTarget))
         { CancelStrike(unit); unit.SiteTarget = -1; unit.CombatWaiting=false; ResumeAttackMove(unit); return false; }
         if (unit.SiteTarget < 0)
@@ -160,7 +161,7 @@ public sealed partial class SimWorld
     {
         var (x,z) = Nav(unit).Center(node); int y = Nav(unit).NodeHeight(node);
         int Spacing(SimUnit other)=>unit.Definition.BodyRadiusMm>350 ? PositionSpacing(unit,other) : BodySeparation(unit,other);
-        return !Units.Any(other => other.Id != unit.Id && other.Present && other.Goal < 0 && other.TransitNode < 0
+        return !ActiveUnits.Any(other => other.Id != unit.Id && other.Present && other.Goal < 0 && other.TransitNode < 0
             && VerticalOverlap(y,unit.Definition.BodyHeightMm,other.Y,other.Definition.BodyHeightMm)
             && DistanceSquared(x,z,other.X,other.Z)<(long)Spacing(other)*Spacing(other));
     }
@@ -170,32 +171,29 @@ public sealed partial class SimWorld
     {
         var (x,z) = SitePosition(site);
         if (unit.AttackStartTick >= 0 && unit.AttackVictim >= 0) CancelStrike(unit);
-        if (unit.AttackStartTick >= 0 && Tick-unit.AttackStartTick >= unit.Definition.Attacks[unit.AttackVariant].DurationTicks)
+        if (unit.AttackStartTick >= 0 && unit.StrikeElapsed(Tick) >= unit.Definition.Attacks[unit.AttackVariant].DurationTicks
+            && unit.NextHit >= unit.Definition.Attacks[unit.AttackVariant].Hits.Length)
         { unit.AttackStartTick = unit.AttackVariant = -1; unit.NextHit = 0; }
         if (unit.AttackStartTick < 0 && unit.Cooldown == 0)
         {
             if (!FacingAlignedWith(unit,x,z)) return;
+            EndCamouflage(unit);
             // A building is never in melee reach of a missile unit's sword, so ranged attackers always shoot.
-            var eligible = Enumerable.Range(0,unit.Definition.Attacks.Length)
-                .Where(i => !unit.Definition.IsRanged || !unit.Definition.Attacks[i].Melee).ToArray();
-            if (eligible.Length == 0) eligible = Enumerable.Range(0,unit.Definition.Attacks.Length).ToArray();
-            long total = eligible.Sum(i => (long)unit.Definition.Attacks[i].Weight);
-            long pick = ((long)unit.Id*73856093+unit.AttackSerial*19349663L)%total;
-            int choice = 0;
-            while (pick >= unit.Definition.Attacks[eligible[choice]].Weight) pick -= unit.Definition.Attacks[eligible[choice++]].Weight;
-            unit.AttackVariant = eligible[choice]; unit.AttackSerial++; unit.AttackStartTick = Tick;
+            unit.AttackVariant = AttackVariants.Choose(unit.Definition,unit.Id,unit.AttackSerial);
+            unit.AttackSerial++; unit.AttackStartTick = Tick;
             unit.AttackVictim = -1; unit.NextHit = 0; unit.Cooldown = unit.Definition.Attacks[unit.AttackVariant].DurationTicks;
+            unit.AttackHasteMicroTicks = 0;
             CombatEvents.Add(new(Tick,CombatEventKind.Start,unit.Id,-1,unit.AttackVariant,-1,0,Tick,unit.X,unit.Y,unit.Z));
         }
         if (unit.AttackStartTick < 0) return;
         var attack = unit.Definition.Attacks[unit.AttackVariant];
-        int elapsed = Tick-unit.AttackStartTick;
+        int elapsed = unit.StrikeElapsed(Tick);
         while (unit.NextHit < attack.Hits.Length && attack.Hits[unit.NextHit].Tick <= elapsed)
         {
             int index = unit.NextHit++;
             if (site.Health <= 0 || SiegeTarget(unit) != site.Id) continue;
             long rate = Math.Max(0,(long)unit.MeleeDamageRate-SiteRules(site).ArmorMilli);
-            long damage = rate*attack.DurationTicks*attack.Hits[index].Scale/(TicksPerSecond*attack.Hits.Sum(h => (long)h.Scale));
+            long damage = unit.Definition.HitDamage(attack,index,rate);
             damage = PlaceDamage(unit,damage,unit.Definition.FiresProjectile(unit.AttackVariant),building: true);
             // A source siege weapon (the Huorn's, x3) and Gimli's Siege Aura (x1.5) multiply damage against buildings.
             damage = damage*unit.Definition.SiegePpm/1_000_000*unit.SiegeAuraPpm/1_000_000;
@@ -204,38 +202,47 @@ public sealed partial class SimWorld
         }
     }
 
-    private void DamageSite(SimUnit unit,ConstructionSite site,int attack,int hit,long damage,int startTick)
+    private void DamageSite(SimUnit? unit,ConstructionSite site,int attack,int hit,long damage,int startTick,CombatEventKind kind = CombatEventKind.Hit,int? experiencePpm = null,
+        int source = -1,int sourceTeam = -1)
     {
         var rules = SiteRules(site);
         int before = site.Health;
-        site.Health = Math.Max(0,site.Health-(int)Math.Max(1,(damage+999)/1000));
+        site.Health = Math.Max(0,site.Health-(int)(damage > 0 ? Math.Max(1,(damage+999)/1000) : 0));
+        if (unit != null) EarnHeroExperience(unit,site.Team,(before-site.Health)*1000L,building:true,experiencePpm ?? (kind==CombatEventKind.Burn ? 0 : WeaponExperiencePpm(unit,attack)));
         site.ProgressMicroTicks = Math.Min(site.ProgressMicroTicks,(long)rules.DurationTicks*1_000_000);
         var (x,z) = SitePosition(site);
-        if (before>site.Health) RecordHostileDamage(unit,site.Team,x,z,asset:true);
-        EarnFate(unit.Team,site.Team,unit.X,unit.Z,(before-site.Health)*1000L);
-        CombatEvents.Add(new(Tick,CombatEventKind.Hit,unit.Id,-1,attack,hit,(before-site.Health)*1000L,startTick,x,Navigation.GroundHeight(x,z),z));
-        if (site.Health <= 0) DestroySite(site,unit);
+        if (unit != null)
+        {
+            if (before>site.Health) RecordHostileDamage(unit,site.Team,x,z,asset:true);
+            EarnFate(unit.Team,site.Team,unit.X,unit.Z,(before-site.Health)*1000L);
+        }
+        else if (ConstructionSites.TryGetValue(source,out var tower) && DefenseWeapon(tower,attack) is { } weapon)
+            EarnFate(tower.Team,site.Team,tower.X,tower.Z,(before-site.Health)*1000L,weapon.FatePpm);
+        CombatEvents.Add(new(Tick,kind,unit?.Id ?? -1,-1,attack,hit,(before-site.Health)*1000L,startTick,x,Navigation.GroundHeight(x,z),z,site.Id));
+        if (site.Health <= 0) DestroySite(site,unit,sourceTeam);
     }
 
     /// <summary>A ruined building frees its ground, its producer and its delivery point. A Mill or Foundry
     /// leaves its resource behind as an unclaimed site, exactly as a cancelled foundation does.</summary>
-    private void DestroySite(ConstructionSite site,SimUnit? killer)
+    private void DestroySite(ConstructionSite site,SimUnit? killer,int sourceTeam = -1)
     {
-        foreach (var unit in Units.Where(u => u.Order == OrderKind.AttackStructure && u.OrderTarget == site.Id))
+        foreach (var unit in ActiveUnits.Where(u => u.Order == OrderKind.AttackStructure && u.OrderTarget == site.Id))
         { CancelStrike(unit); unit.Order = OrderKind.Idle; unit.OrderTarget = -1; unit.SiegePlanTick = -1; unit.SiegeForced = false; unit.AutoEngage = true; unit.CombatWaiting=false; }
-        foreach (var unit in Units.Where(u => u.Order == OrderKind.Build && u.OrderTarget == site.Id))
+        foreach (var unit in ActiveUnits.Where(u => u.Order == OrderKind.Build && u.OrderTarget == site.Id))
         { unit.Order = OrderKind.Idle; unit.OrderTarget = -1; unit.GatherPlanTick = -1; }
-        foreach (var unit in Units.Where(u => u.InsideSite == site.Id)) { LeaveBuilding(unit); FinishGather(unit); }
+        foreach (var unit in ActiveUnits.Where(u => u.InsideSite == site.Id)) { LeaveBuilding(unit); FinishGather(unit); }
         Producers.Remove(site.Id);
         DropOffs.RemoveAll(d => d.Obstacle == site.Obstacle && d.Team == site.Team);
         Navigation.SetObstacle(site.Obstacle,false);
         if (killer != null && killer.Team != site.Team) killer.KillCount++;
         if (killer != null) RecordRazed(killer.Team,site); // A surrendering bot's own demolition is no battle loss.
+        else if (sourceTeam >= 0) RecordRazed(sourceTeam,site);
         DestroyedSites.Add(site.Id);
         // A ruined start building stops providing its population and prerequisites.
         if (site.Prebuilt && StartBuildings.TryGetValue(site.Team,out var starts)) starts.Remove(site.Building!);
         if (site.Building != null) ConstructionSites.Remove(site.Id);
-        else { site.Team = -1; site.ProgressMicroTicks = 0; site.RepairMicroTicks = 0; site.Health = 0; site.Complete = false; }
+        else { site.Team = -1; site.ProgressMicroTicks = 0; site.RepairMicroTicks = 0; site.Health = 0; site.Complete = false;
+            site.FirePpm = 0; site.FireSource = -1; site.FireDamageCarry = site.FireHealthCarry = 0; }
     }
 
     private void ReleaseSiegeProjectile(SimUnit unit,ConstructionSite site,int hit,long damage)
@@ -246,8 +253,12 @@ public sealed partial class SimWorld
         long squared = DistanceSquared(unit.X,unit.Z,x,z)+(long)(y-targetY)*(y-targetY);
         long distance = IntegerMotion.SqrtCeiling(squared);
         int travel = (int)Math.Max(1,(distance*TicksPerSecond+unit.Definition.ProjectileSpeedMmPerSecond-1)/unit.Definition.ProjectileSpeedMmPerSecond);
+        var axe = unit.AxeAbility; var attack = unit.Definition.Attacks[unit.AttackVariant];
+        int fire = (int)((long)(unit.FlameArrow?.FirePpmPerSecond ?? axe?.FirePpmPerSecond ?? 0)*attack.DurationTicks*attack.Hits[hit].Scale
+            /(TicksPerSecond*attack.Hits.Sum(h => (long)h.Scale)));
         Projectiles.Add(new(_projectileSequence++,unit.Id,-1,unit.AttackVariant,hit,damage,unit.AttackStartTick,
-            Tick,Tick+travel,unit.X,y,unit.Z,x,targetY,z,site.Id));
+            Tick,Tick+travel,unit.X,y,unit.Z,x,targetY,z,site.Id,FirePpm: fire,
+            Style: unit.FlameArrow!=null ? "evil-flame-arrows" : axe?.Kind == AbilityKind.FlamingAxe ? "dwarf-flaming-axe" : ""));
         CombatEvents.Add(new(Tick,CombatEventKind.Release,unit.Id,-1,unit.AttackVariant,hit,0,unit.AttackStartTick,unit.X,y,unit.Z));
     }
 
@@ -257,7 +268,7 @@ public sealed partial class SimWorld
         foreach (var site in ConstructionSites.Values.Where(s => s.Team >= 0 && s.Complete).ToArray())
         {
             var rules = SiteRules(site); int max = SiteMaxHealth(site);
-            var builders = Units.Where(u => u.Team == site.Team && u.Present && u.Order == OrderKind.Build && u.OrderTarget == site.Id).ToArray();
+            var builders = ActiveUnits.Where(u => u.Team == site.Team && u.Present && u.Order == OrderKind.Build && u.OrderTarget == site.Id).ToArray();
             if (builders.Length == 0) continue;
             if (site.Health >= max || site.Health <= 0)
             {

@@ -13,7 +13,7 @@ public partial class Main
     /// <summary>The clip for a worker's building, gathering phase or carried sack; null when ordinary animation applies.</summary>
     private GatherAnimation? WorkerAnimation(SimUnit unit)
     {
-        if (unit.Health <= 0 || unit.StrikeActive || unit.Casting || unit.Target >= 0
+        if (unit.Health <= 0 || unit.NatureLocked(_world!.Tick) || unit.StrikeActive || unit.Casting || unit.Target >= 0
             || !_workerClips.TryGetValue(unit.Definition.Name,out var clips) || !_world!.Workers.TryGetValue(unit.Definition.Name,out var worker)) return null;
         string kind = unit.CargoKind == ResourceKind.Ore ? "ore" : "food";
         int elapsed = _world.Tick-1-unit.GatherPhaseTick;
@@ -33,7 +33,7 @@ public partial class Main
     {
         (int X,int Z)? target = _world!.IsBuilding(unit) ? _world.SitePosition(_world.ConstructionSites[unit.OrderTarget]) : unit.GatherPhase switch {
             GatherPhase.Mining or GatherPhase.PickingUp when _world!.Resources.TryGetValue(unit.OrderTarget,out var source) => (source.X,source.Z),
-            GatherPhase.PuttingDown => _world!.DropOffs.Where(d => d.Team == unit.Team)
+            GatherPhase.PuttingDown => _world!.DropOffs.Where(d => d.Team == unit.Team && (unit.Order != OrderKind.ReturnCargo || d.Obstacle == unit.OrderTarget))
                 .OrderBy(d => SimWorld.DistanceSquared(unit.X,unit.Z,d.X,d.Z)).Select(d => ((int,int)?)(d.X,d.Z)).FirstOrDefault(),
             _ => null };
         return target is var (x,z) ? Mathf.Atan2(-(x-unit.X),z-unit.Z) : null;

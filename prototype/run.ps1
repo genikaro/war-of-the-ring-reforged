@@ -5,8 +5,18 @@ param(
     [switch]$MotionSmoke,
     [switch]$CombatSmoke,
     [switch]$CommandSmoke,
+    [switch]$InteractionSmoke,
     [switch]$OrdersSmoke,
     [switch]$AbilitySmoke,
+    [switch]$AudioSmoke,
+    [switch]$Unmuted,
+    [switch]$ElvenSmoke,
+    [switch]$NatureSmoke,
+    [switch]$BloodSmoke,
+    [switch]$HeroSkillSmoke,
+    [switch]$GlobalPowerSmoke,
+    [switch]$PlacesSmoke,
+    [switch]$HeroExperienceSmoke,
     [switch]$Skirmish,
     [ValidatePattern('^MP[0-9]{2}_[^\/.]+$')]
     [string]$Map,
@@ -20,11 +30,13 @@ param(
     [switch]$FrodoSmoke,
     [switch]$TechSmoke,
     [switch]$Tier2Smoke,
+    [switch]$EvilSmoke,
     [switch]$ResearchSmoke,
     [switch]$SiegeSmoke,
     [switch]$DefenseSmoke,
     [switch]$VictorySmoke,
     [switch]$AiSmoke,
+    [switch]$ExpansionSmoke,
     [switch]$ObserverSmoke,
     [switch]$Setup,
     [switch]$SetupSmoke,
@@ -32,9 +44,13 @@ param(
     [switch]$SandboxSmoke,
     [switch]$Observe,
     [string[]]$Bots,
+    [ValidateSet('good','evil')]
+    [string[]]$Factions,
     [int]$Speed,
     [int]$Seed,
     [switch]$Profile,
+    [switch]$PerformanceSmoke,
+    [switch]$EconomyRecoverySmoke,
     [switch]$NoAi,
     [string]$AiPersonality,
     [switch]$MeleeSmoke,
@@ -65,31 +81,57 @@ if (-not $GodotPath) {
     else { $GodotPath = (Get-Command godot -ErrorAction Stop).Source }
 }
 # -Skirmish with nothing else that chooses the match opens the setup screen; -Setup always does.
-$launchOnly = @('Skirmish','GodotPath','DotnetPath','Resolution','HideHud','DebugMenu','View')
+$launchOnly = @('Skirmish','GodotPath','DotnetPath','Resolution','HideHud','DebugMenu','View','Unmuted')
 $setupMode = $Setup -or $SetupSmoke -or ($Skirmish -and -not ($PSBoundParameters.Keys | Where-Object { $_ -notin $launchOnly }))
 $env:DOTNET_ROOT = Split-Path -Parent $DotnetPath
 $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
+if ($ExpansionSmoke) { $AiSmoke = $true; $NoAi = $true; $Speed = 16 }
+if ($EconomyRecoverySmoke) {
+    $Observe = $true; $Speed = 16
+    if (-not $Map -and -not $CachePath) { $Map = 'MP06_Wheel of Fate' }
+    if (-not $Bots) { $Bots = @('Gimli','Gimli','Gimli','Gimli','Gimli','Gimli') }
+}
+if ($ElvenSmoke -or $NatureSmoke -or $BloodSmoke -or $GlobalPowerSmoke -or $PlacesSmoke -or $HeroSkillSmoke -or $HeroExperienceSmoke -or $PerformanceSmoke) { $Sandbox = $true }
 & $DotnetPath build (Join-Path $PSScriptRoot 'Reforged.csproj') --nologo
 if ($LASTEXITCODE -ne 0) { throw 'C# build failed' }
 $arguments = @('--path', $PSScriptRoot)
 if ($Resolution) { $arguments += @('--resolution',$Resolution) }
-if ($SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $TechSmoke -or $Tier2Smoke -or $ResearchSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $Observe -or $Map -or $Sandbox -or $SandboxSmoke) { $Skirmish = $true }
-if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $OrdersSmoke -or $AbilitySmoke -or $SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $TechSmoke -or $Tier2Smoke -or $ResearchSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $SetupSmoke -or $SandboxSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
+if ($SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $TechSmoke -or $Tier2Smoke -or $EvilSmoke -or $ResearchSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $Observe -or $Map -or $Sandbox -or $SandboxSmoke) { $Skirmish = $true }
+if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $InteractionSmoke -or $OrdersSmoke -or $AbilitySmoke -or $SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $TechSmoke -or $Tier2Smoke -or $EvilSmoke -or $ResearchSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $SetupSmoke -or $SandboxSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
     $renderRate = if ($MotionSmoke -or $FormationSmoke) { '80' } else { '20' }
     if (-not $CapturePath) { $arguments += '--headless' }
     $arguments += @('--fixed-fps', $renderRate)
 }
+if ($ElvenSmoke -or $NatureSmoke -or $BloodSmoke -or $GlobalPowerSmoke -or $PlacesSmoke -or $HeroSkillSmoke -or $HeroExperienceSmoke -or $PerformanceSmoke -or $EconomyRecoverySmoke) {
+    if (-not $CapturePath) { $arguments += '--headless' }
+    $arguments += @('--fixed-fps','20')
+}
+if ($AudioSmoke) {
+    if (-not $CapturePath) { $arguments += '--headless' }
+    $arguments += @('--fixed-fps','20')
+}
 $arguments += '--'
+if ($AudioSmoke) { $arguments += '--audio-smoke' }
 $arguments += "--view=$View"
 if ($HideHud) { $arguments += '--hide-hud' }
+# Debug sessions start muted (build-142); -Unmuted plays the audio.
+if ($Unmuted) { $arguments += '--unmuted' }
 if ($DebugMenu) { $arguments += '--debug-menu' }
 if ($Smoke -or $MotionSmoke) { $arguments += '--smoke' }
 if ($MotionSmoke) { $arguments += '--motion-smoke' }
 if ($CombatSmoke) { $arguments += '--combat-smoke' }
 if ($CommandSmoke) { $arguments += '--command-smoke' }
+if ($InteractionSmoke) { $arguments += '--interaction-smoke' }
 if ($OrdersSmoke) { $arguments += '--orders-smoke' }
 if ($AbilitySmoke) { $arguments += '--ability-smoke' }
+if ($ElvenSmoke) { $arguments += '--elven-smoke' }
+if ($NatureSmoke) { $arguments += '--nature-smoke' }
+if ($BloodSmoke) { $arguments += '--blood-smoke' }
+if ($GlobalPowerSmoke) { $arguments += '--global-power-smoke' }
+if ($PlacesSmoke) { $arguments += '--places-smoke' }
+if ($HeroSkillSmoke) { $arguments += '--hero-skill-smoke' }
+if ($HeroExperienceSmoke) { $arguments += '--hero-experience-smoke' }
 if ($SkirmishSmoke) { $arguments += '--skirmish-smoke' }
 if ($ConstructionSmoke) { $arguments += '--construction-smoke' }
 if ($StructureSmoke) { $arguments += '--structure-smoke' }
@@ -100,20 +142,25 @@ if ($MinimapSmoke) { $arguments += '--minimap-smoke' }
 if ($FrodoSmoke) { $arguments += '--frodo-smoke' }
 if ($TechSmoke) { $arguments += '--tech-smoke' }
 if ($Tier2Smoke) { $arguments += '--tier2-smoke' }
+if ($EvilSmoke) { $arguments += '--evil-smoke'; if (-not $Factions) { $arguments += '--factions=evil,good' } }
 if ($ResearchSmoke) { $arguments += '--research-smoke' }
 if ($SiegeSmoke) { $arguments += '--siege-smoke' }
 if ($DefenseSmoke) { $arguments += '--defense-smoke' }
 if ($VictorySmoke) { $arguments += '--victory-smoke' }
 if ($AiSmoke) { $arguments += '--ai-smoke' }
+if ($ExpansionSmoke) { $arguments += '--expansion-smoke' }
 if ($ObserverSmoke) { $arguments += @('--observer-smoke','--observe','--bots=Gimli,Aragorn') }
 if ($setupMode) { $arguments += '--setup' }
 if ($SetupSmoke) { $arguments += '--setup-smoke' }
 if ($SandboxSmoke) { $arguments += '--sandbox-smoke' }
 if ($Observe) { $arguments += '--observe' }
 if ($Bots) { $arguments += "--bots=$($Bots -join ',')" }
+if ($Factions) { $arguments += "--factions=$($Factions -join ',')" }
 if ($Speed) { $arguments += "--speed=$Speed" }
 if ($Seed) { $arguments += "--seed=$Seed" }
 if ($Profile) { $arguments += '--profile' }
+if ($PerformanceSmoke) { $arguments += @('--performance-smoke','--no-ai') }
+if ($EconomyRecoverySmoke) { $arguments += '--economy-recovery-smoke' }
 if ($NoAi) { $arguments += '--no-ai' }
 if ($AiPersonality) { $arguments += "--ai-personality=$AiPersonality" }
 if ($MeleeSmoke) { $arguments += '--melee-smoke' }
@@ -130,5 +177,16 @@ if ($Map -and -not $CachePath) { $CachePath = Join-Path $repo "converted/skirmis
 if (($Sandbox -or $SandboxSmoke) -and -not $CachePath) { $CachePath = Join-Path $repo 'converted/skirmish-maps/Sandbox' }
 if ($Skirmish -and -not $CachePath) { $CachePath = Join-Path $repo 'converted/skirmish' }
 if ($CachePath) { $arguments += "--cache=$([System.IO.Path]::GetFullPath($CachePath))" }
+if ($AudioSmoke) {
+    # Godot can report a signal connection error while still returning exit code zero.
+    $audioOutput = @(& $GodotPath @arguments 2>&1)
+    $audioExit = $LASTEXITCODE
+    $audioOutput | ForEach-Object { Write-Output $_ }
+    if ($audioExit -eq 0 -and ($audioOutput -match '^ERROR:')) {
+        Write-Output 'Audio smoke failed: Godot reported errors.'
+        exit 1
+    }
+    exit $audioExit
+}
 & $GodotPath @arguments
 exit $LASTEXITCODE

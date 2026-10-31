@@ -5,8 +5,8 @@ using System.Text.RegularExpressions;
 
 /// <summary>The match chosen on the setup screen: the map's cache, the human's slot (-1 to watch), each slot's bot
 /// personality with its traits ("Gimli+Defender"; "" for the human and closed slots), the closed slots, the start speed,
-/// and the seed that draws its random places of power (build-54), new for every Start.</summary>
-public sealed record SkirmishSetup(string Cache,string Map,int Human,string[] Bots,int[] Closed,int Speed,int Seed = 0);
+/// and the seed that draws its random places of power and bots, new for every Start.</summary>
+public sealed record SkirmishSetup(string Cache,string Map,int Human,string[] Bots,int[] Closed,int Speed,int Seed = 0,string[]? Factions = null);
 
 /// <summary>The skirmish setup screen, a lobby in the manner of Warcraft III and StarCraft II: every multiplayer map
 /// with its player count and a preview of its start positions, one row per start position (you, a bot personality or
@@ -15,9 +15,8 @@ public sealed record SkirmishSetup(string Cache,string Map,int Human,string[] Bo
 /// build-49), the start speed, and Start. Maps not imported yet are listed with the command that imports them.</summary>
 public partial class SetupScreen : Control
 {
-    public sealed record Personality(string Id,int Difficulty);
     public sealed record MapEntry(string Stem,string Title,string? Cache,int Players,(int X,int Z)[] Bases,(bool Food,int X,int Z)[] Resources,
-        int WidthMm,int HeightMm,Color[] Colors,Personality[] Personalities,string DefaultPersonality,bool Sandbox = false)
+        int WidthMm,int HeightMm,Color[] Colors,AiBotOption[] Personalities,string DefaultPersonality,bool Sandbox = false)
     {
         public bool Imported => Cache != null;
     }
@@ -40,6 +39,9 @@ public partial class SetupScreen : Control
     private ScrollContainer _scroll = null!;
     private Label _mapTitle = null!,_mapDetail = null!,_status = null!;
     private readonly (Control Row,ColorRect Swatch,Label Name,OptionButton Choice,MenuButton Traits)[] _slots = new (Control,ColorRect,Label,OptionButton,MenuButton)[Slots];
+    /// <summary>Each slot's side (build-133): Good or Evil. The Sandbox lets you choose both of yours.</summary>
+    private readonly OptionButton[] _sides = new OptionButton[Slots];
+    private const int GoodSide = 0,EvilSide = 1;
     /// <summary>Each slot's bot traits, kept while the slot stays a bot.</summary>
     private readonly SortedSet<AiTrait>[] _traits = [.. Enumerable.Range(0,Slots).Select(_ => new SortedSet<AiTrait>())];
     private MapPreview _preview = null!;
@@ -91,9 +93,11 @@ public partial class SetupScreen : Control
             var row = new HBoxContainer(); row.AddThemeConstantOverride("separation",10); info.AddChild(row);
             var swatch = new ColorRect { CustomMinimumSize = new(14,14),SizeFlagsVertical = SizeFlags.ShrinkCenter }; row.AddChild(swatch);
             var name = Caption($"Player {slot+1}",15,Ink); name.CustomMinimumSize = new(66,0); row.AddChild(name);
-            var choice = new OptionButton { CustomMinimumSize = new(214,30),FocusMode = FocusModeEnum.None };
+            var choice = new OptionButton { CustomMinimumSize = new(168,30),FocusMode = FocusModeEnum.None };
             StyleDropDown(choice,choice.GetPopup()); choice.ItemSelected += item => ChooseSlot(index,(int)item); row.AddChild(choice);
             choice.Pressed += () => { _cardSlot = index; Refresh(); };
+            var side = new OptionButton { CustomMinimumSize = new(70,30),FocusMode = FocusModeEnum.None,TooltipText = "The side this player commands: the Free Peoples (Good) or the Minions of Sauron (Evil)" };
+            side.AddItem("Good"); side.AddItem("Evil"); StyleDropDown(side,side.GetPopup()); side.ItemSelected += _ => Refresh(); row.AddChild(side); _sides[slot] = side;
             // Traits (build-51): check items that stay open, so several can be ticked in one go.
             var traits = new MenuButton { Text = "Traits",CustomMinimumSize = new(80,30),FocusMode = FocusModeEnum.None,Flat = false };
             var menu = traits.GetPopup(); menu.HideOnCheckableItemSelection = false;
@@ -178,14 +182,14 @@ public partial class SetupScreen : Control
             if (!row.Visible) continue;
             swatch.Color = slot < map.Colors.Length ? map.Colors[slot] : Dim;
             choice.Clear();
+            _sides[slot].Select(previous != null && previous.Cache == map.Cache && previous.Factions?.ElementAtOrDefault(slot) == "evil" ? EvilSide : GoodSide);
             choice.AddItem("You"); choice.AddItem("Closed");
             // On the Sandbox both start positions are yours.
             choice.Disabled = map.Sandbox;
             if (map.Sandbox) { choice.Select(You); continue; }
             foreach (var bot in map.Personalities)
             {
-                var entry = AiRoster.Entry(bot.Id);
-                choice.AddItem($"Bot · {entry.Name} ({AiRoster.Difficulty(bot.Difficulty)})");
+                choice.AddItem(bot.Label);
                 choice.SetItemTooltip(choice.ItemCount-1,BotTip(bot));
             }
             int pick = slot == 0 ? You : DefaultBot(map);
@@ -205,8 +209,9 @@ public partial class SetupScreen : Control
 
     private static int DefaultBot(MapEntry map) => FirstBot+Math.Max(0,Array.FindIndex(map.Personalities,p => p.Id == map.DefaultPersonality));
 
-    private static string BotTip(Personality bot)
+    private static string BotTip(AiBotOption bot)
     {
+        if(bot.IsRandom) return $"Random · {AiRoster.Difficulty(bot.Difficulty)}\nChooses a random {AiRoster.Difficulty(bot.Difficulty)} bot when the match starts.\nKeeps this slot's selected traits.";
         var entry = AiRoster.Entry(bot.Id);
         return $"{entry.Name} · {AiRoster.Summary(bot.Difficulty,entry.Style)}\n{entry.Description}";
     }
@@ -268,10 +273,18 @@ public partial class SetupScreen : Control
             _cardDescription.Text = "Choose a bot for a start position to see how it plays.";
             _triangle.Display(null,Dim); return;
         }
-        var bot = map.Personalities[Choice(slot)-FirstBot]; var entry = AiRoster.Entry(bot.Id); var style = entry.Style;
+        var bot = map.Personalities[Choice(slot)-FirstBot];
+        _cardTraits.Text = _traits[slot].Count == 0 ? "" : "Traits: "+AiRoster.TraitList(_traits[slot]); _cardTraits.Visible = _traits[slot].Count > 0;
+        if(bot.IsRandom)
+        {
+            _cardTitle.Text=$"Random · {AiRoster.Difficulty(bot.Difficulty)}";
+            _cardDetail.Text=$"Player {slot+1} · Personality chosen at Start";
+            _cardDescription.Text=$"Chooses a random {AiRoster.Difficulty(bot.Difficulty)} bot when the match starts. Keeps this slot's selected traits.";
+            _triangle.Display(null,Dim); _triangle.Visible=false; return;
+        }
+        var entry = AiRoster.Entry(bot.Id); var style = entry.Style;
         _cardTitle.Text = $"{entry.Name} · {AiRoster.Difficulty(bot.Difficulty)} · {style.Label}";
         _cardDetail.Text = $"Player {slot+1} · Aggression {style.Aggression} · Expansion {style.Expansion} · Tech {style.Tech}";
-        _cardTraits.Text = _traits[slot].Count == 0 ? "" : "Traits: "+AiRoster.TraitList(_traits[slot]); _cardTraits.Visible = _traits[slot].Count > 0;
         _cardDescription.Text = entry.Description;
         _triangle.Display(style,slot < map.Colors.Length ? map.Colors[slot] : Ink);
     }
@@ -285,13 +298,13 @@ public partial class SetupScreen : Control
         int open = Enumerable.Range(0,players).Count(s => Choice(s) != Closed);
         int human = Enumerable.Range(0,players).FirstOrDefault(s => Choice(s) == You,-1);
         _preview.Display(map,map?.Cache is { } cache ? _terrain.GetValueOrDefault(cache) : null,Enumerable.Range(0,players).Select(Choice).ToArray());
-        for (int slot = 0; slot < players; slot++) RefreshTraits(slot);
+        for (int slot = 0; slot < players; slot++) { RefreshTraits(slot); _sides[slot].Disabled = Choice(slot) == Closed; }
         RefreshCard(map,players);
         _start.Disabled = _loading || map is not { Imported: true } || open < 2;
         _status.Text = map == null ? "No multiplayer maps found." : !map.Imported ? $"Not imported yet. Run: {ImportCommand(map.Stem)}"
             : open < 2 ? "At least two start positions must be open."
             : map.Sandbox ? $"Sandbox: you command Player 1 and Player 2 · Tab switches · {_speed.Labels.ElementAtOrDefault(_speed.Index)} speed"
-            : human >= 0 ? $"You play Player {human+1} against {open-1} bot{(open == 2 ? "" : "s")} · {_speed.Labels.ElementAtOrDefault(_speed.Index)} speed"
+            : human >= 0 ? $"You play Player {human+1} ({(_sides[human].Selected == EvilSide ? "Evil" : "Good")}) against {open-1} bot{(open == 2 ? "" : "s")} · {_speed.Labels.ElementAtOrDefault(_speed.Index)} speed"
             : $"Nobody plays: you watch {open} bots · {_speed.Labels.ElementAtOrDefault(_speed.Index)} speed";
     }
 
@@ -301,7 +314,8 @@ public partial class SetupScreen : Control
         var choices = Enumerable.Range(0,map.Players).Select(Choice).ToArray();
         var bots = choices.Select((c,slot) => c >= FirstBot ? new AiBotChoice(map.Personalities[c-FirstBot].Id,[.. _traits[slot]]).ToString() : "").ToArray();
         Started?.Invoke(new(cache,map.Title,Array.IndexOf(choices,You),bots,
-            Enumerable.Range(0,map.Players).Where(s => choices[s] == Closed).ToArray(),Speeds[_speed.Index],Random.Shared.Next()));
+            Enumerable.Range(0,map.Players).Where(s => choices[s] == Closed).ToArray(),Speeds[_speed.Index],Random.Shared.Next(),
+            Enumerable.Range(0,map.Players).Select(s => _sides[s].Selected == EvilSide ? "evil" : "good").ToArray()));
     }
 
     private const string SandboxStem = "Sandbox";
@@ -353,10 +367,11 @@ public partial class SetupScreen : Control
         var resources = skirmish.GetProperty("resources").EnumerateArray()
             .Select(r => { var (x,z) = Ground(r.GetProperty("position")); return (r.GetProperty("kind").GetString() == "food",x,z); }).ToArray();
         var colors = manifest.GetProperty("team_colors").EnumerateArray().Select(c => new Color(c[0].GetSingle(),c[1].GetSingle(),c[2].GetSingle())).ToArray();
-        Personality[] personalities = []; string fallback = "";
+        AiBotOption[] personalities = []; string fallback = "";
         if (skirmish.TryGetProperty("ai",out var ai))
         {
-            personalities = [.. ai.GetProperty("personalities").EnumerateArray().Select(p => new Personality(p.GetProperty("id").GetString()!,p.GetProperty("difficulty").GetInt32()))];
+            personalities = AiBotOptions.For(ai.GetProperty("personalities").EnumerateArray()
+                .Select(p => new AiBotOption(p.GetProperty("id").GetString()!,p.GetProperty("difficulty").GetInt32())));
             fallback = ai.GetProperty("default_personality").GetString()!;
         }
         // The navigation file opens with its size; reading the head spares parsing megabytes for every map.
@@ -445,6 +460,7 @@ public partial class SetupScreen : Control
     public Button MapButton(string stem) => _mapButtons[stem];
     public void RevealMap(string stem) => _scroll.EnsureControlVisible(_mapButtons[stem]);
     public OptionButton SlotChoice(int slot) => _slots[slot].Choice;
+    public OptionButton SlotSide(int slot) => _sides[slot];
     public bool SlotShown(int slot) => _slots[slot].Row.Visible;
     public SpeedSlider SpeedSlider => _speed;
     public Button StartButton => _start;

@@ -7,7 +7,7 @@ using System.Text.Json;
 /// The run records when each milestone happened, in game ticks, as a timeline for tuning.</summary>
 public partial class Main
 {
-    private bool _aiSmoke,_aiAttackCaptured;
+    private bool _aiSmoke,_aiAttackCaptured,_expansionSmoke;
     private readonly Dictionary<string,bool> _aiChecks = [];
     private readonly SortedDictionary<string,int> _aiTimeline = [];
     private int _aiPhase,_aiStep,_aiMaxWorkers,_aiArmyAtLaunch = -1;
@@ -17,6 +17,7 @@ public partial class Main
 
     private void AiSmokeInput()
     {
+        if (_expansionSmoke) { ExpansionSmokeInput(); return; }
         var world = _world!;
         if (_frames < 2 || _aiPhase > 3) return;
         var ai = world.AiPlayers.GetValueOrDefault(AiTeam);

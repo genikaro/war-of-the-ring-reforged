@@ -24,6 +24,7 @@ public partial class Main : Node3D
     private readonly HashSet<int> _selected = [];
     private readonly Dictionary<int, UnitView> _views = [];
     private readonly Dictionary<string,JsonElement> _unitModels = [];
+    private Node3D? _modelTemplateStore;
     private readonly Dictionary<(string File,int Team),Node3D> _modelTemplates = [];
     private readonly Dictionary<int, Node3D> _obstacleViews = [];
     private JsonElement _obstacleLayers;
@@ -71,14 +72,22 @@ public partial class Main : Node3D
         public Node3D Root = root;
         public MeshInstance3D Ring = ring;
         public HealthBar? Health;
+        public HeroGlow? HeroGlow;
+        public float CommandBlip;
+        public Color RingColor;
         public AnimationPlayer? Player = player;
         public JsonElement Model = model;
+        public string DefinitionName = "";
+        /// <summary>Build-137: the team the model was coloured for; Twisting Influence changes it and the view is built again.</summary>
+        public int Team;
         public string Clip = "";
         public string? State;
         public bool Died;
         /// <summary>The tick the presentation first saw this unit dead, and whether its body has left the field.</summary>
         public int DeathTick = -1;
         public bool Buried;
+        /// <summary>Build-130: the body burst in a critical death; its model stays hidden.</summary>
+        public bool Exploded;
         public float DesiredYaw;
         public Vector3 RingPosition = new(float.PositiveInfinity, 0, 0);
         public float RingYaw;
@@ -92,19 +101,25 @@ public partial class Main : Node3D
 
     public override void _Ready()
     {
+        GetTree().AutoAcceptQuit = false;
         CreateUi(); WatchPointer();
         foreach (string arg in OS.GetCmdlineUserArgs())
         {
             if (arg.StartsWith("--cache=")) _cache = arg[8..];
             if (arg.StartsWith("--capture=")) _capture = arg[10..];
             if (arg == "--no-ai") _noAi = true;
+            if (arg == "--audio-smoke") _audioSmoke = true;
             if (arg == "--observe") _observing = true;
             if (arg == "--profile") SimProfiler.Enabled = true;
+            if (arg == "--performance-smoke") _performanceSmoke = true;
+            if (arg == "--economy-recovery-smoke") _economyRecoverySmoke = true;
             if (arg.StartsWith("--bots=")) _bots = arg[7..].Split(',');
+            if (arg.StartsWith("--factions=")) _factions = arg[11..].Split(',');
             if (arg.StartsWith("--speed=")) _speed = int.Parse(arg[8..]);
             if (arg.StartsWith("--seed=")) _matchSeed = int.Parse(arg[7..]);
             if (arg.StartsWith("--ai-personality=")) _aiPersonality = arg[17..];
             if (arg == "--ai-smoke") _aiSmoke = true;
+            if (arg == "--expansion-smoke") _expansionSmoke = _aiSmoke = true;
             if (arg == "--observer-smoke") _observerSmoke = true;
             if (arg == "--setup") _setupMode = true;
             if (arg == "--setup-smoke") _setupSmoke = _setupMode = true;
@@ -124,8 +139,16 @@ public partial class Main : Node3D
             if (arg == "--surface-smoke") _surfaceSmoke = true;
             if (arg == "--obstacle-smoke") _obstacleSmoke = true;
             if (arg == "--command-smoke") _commandSmoke = true;
+            if (arg == "--interaction-smoke") _interactionSmoke = true;
             if (arg == "--orders-smoke") _ordersSmoke = true;
             if (arg == "--ability-smoke") _abilitySmoke = true;
+            if (arg == "--elven-smoke") _elvenSmoke = true;
+            if (arg == "--nature-smoke") _natureSmoke = true;
+            if (arg == "--blood-smoke") _bloodSmoke = true;
+            if (arg == "--global-power-smoke") _globalPowerSmoke = true;
+            if (arg == "--places-smoke") _placesSmoke = true;
+            if (arg == "--hero-skill-smoke") _heroSkillSmoke = true;
+            if (arg == "--hero-experience-smoke") _heroExperienceSmoke = true;
             if (arg == "--skirmish-smoke") _skirmishSmoke = true;
             if (arg == "--construction-smoke") _constructionSmoke = true;
             if (arg == "--structure-smoke") _structureSmoke = true;
@@ -136,6 +159,7 @@ public partial class Main : Node3D
             if (arg == "--frodo-smoke") _frodoSmoke = true;
             if (arg == "--tech-smoke") _techSmoke = true;
             if (arg == "--tier2-smoke") _tier2Smoke = true;
+            if (arg == "--evil-smoke") _evilSmoke = true;
             if (arg == "--research-smoke") _researchSmoke = true;
             if (arg == "--siege-smoke") _siegeSmoke = true;
             if (arg == "--defense-smoke") _defenseSmoke = true;
@@ -161,7 +185,7 @@ public partial class Main : Node3D
             RefreshDebugMenu();
             _status.Text = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             GD.PushError(error.ToString());
-            if (_smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _tier2Smoke || _researchSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke || _observerSmoke || _setupSmoke || _engagementSmoke || _sandboxMapSmoke || _capture != "") GetTree().Quit(1);
+            if (_placesSmoke || _economyRecoverySmoke || _performanceSmoke || _audioSmoke || _smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _interactionSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _tier2Smoke || _evilSmoke || _researchSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke || _observerSmoke || _setupSmoke || _engagementSmoke || _sandboxMapSmoke || _capture != "") GetTree().Quit(1);
         }
     }
 
@@ -189,6 +213,7 @@ public partial class Main : Node3D
         string rulesPath = manifest.GetProperty("combat_rules").GetString()!;
         _rules = CombatRules.Parse(System.IO.File.ReadAllText(CachePath(rulesPath)));
         LoadCombatAudio(ReadJson(rulesPath));
+        LoadBlood();
         var nav = ReadJson("navigation.json");
         byte[] bytes = System.IO.File.ReadAllBytes(CachePath("heights.bin"));
         int[] heights = new int[bytes.Length / 4];
@@ -209,6 +234,7 @@ public partial class Main : Node3D
             _world.BuildingGround = Convert.FromBase64String(building.GetString()!).Select(b => b != 0).ToArray();
         _picker = NavigationPicker.FromCache(navigation, nav);
         var map = LoadGlb(manifest.GetProperty("map").GetString()!); AddChild(map);
+        _terrainMesh = Descendants(map).OfType<MeshInstance3D>().FirstOrDefault(m => m.Name == "Terrain");
         var gate = Descendants(map).OfType<Node3D>().FirstOrDefault(n => n.Name.ToString() == "MAIN_GATE");
         _fortressFocus = gate?.GlobalPosition + new Vector3(17, 0, -4)
             ?? new Vector3(-navigation.Width * navigation.CellSize / 2000f, 0, navigation.Height * navigation.CellSize / 2000f);
@@ -243,21 +269,21 @@ public partial class Main : Node3D
             bool primary = team == PlayerTeam && _primarySquad.Count < 6;
             if (_surfaceSmoke && primary) { cell = surfaceNavigation.Nearest(surfaceStart, surfaceSpawns); surfaceSpawns.Add(cell); }
             // Map caches since build-48 name the unit; the pack's model list may grow.
-            var model = spawn.TryGetProperty("unit",out var named) ? _unitModels[named.GetString()!] : manifest.GetProperty("models")[spawn.GetProperty("model").GetInt32()];
+            var model = spawn.TryGetProperty("unit",out var named) ? _unitModels[StartUnitFor(team,named.GetString()!)] : manifest.GetProperty("models")[spawn.GetProperty("model").GetInt32()];
             var definition = _rules.Units[model.GetProperty("unit").GetString()!];
             if (_skirmish) cell = SkirmishSpawnCell(team,definition,cell);
             var unit = _world.Spawn(team, cell,definition);
             if (primary) _primarySquad.Add(unit.Id);
             AddUnitView(unit);
         }
+        SpawnFactionStartUnits();
         _spawnCount = _world.Units.Count;
         _friendlySquads.AddRange(_world.Units.Where(u => u.Team == PlayerTeam).Select(u => u.Id).Chunk(6));
         for (int slot = 0; slot < _friendlySquads.Count; slot++) _controlGroups.Assign(slot,_friendlySquads[slot],LivingFriendly);
         _commands.TeamColors = _teamColors;
         // HUD art is faction content: in the pack, or in a self-contained cache.
-        _commands.LoadArtwork(_cacheFiles.Content,_world);
+        _commands.LoadArtwork(_cacheFiles.Content,_world,EvilTeam(PlayerTeam));
         _heroBar.LoadArtwork(_commands);
-        _hudScale.Value = _commands.ScalePercent;
         if (_skirmish) LoadSkirmishScene(manifest);
         var framed = _skirmish && !_observing ? _world.Units.Where(u => u.Team == PlayerTeam).ToList() : _world.Units;
         float spanX = (framed.Max(u => u.X)-framed.Min(u => u.X))/1000f;
@@ -273,6 +299,9 @@ public partial class Main : Node3D
         if (_surfaceSmoke) _focus = UnitPosition(_world.Units[0]);
         UpdateCamera();
         _initialDigest = _world.StateDigest();
+        _audio.Load(CachePath(manifest.TryGetProperty("audio",out var audioIndex) ? audioIndex.GetString()! : "audio/index.json"),CachePath,_cache,_cacheFiles.Content);
+        PlayFactionMusic();
+        ResetWorldAudio();
         if (_smoke)
         {
             var first = _world.Units[0];
@@ -283,6 +312,11 @@ public partial class Main : Node3D
     /// <summary>Model, ring and appearance for a start unit or one trained during play.</summary>
     private void AddUnitView(SimUnit unit)
     {
+        if (_views.TryGetValue(unit.Id,out var previous))
+        {
+            RetainUnitTemplates(previous);
+            previous.Root.QueueFree();
+        }
         int team = unit.Team; var model = _unitModels[unit.Definition.Name];
         var root = new Node3D { Name = "Unit_" + unit.Id, PhysicsInterpolationMode = Node.PhysicsInterpolationModeEnum.Off };
         AddChild(root); root.Position = UnitPosition(unit);
@@ -303,6 +337,7 @@ public partial class Main : Node3D
         var ring = new MeshInstance3D { Mesh = ScenePresentation.SelectionRing(), Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             MaterialOverride = new StandardMaterial3D {
                 AlbedoColor = _observing || _sandboxMap ? TeamColor(team).Lightened(.25f) : new Color(team == PlayerTeam ? "e9c22d" : "e65045"), CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+                Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
                 ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
         root.AddChild(ring);
         var health = new HealthBar(Math.Max(1.1f,2.2f*unit.Definition.BodyRadiusMm/1000f),.16f) { Position = new(0,.12f,0) };
@@ -335,7 +370,9 @@ public partial class Main : Node3D
             appearance.Apply(model.GetProperty("idle").GetString()!,0);
             _equipmentStatesVerified = !idle.SequenceEqual(ready) && ready.SequenceEqual(attack) && idle.SequenceEqual(appearance.VisibleNodes);
         }
-        _views[unit.Id] = new UnitView(root,ring,player,model) { Appearance = appearance,Health = health };
+        HeroGlow? heroGlow = unit.Definition.Hero ? new(TeamColor(unit.Team),unit.Definition.BodyRadiusMm/1000f) : null;
+        if (heroGlow != null) root.AddChild(heroGlow.Ground);
+        _views[unit.Id] = new UnitView(root,ring,player,model) { DefinitionName = unit.Definition.Name,Team = unit.Team,Appearance = appearance,Health = health,HeroGlow = heroGlow };
     }
 
     private static IEnumerable<Node> Descendants(Node root)
@@ -353,16 +390,21 @@ public partial class Main : Node3D
         _hud = new SandboxHud(); canvas.AddChild(_hud);
         _hud.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _hud.MouseFilter = Control.MouseFilterEnum.Ignore;
-        _hud.AddChild(new BuildOverlay());
+        _hud.AddChild(new BuildOverlay { Line = 1 });
         _heroBar = new HeroBar(); _hud.AddChild(_heroBar);
         _heroBar.HeroChosen += ChooseHero;
         CreateDebugMenu();
         _commands = new CommandPanel(); _hud.AddChild(_commands);
         CreateOutcomePanel();
         CreateObserverPanel();
-        _commands.MenuChosen += ToggleDebugMenu;
+        CreateGameMenu();
+        _commands.MenuChosen += OpenGameMenu;
         _commands.CommandChosen += ChooseCommand;
         _commands.WalkRunChosen += ToggleWalkRun;
+        _commands.GlobalAbilitiesChosen += () => { CancelTargeting(); OpenBuildMenu(false); };
+        _commands.GlobalPowerChosen += ChooseGlobalPower;
+        _commands.PlacePowerChosen += ChoosePlacePower;
+        _commands.GlobalAbilitiesClosed += () => { if (_pendingGlobalPower >= 0) CancelTargeting(); };
         _commands.AbilityChosen += ChooseAbility;
         _commands.ConstructionChosen += ChooseConstruction;
         _commands.BuildMenuChosen += OpenBuildMenu;
@@ -381,6 +423,7 @@ public partial class Main : Node3D
             ClearConstructionTargeting();
             _orders.Cancel();
             if (_world != null) UnitSelection.Click(_selected,_world.Units,LivingUnit(id) ? _world.Units[id] : null,append,sameType);
+            SelectionSpeech();
         };
         _commands.MapChosen += point => { if (_world != null) CenterViewOn(point); };
         _commands.MapOrdered += OrderFromMinimap;
@@ -389,6 +432,8 @@ public partial class Main : Node3D
     public override void _UnhandledInput(InputEvent input)
     {
         if (_world is null || _loadFailed) return;
+        // The game menu holds play: Esc steps back out of it, and nothing reaches the battlefield.
+        if (_gameMenu.Visible) { if (input is InputEventKey { Pressed: true,Echo: false,Keycode: Key.Escape }) _gameMenu.Back(); return; }
         // The result stops play, but an observer can still page the overview, the Stats tab above all.
         if (_outcome.Visible) { if (_observing && input is InputEventKey { Pressed: true,Echo: false } pressed) ObserverHotkey(pressed); return; }
         if (input is InputEventMouseButton mouse)
@@ -401,7 +446,6 @@ public partial class Main : Node3D
                 if (mouse.Pressed && _constructionTargeting) TargetConstruction(mouse.Position,mouse.ShiftPressed);
                 else if (mouse.Pressed && _orders.Pending != null) Order(mouse.Position,mouse.CtrlPressed,mouse.ShiftPressed);
                 else if (mouse.Pressed) { _dragStart = mouse.Position; _dragging = true; _selectSameType = mouse.CtrlPressed || mouse.DoubleClick; }
-                else if (_dragging) { SelectUnits(_dragStart, mouse.Position, mouse.ShiftPressed,_selectSameType); _dragging = false; _hud.SelectionBox = null; }
             }
             if (mouse.ButtonIndex == MouseButton.Right && mouse.Pressed)
             {
@@ -417,7 +461,6 @@ public partial class Main : Node3D
         if (input is InputEventMouseMotion motion)
         {
             if (_panning) Pan(-motion.Relative.X * _distance / 1100, -motion.Relative.Y * _distance / 1100);
-            if (_dragging) _hud.SelectionBox = new Rect2(_dragStart, motion.Position - _dragStart).Abs();
         }
         if (input is InputEventKey key && key.Pressed && !key.Echo)
         {
@@ -429,7 +472,9 @@ public partial class Main : Node3D
             if (key.Keycode is Key.Equal or Key.Plus or Key.KpAdd) StepSpeed(1);
             if (key.Keycode == Key.Escape)
             {
-                if (_orders.Pending != null || _constructionTargeting) CancelTargeting();
+                if (_pendingGlobalPower >= 0) CancelTargeting();
+                else if (_commands.GlobalAbilitiesOpen) _commands.CloseGlobalAbilities();
+                else if (_orders.Pending != null || _constructionTargeting) CancelTargeting();
                 else if (_buildMenu) OpenBuildMenu(false);
                 else { _selected.Clear(); _selectedStructure = null; }
                 _dragging = false; _hud.SelectionBox = null;
@@ -477,6 +522,7 @@ public partial class Main : Node3D
         if (ids.Length == 0) { _lastGroup = -1; return; }
         _selectedStructure = null;
         _selected.Clear(); _selected.UnionWith(ids);
+        SelectionSpeech();
         ulong now = Time.GetTicksMsec();
         if (_lastGroup == slot && now-_lastGroupTime <= 350)
         {
@@ -492,14 +538,20 @@ public partial class Main : Node3D
         if (BlocksDesktopInput) { GetViewport().SetInputAsHandled(); return; }
         if (input is InputEventMouseMotion motion) { _pointerPosition = motion.Position; _pointerInWindow = true; }
         else if (input is InputEventMouseButton pointer) _pointerPosition = pointer.Position;
-        // GUI controls consume their own releases. End any battlefield drag
-        // here as well when the pointer is released over the panel.
+        // Once a drag starts on the battlefield, retain its motion and release before GUI dispatch.
+        // This also prevents a release over a portrait or minimap from changing the drag's result.
+        if (_dragging && input is InputEventMouseMotion drag)
+        {
+            _hud.SelectionBox = new Rect2(_dragStart,drag.Position-_dragStart).Abs();
+            _hud.QueueRedraw(); GetViewport().SetInputAsHandled(); return;
+        }
         if (input is not InputEventMouseButton { Pressed: false } mouse) return;
         if (mouse.ButtonIndex == MouseButton.Middle) _panning = false;
-        if (mouse.ButtonIndex == MouseButton.Left && _dragging && (_commands.IsVisibleInTree()
-            && _commands.GetGlobalRect().HasPoint(mouse.Position) || _heroBar.Contains(mouse.Position)))
+        if (mouse.ButtonIndex == MouseButton.Left && _dragging)
         {
+            SelectUnits(_dragStart,mouse.Position,mouse.ShiftPressed,_selectSameType);
             _dragging = false; _hud.SelectionBox = null;
+            _hud.QueueRedraw(); GetViewport().SetInputAsHandled();
         }
     }
 
@@ -510,46 +562,70 @@ public partial class Main : Node3D
         var rect = new Rect2(start, end - start).Abs();
         if (rect.Size.Length() < 7)
         {
-            var structure = StructureAt(end);
-            var unit = UnitAt(end,structure?.Distance);
+            // Small pointer jitter off a model still clicks the body where the press began.
+            var structure = StructureAt(start);
+            var unit = UnitAt(start,structure?.Distance);
             // On the Sandbox map, clicking the other player's unit or building takes command of that player.
             if (unit == null && structure is { } hit) { CommandSandboxPlayer(_structureViews[hit.Id].Team); SelectStructure(hit.Id,append); return; }
             if (unit != null) CommandSandboxPlayer(unit.Team);
             _selectedStructure = null;
             UnitSelection.Click(_selected,_world!.Units,unit,append,sameType);
+            SelectionSpeech();
             return;
         }
         if (_sandboxMap && SandboxPlayerInBox(rect) is int side) CommandSandboxPlayer(side);
         int? previousStructure = _selectedStructure;
         _selectedStructure = null;
         if (!append || !_selected.All(LivingFriendly)) _selected.Clear();
-        foreach (var unit in _world!.Units.Where(u => (u.Team == PlayerTeam || _observing) && u.Present))
+        foreach (var unit in _world!.Units.Where(u => (u.Team == PlayerTeam || _observing) && u.Present && _world.CanSeeUnit(PlayerTeam,u)))
             if (InBox(rect,unit)) _selected.Add(unit.Id);
         // Units in the box (or retained by Shift) take priority. Structures
         // remain a separate inspection selection when no units are selected.
-        if (_selected.Count > 0) return;
+        if (_selected.Count > 0) { SelectionSpeech(); return; }
         if (StructureInBox(rect) is int structureId) SelectStructure(structureId);
         else if (append) _selectedStructure = previousStructure;
     }
 
     private bool InBox(Rect2 rect,SimUnit unit)
     {
-        var pos = UnitPosition(unit) + Vector3.Up;
-        return !_camera.IsPositionBehind(pos) && rect.HasPoint(_camera.UnprojectPosition(pos));
+        // Match the upright body used by click picking. A box touching a shoulder or head counts,
+        // including a drag that starts on the model and never encloses its center.
+        var pos = _views[unit.Id].Root.GlobalPosition;
+        float radius = unit.Definition.BodyRadiusMm/1000f;
+        float height = UnitBarHeight(unit)-.25f;
+        var points = new List<Vector2>();
+        for (int i = 0; i < 12; i++)
+        foreach (float y in new[] {0f,height})
+        {
+            float angle = i*Mathf.Tau/12;
+            var point = pos+new Vector3(Mathf.Cos(angle)*radius,y,Mathf.Sin(angle)*radius);
+            if (_camera.IsPositionBehind(point)) return false;
+            points.Add(_camera.UnprojectPosition(point));
+        }
+        return ClipSelectionTriangle(rect,Geometry2D.ConvexHull(points.ToArray())).Length > 0;
     }
 
     private void Order(Vector2 mouse, bool groundOnly = false,bool queued = false)
     {
+        if (_orders.Pending == OrderKind.UseGlobalPower) { TargetGlobalPower(mouse); return; }
+        if (_orders.Pending == OrderKind.UsePlacePower) { TargetPlacePower(mouse); return; }
         if (_orders.Pending == OrderKind.UseAbility) { TargetAbility(mouse); return; }
         if (!_world!.Units.Any(u => u.Team == PlayerTeam && u.Health > 0 && _selected.Contains(u.Id))) return;
-        var unit = groundOnly ? null : UnitAt(mouse);
+        var structure = groundOnly ? null : StructureAt(mouse);
+        var unit = groundOnly ? null : UnitAt(mouse,structure?.Distance);
         if (!groundOnly && unit == null && TrySiege(mouse,queued)) return;
+        if (unit == null && structure is { } ownTarget && TryOwnStructure(ownTarget.Id,queued)) return;
         if (!groundOnly && unit == null && TryGather(mouse,queued)) return;
         if (unit != null)
         {
+            if (_orders.Pending == null && TryHerbOrder(unit,queued)) return;
             if (_orders.Pending == OrderKind.Guard && unit.Team < 0) { _status.Text = "Guard requires a friendly unit or location"; return; }
             bool enemy = unit.Team >= 0 && unit.Team != PlayerTeam;
-            if (_orders.Resolve(unit.Node,enemy ? unit.Id : -1,out var targeted,enemy ? -1 : unit.Id,queued)) SendOrder(targeted,queued);
+            if (_orders.Resolve(unit.Node,enemy ? unit.Id : -1,out var targeted,enemy ? -1 : unit.Id,queued))
+            {
+                SendOrder(targeted,queued);
+                ShowUnitCommandFeedback(unit);
+            }
             else _status.Text = "Guard requires a friendly unit or location";
             return;
         }
@@ -561,8 +637,8 @@ public partial class Main : Node3D
         {
             if (!_orders.Resolve(goal,-1,out var order,keepTargeting: queued)) { _status.Text = "Attack requires an enemy target"; return; }
             SendOrder(order,queued);
-            _hud.Destination = _camera.UnprojectPosition(new Vector3(-hit.Position.X, hit.Position.Y, hit.Position.Z));
-            _hud.DestinationTime = 0.7f;
+            if (structure is { } target) ShowStructureCommandFeedback(target.Id);
+            else ShowGroundCommandFeedback(new(-hit.Position.X,hit.Position.Y,hit.Position.Z),hit.Ground);
         }
         else _status.Text = "No walkable space at this point";
     }
@@ -582,13 +658,17 @@ public partial class Main : Node3D
         var rayOrigin = new System.Numerics.Vector3(-origin.X,origin.Y,origin.Z);
         var rayDirection = new System.Numerics.Vector3(-direction.X,direction.Y,direction.Z);
         var terrain = _picker.Pick(rayOrigin,rayDirection);
-        return UnitPicker.Pick(_world!.Units,rayOrigin,rayDirection,Math.Min(limit ?? float.PositiveInfinity,terrain?.Distance+.03f ?? float.PositiveInfinity));
+        return UnitPicker.Pick(_world!.Units.Where(u => _world.CanSeeUnit(PlayerTeam,u)),rayOrigin,rayDirection,Math.Min(limit ?? float.PositiveInfinity,terrain?.Distance+.03f ?? float.PositiveInfinity));
     }
 
     private void CancelTargeting()
     {
+        _pendingGlobalPower = -1;
+        _pendingPlacePower = -1;
+        ReserveHerbsTargeting(-1);
         ClearConstructionTargeting();
         _orders.Cancel(); _status.Text = "Command targeting cancelled";
+        if (_abilityAreaPreview != null) _abilityAreaPreview.Visible = false;
     }
 
     private void ToggleWalkRun()
@@ -622,6 +702,8 @@ public partial class Main : Node3D
         if (march) _orders.Begin(OrderKind.AttackMove);
         if (!_orders.Resolve(goal,-1,out var order,keepTargeting: queued)) { _status.Text = "Attack requires an enemy target"; return; }
         SendOrder(order,queued);
+        var (goalX,goalZ) = nav.Center(goal);
+        ShowGroundCommandFeedback(PositionOf(goalX,goalZ));
     }
 
     private void ToggleObstacle(Vector2 mouse)
@@ -690,6 +772,8 @@ public partial class Main : Node3D
             if (_skirmish) ApplySkirmishHud(_commands);
             if (_engagementSmoke) RecordEngagementStep(System.Diagnostics.Stopwatch.GetElapsedTime(stepStart).TotalMilliseconds);
             PresentCombatEvents();
+            PresentBloodEvents();
+            PresentWorldAudio();
             PresentAbilityEvents();
             if (_sandboxMap) PresentDummyDamage();
             PresentFoundationFailures();
@@ -706,14 +790,18 @@ public partial class Main : Node3D
         foreach (var (id, view) in _obstacleViews) view.Visible = _world.Navigation.IsObstacleActive(id);
         foreach (var unit in _world.Units)
         {
+            if (_views[unit.Id].DefinitionName != unit.Definition.Name || _views[unit.Id].Team != unit.Team) AddUnitView(unit);
             var view = _views[unit.Id];
             if (view.Buried) continue;
-            if (unit.Casting && unit.OrderTarget >= 0)
+            if (unit.Casting && unit.OrderTarget >= 0 && unit.OrderTarget != unit.Id)
             {
-                var target = _world.Units[unit.OrderTarget];
-                view.DesiredYaw = Mathf.Atan2(-(target.X-unit.X),target.Z-unit.Z);
+                // Build-140: a cast at a building (Grishnakh's Torch) names a construction site, not a unit.
+                int aimX = unit.X,aimZ = unit.Z;
+                if (unit.Ability(unit.AbilitySlot)?.BuildingTarget == true) { if (_world.ConstructionSites.TryGetValue(unit.OrderTarget,out var aimed)) (aimX,aimZ) = (aimed.X,aimed.Z); }
+                else if (unit.OrderTarget < _world.Units.Count) (aimX,aimZ) = (_world.Units[unit.OrderTarget].X,_world.Units[unit.OrderTarget].Z);
+                view.DesiredYaw = Mathf.Atan2(-(aimX-unit.X),aimZ-unit.Z);
             }
-            else if (unit.Definition.IsRanged) view.DesiredYaw = (float)UnitFacing.Sample(unit.Facing,unit.Facing,1);
+            else if (unit.Definition.IsRanged || unit.Casting && unit.Ability(unit.AbilitySlot)?.SelfCast == true) view.DesiredYaw = (float)UnitFacing.Sample(unit.Facing,unit.Facing,1);
             else if ((unit.Attacking || unit.CombatTrafficQueued && !unit.Moving) && unit.Target >= 0)
             {
                 var target = _world.Units[unit.Target];
@@ -735,16 +823,17 @@ public partial class Main : Node3D
                 if (view.Heading.Update(dx,dz,unit.MovementBudget,unit.OrderSequence) is float heading) view.DesiredYaw=heading;
             }
             bool locomotion=unit.Moving && (unit.Target<0 || MovementPlayback.HasLocomotion(unit.Movement,unit.MovementBudget));
-            string state = unit.Health <= 0 ? "death" : unit.Casting ? "cast" : unit.StrikeActive ? "attack" : locomotion ? (unit.Walking ? "walk" : "run") : unit.Target >= 0 ? "ready" : "idle";
+            var nature = unit.Present ? NatureAnimation(unit,_world.Tick) : null;
+            string state = unit.Health <= 0 ? "death" : nature != null ? "nature" : unit.Camouflaged ? "camouflage" : unit.Casting ? "cast" : unit.StrikeActive ? "attack" : locomotion ? (unit.Walking ? "walk" : "run") : unit.Target >= 0 ? "ready" : "idle";
             if (unit.Moving) _movingSeen++;
             if (unit.Moving && unit.FreeMovement) _freeMovementSeen++;
             if (unit.Attacking) _attackingSeen++;
             if (unit.Attacking && unit.Team == PlayerTeam)
                 for (int squad = 0; squad < _friendlySquads.Count; squad++)
                     if (_friendlySquads[squad].Contains(unit.Id)) _squadsFought.Add(squad);
-            string clip = state == "cast" ? unit.Ability(unit.AbilitySlot)!.CastClip : state == "attack" ? unit.Definition.Attacks[unit.AttackVariant].Clip
+            string clip = nature?.Clip ?? (state == "camouflage" ? unit.EnabledAbilities.First(a => a.Kind == AbilityKind.Camouflage).CastClip : state == "cast" ? unit.Ability(unit.AbilitySlot)!.CastClip : state == "attack" ? unit.Definition.Attacks[unit.AttackVariant].Clip
                 : state is "walk" or "run" ? (unit.Walking ? unit.Definition.WalkClip : unit.Definition.RunClip)
-                : state == "ready" ? unit.Definition.ReadyClip : view.Model.GetProperty(state).GetString() ?? "";
+                : state == "ready" ? unit.Definition.ReadyClip : view.Model.GetProperty(state).GetString() ?? "");
             if ((state is "walk" or "run") && clip == "") clip = view.Model.GetProperty("walk").GetString() ?? "";
             var gather = WorkerAnimation(unit);
             if (gather != null) clip = gather.Value.Clip;
@@ -757,18 +846,18 @@ public partial class Main : Node3D
                 if (animation != null)
                 {
                     var resource = view.Player.GetAnimation(animation);
-                    resource.LoopMode = state is "death" or "attack" or "cast" || timed ? Animation.LoopModeEnum.None : Animation.LoopModeEnum.Linear;
+                    resource.LoopMode = state is "death" or "attack" or "cast" or "nature" || timed ? Animation.LoopModeEnum.None : Animation.LoopModeEnum.Linear;
                     if (restartAttack || restartCast) view.Player.Stop();
-                    view.Player.Play(animation,state is "attack" or "cast" || timed ? 0 : 0.12); view.Clip = clip;
+                    // Simulation-seeked clips have SpeedScale=0: a timed blend would never advance.
+                    view.Player.Play(animation,state is "attack" or "cast" or "nature" || timed ? 0 : 0.12); view.Clip = clip;
                 }
             }
             // The carrying clip is a walk; a running worker plays it faster so its steps keep pace.
-            if (view.Player != null) view.Player.SpeedScale = _paused || unit.StrikeActive || unit.Casting || timed ? 0
+            if (view.Player != null) view.Player.SpeedScale = _paused || unit.StrikeActive || unit.Casting || timed || nature != null ? 0
                 : gather != null && unit.Moving && !unit.Walking ? 1_000_000f/unit.Definition.WalkScale : 1;
             view.AttackSerial = unit.AttackSerial;
             view.CastSerial = unit.CastSerial;
             view.State = gather?.State;
-            view.Root.Visible = unit.InsideSite < 0;
             if (!unit.StrikeActive && !unit.Casting) view.Appearance?.Apply(clip,0,view.State);
             if (unit.Health <= 0) view.Died = true;
         }
@@ -780,11 +869,15 @@ public partial class Main : Node3D
 
     public override void _Process(double delta)
     {
+        if (_closing) return;
         if (_setupScreen != null) { _frames++; if (_setupSmoke) SetupSmokeInput(); return; }
         if (_world is null || _loadFailed) return;
         using var processTime = SimProfiler.Time("godot process frame");
+        PresentOrderSpeech();
+        if (_audioSmoke) AudioSmokeInput();
         ReportProfile();
         RefreshObserverPanel(delta);
+        long unitPresentation = SimProfiler.Start();
         float dt = (float)Math.Min(delta, 0.1);
         if (!_paused || _presentStep)
             foreach (var unit in _world.Units)
@@ -815,16 +908,24 @@ public partial class Main : Node3D
                 }
                 SeekAttack(unit,view,fraction);
                 SeekAbility(unit,view,fraction);
+                SeekNature(unit,view,fraction);
                 if (!SeekGather(unit,view,fraction) && !unit.StrikeActive && !unit.Casting && view.Player != null && view.Player.CurrentAnimation.ToString().Length > 0 && view.Player.CurrentAnimationLength > 0)
                     view.Appearance?.Apply(view.Clip,view.Player.CurrentAnimationPosition/view.Player.CurrentAnimationLength,view.State);
             }
+        PresentBlood(_paused ? 1 : Engine.GetPhysicsInterpolationFraction());
+        UpdatePointerHover();
         foreach (var unit in _world.Units)
         {
             var view = _views[unit.Id];
             if (view.Buried) continue;
-            PresentRing(unit,view);
+            view.Root.Visible = unit.InsideSite < 0 && _world.CanSeeUnit(PlayerTeam,unit) && !view.Exploded;
+            PresentInvisibility(unit,view);
+            view.HeroGlow?.Draw(view.Root.GlobalPosition,unit.Present && view.Root.Visible && !view.Translucent,
+                point => unit.Node < _world.Navigation.GroundCount
+                    ? _world.Navigation.GroundHeight((int)(-point.X*1000),(int)(point.Z*1000))/1000f : view.Root.GlobalPosition.Y);
+            view.Health?.SetStyle(_playerColoredBars ? TeamColor(unit.Team) : null,_overheadBars ? UnitBarHeight(unit) : .12f);
             view.Health?.Refresh(unit.Present ? unit.Health : 0,unit.MaxHealth);
-            view.Ring.Visible = unit.Health > 0 && _selected.Contains(unit.Id);
+            PresentCommandRing(unit,view,dt);
             if (!view.Ring.Visible || (view.RingPosition == view.Root.Position && view.RingYaw == view.Root.Rotation.Y)) continue;
             var transform = view.Root.GlobalTransform; var inverse = transform.AffineInverse();
             ScenePresentation.SelectionRing(local => {
@@ -837,18 +938,24 @@ public partial class Main : Node3D
             }, (ArrayMesh)view.Ring.Mesh!);
             view.RingPosition = view.Root.Position; view.RingYaw = view.Root.Rotation.Y;
         }
+        SimProfiler.Record("godot units",unitPresentation);
+        long effectPresentation = SimProfiler.Start();
         PresentProjectiles();
         PresentHealingEffects();
+        PresentElvenEffects();
+        PresentDroppedObjects();
+        SimProfiler.Record("godot effects",effectPresentation);
         var edge = EdgePan();
         float right = Math.Clamp((Input.IsPhysicalKeyPressed(Key.Right) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Left) ? 1 : 0) + edge.X,-1,1);
         float forward = Math.Clamp((Input.IsPhysicalKeyPressed(Key.Down) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Up) ? 1 : 0) + edge.Y,-1,1);
-        if (_constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke) right = forward = 0;
+        if (_constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _gameMenu.Visible) right = forward = 0;
         Pan(right * dt * _distance * 0.6f, forward * dt * _distance * 0.6f);
         UpdateCamera();
         _commands.SetMinimapView(ViewFootprint());
-        _selected.RemoveWhere(id => !LivingUnit(id));
+        long hudPresentation = SimProfiler.Start();
+        _selected.RemoveWhere(id => !LivingUnit(id) || !_world.CanSeeUnit(PlayerTeam,_world.Units[id]));
         var units = _world.Units.Where(u => _selected.Contains(u.Id)).ToList();
-        if (units.Count == 0) _orders.Cancel();
+        if (units.Count == 0 && _pendingGlobalPower < 0 && _pendingPlacePower < 0) _orders.Cancel();
         if (_skirmish) SyncBuildMenu();
         _commands.Refresh(units,UnitName,_orders.Pending,_paused,
             Enumerable.Range(0,10).Select(slot => _controlGroups.Recall(slot,LivingFriendly)).ToArray(),
@@ -857,28 +964,77 @@ public partial class Main : Node3D
         _heroBar.Refresh(FriendlyHeroes(),_commands.Art,_commands.EffectiveScale);
         if (_skirmish)
         {
-            if (!SelectedWorkers().Any()) ClearConstructionTargeting();
+            if (!SelectedBuilders().Any()) ClearConstructionTargeting();
             _commands.RefreshConstruction(_world,units,_constructionTargeting,_constructionBuilding,PageChoices(),SelectedStructureDetails());
             PresentConstruction();
             PresentFoundationGhosts();
-            PresentStructureSelection();
+            PresentCorruption();
+            PresentStructureSelection(dt);
             PresentProduction();
             UpdateConstructionPreview();
         }
+        _commands.RefreshFatePage($"{_selectedStructure}:{string.Join(',',_selected.Order())}");
+        _commands.RefreshGlobalPowers(_pendingGlobalPower);
         _presentStep = false;
         if (_toolsPanel.Visible) RefreshDebugMenu();
         PresentWaypoints();
         if (_sandboxMap) { PresentSandboxRallies(); AnimateDummyDamage(); }
-        _hud.DestinationTime -= dt; _hud.QueueRedraw();
+        PresentGroundCommandFeedback(dt); _hud.QueueRedraw();
+        SimProfiler.Record("godot hud",hudPresentation);
         _frames++;
+        if (_performanceSmoke) PerformanceSmokeInput();
+        if (_economyRecoverySmoke) EconomyRecoverySmokeInput();
         if (_commandSmoke) CommandSmokeInput();
-        if (_ordersSmoke) OrdersSmokeInput();
-        if (_abilitySmoke) AbilitySmokeInput();
-        if (_skirmishSmoke) SkirmishSmokeInput();
-        if (_constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _tier2Smoke || _researchSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke || _observerSmoke)
+        if (_interactionSmoke)
         {
             _injectingConstructionInput = true;
-            try { if (_minimapSmoke) MinimapSmokeInput(); else if (_siegeSmoke) SiegeSmokeInput(); else if (_defenseSmoke) DefenseSmokeInput(); else if (_victorySmoke) VictorySmokeInput(); else if (_aiSmoke) AiSmokeInput(); else if (_observerSmoke) ObserverSmokeInput(); else if (_frodoSmoke) FrodoSmokeInput(); else if (_techSmoke) TechSmokeInput(); else if (_tier2Smoke) Tier2SmokeInput(); else if (_researchSmoke) ResearchSmokeInput(); else if (_structureSmoke) StructureSmokeInput(); else if (_productionSmoke) ProductionSmokeInput(); else if (_placementSmoke) PlacementSmokeInput(); else if (_dwarfHallSmoke) DwarfHallSmokeInput(); else ConstructionSmokeInput(); }
+            try { InteractionSmokeInput(); }
+            finally { _injectingConstructionInput = false; }
+        }
+        if (_ordersSmoke) OrdersSmokeInput();
+        if (_abilitySmoke) AbilitySmokeInput();
+        if (_elvenSmoke)
+        {
+            _injectingConstructionInput = true;
+            try { ElvenSmokeInput(); }
+            finally { _injectingConstructionInput = false; }
+        }
+        if (_bloodSmoke) BloodSmokeInput();
+        if (_natureSmoke)
+        {
+            _injectingConstructionInput = true;
+            try { NatureSmokeInput(); }
+            finally { _injectingConstructionInput = false; }
+        }
+        if (_globalPowerSmoke)
+        {
+            _injectingConstructionInput = true;
+            try { GlobalPowerSmokeInput(); }
+            finally { _injectingConstructionInput = false; }
+        }
+        if (_placesSmoke)
+        {
+            _injectingConstructionInput = true;
+            try { PlacesSmokeInput(); }
+            finally { _injectingConstructionInput = false; }
+        }
+        if (_heroSkillSmoke)
+        {
+            _injectingConstructionInput = true;
+            try { HeroSkillSmokeInput(); }
+            finally { _injectingConstructionInput = false; }
+        }
+        if (_heroExperienceSmoke)
+        {
+            _injectingConstructionInput = true;
+            try { HeroExperienceSmokeInput(); }
+            finally { _injectingConstructionInput = false; }
+        }
+        if (_skirmishSmoke) SkirmishSmokeInput();
+        if (_constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _tier2Smoke || _evilSmoke || _researchSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke || _observerSmoke)
+        {
+            _injectingConstructionInput = true;
+            try { if (_minimapSmoke) MinimapSmokeInput(); else if (_siegeSmoke) SiegeSmokeInput(); else if (_defenseSmoke) DefenseSmokeInput(); else if (_victorySmoke) VictorySmokeInput(); else if (_aiSmoke) AiSmokeInput(); else if (_observerSmoke) ObserverSmokeInput(); else if (_frodoSmoke) FrodoSmokeInput(); else if (_techSmoke) TechSmokeInput(); else if (_tier2Smoke) Tier2SmokeInput(); else if (_evilSmoke) EvilSmokeInput(); else if (_researchSmoke) ResearchSmokeInput(); else if (_structureSmoke) StructureSmokeInput(); else if (_productionSmoke) ProductionSmokeInput(); else if (_placementSmoke) PlacementSmokeInput(); else if (_dwarfHallSmoke) DwarfHallSmokeInput(); else ConstructionSmokeInput(); }
             finally { _injectingConstructionInput = false; }
         }
         if (_engagementSmoke) { if (_formationSmoke) FormationSmokeInput(); else EngagementSmokeInput(); }
@@ -903,12 +1059,12 @@ public partial class Main : Node3D
         {
             bool ground = _world.Commands.LastOrDefault() is { Target: -1 } command && command.Cell < _world.Navigation.GroundCount;
             GD.Print("SURFACE_PICK_SMOKE " + _surfacePicked); GD.Print("UNDERPASS_PICK_SMOKE " + ground);
-            GetTree().Quit(_surfacePicked && ground ? 0 : 1);
+            _ = FinishCombatAudio(_surfacePicked && ground ? 0 : 1);
         }
         if (_smoke) SmokeInput();
         if (_smoke && _capture != "" && _frames == (_combatSmoke ? 180 : 60)) _ = CaptureFrame(false);
         if (_smoke && _world.Tick >= 420) FinishSmoke();
-        else if (!_smoke && !_commandSmoke && !_ordersSmoke && !_abilitySmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_productionSmoke && !_placementSmoke && !_dwarfHallSmoke && !_minimapSmoke && !_frodoSmoke && !_techSmoke && !_tier2Smoke && !_researchSmoke && !_siegeSmoke && !_defenseSmoke && !_victorySmoke && !_aiSmoke && !_observerSmoke && !_setupSmoke && !_engagementSmoke && !_sandboxMapSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
+        else if (!_placesSmoke && !_audioSmoke && !_smoke && !_commandSmoke && !_interactionSmoke && !_ordersSmoke && !_abilitySmoke && !_elvenSmoke && !_natureSmoke && !_bloodSmoke && !_globalPowerSmoke && !_heroSkillSmoke && !_heroExperienceSmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_productionSmoke && !_placementSmoke && !_dwarfHallSmoke && !_minimapSmoke && !_frodoSmoke && !_techSmoke && !_tier2Smoke && !_evilSmoke && !_researchSmoke && !_siegeSmoke && !_defenseSmoke && !_victorySmoke && !_aiSmoke && !_observerSmoke && !_setupSmoke && !_engagementSmoke && !_sandboxMapSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
     }
 
     private string UnitName(int id) => _world!.Units[id].Definition.DisplayName;
@@ -980,7 +1136,7 @@ public partial class Main : Node3D
         {
             bool passed = _obstacleSmokeId >= 0 && _obstacleRemoved && _world!.Navigation.IsObstacleActive(_obstacleSmokeId)
                 && _obstacleViews[_obstacleSmokeId].Visible && _world.ObstacleCommands.Count == 2;
-            GD.Print("OBSTACLE_INPUT_SMOKE " + passed); GetTree().Quit(passed ? 0 : 1);
+            GD.Print("OBSTACLE_INPUT_SMOKE " + passed); _ = FinishCombatAudio(passed ? 0 : 1);
         }
     }
 
@@ -1085,6 +1241,8 @@ public partial class Main : Node3D
             source_units = _world.Units.Select(u => u.Definition.Id).Distinct().Order().ToArray(),
             source_health = _rules.Units.Values.Select(u => u.MaxHealth).Order().ToArray(),
             arrow_releases = _arrowReleases, arrow_hits = _arrowHits, arrow_visuals = _arrowVisuals,
+            archer_bow_origins = _archerBowOrigins,archer_bow_fallbacks = _archerBowFallbacks,
+            archer_bow_offsets = _archerReleaseOffsets.Values.Select(p => new { x=p.X,y=p.Y,z=p.Z }).ToArray(),
             arrow_launch_samples = _launchSamples, arrow_trails_created = _trailCreated, arrow_trail_samples = _trailSamples,
             ranged_release_timing = _combatTrace.Where(e => e.Kind == CombatEventKind.Release).All(e =>
                 e.Tick-e.StartTick == _world.Units[e.Unit].Definition.Attacks[e.Attack].Hits[e.Hit].Tick),
@@ -1116,6 +1274,7 @@ public partial class Main : Node3D
             && report.input_map_views && report.camera_shortcuts_removed && report.presentation_import && report.free_movement_samples > 0;
         if (_motionSmoke) passed &= report.turning_samples > 0 && report.interpolated_samples > 0;
         if (_combatSmoke) passed &= report.friendly_squads_fought == 3 && report.combat_spacing && report.input_squad_keys;
+        if (_combatSmoke || _meleeSmoke) passed &= report.archer_bow_origins > 0 && report.archer_bow_fallbacks == 0;
         if (_meleeSmoke) passed &= report.source_units.SequenceEqual(new[] {2,3,16,34}) && report.source_health.SequenceEqual(new[] {180,240,350,485})
             && report.arrow_releases > 0 && report.arrow_hits > 0 && report.arrow_visuals > 0 && report.ranged_release_timing
             && report.arrow_launch_samples == report.arrow_releases && report.arrow_trails_created == report.arrow_visuals && report.arrow_trail_samples > 0
@@ -1151,6 +1310,6 @@ public partial class Main : Node3D
             System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(destination, ".json"),
                 JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
         }
-        if (quit) GetTree().Quit(error == Error.Ok ? 0 : 1);
+        if (quit) _ = FinishCombatAudio(error == Error.Ok ? 0 : 1);
     }
 }

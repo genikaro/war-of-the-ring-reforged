@@ -1,8 +1,332 @@
 # Godot C# skirmish sandbox
 
+**builds 137-141:** The Evil heroes' battle gear. All sixteen gears of Gollum, the Nazgul King, Saleme, Grishnakh and Saruman are simulated: Prison of Ice, Invisible Force, Pestilence and
+Twisting Influence (137), Shadow Bind and Shadow Walk (138, adds the Black Rider; rebuild the pack only, the maps already cover its body), Mystic Blades, Blood Mark and Poison Trap (139), Torch and Satchel Charge (140),
+Sneak, Surprise Attack and Dark Tracking (141). Rules, source numbers and adapters are in [EVIL.md](EVIL.md); `-EvilSmoke -Sandbox` casts them through the HUD.
+
+**builds 133-135:** The Evil faction. Pick Evil beside any start position on the setup
+screen (the Sandbox lets you pick both of yours), or launch with `-Factions evil,good`.
+The Minions play from a Goblin Hovel with Goblin Slaves; a Slavemaster supplies
+population and lays War Posts, which corrupt the ground the other buildings must
+stand on; the Fortress of Mordor trains five heroes and opens five tiers; bots play
+the side, cast the Evil Fate powers (Bog, Crows, Vile Surge, the Balrog) and
+heroes carry their source abilities (all sixteen simulated since builds 137-141). Refresh
+`python tools/content_pack.py` and re-import the maps (`python tools/prepare_prototype.py --all-maps`)
+before fielding an Evil troll or Balrog. See [EVIL.md](EVIL.md).
+
+**build-132:** Skirmishes exclude Steed of Rohan, Radagast's Aviary and Enchanting
+Willow; explicit placements become seeded replacements from the remaining
+12-place pool. Monument of Narsil now gives heroes +25% attack damage, replacing
+its army armor bonus. The attack HUD includes place damage multipliers.
+See [Places of Power](PLACES-OF-POWER.md).
+
+**build-131:** Blood is toned down by the new Reforged option *Scaled blood*:
+harder hits throw more blood (half at a glancing blow, the source amount at 25
+damage, half again from 50), and a unit bleeds more often the more it is wounded
+(never above 80% health, always at 20% or less). The Purist edition bleeds on
+every hit as the original. Elven Archer arrows and daggers now make their sound
+on buildings, using the original's default impact row. Refresh
+`python tools/content_pack.py` and restart. See [BLOOD.md](BLOOD.md#scaled-blood-build-131-reforged-option).
+
+**build-130:** Critical kills from the original data: when Gimli's axe, the
+Giant Ent or the Ballista bolt (weapons that can critically kill) slays a unit
+that can be critically killed, the body bursts into its original gore (blood
+vapour, skull, bones and flesh that land and rest, splats, a blood mark) and
+leaves no corpse. Heroes never burst. Refresh `python tools/content_pack.py` and
+restart. See [BLOOD.md](BLOOD.md#critical-kills-build-130).
+
+**build-129:** Fights bleed with the original effects: each hit plays the
+victim's source blood (red, orc or Huorn sap) and the weapon's impact flash, a
+dying unit leaves a growing blood pool, and blades that cut flesh show their
+bloody model parts. Settings > Game > Blood turns it off. Knocked-back units play
+Knocked Back, then Get Up, before acting, and a swing whose victim dies plays to
+its end. Refresh `python tools/content_pack.py` and restart. See [BLOOD.md](BLOOD.md).
+
+**build-128:** Places of Power resolve to their real names and original models,
+with complete random-object bonuses. Adds speed/sight and recruitment discounts,
+exact paid-cost refunds, and Willow/Aviary powers with Q targeting and cooldowns.
+The audit confirms 15 distinct source models with some shared variants. Refresh
+`python tools/content_pack.py` and restart. See [Places of Power](PLACES-OF-POWER.md)
+for rules and adapters.
+
+**build-127:** Ballista Tower bolts deal 50 damage before armour every 3 seconds;
+arrows retain their 14 damage per second. This is a prototype balance override of
+the imported 35 DPS / 10-second bolt, whose previous conversion dealt 350 per shot.
+Both tower weapons can automatically target enemy buildings, including foundations,
+when they have no unit target. Their usual minimum and maximum ranges still apply.
+The selected tower uses the unit stats panel style: damage per hit in each weapon
+row, with DPS, attack speed and range in hover tooltips. Existing caches work as-is.
+
+**build-125:** The Fate orb opens five usable Good global abilities: Blind,
+Brambles, Heroic Legacy, Blessed Wind and Summon Giant Ent. Bots use them for
+combat support while reserving Fate for heroes. See [GLOBAL-ABILITIES.md](GLOBAL-ABILITIES.md)
+for controls, source rules, adapters and validation.
+
 First Phase 3 milestone. Loads the local Helm's Deep GLB, Aragorn, eleven Elf
 Knights, six Elven Archers and eighteen Uruk-hai in three six-unit squads per side. Select friendly units, issue orders through the command panel and
 fight a simple opponent. The engine choice was approved on Oct 19, 2026.
+
+**build-120:** setup plays its own menu cue. Matches play the player's faction's
+normal tracks in source order, with 15 seconds of silence between tracks.
+Combat no longer switches themes or restarts playback, and music is never shuffled.
+Menu, ten Good and ten Evil tracks are included in refreshed local caches.
+Restart; other installs run `python tools/game_audio.py` for existing caches.
+See [audio notes](AUDIO.md).
+
+**build-118:** attack animations use shuffled weighted cycles for both unit and
+building attacks. Each cycle includes every equal-weight clip, avoiding the
+long runs of one animation caused by the old selector's interaction with source
+weights of 10000. Missile/contact variants remain separate, damage stays fixed
+per strike, and animation choice remains deterministic for replays.
+
+**build-117:** bots expand tower coverage as each base grows: one tower normally,
+two for Defenders, plus another per four completed local buildings, capped at
+four or five per base. New towers cover exposed buildings and expansions.
+Watchtowers upgrade to Ballista Towers when unlocked, one at a time, while
+preserving construction and technology reserves. Restart; no cache rebuild.
+
+**build-116:** attack animations now deal the same damage per strike as the HUD.
+Unupgraded Aragorn deals 26 damage on each strike across all three animations,
+including both strikes of the double attack. Damage bonuses and armor still
+apply; the attack tooltip's DPS follows actual fixed damage and attack speed.
+
+**build-115:** heroes have a soft player-colored halo at their feet, visible
+without selecting them. It follows the terrain and movement, stays separate
+from selection/hover rings and spell effects, and hides during invisibility or
+after death. Newly recruited and revived heroes receive the same glow.
+
+**build-136:** corrupted ground follows the terrain and uses the source's ash tiles; bots train heroes sooner (an upgrade waits for a hero
+it can pay for, Fate-only heroes ignore the building reserve, the first hero is saved for). See EVIL.md. Restart; rebuild the content pack once
+(`python tools/content_pack.py`) for the tiles.
+
+**build-114:** bots recruit and revive heroes, buy their paid abilities, defend
+home and support the main assault. Wounded heroes retreat below 30% health and
+return at 75%. Heroes use healing, stuns, shields, Trueshot, area spells and
+Capture when useful; Frodo uses the Ring to escape. Personality hero/ability
+flags, resource reservations and normal training limits apply. Restart; no cache rebuild.
+
+**build-112:** audio hooks connect each UI control once, including populated
+subtrees, newly added controls and controls leaving and re-entering the tree.
+Fixes the repeated `child_entered_tree` / button signal errors in the log.
+The audio smoke also fails on engine errors, even if Godot returns success.
+Restart; no cache rebuild.
+
+**build-110:** peace/battle switches preserve the soundtrack's playback position
+instead of restarting the same introductions. Music progresses through all ten
+original pairs in shuffled order, with no repeats until each pair has played.
+Frequent skirmishes can no longer keep the soundtrack on one pair. Restart;
+no cache rebuild. See [audio notes](AUDIO.md).
+
+**build-109:** original music, sounds and unit speech are connected to play.
+The soundtrack crossfades between building and battle themes; units respond to
+selection and orders, announce training and react to combat. Weapon impacts use
+their source weapon/material pairs; workers mine and hammer, and menus and
+construction play their original effects. Settings → Audio has Master, Music,
+Sound effects and Unit speech volume, Mute all and a speech test. Changes preview
+live; Apply / OK saves, Cancel / Esc restores the applied mix. The shared pack and
+standalone demo audio are refreshed locally. Restart; other installs run
+`python tools/game_audio.py` for existing caches or rebuild the content pack.
+See [audio notes](AUDIO.md).
+
+**build-108:** the selected hero's XP row follows the original console: level
+label above a full-height blue bar, original beveled frame and centered current /
+required XP count. Health sits above it and status icons below. Counters show
+whole XP; the tooltip retains fractional detail. Restart; no cache rebuild.
+
+**build-107:** defeated heroes retain their level and exact XP when resummoned at
+the Citadel, including progress toward the next level. They return at full health
+with their restored level bonuses. Records are separate for each player and hero
+type and survive repeated defeats and cancelled recruitment. Restart; no cache
+rebuild. See [hero experience](HERO-EXPERIENCE.md).
+
+**build-106:** heroes earn experience from combat and advance through the original
+ten levels, gaining maximum health, armor and attack. The selected hero and the
+right-edge portrait show level and XP progress; level-up plays the original effect
+and sound. Wounded heroes keep their health percentage. Unit, building, weapon,
+spell and experience-place rates are source-backed; overkill and friendly damage
+give no extra XP. The shared pack and standalone demo cache are refreshed locally.
+Restart; other installs rebuild with `python tools/content_pack.py`. See
+[hero experience](HERO-EXPERIENCE.md) for thresholds, rules and validation.
+
+**build-105:** all Good heroes have usable ability sets. Gimli gains Sunder (Q)
+and tower Capture (W); Legolas gains Trueshot (Q) and Elven Speed (W); Gandalf
+gains Blinding Light (Q), Flame Shield (W), Negate Ability (E) and Rain of Fire (R).
+Includes source slots, icons, animations, sounds and sprite effects; area previews,
+timed statuses, dispelling, collision-safe knockback and tower ownership colors.
+The shared content pack is refreshed locally. Restart; other installs need
+`python tools/content_pack.py`. Hero levels followed in build-106; tower garrisons
+remain future work. See [hero abilities](ABILITIES.md#remaining-good-hero-skills--build-105).
+
+**build-104:** Healing Herbs' W key and button reserve the Beorning while you
+choose an ally, so automatic healing cannot take the cast first. Manual targeting
+can redirect an automatic heal before it applies; spent cooldowns remain intact.
+Cancelling targeting restores automatic healing. Ability grid hotkeys also use
+physical key positions on other keyboard layouts. Restart; no cache rebuild.
+
+**build-103:** units finish ability animations before carrying out replacement
+orders. Stop cancels casting and waiting orders immediately; stopping before
+the effect leaves the ability ready. Cooldown begins when the effect applies;
+an effect already released keeps its cooldown. Restart; no cache rebuild.
+
+**build-102:** Nature's Haven units have their source abilities. Beornings heal
+wounded allies automatically or by right-click/W; House of Lore research adds
+Bear Form (Q), the bear's Savage Blow (W), and Huorn Treeform (Q). Transformation
+keeps selection, population, research and health percentage; both forms use their
+own models, stats and abilities. Savage Blow deals 75 damage in its forward arc
+and knocks susceptible units back. Treeform heals the Huorn and dazes nearby
+enemies for 8 seconds, with the original root mesh, animations, icons and sounds.
+The shared content pack is refreshed locally. Other installs need
+`python tools/content_pack.py`. Restart; see [Nature abilities](ABILITIES.md#natures-haven--build-102).
+
+**build-101:** Fate sits on the middle arch's round ornament. Fate and group
+buttons use the console art without yellow hover, pressed or focus borders.
+Selections larger than 20 units scroll within the same two portrait rows, with
+a slim scrollbar and mouse-wheel support. Scrolling preserves the selection;
+portraits retain their tooltips and click / Shift-click behavior. Restart;
+no cache rebuild.
+
+**build-100:** Archer arrows have a more visible arc (6% of ground distance,
+capped at 1.2 m) and launch from the model's animated bow joint at its release
+pose, rather than the body's generic firing height. Arrow trails start at the
+same bow position. Restart; no cache rebuild.
+
+**build-99:** Elven Archer arrows follow a very shallow arc, rising 2% of the
+shot's ground distance above the direct line (at most 35 cm). The arrow turns
+along the curve and its trail follows it. Restart; no cache rebuild.
+
+**build-98:** Eagle Fletching appears in the Archer's passive R slot, dim until
+researched and bright afterward. Protection surrounds its target with a visible
+blue aura using the original target texture. Spell cursors use their own source
+art and original arrow-tip hotspots, fixing the offset when choosing a shield
+or healing target. The shared pack and local prototype cache are refreshed;
+restart the game. Other installs need `python tools/content_pack.py`.
+
+**build-97:** ranged units can keep aiming and releasing shots at a running or
+circling target. Tracking compares each facing angle with the aim for that same
+tick, instead of requiring the previous angle to match the target's new position.
+First acquisition still waits for the turn; attack timing, range, line of fire
+and order cancellation retain their existing rules. Restart; no cache rebuild.
+
+**build-96:** the console's Menu button opens the original in-game menu: the
+Good menu frame over a dimmed, paused battlefield with Settings, Exit and Resume
+in the original order. Settings uses the original Game Options frame, gold-edged
+buttons and check boxes, with Game (health bars, interface size), Controls (the
+key reference) and Reforged tabs, and Reset / Apply / Cancel / OK. The Reforged
+tab picks the Purist, Reforged or Custom edition; it lists no improvements yet.
+Exit asks Exit to Main Menu (the setup screen), Exit to Windows or Cancel. Esc
+steps back out of the menu. Settings persist in `user://settings.cfg`. The debug
+tools moved to a **Debug · F4** button at the top right, above the build line.
+The local shared interface pack and `converted/prototype` are refreshed; other
+installs need `python tools/content_pack.py`. Restart the game.
+
+**build-95:** placed building outlines use their actual footprints, fixing the
+Camp's empty space on the left. Human Workers use the original single-punch
+animation: 5 base damage every 1.5 seconds, before armor and bonuses. Construction
+adds only the health earned by new work, preserving attack damage through
+completion. Fate moves to the original orb in the console's center with an
+overlaid counter (0–20); hover shows progress and click opens a placeholder
+global-abilities page. Back, V or Esc returns to the selected unit's commands.
+The local shared interface pack is refreshed; other installs need
+`python tools/content_pack.py`. Restart the game.
+
+**build-94:** Sanctuary units have their source abilities and upgrades. Elven
+Archers gain passive Elven Cloaks at the Wilderness Outpost; Lightbearers have
+Protection (Q), with Negate Magic (W) and Light of Lothlórien (E) researched at
+the House of Lore. Ground spells preview their full 7 m / 5 m radius under the
+cursor. Original sprite effects, cast animations, ability sounds and the
+Lightbearer projectile replace the placeholder orb; ranged impacts use the
+target material's source sounds. The shared content pack is rebuilt locally;
+other installs need `python tools/content_pack.py`. See [Sanctuary abilities](ABILITIES.md#elven-sanctuary--build-94).
+
+**build-93:** colored overhead health bars are on by default and appear only
+when damaged (including unfinished construction). Building bars center over
+their visible roof geometry with a small screen-space gap; flags and shadows
+do not shift the anchor. HUD bars keep their original colors. Restart; no cache rebuild.
+
+**build-92:** the ground-click ring is 20% smaller with 0.8 peak opacity,
+retaining its double pulse and fade. Restart; no cache rebuild.
+
+**build-91:** unit and building right-click outlines share two smooth opacity
+pulses, with eased fades and a gentle return to the hovered or selected outline.
+Both keep their owner color and normal size. Restart; no cache rebuild.
+
+**build-90:** ground command feedback uses the unit selection-ring geometry laid
+onto the terrain. Its perspective, slope and occlusion follow the world, while
+the small double pulse remains. Elevated clicks keep the ring on the clicked
+surface. Restart; no cache rebuild.
+
+**build-89:** right-clicking owned buildings gives selected units a footprint-aware
+approach order. Carrying workers deliver to the clicked drop-off building; empty
+workers repair, resume construction or gather as appropriate. Mixed selections
+split those jobs, and deliveries can resume the worker's previous gathering.
+Restart; no cache rebuild.
+
+**build-88:** right-clicking a unit gives two rapid owner-colored ring blips,
+separated by a brief dark gap, then restores its selected or hovered appearance.
+The ring keeps its normal size. Restart; no cache rebuild.
+
+**build-87:** structures and neutral interactables use the same feedback as units:
+a half-opacity owner-colored footprint on hover and one brief solid blip when
+targeted. Attack, repair, gathering and structure rally targets all acknowledge
+orders; selected structures keep their normal outline. Restart; no cache rebuild.
+
+**build-86:** ground right-click feedback returns to the small gold circle,
+with two gentle size pulses and a short fade. Restart; no cache rebuild.
+
+**build-85:** player-colored health bars affect only world overlays; console and
+hero bars retain their original colors. Right-clicking a unit briefly shows its
+owner's color on the normal-sized ring once. Hovered units show a half-opacity
+ring; selected units keep their normal ring. Restart; no cache rebuild.
+
+**build-84:** accepted ground orders show animated converging arrows and a fading
+ripple anchored to the clicked world point. Unit targets briefly pulse their
+selection ring without changing selection. Battlefield box drags keep working
+over the HUD, and a box touching a unit's body selects it. F4 → Experimental health
+bars has independent player-color and overhead toggles (both off by default).
+Overhead bars also show full-health units and buildings. Restart; no cache rebuild.
+
+**build-83:** Ranger Camouflage and Eagle Eye are researchable at the Wilderness
+Outpost after Citadel 2 (each 75 food, 75 ore, 90 seconds). The Ranger's command
+panel shows Camouflage on Q, passive Eagle Eye on E, and innate Detection on R;
+research-locked icons stay dark. Q hides selected Rangers until movement or
+attack, with a three-second recharge after revealing. Detection reveals enemy
+camouflage within 20 m; Eagle Eye extends this to 40 m. Hidden enemies disappear
+from targeting, the world and minimap. Terrain fog is still absent. The shared
+content pack is refreshed locally; other installs need `python tools/content_pack.py`.
+
+**build-82:** Axethrower projectiles tumble in flight using their source spin
+axis and speed (1,080 degrees per second). Both normal and flaming axes rotate;
+pause freezes their pose, and follow-through hits preserve the spin phase.
+The local shared content pack is refreshed; other installs need `python tools/content_pack.py`.
+
+**build-81:** Flaming Axe's description states its maximum fire damage (7 per
+second) and duration (6.25 seconds after the last hit), without referring to other
+abilities. Normal building animations now loop, including the Mill's sails;
+prebuilt buildings also start their animations. The local shared content pack is refreshed.
+
+**build-80:** Flaming Axe uses the original projectile torch effect for building
+attacks. The source flaming projectile shares the normal axe mesh and adds flame,
+smoke and ember sprites; unit targets and follow-through hits retain normal axes.
+The shared content pack was rebuilt locally; other installs need `python tools/content_pack.py`.
+
+**build-79:** ability tooltips show the name and effect description. Burning
+buildings show a fire status icon under their health bar; it disappears when the
+fire goes out. Ongoing fire damage no longer plays weapon hit sounds.
+Restart; no cache rebuild.
+
+**build-78:** Dwarf Shieldbreakers research Shield Break at the Forge; Axethrowers
+gain Razored Edge follow-through hits and Flaming Axe building fires. Their passive
+icons stay visible and dim until researched, then light up automatically. Shield
+Break shows its armor reduction and timer on the target. The shared content pack
+has been refreshed locally; rebuild other installs with `python tools/content_pack.py`.
+See [Dwarf abilities](ABILITIES.md#dwarf-units--build-78).
+
+**build-77:** skirmish bot choices run Easy, Normal, Hard, alphabetically within each
+difficulty. Each group starts with its own Random option, which draws a named bot
+of that difficulty when the match starts and keeps the slot's selected traits.
+Returning to setup keeps the Random choice; Restart repeats the same draw.
+See [the setup notes](SKIRMISH.md#build-77-bot-order-and-random-choices).
+Restart; no cache rebuild.
 
 **build-75:** the camera looks straight from south to north, as in the original game. The
 view and the minimap had been turned half way round from the original: on Bilbo's
@@ -257,9 +581,10 @@ are prototype policies; [ranged details and limits](COMBAT.md#elven-archer).
 Click an enemy to inspect the same stats with a red ring and health bar.
 Unit commands disable while inspecting it; the global Walk/Run switch remains
 available. Drag selection remains friendly-only.
-A unit or building below full health also carries the original's world health
-bar, a black strip with a green fill at its foot. A foundation's health climbs
-with the work done, so the same bar is its construction progress bar.
+A unit or building below full health carries a black world health bar with its
+owner's color above the model. Building bars center just above the visible roof.
+Menu → Settings → Health bars can restore green fills or placement at the model's foot.
+A foundation's health climbs with the work done, so the same bar is its construction progress bar.
 Selection rings show the full body envelope: Aragorn **0.800 m**, Elven Knight
 **0.927 m**, Uruk-hai **0.693 m** radius. Aragorn's demo model is enlarged 12%,
 with a wider hitbox; raw source bounds remain recorded. Friendly personal space while
@@ -452,7 +777,10 @@ with the chosen speed (big fights on large maps), the game runs slower instead o
 the frame rate, and the match panel shows the speed actually reached.
 
 `-Profile` (any mode) prints, every two game minutes, the unit count and where
-simulation and frame time went, for chasing slow matches.
+simulation and frame time went, for chasing slow matches. It also reports total
+units, buried bodies, native nodes/resources, managed heap, private memory,
+allocated bytes and GC counts. [Performance notes](PERFORMANCE.md) explain the
+retention checks, allocation sampler and remaining large-match costs.
 
 All generated game data stays in ignored `converted/prototype/`, `converted/skirmish/` and `converted/skirmish-maps/`. The source
 project contains no game assets. At launch the manifest's content hashes are
@@ -517,11 +845,12 @@ caches and Helm's Deep.
 | Sandbox: Tab, or the Player 1 / Player 2 tabs beside the console menu | Command the other player (clicking its unit or building does too) |
 | Observing: a player's name in the overview | Center the camera on that player's base |
 | Observing: speed slider / pause button | Choose the game speed / pause and resume |
-| Esc | Cancel targeting; then close the build page; otherwise clear selection |
+| Esc | Cancel targeting; then close the build page; otherwise clear selection. In the game menu: back out (Settings drops changes, Main Menu resumes) |
 | Right-click while targeting | Cancel targeting and retain the current order |
 | Restart sandbox | Reset the encounter |
-| Menu: All squads / Fortress / Whole map / Focus selection | Frame a comparison view or the current selection |
-| F4 / console Menu button | Open/close debug tools |
+| Debug tools: All squads / Fortress / Whole map / Focus selection | Frame a comparison view or the current selection |
+| Console Menu button | Open the game menu (pauses play): Settings, Exit, Resume |
+| F4 / Debug button (top right) | Open/close debug tools |
 | F10 | Show/hide the debug UI |
 
 Control policy (user decision): **Q/W/E/R for abilities 1–4** and **F2 for
@@ -533,11 +862,11 @@ Aragorn's Q heal, W/E passives and global Walk/Run are implemented. See
 
 The debug menu has live pause/tick and selected-order information, Pause/Resume,
 Step one tick (50 ms while paused), Restart encounter, camera view/rotation
-buttons, Focus selection and the saved 75–150% interface size. In a skirmish its
-Cheats section adds 1000 food and ore or makes your building and training
-instant. The current shortcut guide is collapsible; the last action is labeled
+buttons and Focus selection. In a skirmish its Cheats section adds 1000 food and
+ore or makes your building and training instant. The last action is labeled
 separately from live state. The menu scrolls to fit above the console. Opening
-it does not pause play.
+it does not pause play. The interface size, health bar options and shortcut guide
+moved to the game menu's Settings in build-96.
 Use `./prototype/run.ps1 -DebugMenu` to start with it open, including when saving
 a normal viewport capture with `-CapturePath`.
 
@@ -662,6 +991,16 @@ Attack/A, hidden Move/Stop controls, targeted and immediate orders, disabled
 commands, cancellation, mixed unit types, combat interruption, pause/resume,
 drag release over the panel and removal of dead selected units. Its report is
 `converted/prototype/command-smoke-report.json`.
+The interaction check (`./prototype/run.ps1 -InteractionSmoke`) covers animated
+ground feedback, fixed-size owner-colored target blips, faded hover rings,
+partial-body drags, dragging onto the HUD, and both health bar toggles.
+It also verifies that player colors leave the HUD bars unchanged. Add `-Skirmish -NoAi`
+to cover building bars and structure hover/blip feedback for move, attack, repair,
+gather and rally targets too; add `-CapturePath converted/prototype/interaction.png`
+to render the overhead bars and target blip, plus `.ground.png` and `.hover.png` captures.
+Skirmish captures also include `.structure-hover.png`, `.structure-blip.png`, and
+`.structure-hp.png`; checks cover building bar alignment during camera rotation.
+It writes `interaction-smoke-report.json` in the chosen cache.
 The orders smoke test adds 27 actual input checks for control groups, centering,
 new commands, queues, HUD adjustment and debug pause/step/open/close controls,
 writing `converted/prototype/orders-smoke-report.json`. It also checks F2 and the

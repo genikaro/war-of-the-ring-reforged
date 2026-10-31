@@ -1,6 +1,8 @@
-"""Small, traced hero ability adapters (Aragorn, Frodo, Gimli's Siege Aura, Legolas's Guardian Wind); no general spell
-VM or purchase economy. Every other ability of an exported unit is listed with its source slot, icon and an English
-description, marked unsimulated (Kind 8), so the action grid shows the unit's full set."""
+"""Source adapters for Good hero abilities and the ordinary units' ability modules.
+
+The remaining Gimli, Legolas and Gandalf skills are traced in hero_skills;
+all five Good heroes now export their complete usable source ability sets.
+"""
 import math
 
 
@@ -24,20 +26,28 @@ HEROES = {'UNIT_G_HERO_ARAGORN': {25: "Andúril's Fury", 41: 'Greater Kingsfoil'
           'UNIT_G_HERO_LEGOLAS': {0: 'Trueshot', 6: 'Elven Speed', 19: 'Guardian Wind'},
           'UNIT_G_HERO_GANDALF': {15: 'Blinding Light', 40: 'Negate Ability', 42: 'Flame Shield', 43: 'Rain of Fire'},
           'UNIT_G_ELVEN_LIGHTBRINGER': {24: 'Protection'}}
-# English descriptions of the abilities not simulated yet, after the shipped manual (PDF pages 15-17) and the captured
-# Russian tooltips (good-020 to -069).
-UNSIMULATED = {27: 'Gimli slams the ground with his axe, knocking down and stunning nearby enemies.',
-               45: 'Gimli takes an enemy tower, ejecting its garrison, and turns it against the enemy.',
-               0: 'Legolas shoots an arrow that knocks the target back out of the fight for a moment.',
-               6: 'Legolas and the troops around him move and attack much faster for a while.',
-               15: 'A blinding flash from the staff stuns every enemy around Gandalf for a moment.',
-               40: 'Gandalf stops an enemy from using its special abilities for a while.',
-               42: 'A shield on an ally that reflects part of the damage it takes back at the attacker.',
-               43: 'Fire rains on an area, burning enemy units and setting enemy buildings alight.',
-               24: 'A protective layer of light around an ally absorbs damage done to it.'}
+EVIL_HEROES = ('UNIT_E_HERO_GOLLUM', 'UNIT_E_HERO_NAZGUL_KING', 'UNIT_E_HERO_QAMARA', 'UNIT_E_HERO_GRISHNAKH', 'UNIT_E_HERO_SARUMAN')
 
 
 def export(resolver, unit, model, skeleton):
+    if unit.name.startswith('UNIT_E_') and unit.name not in EVIL_HEROES:
+        import evil_upgrades
+        return evil_upgrades.export(resolver, unit, model, skeleton)
+    if unit.name in ('UNIT_G_BEORNING', 'UNIT_G_BEAR', 'UNIT_G_HUORN'):
+        import nature_abilities
+        return nature_abilities.export(resolver, unit, model, skeleton)
+    if unit.name in ('UNIT_G_ELVEN_ARCHER', 'UNIT_G_ELVEN_LIGHTBRINGER'):
+        import elven_abilities
+        return elven_abilities.export(resolver, unit, model, skeleton)
+    if unit.name == 'UNIT_G_RANGER':
+        import ranger_abilities
+        return ranger_abilities.export(resolver, unit, model, skeleton)
+    if unit.name in ('UNIT_G_DWARVEN_AXETHROWER', 'UNIT_G_DWARVEN_SHIELDBREAKER'):
+        import dwarf_abilities
+        return dwarf_abilities.export(resolver, unit)
+    if unit.name in EVIL_HEROES:
+        import evil_abilities
+        return evil_abilities.export(resolver, unit, model, skeleton)
     if unit.name not in HEROES:
         return []
     db = resolver.db
@@ -132,6 +142,10 @@ def export(resolver, unit, model, skeleton):
             definition.update(Kind=7, Passive=False, RangeMm=round(spell['MaxAreaOfEffectRange'] * 1000),
                 BonusScale=round(ward['Float_01'] * 1_000_000), DurationTicks=math.ceil(timer['Float_01'] * 20))
         else:
-            definition.update(Kind=8, RechargeTicks=math.ceil(spell['RechargeTime'] * 20), Description=UNSIMULATED[gear.id])
+            import hero_skills
+            definition = hero_skills.export(resolver, gear, model, skeleton, HEROES[unit.name][gear.id])
+        # Innate gear can carry nominal prices; only IsPurchasable creates a paid unlock.
+        definition.update(Purchasable=bool(gear['IsPurchasable']),
+                          PurchaseFateCost=gear['PurchaseCostPower'] if gear['IsPurchasable'] else 0)
         abilities.append(definition)
     return sorted(abilities, key=lambda a: a['Slot'])

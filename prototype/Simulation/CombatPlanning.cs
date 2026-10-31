@@ -16,10 +16,10 @@ public sealed partial class SimWorld
         // A failed redirect can leave a request behind while the existing route becomes usable again.
         // Only demand renewed on the previous tick can reserve a turn; stale requests must not occupy
         // all grants indefinitely while their owners keep walking without asking for another search.
-        foreach (var unit in Units)
+        foreach (var unit in ActiveUnits)
             if (unit.CombatRequestTick>=0 && (!NeedsCombatPlan(unit)
                 || unit.CombatRequestRenewedTick<Tick-1)) unit.CombatRequestTick=-1;
-        foreach (var unit in Units.Where(u=>u.CombatRequestTick>=0 && NeedsCombatPlan(u))
+        foreach (var unit in ActiveUnits.Where(u=>u.CombatRequestTick>=0 && NeedsCombatPlan(u))
             .OrderBy(u=>u.CombatRequestTick).ThenBy(u=>u.Id).Take(CombatSearchesPerTick))
             _combatPlanningGrants.Add(unit.Id);
     }

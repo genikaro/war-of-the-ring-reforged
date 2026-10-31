@@ -84,6 +84,6 @@ public partial class Main
             passed=_engagementSelected && _formationMoveDispatch && _formationFirstArrival && _formationMarchDispatch && _formationEngaged
                 && arrived && allies.Length>=16 && _formationWidth<=18 && _engagementSafe};
         System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"formation-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented=true}));
-        GD.Print("FORMATION_SMOKE "+JsonSerializer.Serialize(report)); GetTree().Quit(report.passed?0:1);
+        GD.Print("FORMATION_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed?0:1);
     }
 }

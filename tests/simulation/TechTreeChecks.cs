@@ -105,7 +105,8 @@ public static class TechTreeChecks
             var world = new SimWorld(nav,rules);
             world.BuildingRules.Add("ballista",new("ballista","Ballista Tower",null,150,150,800,500,750000,750000,100000,50000,[],2000));
             world.Defenses.Add("ballista",new(14000,0,19000,[1000,1200,1400,1600,1750],0,4800,0));
-            world.ExtraDefenses.Add("ballista",[new(35000,10000,22000,[100,200,300,400,500],0,4600,0)]);
+            world.ExtraDefenses.Add("ballista",[new DefenseDefinition(35000,10000,22000,[100,200,300,400,500],0,4600,0)
+                .ForGameplay("WEAPON_BUILDING_G_SUPERTOWER_BOLT")]);
             world.ConstructionSites.Add(Tower,new(Tower,Tower,2000,"ballista",10500,15500) { Team = 0,Health = 500,Complete = true });
             return world;
         }
@@ -113,14 +114,14 @@ public static class TechTreeChecks
         var far = Fixture(); var target = far.Spawn(1,Cell(25,15),sturdy); target.Order = OrderKind.HoldGround; target.Cooldown = 100000;
         far.Step();
         var bolt = far.Projectiles.SingleOrDefault(p => p.Attack == 1); var arrow = far.Projectiles.SingleOrDefault(p => p.Attack == 0);
-        check(bolt != null && arrow != null && bolt.DamageMilli == 350_000 && far.ConstructionSites[Tower].ExtraDefenseCooldowns[0] == 200,
-            "the Ballista Tower fires its arrows and its bolt: 35 DPS over the source 10 s interval");
+        check(bolt != null && arrow != null && bolt.DamageMilli == 50_000 && far.ConstructionSites[Tower].ExtraDefenseCooldowns[0] == 60,
+            "the Ballista Tower fires arrows alongside a 50-damage bolt every three seconds");
         var near = Fixture(); var close = near.Spawn(1,Cell(15,15)); close.Order = OrderKind.HoldGround; close.Cooldown = 100000;
         near.Step();
         check(near.Projectiles.Count == 1 && near.Projectiles[0].Attack == 0,"the bolt keeps its source 10 m minimum range; the arrows do not");
         int bolts = 0;
         for (int i = 0; i < 210; i++) { far.Step(); bolts += far.CombatEvents.Count(e => e is { Kind: CombatEventKind.Release,Site: Tower,Attack: 1 }); }
-        check(bolts == 1 && target.Health < sturdy.MaxHealth,"the next bolt waits out its 10 s interval while the arrows keep firing");
+        check(bolts == 3 && target.Health < sturdy.MaxHealth,"bolts keep their three-second interval while the arrows keep firing");
     }
 
     private static void Siege(Action<bool,string> check)
@@ -157,10 +158,11 @@ public static class TechTreeChecks
         var world = new SimWorld(new GridNavigation(40,20,1000,Enumerable.Repeat(true,800).ToArray(),new int[861]));
         var caster = world.Spawn(0,10*40+10,legolas); var near = world.Spawn(0,10*40+15); var far = world.Spawn(0,10*40+30);
         world.EnqueueAbility(0,[caster.Id],2,-1); world.Step();
-        check(caster.Casting && caster.AbilityReadyAt[2] == 600 && near.MissileWardUntil < 0,"Guardian Wind casts on the spot and spends its source 30 s cooldown");
+        check(caster.Casting && caster.AbilityReadyAt[2] == 0 && near.MissileWardUntil < 0,"Guardian Wind winds up on the spot without spending cooldown yet");
         Step(world,8);
         check(near.MissileWardUntil == world.Tick-1+240 && near.MissileWardPpm == 10_000 && caster.MissileWardUntil == near.MissileWardUntil
-            && far.MissileWardUntil < 0 && world.AbilityEvents.Any(e => e.Kind == AbilityEventKind.Ward),"at the toolscript tick allies within 12 m, Legolas too, are warded for 12 s");
+            && far.MissileWardUntil < 0 && caster.AbilityReadyAt[2] == 608
+            && world.AbilityEvents.Any(e => e.Kind == AbilityEventKind.Ward),"at the toolscript tick allies within 12 m, Legolas too, are warded for 12 s and the 30 s cooldown starts");
 
         long Arrow(bool warded)
         {

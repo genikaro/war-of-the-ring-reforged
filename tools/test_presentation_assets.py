@@ -124,6 +124,22 @@ class PresentationTests(unittest.TestCase):
             self.assertEqual(m['resource_keys'][0]['id'], 3)
             self.assertEqual((m['actions'][0]['id'], m['actions'][0]['shape_parameters']), (17, [42]))
 
+    def test_projectile_spin_rejects_invalid_axes_and_changing_motion(self):
+        def bits(value):
+            return struct.unpack('<I', struct.pack('<f',value))[0]
+        def source(axis, speed):
+            return {'motion_keys': [{'time': 0,'values': [[bits(v) for v in [*axis,1]], bits(speed), *([0]*11)]}]}
+        self.assertIsNone(lpo.spin_parameters({'motion_keys': []}))
+        self.assertIsNone(lpo.spin_parameters(source([1,0,0],0)))
+        self.assertEqual(lpo.spin_parameters(source([2,0,0],1080)), {'Axis': [1,0,0],'DegreesPerSecond': 1080})
+        for invalid in (source([0,0,0],1080),source([float('nan'),0,0],1080),source([1,0,0],float('inf'))):
+            with self.assertRaises(ValueError):
+                lpo.spin_parameters(invalid)
+        changing = source([1,0,0],1080)
+        changing['motion_keys'] *= 2
+        with self.assertRaisesRegex(ValueError,'constant'):
+            lpo.spin_parameters(changing)
+
     def test_cloth_versions_topology_and_spring_validation(self):
         for version in (100, 102, 103):
             m = cth.parse(cloth(version))

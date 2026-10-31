@@ -24,6 +24,7 @@ public sealed partial class SimWorld
     /// <summary>A unit fell to <paramref name="killer"/>'s side (-1 when nobody is credited); a friend's blow is a loss only.</summary>
     private void RecordDeath(int killer,SimUnit victim)
     {
+        RememberHeroExperience(victim);
         MatchRecord.Add(Record(victim.Team).UnitLosses,victim.Definition.DisplayName);
         if (killer >= 0 && killer != victim.Team) MatchRecord.Add(Record(killer).UnitKills,victim.Definition.DisplayName);
     }

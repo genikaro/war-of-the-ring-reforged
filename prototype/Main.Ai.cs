@@ -14,7 +14,7 @@ public partial class Main
     private const int AiTeam = 1;
 
     private bool PassiveEnemyFixture => _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke
-        || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _tier2Smoke || _researchSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke;
+        || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _tier2Smoke || _evilSmoke || _researchSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke;
 
     private void LoadSkirmishAi(JsonElement data)
     {
@@ -22,10 +22,10 @@ public partial class Main
         if (!data.TryGetProperty("ai",out var ai))
             throw new InvalidOperationException("Refresh AI rules: python tools/skirmish_ai.py --cache converted/skirmish");
         var world = _world!;
-        foreach (var item in ai.GetProperty("buildings").EnumerateObject())
+        foreach (var item in ai.GetProperty("buildings").EnumerateObject().Where(b => Loaded(b.Name)))
             world.AiBuildings.Add(item.Name,new(item.Value.GetProperty("class").GetString()!,item.Value.GetProperty("must_have_first_pass").GetBoolean(),
                 item.Value.GetProperty("max_default").GetInt32(),item.Value.GetProperty("lower_priority_if_exists").GetBoolean()));
-        foreach (var item in ai.GetProperty("units").EnumerateObject())
+        foreach (var item in ai.GetProperty("units").EnumerateObject().Where(u => Loaded(u.Name)))
             world.AiUnits.Add(item.Name,new(item.Value.GetProperty("never_add").GetBoolean(),item.Value.GetProperty("assault").GetInt32()));
         var assault = ai.GetProperty("war_parties").GetProperty("ASSAULT");
         if (ai.GetProperty("war_parties").TryGetProperty("RAIDING",out var raiding))
@@ -42,6 +42,8 @@ public partial class Main
         world.AggressiveIdleTeams.UnionWith(world.Contenders.Where(t => t != PlayerTeam));
         if (_noAi || PassiveEnemyFixture && !_observing) return;
         string fallback = ai.GetProperty("default_personality").GetString()!;
+        var botOptions=ai.GetProperty("personalities").EnumerateArray()
+            .Select(p=>new AiBotOption(p.GetProperty("id").GetString()!,p.GetProperty("difficulty").GetInt32())).ToArray();
         AiPersonality Personality(string wanted)
         {
             var chosen = ai.GetProperty("personalities").EnumerateArray()
@@ -55,7 +57,7 @@ public partial class Main
         foreach (int team in world.Contenders.Where(t => t != PlayerTeam))
         {
             string wanted = _bots.ElementAtOrDefault(team) is { Length: > 0 } bot ? bot : _aiPersonality == "" ? fallback : _aiPersonality;
-            var choice = AiRoster.Parse(wanted);
+            var choice = AiBotOptions.Resolve(AiRoster.Parse(wanted),botOptions,_matchSeed,team);
             world.AiPlayers.Add(team,new(team,Personality(choice.Id),traits: choice.Traits));
         }
     }

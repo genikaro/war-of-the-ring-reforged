@@ -30,7 +30,7 @@ public sealed partial class SimWorld
     {
         var rates = Rules.Regeneration;
         if (rates == RegenerationRates.None) return;
-        foreach (var unit in Units)
+        foreach (var unit in ActiveUnits)
         {
             if (unit.Health <= 0 || unit.InsideSite >= 0 || unit.RingActive) continue;
             long most = (long)unit.MaxHealth*1000;
@@ -45,6 +45,7 @@ public sealed partial class SimWorld
     /// gathering or carrying a load, building or repairing on the spot, walking, running, in an attack stance, or idle.</summary>
     public int RegenerationRate(SimUnit unit)
     {
+        if (unit.Dazed?.Until > Tick || unit.KnockbackRecoverUntil > Tick) return 0;
         var r = Rules.Regeneration;
         var (ordinary,hero) = unit.Casting ? (r.SpecialMilli,r.SpecialHeroMilli)
             : Swinging(unit) ? (r.AttackMilli,r.AttackHeroMilli)

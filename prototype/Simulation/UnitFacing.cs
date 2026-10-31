@@ -22,10 +22,17 @@ public sealed partial class SimWorld
     {
         if (!unit.Definition.IsRanged) return true;
         int desired = UnitFacing.FromDirection(target.X-unit.X,target.Z-unit.Z);
+        bool tracking = unit.AttackAimTarget == target.Id && unit.AttackAimTick == Tick-1
+            && Math.Abs(UnitFacing.Delta(unit.PreviousFacing,unit.AttackAimDirection)) <= UnitFacing.AttackTolerance;
         unit.Facing = UnitFacing.Turn(unit.Facing,desired);
-        // Wait until the preceding rendered turn segment is aligned too.
-        // Playback cannot begin a windup while still interpolating the turn.
-        return FacingAligned(unit,target);
+        // A moving target has a new bearing every tick. Once tracking, the previous heading
+        // must match the previous aim, rather than that new bearing; otherwise a circling
+        // runner can keep every windup waiting forever. The current heading must still aim
+        // at the target, and a fresh acquisition keeps the original settled-turn check.
+        bool ready = FacingAligned(unit,target) || tracking
+            && Math.Abs(UnitFacing.Delta(unit.Facing,desired)) <= UnitFacing.AttackTolerance;
+        unit.AttackAimTarget = target.Id; unit.AttackAimDirection = desired; unit.AttackAimTick = Tick;
+        return ready;
     }
 
     /// <summary>Turn toward a building, which has a position but no body to aim at.</summary>
@@ -54,7 +61,14 @@ public sealed partial class SimWorld
 
     private void FaceMovement()
     {
-        foreach (var unit in Units.Where(u => u.Present && u.Definition.IsRanged && !u.Attacking && u.Movement.Count >= 2))
+        foreach (var bear in ActiveUnits.Where(u => u.Present && !u.Casting && u.EnabledAbilities.Any(a => a.Kind == AbilityKind.SavageBlow)))
+            if (bear.Target >= 0) bear.Facing=UnitFacing.FromDirection(Units[bear.Target].X-bear.X,Units[bear.Target].Z-bear.Z);
+            else if (bear.Movement.Count >= 2)
+            {
+                var from=bear.Movement[0]; var to=bear.Movement[^1];
+                if (from.X != to.X || from.Z != to.Z) bear.Facing=UnitFacing.FromDirection(to.X-from.X,to.Z-from.Z);
+            }
+        foreach (var unit in ActiveUnits.Where(u => u.Present && u.Definition.IsRanged && !u.Attacking && u.Movement.Count >= 2))
         {
             var from = unit.Movement[0]; var to = unit.Movement[^1];
             long threshold = Math.Max(2,unit.MovementBudget/5000);

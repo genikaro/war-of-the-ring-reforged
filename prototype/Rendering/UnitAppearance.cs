@@ -12,6 +12,12 @@ public sealed class UnitAppearance
     public int BoundMeshes => _meshes.Count;
     public int[] VisibleNodes => _meshes.Where(p => p.Value.Visible).Select(p => p.Key).Order().ToArray();
     public int Changes { get; private set; }
+    /// <summary>ModelFlags ids 0 and 1, MODEL_FLAG_WEAPON_BLOOD_RIGHT and _LEFT: the blood-smeared blade overlays.</summary>
+    public const long WeaponBloodMask = 0b11;
+    /// <summary>Build-129: show the weapon blood overlays once the unit's weapon has drawn blood.</summary>
+    public bool WeaponBlood { get; set; }
+    public bool HasWeaponBlood { get; }
+    public bool WeaponBloodVisible { get; private set; }
 
     public static JsonElement Read(string path)
     {
@@ -33,6 +39,9 @@ public sealed class UnitAppearance
             foreach (var part in model.GetProperty("parts").EnumerateArray())
                 if (part.ValueKind != JsonValueKind.Null && !_meshes.ContainsKey(part.GetInt32()))
                     throw new InvalidOperationException("Imported appearance mesh missing: "+part.GetInt32());
+        HasWeaponBlood = data.GetProperty("models").EnumerateArray().Any(model =>
+            model.GetProperty("attachments").EnumerateArray().Any(a => (a.GetProperty("flags").GetInt64()&WeaponBloodMask) != 0)
+            || model.GetProperty("partFlags").EnumerateArray().Any(f => (f.GetInt64()&WeaponBloodMask) != 0));
         foreach (var model in data.GetProperty("models").EnumerateArray())
             foreach (var cloth in model.GetProperty("cloths").EnumerateArray())
                 if (cloth.GetProperty("node") is var node && node.ValueKind != JsonValueKind.Null && !_meshes.ContainsKey(node.GetInt32()))
@@ -68,8 +77,9 @@ public sealed class UnitAppearance
         var flags = _data.GetProperty("flags");
         long blood = flags.GetProperty("blood").GetInt64(),levels = 0,level = flags.GetProperty("levels")[0].GetInt64();
         foreach (var item in flags.GetProperty("levels").EnumerateArray()) levels |= item.GetInt64();
+        if (WeaponBlood) blood &= ~WeaponBloodMask;
         bool Configured(long mask) => (mask&blood) == 0 && ((mask&levels) == 0 || (mask&level) != 0);
-        var gates = new List<bool[]>(); int modelIndex = 0;
+        var gates = new List<bool[]>(); int modelIndex = 0; bool weaponBlood = false;
         foreach (var model in _data.GetProperty("models").EnumerateArray())
         {
             var parent = model.GetProperty("parent");
@@ -115,8 +125,13 @@ public sealed class UnitAppearance
                         && index < attachments.Count) attachments[index] = e.GetProperty("name").GetString() == "show_attachment";
             slot = 0;
             foreach (var attachment in model.GetProperty("attachments").EnumerateArray())
-            { attachments[slot] = enabled && attachments[slot] && Configured(attachment.GetProperty("flags").GetInt64()); slot++; }
+            {
+                long mask = attachment.GetProperty("flags").GetInt64();
+                attachments[slot] = enabled && attachments[slot] && Configured(mask);
+                weaponBlood |= attachments[slot] && (mask&WeaponBloodMask) != 0; slot++;
+            }
             gates.Add(attachments.ToArray()); modelIndex++;
         }
+        WeaponBloodVisible = weaponBlood;
     }
 }

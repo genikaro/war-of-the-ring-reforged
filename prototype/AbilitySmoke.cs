@@ -35,8 +35,29 @@ public partial class Main
                 // Fixture: these checks count exact health (60 before the heal, 310 after, 100 after Stop), and since
                 // build-52 an idle unit regains 50 milli-HP a tick, which shows as the next whole point (RegenerationChecks).
                 world.Rules.Regeneration = RegenerationRates.None;
+                if (!world.Economies.ContainsKey(0)) world.Economies.Add(0,new(0,0));
+                world.Economies[0].Fate=0;
                 PushKey(Key.Key1); break;
-            case 5: Click(_commands.PortraitButton(0).GetGlobalRect().GetCenter()); break;
+            case 3:
+                _abilityChecks["paid_passives_start_locked"] = hero.MeleeDamageRate==20000 && hero.Immunities==StatusProtection.None
+                    && _commands.AbilityButton(1).Disabled && _commands.AbilityButton(2).Disabled
+                    && _commands.AbilityLabel(1)=="2 Fate" && _commands.AbilityHotkey(1).Text=="W";
+                HoverAbilityPoint(_commands.AbilityButton(1).GetGlobalRect().GetCenter());
+                if (_capture!="") _=CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-locked.png");
+                _abilityCommandCount=world.Commands.Count;PushKey(Key.W);break;
+            case 4:
+                _abilityChecks["insufficient_fate_rejects_unlock"] = world.Commands.Count==_abilityCommandCount && hero.PurchasedAbilities.Count==0;
+                world.Economies[0].Fate=3;HoverAbilityPoint(_commands.AbilityButton(1).GetGlobalRect().GetCenter());break;
+            case 5:
+                _abilityChecks["purchase_tooltip_has_fate_cost"] = _commands.DisplayedTooltipCosts.SequenceEqual(["Fate 2"]);
+                Click(_commands.AbilityButton(1).GetGlobalRect().GetCenter());break;
+            case 6:
+                _abilityChecks["button_buys_passive_without_cast"] = hero.AbilityPurchased(hero.Ability(1)!) && hero.MeleeDamageRate==30000
+                    && world.Economies[0].Fate==1 && !hero.Casting && _orders.Pending==null;
+                PushKey(Key.E);PushKey(Key.E);break;
+            case 7:
+                _abilityChecks["hotkey_buys_immunity_once"] = hero.Immunities==(StatusProtection)15 && world.Economies[0].Fate==0
+                    && hero.PurchasedAbilities.Count==2;break;
             case 8:
                 _abilityChecks["source_ability_panel"] = _commands.AbilityButton(0).Visible && !_commands.AbilityButton(0).Disabled
                     && _commands.AbilityButton(1).Visible && _commands.AbilityButton(1).Disabled
@@ -81,6 +102,10 @@ public partial class Main
                 _abilityChecks["pause_freezes_cast"] = world.Tick == _abilityPausedTick && world.Units[_abilitySmokeTarget].Health == 60
                     && Math.Abs(_views[0].Player!.CurrentAnimationPosition-_abilityPausedTime) < .0001;
                 PushKey(Key.Space); break;
+            case 28: PushKey(Key.H); break;
+            case 29:
+                _abilityChecks["hold_waits_for_cast_animation"] = hero.Casting && hero.Order == OrderKind.UseAbility
+                    && hero.HeldOrder?.Kind == OrderKind.HoldGround; break;
             case 37:
                 _abilityChecks["source_heal_applied"] = world.Units[_abilitySmokeTarget].Health == 310 && _healLabels.Count > 0;
                 _abilityChecks["original_healing_sprite_layers_visible"] = _healingLayers.Length == 5 && _healingEffects.Count == 1
@@ -104,6 +129,8 @@ public partial class Main
                 _abilityChecks["enemy_selection_cannot_cast"] = world.Commands.Count == _abilityCommandCount && _orders.Pending == null;
                 PushKey(Key.Key2); break;
             case 50:
+                _abilityChecks["hold_applies_after_cast_completion"] = !hero.Casting && hero.Order == OrderKind.HoldGround
+                    && world.Units[_abilitySmokeTarget].Health == 310;
                 _abilityChecks["nonhero_selection_hides_abilities"] = !_commands.AbilityButton(0).Visible;
                 PushKey(Key.Q); break;
             case 53:
@@ -146,8 +173,8 @@ public partial class Main
                 _abilityChecks["paused_cast_starts_on_resume"] = hero.Casting;
                 PushKey(Key.S); break;
             case 410:
-                _abilityChecks["stop_interrupts_without_heal"] = !hero.Casting && hero.Health == 100 && hero.AbilityReadyAt[0] > world.Tick;
-                var report = new { build = BuildInfo.Label,checks = _abilityChecks,passed = _abilityChecks.Count == 38 && _abilityChecks.Values.All(v => v),
+                _abilityChecks["stop_interrupts_without_heal_or_cooldown"] = !hero.Casting && hero.Health == 100 && hero.AbilityReadyAt[0] <= world.Tick;
+                var report = new { build = BuildInfo.Label,checks = _abilityChecks,passed = _abilityChecks.Count == 45 && _abilityChecks.Values.All(v => v),
                     commands = world.Commands,cooldown_snapshot = _abilityCooldownSnapshot,final_digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"ability-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("ABILITY_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;

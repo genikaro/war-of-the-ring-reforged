@@ -17,14 +17,18 @@ public sealed record UnitHudStats(string Type,string Icon,string Matchups,string
         string icon = type switch { 0 => "slashing",1 => "piercing",2 => "blunt",3 => "hero",_ => "" };
         string matchups = string.Join("\n",Enumerable.Range(0,4).Select(target =>
             $"{rules.TypeScale(type,target)/10_000m:0.##}% vs {TypeName(target)}"));
-        decimal dps = unit.MeleeDamageRate/1000m,seconds = SecondsPerHit(unit.Definition);
-        decimal baseDps = (unit.Definition.Abilities?.FirstOrDefault(a => a.Passive && a.Kind == AbilityKind.Fury)?.DpsMilli ?? unit.Definition.DpsMilli)/1000m;
-        string perHit = Whole(dps*seconds),basePerHit = Whole(baseDps*seconds);
+        decimal placeScale = unit.PlaceDamagePpm/1_000_000m*(unit.Definition.IsRanged ? unit.PlaceRangedPpm : unit.PlaceMeleePpm)/1_000_000m;
+        decimal dps = unit.MeleeDamageRate/1000m*placeScale,seconds = SecondsPerHit(unit.Definition);
+        decimal baseDps = (unit.EnabledAbilities.FirstOrDefault(a => a.Passive && a.Kind == AbilityKind.Fury)?.DpsMilli ?? unit.Definition.DpsMilli)/1000m;
+        decimal hitDamage = unit.Definition.HitDamageAtRate(unit.MeleeDamageRate)/1000m*placeScale;
+        string perHit = Whole(hitDamage),basePerHit = Whole(unit.Definition.HitDamageAtRate((long)(baseDps*1000))/1000m);
+        decimal actualSeconds = seconds*1_000_000/unit.TimeScalePpm,actualDps = hitDamage/actualSeconds;
         decimal hitBonus = decimal.Parse(perHit,CultureInfo.InvariantCulture)-decimal.Parse(basePerHit,CultureInfo.InvariantCulture);
         string tip = dps <= 0 ? "No attack" : string.Create(CultureInfo.InvariantCulture,
-            $"Damage per hit: {perHit}{(dps != baseDps ? $" ({basePerHit} base {Signed(hitBonus)} bonus)" : "")}\nDamage per second: {dps:0.###}\nAttack speed: {SpeedName(seconds)} (a hit every {seconds:0.##} s)");
+            $"Damage per hit: {perHit}{(dps != baseDps ? $" ({basePerHit} base {Signed(hitBonus)} bonus)" : "")}\nDamage per second: {actualDps:0.###}\nAttack speed: {SpeedName(actualSeconds)} (a hit every {actualSeconds:0.##} s)");
         decimal armor = unit.ArmorMilli/1000m,baseArmor = unit.Definition.ArmorMilli/1000m;
-        var sources = new[] {("research",unit.TechniqueArmorMilli),("places of power",unit.PlaceArmorMilli),("dummy buttons",unit.BonusArmorMilli)}
+        var sources = new[] {("hero level",unit.ExperienceArmorMilli),("research",unit.TechniqueArmorMilli),("places of power",unit.PlaceArmorMilli),("dummy buttons",unit.BonusArmorMilli),
+                ("Shield Break",-unit.ShieldBreakArmorMilli)}
             .Where(s => s.Item2 != 0).Select(s => $"{Signed(s.Item2/1000m)} {s.Item1}");
         string armorTip = armor == baseArmor ? "" : string.Create(CultureInfo.InvariantCulture,$"Armor {armor:0.###}: {baseArmor:0.###} base\n")+string.Join("\n",sources);
         return new(TypeName(type),icon == "" ? "" : "counter_marker_G_"+icon,matchups,dps <= 0 ? perHit : basePerHit,
@@ -45,14 +49,9 @@ public sealed record UnitHudStats(string Type,string Icon,string Matchups,string
     /// <summary>Mean time between hits of the attacks the Attack stat covers (a ranged unit's missile ones), each clip
     /// weighted by its source choice weight. A swing lasts its clip and the next follows at once, and the damage per
     /// second is spread over its hits, so damage per hit is the damage per second times this.</summary>
-    public static decimal SecondsPerHit(UnitDefinition unit)
-    {
-        var attacks = unit.Attacks.Where(a => !unit.IsRanged || !a.Melee).ToArray();
-        decimal ticks = attacks.Sum(a => (decimal)a.Weight*a.DurationTicks),hits = attacks.Sum(a => (decimal)a.Weight*a.Hits.Length);
-        return hits > 0 ? ticks/hits/SimWorld.TicksPerSecond : 1;
-    }
+    public static decimal SecondsPerHit(UnitDefinition unit) => unit.SecondsPerHit();
 
-    /// <summary>Bands over the Good roster's 0.77-2.2 s between hits: the Worker and Gondor Swordsman are very fast,
+    /// <summary>Bands over the Good roster's 0.77-2.2 s between hits: the Gondor Swordsman is very fast, the Worker average,
     /// Aragorn fast, the Uruk-Hai average, the Rohan Rider slow, the Elven Archer very slow.</summary>
     public static string SpeedName(decimal secondsPerHit) => secondsPerHit switch
     {

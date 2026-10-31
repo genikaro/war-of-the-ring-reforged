@@ -37,6 +37,8 @@ public sealed class AiPlayer(int team,AiPersonality personality,AiStyle? style =
     /// <summary>What the last strategic think decided for building and for tech, kept for the status between them.</summary>
     public string Plan { get; internal set; } = "";
     public string TechPlan { get; internal set; } = "";
+    /// <summary>Chosen once on reaching Tier 2, retained through losses and subsequent upgrades.</summary>
+    public AiComposition? Composition { get; internal set; }
     /// <summary>Units of the assault under way, and the enemy building it is razing.</summary>
     public List<int> Party { get; } = [];
     public int PartyTarget { get; internal set; } = -1;
@@ -93,6 +95,8 @@ public sealed class AiPlayer(int team,AiPersonality personality,AiStyle? style =
     /// <summary>Soldiers that retreated wounded: they defend the base but join no party or guard until above half their
     /// health again (owner rule, build-50; nothing regenerates yet, so for now they stay home).</summary>
     public SortedSet<int> Recovering { get; } = [];
+    /// <summary>Heroes return home below 30% health and rejoin the army at 75%.</summary>
+    public SortedSet<int> RecoveringHeroes { get; } = [];
     /// <summary>Since when each idle soldier outside the party has stood far from every own building (build-50).</summary>
     public SortedDictionary<int,int> StraySince { get; } = [];
     /// <summary>When the bot last trained a soldier or sent a party, and whether the party under way is a last all-in.</summary>
@@ -109,8 +113,9 @@ public sealed class AiPlayer(int team,AiPersonality personality,AiStyle? style =
 /// recovered, so everything below is an adapter built on them, thinking through the same commands a player issues.
 /// The numbers come from the bot's AiProfile (owner model, build-49): its difficulty sets how well it plays (think
 /// rate, builders, regrouping, target choice, when a party falls back) and its style, a point in the Aggression /
-/// Expansion / Tech triangle, what it plays. Economy: train workers to the profile's count + 2 per Mill, and split them
-/// by what the bank lacks (75% on food while ore piles up, 25% while food does, else half; at most six per Mill),
+/// Expansion / Tech triangle, what it plays. Economy: train workers to the profile's count + 2 per Mill, capped at
+/// five per usable resource plus the skill's one or two builders. Split gatherers
+/// by what the bank lacks (75% on food while ore piles up, 25% while food does, else half; at most five per source),
 /// moving one gatherer a think. Building: one project at a time with the skill's builders, who lay and pay for the
 /// foundation on arrival, placed on rings around home toward the enemy and 10 m clear of resources, abandoned for the
 /// source refund if it makes no progress for 30 s, in the order the source columns allow: economy buildings first (all
@@ -127,7 +132,8 @@ public sealed class AiPlayer(int team,AiPersonality personality,AiStyle? style =
 /// enemy (build-43). Owner rules (build-38):
 /// workers and new Mills keep away from resources within 30 m of enemy buildings while a safe one exists; a lost
 /// Citadel is rebuilt first; from 15:00 (Expansion 0) to 5:00 (Expansion 100) the bot expands with a Citadel by the
-/// nearest safe resource outside its Citadels' reach, then once more every 10:00 - 4 s x Expansion, up to two to
+/// best safe resource cluster outside its Citadels' reach, leaving room for a covering tower and claiming its local
+/// Mill and Foundry before further growth, then once more every 10:00 - 4 s x Expansion, up to two to
 /// four Citadels by Expansion; with no
 /// soldier trained or sent for 3 minutes and none affordable, every idle soldier goes all in, without falling back;
 /// and a bot that can never field an army again (no soldier, no worker able to earn, nothing affordable) surrenders,
@@ -137,7 +143,9 @@ public sealed class AiPlayer(int team,AiPersonality personality,AiStyle? style =
 /// worth of idle soldiers reinforces a party still out. Owner request (build-41): a party marches in legs, mustering
 /// on its route first and regrouping on open ground every 25 m, instead of filing through narrow places. Owner request
 /// (build-47): bots climb the technology tree, see AiTech.cs; raids (build-53) are in AiRaids.cs and places of power
-/// (build-54) in AiPlaces.cs. Not simulated: scouting, flanking, heroes and special abilities.</summary>
+/// (build-54) in AiPlaces.cs. Hero recruitment and tactics (build-114) are in AiHeroes.cs.
+/// Growing tower coverage and Ballista upgrades (build-117) are in AiDefenses.cs.
+/// Not simulated: scouting, flanking and non-hero special abilities.</summary>
 public sealed partial class SimWorld
 {
     public SortedDictionary<int,AiPlayer> AiPlayers { get; } = [];
@@ -146,7 +154,7 @@ public sealed partial class SimWorld
     public AiWarParty AiAssaultParty { get; set; } = new(5,12,800_000);
     /// <summary>AIWARPARTY_RAIDING's size bounds (build-53); the default matches the source for caches without it.</summary>
     public AiWarParty AiRaidParty { get; set; } = new(3,6,0);
-    public const int AiDefenseRadiusMm = 30000,AiEngageRadiusMm = 12000,AiStallTicks = 30*TicksPerSecond,AiFoodPerMill = 6,
+    public const int AiDefenseRadiusMm = 30000,AiEngageRadiusMm = 12000,AiStallTicks = 30*TicksPerSecond,AiWorkersPerResource = 5,
         AiResourceClearanceMm = 10000,AiStagnationTicks = 180*TicksPerSecond,
         AiGuardSlackMm = 8000,AiClaimWaitMm = 15000,AiAttackersPerEnemy = 4,AiTargetRankMm = 12000,AiPullOutPercent = 25,AiTowerReachMm = 42000,AiPullOutChance = 33,
         AiStrayMm = 40000,AiStrayTicks = 10*TicksPerSecond,AiMusterMm = 15000,AiLegMm = 25000,AiRegroupMm = 12000,AiLegPatienceTicks = 10*TicksPerSecond;
@@ -200,9 +208,9 @@ public sealed partial class SimWorld
     private void Think(AiPlayer ai)
     {
         bool strategic = ai.Thinks++%ai.Profile.Skill.StrategicEvery == 0;
-        var mine = Units.Where(u => u.Team == ai.Team && u.Present).ToArray();
+        var mine = ActiveUnits.Where(u => u.Team == ai.Team && u.Present).ToArray();
         var workers = mine.Where(IsAiWorker).ToArray();
-        int living = Units.Count(u => u.Team == ai.Team && u.Health > 0 && IsAiWorker(u));
+        int living = ActiveUnits.Count(u => u.Team == ai.Team && u.Health > 0 && IsAiWorker(u));
         if (strategic && AiSurrenders(ai))
         {
             foreach (var site in ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Health > 0).ToArray()) DestroySite(site,null);
@@ -220,12 +228,14 @@ public sealed partial class SimWorld
         bool threatened = AiDefend(ai,ref home);
         if (strategic)
         {
+            AiChooseComposition(ai);
             if (!threatened) AiRepair(ai,workers);
             (string plan,int reserveFood,int reserveOre) = AiConstruction(ai,workers,bx,bz);
             AiAssignWorkers(ai,workers);
             bool armyReady = home.Length+ai.Party.Count >= AiPartySize(ai);
-            var (tech,techFood,techOre) = AiTech(ai,reserveFood,reserveOre,armyReady);
-            AiTrain(ai,living,reserveFood+techFood,reserveOre+techOre,armyReady);
+            bool finiteFood = AiNeedsLastArmy(ai) && AiFoodUnrenewable(ai);
+            var (tech,techFood,techOre) = finiteFood ? ("",0,0) : AiTech(ai,reserveFood,reserveOre,armyReady);
+            AiTrain(ai,living,finiteFood ? 0 : reserveFood+techFood,finiteFood ? 0 : reserveOre+techOre,armyReady);
             ai.Plan = plan; ai.TechPlan = tech;
         }
         home = AiGuard(ai,expansions,home,threatened);
@@ -233,6 +243,9 @@ public sealed partial class SimWorld
         home = AiRaid(ai,[.. home.Where(u => !ai.Party.Contains(u.Id))],bx,bz,threatened);
         home = AiCapturePlaces(ai,home,bx,bz,threatened);
         AiRally(ai,home,bx,bz);
+        AiHeroes(ai,mine.Where(u => u.Definition.Hero).ToArray(),bx,bz,strategic);
+        AiEvilUnitAbilities(ai,mine);
+        AiGlobalPowers(ai,bx,bz);
         var members = ai.Party.ToHashSet();
         bool committed = CanAttackSite(ai.Team,ai.PartyTarget) && ai.Party.Any(id => SiegeTarget(Units[id]) == ai.PartyTarget
             || Units[id].AiSiegeObjective == ai.PartyTarget);
@@ -244,7 +257,8 @@ public sealed partial class SimWorld
         string raid = ai.Raid.Count > 0 ? $" · raid {ai.Raid.Count}/{ai.RaidStart}" : "";
         int held = PlacesOfPower.Count(p => p.Owner == ai.Team);
         string places = (ai.PlaceSquad.Count > 0 ? $" · to a place {ai.PlaceSquad.Count}/{ai.PlaceSquadStart}" : "")+(held > 0 ? $" · places {held}" : "");
-        ai.Status = $"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)}{march}{waits}{raid}{places}{defense}{(guards > 0 ? $" · guards {guards}" : "")} · {ai.Plan}{(ai.TechPlan != "" ? " · "+ai.TechPlan : "")} · parties {ai.PartiesSent}{(ai.RaidsSent > 0 ? $" · raids {ai.RaidsSent}" : "")}";
+        int heroes = mine.Count(u => u.Definition.Hero);
+        ai.Status = (ai.Composition is { } composition ? composition.Name+" · " : "")+$"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)}{march}{waits}{raid}{places}{defense}{(guards > 0 ? $" · guards {guards}" : "")}{(heroes > 0 ? $" · heroes {heroes} ({ai.RecoveringHeroes.Count} recovering)" : "")} · {ai.Plan}{(ai.TechPlan != "" ? " · "+ai.TechPlan : "")} · parties {ai.PartiesSent}{(ai.RaidsSent > 0 ? $" · raids {ai.RaidsSent}" : "")}";
     }
 
     /// <summary>The bot's Citadels away from its start (foundations too), with the guards of fallen ones released and
@@ -283,7 +297,7 @@ public sealed partial class SimWorld
             if (post == null || post.Units.Count == 0) continue;
             var guards = post.Units.Select(id => Units[id]).ToArray();
             AiOrder(ai,guards.Where(u => ai.Unreachable.ContainsKey(u.Target) || u.Order == OrderKind.Attack && ai.Unreachable.ContainsKey(u.OrderTarget)).Select(u => u.Id),OrderKind.Stop);
-            var raiders = Units.Where(u => u.Present && u.Team != ai.Team && !u.RingActive && !ai.Unreachable.ContainsKey(u.Id)
+            var raiders = ActiveUnits.Where(u => u.Present && u.Team != ai.Team && CanSeeUnit(ai.Team,u) && !ai.Unreachable.ContainsKey(u.Id)
                     && DistanceSquared(u.X,u.Z,site.X,site.Z) <= (long)AiDefenseRadiusMm*AiDefenseRadiusMm)
                 .OrderBy(u => IsAiWorker(u) ? 1 : 0).ThenBy(u => DistanceSquared(u.X,u.Z,site.X,site.Z)).ThenBy(u => u.Id).ToArray();
             var intruder = AiStalled(ai,post.Seen,raiders);
@@ -296,23 +310,10 @@ public sealed partial class SimWorld
         return home.Where(u => !ai.Guards.Values.Any(g => g.Units.Contains(u.Id))).ToArray();
     }
 
-    /// <summary>A Defender's Citadel with fewer than Profile.TowersPerCitadel towers within 42 m (placement rings reach 40 m), the one with the fewest
-    /// (then the oldest), or null when every Citadel has its towers.</summary>
-    private ConstructionSite? AiTowerCitadel(AiPlayer ai)
-    {
-        var start = StartStructures.FirstOrDefault(s => s.Team == ai.Team);
-        if (start == null || ai.Profile.TowersPerCitadel <= 0) return null;
-        var towers = ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Health > 0 && AiBuildings.GetValueOrDefault(SiteRules(s).Name)?.Class == "DEFENSIVE")
-            .Select(SitePosition).ToArray();
-        int Near(ConstructionSite keep) => towers.Count(t => DistanceSquared(t.X,t.Z,SitePosition(keep).X,SitePosition(keep).Z) <= (long)AiTowerReachMm*AiTowerReachMm);
-        return ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Complete && s.Health > 0 && s.Building != null && Satisfies(s.Building,start.Building))
-            .Where(s => Near(s) < ai.Profile.TowersPerCitadel).OrderBy(Near).ThenBy(s => s.Id).FirstOrDefault();
-    }
-
     /// <summary>A Defender attacks before its gate once enough towers stand and its army is big enough.</summary>
     private bool AiEarlyAssault(AiPlayer ai) => ai.Profile.EarlyAssaultTowers > 0
         && ConstructionSites.Values.Count(s => s.Team == ai.Team && s.Complete && s.Health > 0 && SiteDefense(s) != null) >= ai.Profile.EarlyAssaultTowers
-        && Units.Count(u => u.Team == ai.Team && u.Health > 0 && IsAiSoldier(u)) >= ai.Profile.EarlyAssaultArmy;
+        && ActiveUnits.Count(u => u.Team == ai.Team && u.Health > 0 && IsAiSoldier(u)) >= ai.Profile.EarlyAssaultArmy;
 
     /// <summary>Where an expansion's guard stands: 12-24 m from the Citadel toward the nearest enemy building, alternating
     /// either side of that direction, on ground the first recruit can walk to and 10 m clear of resources, so the guard
@@ -352,7 +353,7 @@ public sealed partial class SimWorld
             && buildings.All(b => DistanceSquared(b.X,b.Z,enemy.X,enemy.Z) > leash*leash);
         AiOrder(ai,home.Where(u => ai.Unreachable.ContainsKey(u.Target) || Gone(u,u.Target)
             || u.Order == OrderKind.Attack && (ai.Unreachable.ContainsKey(u.OrderTarget) || Gone(u,u.OrderTarget))).Select(u => u.Id),OrderKind.Stop);
-        var intruders = Units.Where(u => u.Present && u.Team != ai.Team && !u.RingActive && !ai.Unreachable.ContainsKey(u.Id)
+        var intruders = ActiveUnits.Where(u => u.Present && u.Team != ai.Team && CanSeeUnit(ai.Team,u) && !ai.Unreachable.ContainsKey(u.Id)
                 && (AiAttacksAssets(ai,u,buildings) || buildings.Any(b => DistanceSquared(b.X,b.Z,u.X,u.Z) <= (long)AiDefenseRadiusMm*AiDefenseRadiusMm)))
             .OrderBy(u => AiAttacksAssets(ai,u,buildings) ? 0 : 1).ThenBy(u => IsAiWorker(u) ? 1 : 0)
             .ThenBy(u => buildings.Min(b => DistanceSquared(b.X,b.Z,u.X,u.Z))).ThenBy(u => u.Id).ToArray();
@@ -394,7 +395,7 @@ public sealed partial class SimWorld
         var open = enemies.Where(e => seen.ContainsKey(e.Id)).ToArray();
         if (open.Any(e => !IsAiWorker(e))) open = [.. open.Where(e => !IsAiWorker(e))];
         if (open.Length == 0) return;
-        var shares = open.ToDictionary(e => e.Id,e => Units.Count(u => u.Team == ai.Team && u.Present
+        var shares = open.ToDictionary(e => e.Id,e => ActiveUnits.Count(u => u.Team == ai.Team && u.Present
             && (u.Target == e.Id || u.Order == OrderKind.Attack && u.OrderTarget == e.Id)));
         var free = soldiers.Where(u => u.Target < 0).OrderBy(u => u.Id).ToArray();
         var targeting = ai.Profile.Skill.Targeting;
@@ -431,15 +432,17 @@ public sealed partial class SimWorld
     }
 
     /// <summary>A bot surrenders once it can never field an army again: no soldier, hero or unit in training left, no
-    /// worker able to earn (none alive, or no Citadel to deliver to), and a bank that pays for no unit its buildings
-    /// offer, nor for a new Citadel while workers remain without one.</summary>
+    /// worker able to restore useful income (ore alone gets a recovery grace period), and a bank that pays for no
+    /// unit its buildings offer, nor for a new Citadel while workers remain without one.</summary>
     private bool AiSurrenders(AiPlayer ai)
     {
-        var living = Units.Where(u => u.Team == ai.Team && u.Health > 0).ToArray();
+        var living = ActiveUnits.Where(u => u.Team == ai.Team && u.Health > 0).ToArray();
         if (living.Any(u => !IsAiWorker(u))) return false;
         var producers = Producers.Values.Where(p => p.Team == ai.Team).ToArray();
         if (producers.Any(p => p.Queue.Count > 0)) return false;
-        if (living.Length > 0 && DropOffs.Any(d => d.Team == ai.Team)) return false;
+        if (ai.Personality.UsesHeroes && producers.Any(p => Enumerable.Range(0,p.Units.Length)
+            .Any(slot => Rules.Units.GetValueOrDefault(p.Units[slot])?.Hero == true && CanTrain(ai.Team,p.Id,slot,out _)))) return false;
+        if (living.Length > 0 && DropOffs.Any(d => d.Team == ai.Team) && !AiFoodStranded(ai)) return false;
         var bank = Economies[ai.Team];
         bool Affords(int food,int ore) => bank.FoodMilli >= food*1000L && bank.OreMilli >= ore*1000L;
         if (producers.SelectMany(p => p.Units).Any(u => Rules.Units.TryGetValue(u,out var d) && !d.Hero
@@ -455,8 +458,21 @@ public sealed partial class SimWorld
     /// <summary>The first expansion: 15:00 at Expansion 0, 5:00 at 100.</summary>
     public static int AiExpansionTick(AiPlayer ai) => ai.Profile.ExpansionTicks;
 
-    private int AiWorkerTarget(AiPlayer ai) => ai.Profile.Workers
-        +2*ConstructionSites.Values.Count(s => s.Team == ai.Team && s.Complete && s.Building == null && Resources[s.Resource].Kind == ResourceKind.Food);
+    /// <summary>Use the same safe, gatherable sources for staffing and assignment. Raw ore counts before a Foundry;
+    /// an unbuilt Mill, exhausted source or enemy claim provides no jobs.</summary>
+    private GatherSource[] AiGatherSources(AiPlayer ai)
+    {
+        var usable = Resources.Values.Where(r => CanGather(ai.Team,r.Id)).ToArray();
+        var safe = usable.Where(r => !AiUnsafe(ai,r.X,r.Z)).ToArray();
+        return safe.Length > 0 ? safe : usable;
+    }
+
+    private int AiWorkerTarget(AiPlayer ai)
+    {
+        var sources = AiGatherSources(ai);
+        int mills = sources.Count(r => r.Kind == ResourceKind.Food);
+        return Math.Min(ai.Profile.Workers+2*mills,AiWorkersPerResource*sources.Length+ai.Profile.Skill.Builders);
+    }
 
     /// <summary>From MaxSize at Aggression 0 down to MinSize at 100.</summary>
     public int AiPartySize(AiPlayer ai) => ai.Profile.SmallestParties ? AiAssaultParty.MinSize
@@ -481,8 +497,13 @@ public sealed partial class SimWorld
                 return ("abandoned "+SiteRules(project).DisplayName,0,0);
             }
             var crew = workers.Count(w => w.Order == OrderKind.Build && w.OrderTarget == project.Id);
+            var (projectX,projectZ) = SitePosition(project);
+            bool local = AiExpansionWork(ai,projectX,projectZ,
+                project.Building==StartStructures.FirstOrDefault(s=>s.Team==ai.Team)?.Building);
             var helper = workers.Where(w => w.Order is OrderKind.Idle or OrderKind.Gather && w.CargoMilli == 0)
-                .OrderBy(w => DistanceSquared(w.X,w.Z,project.X,project.Z)).ThenBy(w => w.Id).FirstOrDefault();
+                .OrderBy(w => local || w.Order==OrderKind.Idle ? 0 : 1)
+                .ThenBy(w => DistanceSquared(w.X,w.Z,projectX,projectZ))
+                .ThenBy(w => w.Order == OrderKind.Idle ? 0 : 1).ThenBy(w => w.Id).FirstOrDefault();
             if (crew < ai.Profile.Skill.Builders && helper != null) AiOrder(ai,[helper.Id],OrderKind.Build,target: project.Id);
             return ("building "+SiteRules(project).DisplayName,0,0);
         }
@@ -506,26 +527,43 @@ public sealed partial class SimWorld
             }
             return ("walking to lay "+pending.DisplayName,pending.FoodCost,pending.OreCost);
         }
+        // Build-135, the Evil side: ore the plan is not spending (it waits on food) pays for the first War Post at the edge of the base's ground,
+        // which earns Fate and gives the buildings that need corrupted ground room.
+        if (FactionOf(ai.Team) == Evil && WarPost is { } spare && BuildingRules.TryGetValue(spare,out var spareRules) && AiCount(ai.Team,spare) == 0
+            && Economies[ai.Team].OreMilli >= (spareRules.OreCost+300)*1000L && AiPostLayers(ai,spare).Length > 0 && AiLayWarPost(ai,false,bx,bz) is { } early)
+            return early;
         string? next = AiNextBuilding(ai);
         if (next == null) return ("plan complete",0,0);
-        var rules = BuildingRules.GetValueOrDefault(next) ?? ConstructionRules.Values.First(r => r.Name == next);
+        var rules = BuildingRules.GetValueOrDefault(next) ?? ResourceRulesNamed(next)!;
         var bank = Economies[ai.Team];
+        if (rules.FoodCost > 0 && AiNeedsLastArmy(ai) && AiAffordsSoldier(ai) && AiFoodUnrenewable(ai))
+            return ("preserving remaining food for troops",0,0);
         if (bank.FoodMilli < rules.FoodCost*1000L || bank.OreMilli < rules.OreCost*1000L || workers.Length == 0)
             return ("saving for "+rules.DisplayName,rules.FoodCost,rules.OreCost);
         bool citadel = next == StartStructures.FirstOrDefault(s => s.Team == ai.Team)?.Building;
+        int resourceSite = rules.Kind is { } resourceKind ? AiExpansionResourceSite(ai,resourceKind) : -1;
         var (px,pz) = citadel ? ai.CitadelSite
-            : AiBuildings.GetValueOrDefault(next)?.Class == "DEFENSIVE" && AiTowerCitadel(ai) is { } keep ? SitePosition(keep) : (bx,bz);
+            : resourceSite >= 0 ? SitePosition(ConstructionSites[resourceSite])
+            : AiBuildings.GetValueOrDefault(next)?.Class == "DEFENSIVE" && AiTowerCitadel(ai,next) is { } keep ? SitePosition(keep) : (bx,bz);
+        // Build-134, the Evil side: a building that needs corrupted ground and finds none has a War Post laid first.
+        if (rules.Kind == null && Corruption?.Only.Contains(next) == true
+            && (citadel ? !IsCorrupted(ai.Team,px,pz) : AiPlacementCell(ai,next,px,pz) < 0) && AiLayWarPost(ai,citadel,citadel ? px : bx,citadel ? pz : bz) is { } post)
+            return post;
+        bool localCrew = AiExpansionWork(ai,px,pz,citadel);
         var crewIds = workers.Where(w => w.CargoMilli == 0 && w.Order is OrderKind.Idle or OrderKind.Gather)
-            .OrderBy(w => DistanceSquared(w.X,w.Z,px,pz)).ThenBy(w => w.Id).Take(ai.Profile.Skill.Builders).Select(w => w.Id).ToArray();
+            .OrderBy(w => localCrew || w.Order==OrderKind.Idle ? 0 : 1)
+            .ThenBy(w => DistanceSquared(w.X,w.Z,px,pz))
+            .ThenBy(w => w.Order == OrderKind.Idle ? 0 : 1).ThenBy(w => w.Id).Take(ai.Profile.Skill.Builders).Select(w => w.Id).ToArray();
         if (crewIds.Length == 0) return ("waiting for builders",rules.FoodCost,rules.OreCost);
         if (rules.Kind is { } kind)
         {
-            var site = AiResourceSite(ai,kind,bx,bz,anyDistance: AiCount(ai.Team,next) == 0);
+            var site = kind == ResourceKind.Food && !AiHasFoodSupply(ai) ? AiFoodRecoverySite(ai) : resourceSite >= 0 ? resourceSite
+                : AiResourceSite(ai,kind,bx,bz,anyDistance: AiCount(ai.Team,next) == 0);
             if (site >= 0) AiOrder(ai,crewIds,OrderKind.Build,target: site);
         }
         else
         {
-            int cell = AiPlacementCell(ai,next,px,pz);
+            int cell = citadel ? Navigation.Cell(px,pz) : AiPlacementCell(ai,next,px,pz);
             if (cell >= 0)
             {
                 AiOrder(ai,crewIds,OrderKind.PlaceBuilding,cell,PlaceableBuildings.IndexOf(next));
@@ -540,17 +578,28 @@ public sealed partial class SimWorld
     private string? AiNextBuilding(AiPlayer ai)
     {
         int team = ai.Team;
-        bool Can(string name) => (BuildingRules.GetValueOrDefault(name) ?? ConstructionRules.Values.FirstOrDefault(r => r.Name == name)) is { } rules
+        bool Can(string name) => (BuildingRules.GetValueOrDefault(name) ?? ResourceRulesNamed(name)) is { } rules
             && rules.Prerequisites.All(p => HasBuilding(team,p))
             && (rules.Kind is not { } kind || AiResourceSite(ai,kind,0,0,anyDistance: true) >= 0);
         string? citadel = StartStructures.FirstOrDefault(s => s.Team == team)?.Building;
         int citadels = citadel == null ? 0 : AiCount(team,citadel);
         // A lost Citadel comes back first: without one nothing is delivered and no worker is trained.
         if (citadel != null && citadels == 0 && Can(citadel) && AiCitadelSite(ai,citadel,rebuild: true)) return citadel;
-        var housing = PopulationProvided.Where(p => p.Value > 0 && PlaceableBuildings.Contains(p.Key) && AiBuildings.ContainsKey(p.Key)
+        // An exhausted Mill still counts as a building, but cannot fund towers, training or an expansion Citadel.
+        // Claim reachable replacement food before those plans reserve resources, regardless of expansion style/timer.
+        if (!AiHasFoodSupply(ai) && ResourceRules(team,ResourceKind.Food) is { } mill && AiFoodRecoverySite(ai) >= 0)
+            return mill.Name;
+        // Finish each expansion's economy before spending on another tower, producer or Citadel. The source's
+        // lower priority for further Foundries must not leave a new base mining raw ore forever.
+        foreach (var (kind,resource) in ResourceRulesOf(team))
+            if (AiExpansionResourceSite(ai,kind) >= 0 && Can(resource.Name)) return resource.Name;
+        var housing = PopulationProvided.Where(p => p.Value > 0 && PlaceableBuildings.Contains(p.Key) && AiBuildings.ContainsKey(p.Key) && FactionOfName(p.Key) == FactionOf(team)
             && p.Key != StartStructures.FirstOrDefault(s => s.Team == team)?.Building).OrderByDescending(p => p.Value).Select(p => p.Key).FirstOrDefault();
         if (housing != null && PopulationCapacity(team) < MaxPopulation && PopulationUsed(team)+3 >= PopulationCapacity(team) && Can(housing)) return housing;
-        var order = AiBuildings.Keys.Where(n => n != StartStructures.FirstOrDefault(s => s.Team == team)?.Building).ToArray();
+        var preferred = AiCompositionBuildings(ai);
+        var order = AiBuildings.Keys.Where(n => FactionOfName(n) == FactionOf(team) && !AiIsPost(n) && n != StartStructures.FirstOrDefault(s => s.Team == team)?.Building
+                && (preferred == null || AiBuildings[n].Class is not ("MILITARY" or "UPGRADE") || preferred.Contains(n)))
+            .OrderByDescending(n => AiProducerWeight(ai,n)).ToArray();
         string[] Pass(string cls,bool first) => order.Where(n => AiBuildings[n].Class == cls && AiBuildings[n].MustHaveFirstPass == first).ToArray();
         bool defensive = ai.Profile.TowerFirst;
         var firstCopies = Pass("ECONOMY",true).Concat(defensive ? Pass("DEFENSIVE",true) : [])
@@ -559,9 +608,10 @@ public sealed partial class SimWorld
             .Concat(order.Where(n => AiBuildings[n].Class == "UPGRADE")).Concat(defensive ? [] : Pass("DEFENSIVE",true))
             .Concat(order.Where(n => AiBuildings[n].MustHaveFirstPass));
         foreach (var name in firstCopies.Distinct())
-            if (AiCount(team,name) == 0 && Can(name)) return name;
-        // A Defender (build-51) keeps towers by every Citadel; AiConstruction places them by the one with the fewest.
-        if (ai.Profile.TowersPerCitadel > 0 && Pass("DEFENSIVE",true).FirstOrDefault() is { } tower && Can(tower) && AiTowerCitadel(ai) != null) return tower;
+            if (AiCount(team,name) == 0 && Can(name)
+                && (AiBuildings[name].Class != "DEFENSIVE" || AiTowerCitadel(ai,name) != null)) return name;
+        // Every growing base gets more coverage (build-117); upgraded towers still fill their original tower slot.
+        if (Pass("DEFENSIVE",true).FirstOrDefault(n => Can(n) && AiTowerCitadel(ai,n) != null) is { } tower) return tower;
         // Expansion (owner rule): a Citadel by unclaimed resources once the time comes, then one more every interval.
         if (citadel != null && citadels < ai.Profile.MaxCitadels && Tick >= AiExpansionTick(ai)+(citadels-1)*ai.Profile.ExpansionIntervalTicks
             && Can(citadel) && AiCitadelSite(ai,citadel,rebuild: false)) return citadel;
@@ -570,7 +620,8 @@ public sealed partial class SimWorld
         // training: with food the bottleneck, a producer more than the food keeps busy only takes food from the army.
         var bank = Economies[team];
         bool busy = ai.Profile.FreeMilitary && Producers.Values.Where(p => p.Team == team && p.Units.Any(u => !Workers.ContainsKey(u))).All(p => p.Queue.Count > 0);
-        foreach (var name in order.Where(n => AiBuildings[n].Class == "MILITARY"))
+        foreach (var name in order.Where(n => AiBuildings[n].Class == "MILITARY")
+            .OrderByDescending(n => preferred == null ? 0 : 1000*AiProducerWeight(ai,n)/(AiCount(team,n)+1)))
         {
             var rules = BuildingRules[name]; var rule = AiBuildings[name];
             if ((rule.MaxDefault < 0 || AiCount(team,name) < rule.MaxDefault) && Can(name)
@@ -578,67 +629,58 @@ public sealed partial class SimWorld
         }
         // A Mill on every further well near home or an expansion (AILowerPriorityIfExists is false for the Mill).
         return order.FirstOrDefault(n => !AiBuildings[n].LowerPriorityIfExists && AiBuildings[n].Class == "ECONOMY" && Can(n)
-            && ConstructionRules.Values.FirstOrDefault(r => r.Name == n)?.Kind is { } kind && AiResourceSite(ai,kind,0,0,anyDistance: false) >= 0);
+            && ResourceRulesNamed(n)?.Kind is { } kind && AiResourceSite(ai,kind,0,0,anyDistance: false) >= 0);
     }
 
     /// <summary>The nearest unclaimed, gatherable resource site of a kind away from enemy buildings, within 80 m of home
     /// or one of the bot's Citadels unless any distance will do.</summary>
-    private int AiResourceSite(AiPlayer ai,ResourceKind kind,int bx,int bz,bool anyDistance = false)
+    private int AiResourceSite(AiPlayer ai,ResourceKind kind,int bx,int bz,bool anyDistance = false,bool reachable = false)
     {
         if (bx == 0 && bz == 0) (bx,bz) = AiBase(ai);
         var homes = DropOffs.Where(d => d.Team == ai.Team).Select(d => (X: d.X,Z: d.Z)).Append((X: bx,Z: bz)).ToArray();
         // Affordability is the plan's concern, and units on the foundation (its own miners at a raw ore pile, above
         // all) step away while the crew walks over; every other refusal rules the site out.
         bool Open(GatherSource r) => CanStartConstruction(ai.Team,r.Id,out var reason) || reason is "Insufficient resources" or UnitBlocksFoundation;
+        var worker = reachable ? ActiveUnits.Where(u => u.Team == ai.Team && u.Health > 0 && IsAiWorker(u))
+            .OrderByDescending(u => Nav(u).CanStand(u.Node)).ThenBy(u => u.Id).FirstOrDefault() : null;
         return Resources.Values.Where(r => r.Kind == kind && ConstructionSites.TryGetValue(r.Id,out var site) && site.Team < 0 && Open(r)
+                && (!reachable || r.ImprovedRateMilliPerTick > 0 && r.RemainingMilli > r.ImprovedFloorMilli && worker != null
+                    && EconomyRouteCandidates(worker,SiteArea(site),n => ClaimSpot(worker,site,n),ignoreUnits:true).Any())
                 && (anyDistance || homes.Any(h => DistanceSquared(r.X,r.Z,h.X,h.Z) <= 80000L*80000)) && !AiUnsafe(ai,r.X,r.Z))
             .OrderBy(r => DistanceSquared(r.X,r.Z,bx,bz)).ThenBy(r => r.Id).Select(r => r.Id).DefaultIfEmpty(-1).First();
     }
 
-    /// <summary>Where a new Citadel should stand. Rebuilding: the old home, unless an enemy building is near it or no room
-    /// was found there. Expanding (or when home is lost): by the resource nearest home that lies outside every own
-    /// Citadel's reach, away from enemy buildings, on ground a worker can walk to. Sets CitadelSite.</summary>
-    private bool AiCitadelSite(AiPlayer ai,string citadel,bool rebuild)
-    {
-        var start = StartStructures.FirstOrDefault(s => s.Team == ai.Team);
-        if (rebuild && start != null && !AiUnsafe(ai,start.X,start.Z) && !ai.RefusedCells.Contains(Navigation.Cell(start.X,start.Z)))
-        { ai.CitadelSite = (start.X,start.Z); return true; }
-        // Reachability is judged from a worker on open ground: one at a work spot may stand on a footprint cell.
-        var worker = Units.Where(u => u.Team == ai.Team && u.Present && IsAiWorker(u)).OrderByDescending(u => Nav(u).CanStand(u.Node)).ThenBy(u => u.Id).FirstOrDefault();
-        if (worker == null) return false;
-        int reach = PlacementRadiusMm.GetValueOrDefault(citadel,25000);
-        var depots = DropOffs.Where(d => d.Team == ai.Team).ToArray();
-        var (bx,bz) = AiBase(ai); var nav = Nav(worker);
-        var site = Resources.Values.Where(r => r.RemainingMilli > 0 && !ai.RefusedCells.Contains(Navigation.Cell(r.X,r.Z))
-                && (!ConstructionSites.TryGetValue(r.Id,out var claim) || claim.Team < 0 || claim.Team == ai.Team)
-                && depots.All(d => DistanceSquared(d.X,d.Z,r.X,r.Z) > (long)reach*reach) && !AiUnsafe(ai,r.X,r.Z))
-            .OrderBy(r => DistanceSquared(r.X,r.Z,bx,bz)).ThenBy(r => r.Id)
-            .FirstOrDefault(r => nav.Nearest(Navigation.Cell(r.X,r.Z),connectedTo: worker.Node) >= 0);
-        if (site == null) return false;
-        ai.CitadelSite = (site.X,site.Z); return true;
-    }
-
-    /// <summary>Rings of candidate cells around a spot (home, or a Citadel's resource), alternating either side of the
-    /// enemy's direction; a Citadel starts on the far side.</summary>
+    /// <summary>Rings around a base, alternating either side of the enemy's direction. Towers stay inside firing
+    /// range of the Citadel and rank resource-worker coverage before spacing. Citadels use AiCitadelSite.</summary>
     private int AiPlacementCell(AiPlayer ai,string building,int bx,int bz)
     {
         var enemy = ConstructionSites.Values.Where(s => s.Team >= 0 && s.Team != ai.Team && s.Health > 0).Select(SitePosition).DefaultIfEmpty((bx,bz)).First();
         double facing = Math.Atan2(enemy.Item2-bz,enemy.Item1-bx)
             +(building == StartStructures.FirstOrDefault(s => s.Team == ai.Team)?.Building ? Math.PI : 0);
-        int first = AiBuildings.GetValueOrDefault(building)?.Class == "DEFENSIVE" ? 18000 : 12000;
-        for (int ring = first; ring <= 40000; ring += 3000)
-            for (int step = 0; step < 16; step++)
+        bool tower = AiBuildings.GetValueOrDefault(building)?.Class == "DEFENSIVE";
+        int first = tower ? 6000 : 12000;
+        var assets = tower ? AiTowerAssets(ai,bx,bz) : [];
+        var resources = tower ? AiTowerWorkAreas(ai,bx,bz) : [];
+        var towers = tower ? ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Health > 0 && AiIsTower(s)).ToArray() : [];
+        int best = -1; long bestScore = long.MinValue;
+        int steps = tower ? 32 : 16;
+        int last = tower ? Math.Max(0,(Defenses.GetValueOrDefault(building)?.RangeMm ?? 19000)-3000) : 40000;
+        for (int ring = first; ring <= last; ring += tower ? 2000 : 3000)
+            for (int step = 0; step < steps; step++)
             {
                 // Alternate either side of the preferred direction.
-                double angle = facing+(step%2 == 0 ? 1 : -1)*((step+1)/2)*Math.Tau/16;
+                double angle = facing+(step%2 == 0 ? 1 : -1)*((step+1)/2)*Math.Tau/steps;
                 int cell = Navigation.Cell(bx+(int)Math.Round(ring*Math.Cos(angle)),bz+(int)Math.Round(ring*Math.Sin(angle)));
                 if (cell < 0 || ai.RefusedCells.Contains(cell)) continue;
                 // Keep the ground around resources free for the gatherers queuing at them.
                 var (x,z) = Navigation.Center(cell);
                 if (Resources.Values.Any(r => DistanceSquared(r.X,r.Z,x,z) < (long)AiResourceClearanceMm*AiResourceClearanceMm)) continue;
-                if (CanPlaceBuilding(ai.Team,building,cell,out _)) return cell;
+                if (!CanPlaceBuilding(ai.Team,building,cell,out _)) continue;
+                if (!tower) return cell;
+                long score = AiTowerPlacementScore(building,x,z,bx,bz,assets,towers,resources);
+                if (score > bestScore) { best = cell; bestScore = score; }
             }
-        return -1;
+        return best;
     }
 
     private void AiAssignWorkers(AiPlayer ai,SimUnit[] workers)
@@ -651,85 +693,136 @@ public sealed partial class SimWorld
         AiOrder(ai,workers.Where(w => w.Order == OrderKind.Gather && w.CargoMilli == 0 && claiming.Contains(w.OrderTarget)).Select(w => w.Id),OrderKind.Stop);
         bool Waiting(SimUnit w) => claiming.Any(id => SitePosition(ConstructionSites[id]) is var (x,z)
             && DistanceSquared(w.X,w.Z,x,z) <= (long)AiClaimWaitMm*AiClaimWaitMm);
+        // Count everyone assigned, including workers delivering cargo or temporarily inside a Mill/Foundry.
+        // Free surplus empty-handed workers first, so an old crowded assignment can spread to another source.
+        var living = ActiveUnits.Where(w => w.Team == ai.Team && w.Health > 0 && IsAiWorker(w)).ToArray();
+        foreach (var group in living.Where(w => w.Order == OrderKind.Gather).GroupBy(w => w.OrderTarget))
+            AiOrder(ai,group.OrderByDescending(w => !w.Present || w.CargoMilli > 0).ThenBy(w => w.Id)
+                .Skip(AiWorkersPerResource).Where(w => w.Present && w.CargoMilli == 0).Select(w => w.Id),OrderKind.Stop);
+        // Once five workers can gather, keep the construction allowance available even before every source is full.
+        // A small or recovering economy uses everyone; loaded workers finish delivery before becoming builders.
+        int builders = Math.Min(ai.Profile.Skill.Builders,Math.Max(0,living.Length-AiWorkersPerResource));
+        int gatherTarget = Math.Max(1,living.Length-builders);
+        int gatherers = living.Count(w => w.Order == OrderKind.Gather);
+        if (gatherers > gatherTarget)
+        {
+            var (bx,bz) = AiBase(ai);
+            AiOrder(ai,workers.Where(w => w.Order == OrderKind.Gather && w.CargoMilli == 0)
+                .OrderBy(w => DistanceSquared(w.X,w.Z,bx,bz)).ThenByDescending(w => w.Id)
+                .Take(gatherers-gatherTarget).Select(w => w.Id),OrderKind.Stop);
+            gatherers = living.Count(w => w.Order == OrderKind.Gather);
+        }
         var idle = workers.Where(w => w.Order is OrderKind.Idle or OrderKind.Stop && w.OrderQueue.Count == 0 && !Waiting(w)).ToList();
-        int want = AiFoodTarget(ai,workers.Length+workers.Count(w => w.InsideSite >= 0));
-        // Sources by enemy buildings bleed workers to their defenders; they are used only when nothing else is left.
-        var exposed = Resources.Values.Where(r => AiUnsafe(ai,r.X,r.Z)).Select(r => r.Id).ToHashSet();
-        bool anySafe = Resources.Values.Any(r => !exposed.Contains(r.Id) && CanGather(ai.Team,r.Id));
-        bool Usable(GatherSource r) => CanGather(ai.Team,r.Id) && (!anySafe || !exposed.Contains(r.Id)) && !claiming.Contains(r.Id);
+        var sources = AiGatherSources(ai).Where(r => !claiming.Contains(r.Id)).ToArray();
+        var loads = living.Where(w => w.Order == OrderKind.Gather).GroupBy(w => w.OrderTarget).ToDictionary(g => g.Key,g => g.Count());
+        int Load(GatherSource r) => loads.GetValueOrDefault(r.Id);
+        bool HasRoom(GatherSource r) => Load(r) < AiWorkersPerResource;
+        int want = AiFoodTarget(ai,gatherTarget,sources);
+        int food = living.Count(w => w.Order == OrderKind.Gather && Resources.TryGetValue(w.OrderTarget,out var r) && r.Kind == ResourceKind.Food);
         foreach (var worker in idle)
         {
-            var kind = FoodGatherers(ai) < want ? ResourceKind.Food : ResourceKind.Ore;
-            var source = Resources.Values.Where(r => Usable(r) && (r.Kind == kind || !Resources.Values.Any(o => o.Kind == kind && Usable(o))))
+            if (gatherers >= gatherTarget) break;
+            var kind = food < want ? ResourceKind.Food : ResourceKind.Ore;
+            var source = sources.Where(HasRoom)
                 .OrderBy(r => r.Kind == kind ? 0 : 1)
                 .ThenBy(r => ConstructionSites.TryGetValue(r.Id,out var s) && s.Team == ai.Team && s.Complete ? 0 : 1)
                 .ThenBy(r => DistanceSquared(r.X,r.Z,worker.X,worker.Z)).ThenBy(r => r.Id).FirstOrDefault();
-            if (source != null) AiOrder(ai,[worker.Id],OrderKind.Gather,target: source.Id);
+            if (source == null) continue;
+            AiOrder(ai,[worker.Id],OrderKind.Gather,target: source.Id);
+            loads[source.Id] = Load(source)+1;
+            gatherers++;
+            if (source.Kind == ResourceKind.Food) food++;
         }
         // Rebalance one empty-handed gatherer a second toward the food target.
-        int food = FoodGatherers(ai);
         var from = food < want ? ResourceKind.Ore : food > want+1 ? ResourceKind.Food : (ResourceKind?)null;
         if (from is not { } kindFrom) return;
         var mover = workers.Where(w => w.Order == OrderKind.Gather && w.CargoMilli == 0 && Resources.TryGetValue(w.OrderTarget,out var r) && r.Kind == kindFrom)
             .OrderBy(w => w.Id).FirstOrDefault();
-        var to = mover == null ? null : Resources.Values.Where(r => r.Kind != kindFrom && Usable(r))
+        var to = mover == null ? null : sources.Where(r => r.Kind != kindFrom && HasRoom(r))
             .OrderBy(r => ConstructionSites.TryGetValue(r.Id,out var s) && s.Team == ai.Team && s.Complete ? 0 : 1)
             .ThenBy(r => DistanceSquared(r.X,r.Z,mover.X,mover.Z)).ThenBy(r => r.Id).FirstOrDefault();
         if (mover != null && to != null) AiOrder(ai,[mover.Id],OrderKind.Gather,target: to.Id);
     }
 
-    /// <summary>Food buys the army: gatherers split by what the bank lacks, at most AiFoodPerMill per completed Mill.</summary>
-    private int AiFoodTarget(AiPlayer ai,int workers)
+    /// <summary>Food buys the army: split by the bank, within both kinds' available gathering slots.</summary>
+    private int AiFoodTarget(AiPlayer ai,int workers,GatherSource[] sources)
     {
-        int mills = ConstructionSites.Values.Count(s => s.Team == ai.Team && s.Complete && s.Building == null && Resources[s.Resource].Kind == ResourceKind.Food);
+        int foodSlots = AiWorkersPerResource*sources.Count(r => r.Kind == ResourceKind.Food);
+        int oreSlots = AiWorkersPerResource*sources.Count(r => r.Kind == ResourceKind.Ore);
         var bank = Economies[ai.Team];
         int percent = bank.OreMilli > 2*bank.FoodMilli+100_000 ? 75 : bank.FoodMilli > 2*bank.OreMilli+100_000 ? 25 : 50;
-        return Math.Min(AiFoodPerMill*mills,(workers*percent+50)/100);
+        return Math.Min(foodSlots,Math.Max(workers-oreSlots,(workers*percent+50)/100));
     }
-
-    private int FoodGatherers(AiPlayer ai) => Units.Count(w => w.Team == ai.Team && w.Health > 0 && w.Order == OrderKind.Gather
-        && Resources.TryGetValue(w.OrderTarget,out var r) && r.Kind == ResourceKind.Food);
 
     private void AiTrain(AiPlayer ai,int workers,int reserveFood,int reserveOre,bool armyReady = false)
     {
         var bank = Economies[ai.Team];
-        bool Affordable(ProductionDefinition rules,bool urgent) => bank.FoodMilli >= (rules.FoodCost+(urgent ? 0 : reserveFood))*1000L
-            && bank.OreMilli >= (rules.OreCost+(urgent ? 0 : reserveOre))*1000L;
+        (int Food,int Ore) heroSavings = (0,0);
+        bool Affordable(ProductionDefinition rules,bool urgent)
+        {
+            var cost = TrainingCost(ai.Team,rules);
+            return bank.FoodMilli >= (cost.FoodCost+(urgent ? 0 : reserveFood+heroSavings.Food))*1000L
+                && bank.OreMilli >= (cost.OreCost+(urgent ? 0 : reserveOre+heroSavings.Ore))*1000L;
+        }
         int queuedWorkers = Producers.Values.Where(p => p.Team == ai.Team).Sum(p => p.Queue.Count(q => Workers.ContainsKey(q.Unit)));
-        var army = Units.Where(u => u.Team == ai.Team && u.Health > 0 && IsAiSoldier(u)).Select(u => u.Definition)
-            .Concat(Producers.Values.Where(p => p.Team == ai.Team).SelectMany(p => p.Queue).Where(q => !Workers.ContainsKey(q.Unit))
+        int workerTarget = AiWorkerTarget(ai);
+        var army = ActiveUnits.Where(u => u.Team == ai.Team && u.Health > 0 && IsAiSoldier(u)).Select(u => u.Definition)
+            .Concat(Producers.Values.Where(p => p.Team == ai.Team).SelectMany(p => p.Queue).Where(q => !Workers.ContainsKey(q.Unit) && !Rules.Units[q.Unit].Hero)
                 .Select(q => Rules.Units[q.Unit])).ToArray();
         long melee = army.Count(d => !d.IsRanged),total = army.Length;
+        heroSavings = AiFirstHeroSavings(ai,(int)total);
+        bool finiteFood = total == 0 && AiFoodUnrenewable(ai);
         IEnumerable<string> Soldiers(ProductionBuilding p) => p.Units.Where(u => AiUnits.TryGetValue(u,out var rule) && !rule.NeverAdd
             && Rules.Units.TryGetValue(u,out var d) && !d.Hero && MissingPrerequisite(ai.Team,ProductionRules[u].Prerequisites ?? []) == null);
         var offered = Producers.Values.Where(p => p.Team == ai.Team).SelectMany(Soldiers).Select(u => Rules.Units[u].IsRanged).ToHashSet();
+        var counts = army.GroupBy(d => d.Name).ToDictionary(g => g.Key,g => g.Count());
+        var focusOptions = ai.Composition is { Focused:true } ? Producers.Values.Where(p => p.Team == ai.Team)
+            .SelectMany(p => p.Units.Select((u,i) => (Producer:p,Slot:i,Unit:u)).Where(o => Soldiers(p).Contains(o.Unit))).ToArray() : [];
         foreach (var producer in Producers.Values.Where(p => p.Team == ai.Team && p.Queue.Count == 0))
         {
             int slot = -1;
             int worker = Array.FindIndex(producer.Units,Workers.ContainsKey);
-            if (worker >= 0 && workers+queuedWorkers < AiWorkerTarget(ai) && Affordable(ProductionRules[producer.Units[worker]],workers < 6)) slot = worker;
+            if (worker >= 0 && (!finiteFood || workers == 0) && workers+queuedWorkers < Math.Min(6,workerTarget) && Affordable(ProductionRules[producer.Units[worker]],true)) slot = worker;
+            else if (AiSupportSlot(ai,producer) is int support && support >= 0 && Affordable(ProductionRules[producer.Units[support]],true)) slot = support;
+            else if (ai.Personality.UsesHeroes && (total >= AiAssaultParty.MinSize || workers == 0 && total == 0
+                    || finiteFood && total == 0 && Tick-ai.LastArmyTick >= AiStagnationTicks)
+                && AiHeroRecruit(ai,producer,reserveFood,reserveOre) is int heroSlot && heroSlot >= 0) slot = heroSlot;
+            else if (worker >= 0 && (!finiteFood || workers == 0) && workers+queuedWorkers < workerTarget && Affordable(ProductionRules[producer.Units[worker]],false)) slot = worker;
             else
             {
-                // Toward the Assault shares: the class furthest below its share first, then Assault effectiveness.
-                // A producer of the unwanted class waits while a producer of the wanted class exists.
-                int meleeShare = ai.Profile.MeleeSharePpm >= 0 ? ai.Profile.MeleeSharePpm : AiAssaultParty.MeleeSharePpm;
-                bool wantMelee = total == 0 || melee*1_000_000 < total*(long)meleeShare;
-                var soldiers = Soldiers(producer).ToHashSet();
-                // Build-47: equal Assault effectiveness goes to the dearer, stronger unit (the Rider over the Swordsman).
-                // While the army is short of a party the best affordable one is trained; once it has one, the producer
-                // saves for its best unit rather than spending the food on a weaker one.
-                var ranked = Enumerable.Range(0,producer.Units.Length)
-                    .Where(i => soldiers.Contains(producer.Units[i]) && (Rules.Units[producer.Units[i]].IsRanged != wantMelee || !offered.Contains(!wantMelee)))
-                    .OrderBy(i => Rules.Units[producer.Units[i]].IsRanged == wantMelee ? 1 : 0)
-                    .ThenByDescending(i => ai.Profile.CheapSoldiers ? 0 : AiUnits[producer.Units[i]].Assault)
-                    .ThenBy(i => (ai.Profile.CheapSoldiers ? 1 : -1)*(ProductionRules[producer.Units[i]].FoodCost+ProductionRules[producer.Units[i]].OreCost)).ThenBy(i => i).ToArray();
-                // A Rusher (build-51) never saves for a better soldier.
-                slot = (armyReady && !ai.Profile.CheapSoldiers ? ranked.Take(1) : ranked).Where(i => Affordable(ProductionRules[producer.Units[i]],false)).DefaultIfEmpty(-1).First();
+                int room = PopulationCapacity(ai.Team)-PopulationUsed(ai.Team);
+                var focusOffered = focusOptions.Where(o => ProductionRules[o.Unit].Population <= room
+                    && (CanTrain(ai.Team,o.Producer.Id,o.Slot,out string reason) || reason == "Insufficient resources"))
+                    .Select(o => o.Unit).Distinct().ToArray();
+                int? focused = AiCompositionRecruit(ai,producer,counts,focusOffered,r => Affordable(r,false),armyReady);
+                if (focused != null) slot = focused.Value;
+                else
+                {
+                    // Toward the Assault shares: the class furthest below its share first, then Assault effectiveness.
+                    // A producer of the unwanted class waits while a producer of the wanted class exists.
+                    int meleeShare = ai.Profile.MeleeSharePpm >= 0 ? ai.Profile.MeleeSharePpm : AiAssaultParty.MeleeSharePpm;
+                    bool wantMelee = total == 0 || melee*1_000_000 < total*(long)meleeShare;
+                    var soldiers = Soldiers(producer).ToHashSet();
+                    // Build-47: equal Assault effectiveness goes to the dearer, stronger unit (the Rider over the Swordsman).
+                    // While the army is short of a party the best affordable one is trained; once it has one, the producer
+                    // saves for its best unit rather than spending the food on a weaker one.
+                    var ranked = Enumerable.Range(0,producer.Units.Length)
+                        .Where(i => soldiers.Contains(producer.Units[i]) && (Rules.Units[producer.Units[i]].IsRanged != wantMelee || !offered.Contains(!wantMelee)))
+                        .OrderBy(i => Rules.Units[producer.Units[i]].IsRanged == wantMelee ? 1 : 0)
+                        .ThenByDescending(i => ai.Profile.CheapSoldiers ? 0 : AiUnits[producer.Units[i]].Assault)
+                        .ThenBy(i => (ai.Profile.CheapSoldiers ? 1 : -1)*(ProductionRules[producer.Units[i]].FoodCost+ProductionRules[producer.Units[i]].OreCost)).ThenBy(i => i).ToArray();
+                    // A Rusher (build-51) never saves for a better soldier.
+                    slot = (armyReady && !ai.Profile.CheapSoldiers ? ranked.Take(1) : ranked).Where(i => Affordable(ProductionRules[producer.Units[i]],false)).DefaultIfEmpty(-1).First();
+                }
             }
             if (slot < 0 || !CanTrain(ai.Team,producer.Id,slot,out _)) continue;
             AiOrder(ai,[producer.Id],OrderKind.Train,slot,producer.Id);
             if (Workers.ContainsKey(producer.Units[slot])) queuedWorkers++;
-            else { total++; if (!Rules.Units[producer.Units[slot]].IsRanged) melee++; ai.LastArmyTick = Tick; }
+            else if (!Rules.Units[producer.Units[slot]].Hero)
+            {
+                string unit = producer.Units[slot]; counts[unit] = counts.GetValueOrDefault(unit)+1;
+                total++; if (!Rules.Units[unit].IsRanged) melee++; ai.LastArmyTick = Tick;
+            }
         }
     }
 
@@ -880,7 +973,7 @@ public sealed partial class SimWorld
         foreach (var member in party)
             foreach (var enemy in NearUnits(member.X,member.Z,scan))
             {
-                if (enemy.Team == ai.Team || !enemy.Present || enemy.RingActive || ai.Unreachable.ContainsKey(enemy.Id)) continue;
+                if (enemy.Team == ai.Team || !enemy.Present || !CanSeeUnit(ai.Team,enemy) || ai.Unreachable.ContainsKey(enemy.Id)) continue;
                 long distance = DistanceSquared(enemy.X,enemy.Z,member.X,member.Z);
                 bool danger = AttackingUnit(enemy,ai.Team) && members.Contains(enemy.Target)
                     || RecentDamageTo(enemy,ai.Team) && DistanceSquared(member.X,member.Z,enemy.LastHostileDamageX,enemy.LastHostileDamageZ) <= (long)SiegeSupportMm*SiegeSupportMm;
@@ -1018,11 +1111,12 @@ public sealed partial class SimWorld
         AiOrder(ai,ai.Party,OrderKind.AttackMove,AiLegCell(ai,target));
     }
 
-    private string AiDigest() => ":ai:"+string.Join(';',AiPlayers.Values.Select(a =>
+    private string AiDigest() => ":ai-seed:"+MatchSeed+":ai:"+string.Join(';',AiPlayers.Values.Select(a =>
         $"{a.Team},{a.Personality.Id}+{string.Join('+',a.Traits)},{a.Profile.Style.Aggression}/{a.Profile.Style.Expansion}/{a.Profile.Style.Tech},{a.Thinks},{a.PartyTarget},{a.PartiesSent},{a.Project},{a.ProjectProgress},{a.ProjectMovedTick},{a.Chase},{a.ChaseSince},{a.Intruder},{a.IntruderSince},"
         +$"{a.LastArmyTick},{a.AllIn},{a.CitadelSite.X},{a.CitadelSite.Z},{a.CrewDistance},{string.Join('/',a.IntruderSeen)},{string.Join('/',a.ChaseSeen)}:{string.Join(',',a.Unreachable)}:{string.Join(',',a.Party)}:{string.Join(',',a.RefusedCells.Order())}"
         +":guards:"+string.Join('|',a.Guards.Select(g => $"{g.Key}@{g.Value.Cell}={string.Join(',',g.Value.Units)}/{string.Join('/',g.Value.Seen)}"))
         +$":home-defense:{a.HomeDefenseUntil}:{string.Join(',',a.HomeDefenders)}"
         +$":legs:{a.Leg},{a.LegMovedTick},{a.LegGap}:{string.Join(',',a.Legs)}:wounded:{string.Join('/',a.WoundedRolls)}:recovering:{string.Join(',',a.Recovering)}:raid:{a.RaidStart},{a.RaidCell},{a.RaidSite},{a.RaidsSent},{a.NextRaidTick}:{string.Join(',',a.Raid)}:stray:{string.Join('/',a.StraySince)}"
-        +$":place:{a.PlaceSquadStart},{a.PlaceTarget},{a.PlaceCell},{a.PlaceSince},{a.PlaceSquadsSent},{a.NextPlaceTick}:{string.Join(',',a.PlaceSquad)}"));
+        +$":place:{a.PlaceSquadStart},{a.PlaceTarget},{a.PlaceCell},{a.PlaceSince},{a.PlaceSquadsSent},{a.NextPlaceTick}:{string.Join(',',a.PlaceSquad)}"
+        +$":hero-recovery:{string.Join(',',a.RecoveringHeroes)}:composition:{a.Composition?.Id}"));
 }

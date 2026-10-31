@@ -66,12 +66,20 @@ public sealed partial class SimWorld
     public bool CanPlaceBuilding(int team,string building,int cell,out string reason,bool ignoreUnits = false)
     {
         if (!CanStartBuilding(team,building,out reason)) return false;
+        return BuildingPlacementClear(team,building,cell,out reason,ignoreUnits);
+    }
+
+    // Planning can inspect the ground before the bank covers a building, so saving never depends on affordability.
+    private bool BuildingPlacementClear(int team,string building,int cell,out string reason,bool ignoreUnits = false,bool ignoreCorruption = false)
+    {
         var placement = Placements[building];
         if (PlacementFootprint(building,cell) is not { } footprint) { reason = "Choose open ground inside the map"; return false; }
         var (x,z) = Navigation.Center(cell);
         // ponytail: center distance to a completed building of the team; the original's measurement is unverified.
         if (placement.MustBeNear && !PlacementAnchors(team).Any(a => DistanceSquared(a.X,a.Z,x,z) <= (long)a.Radius*a.Radius))
         { reason = "Too far from your buildings"; return false; }
+        // Build-133: the Evil side builds on corrupted ground only (a War Post, a Slaughterhouse or a Smelter excepted).
+        if (!ignoreCorruption && Corruption != null && Corruption.Only.Contains(building) && !IsCorrupted(team,x,z)) { reason = NeedsCorruption; return false; }
         return FootprintClear(footprint,out reason,ignoreUnits);
     }
 
@@ -86,7 +94,7 @@ public sealed partial class SimWorld
             if (!Navigation.CanStand(covered) || ConstructionSites.Values.Any(s => s.Building == null && Navigation.ObstacleCovers(s.Obstacle,covered)))
             { reason = "Too close to another structure or resource"; return false; }
         }
-        if (!ignoreUnits) foreach (var unit in Units.Where(u => u.Present))
+        if (!ignoreUnits) foreach (var unit in ActiveUnits.Where(u => u.Present))
         {
             var (tx,tz) = unit.TransitNode >= 0 ? Navigation.Center(unit.TransitNode) : (unit.X,unit.Z);
             if (GridNavigation.FootprintBlocks(footprint,unit.X,unit.Z,tx,tz,unit.Definition.BodyRadiusMm)) { reason = UnitBlocksFoundation; return false; }
@@ -108,7 +116,7 @@ public sealed partial class SimWorld
         string building = PlaceableBuildings[command.Target];
         var ready = new List<SimUnit>();
         foreach (var unit in command.Units.Where(id => id >= 0 && id < Units.Count).Select(id => Units[id])
-            .Where(u => u.Team == command.Team && u.Present && Workers.ContainsKey(u.Definition.Name)))
+            .Where(u => u.Team == command.Team && u.Present && MayPlace(u,building)))
         {
             if (!activating && command.Queued && unit.Order is not (OrderKind.Idle or OrderKind.Stop or OrderKind.HoldGround))
                 unit.OrderQueue.Add(new(OrderKind.PlaceBuilding,command.Cell,command.Target,command.Sequence));
@@ -218,7 +226,7 @@ public sealed partial class SimWorld
     {
         if (reason != UnitBlocksFoundation) { AbandonFoundation(unit,reason); return; }
         if (!Persevere(unit,reason) || (Tick-unit.PlacementWaitTick)%TicksPerSecond != 0) return;
-        foreach (var idle in Units.Where(u => u.Team == unit.Team && u.Present && u.Order is OrderKind.Idle or OrderKind.Stop
+        foreach (var idle in ActiveUnits.Where(u => u.Team == unit.Team && u.Present && u.Order is OrderKind.Idle or OrderKind.Stop
             && u.Target < 0 && u.Goal < 0 && u.TransitNode < 0 && blocks(u,u.X,u.Z)).ToArray())
         {
             var nav = Nav(idle);

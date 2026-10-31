@@ -22,8 +22,9 @@ public partial class Main
             case OrderKind.Move or OrderKind.AttackMove or OrderKind.Patrol or OrderKind.Guard or OrderKind.ForceAttack or OrderKind.PlaceBuilding when cell >= 0:
                 var (x,z) = world.Navigation.Center(cell); return (x,z,kind != OrderKind.PlaceBuilding);
             case OrderKind.Gather when world.Resources.TryGetValue(target,out var source): return (source.X,source.Z,false);
-            case OrderKind.Build or OrderKind.AttackStructure when world.ConstructionSites.TryGetValue(target,out var site):
+            case OrderKind.Build or OrderKind.AttackStructure or OrderKind.ApproachStructure when world.ConstructionSites.TryGetValue(target,out var site):
                 var (sx,sz) = world.SitePosition(site); return (sx,sz,false);
+            case OrderKind.ReturnCargo when world.OwnedDropOff(PlayerTeam,target) is { } depot: return (depot.X,depot.Z,false);
             default: return null;
         }
     }
@@ -41,7 +42,7 @@ public partial class Main
 
     private static Color WaypointColor(OrderKind kind) => kind switch {
         OrderKind.Attack or OrderKind.AttackMove or OrderKind.ForceAttack or OrderKind.AttackStructure => new Color("e8574a"),
-        OrderKind.Gather or OrderKind.Build or OrderKind.PlaceBuilding => new Color("e9c22d"),
+        OrderKind.Gather or OrderKind.Build or OrderKind.PlaceBuilding or OrderKind.ReturnCargo => new Color("e9c22d"),
         _ => new Color("7bd65a") };
 
     private void PresentWaypoints()

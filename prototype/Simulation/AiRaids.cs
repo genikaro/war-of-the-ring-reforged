@@ -47,7 +47,7 @@ public sealed partial class SimWorld
             return home;
         }
         // On the spot: the workers first, each free raider at the nearest one, then the building.
-        var workers = Units.Where(u => u.Present && u.Team != ai.Team && u.Team >= 0 && IsAiWorker(u)
+        var workers = ActiveUnits.Where(u => u.Present && u.Team != ai.Team && u.Team >= 0 && IsAiWorker(u)
             && DistanceSquared(u.X,u.Z,tx,tz) <= (long)AiRaidReachMm*AiRaidReachMm).ToArray();
         var free = raid.Where(u => u.Target < 0).ToArray();
         if (workers.Length > 0)
@@ -108,7 +108,7 @@ public sealed partial class SimWorld
         {
             var (x,z) = SitePosition(site); points.Add((x,z,site.Id));
         }
-        var mined = Units.Where(u => u.Present && u.Team >= 0 && u.Team != ai.Team && u.Order == OrderKind.Gather).Select(u => u.OrderTarget).ToHashSet();
+        var mined = ActiveUnits.Where(u => u.Present && u.Team >= 0 && u.Team != ai.Team && u.Order == OrderKind.Gather).Select(u => u.OrderTarget).ToHashSet();
         foreach (var pile in Resources.Values.Where(r => mined.Contains(r.Id) && (!ConstructionSites.TryGetValue(r.Id,out var claim) || claim.Team < 0)))
             points.Add((pile.X,pile.Z,-1));
         var ranked = new List<(long Score,int X,int Z,int Site)>();

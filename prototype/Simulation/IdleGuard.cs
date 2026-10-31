@@ -29,7 +29,7 @@ public sealed partial class SimWorld
         if (distance<= (long)IdleAwarenessMm*IdleAwarenessMm) return true;
         if (BotGuard(unit) && distance<=(long)BotAssistMm*BotAssistMm && FightingTeam(enemy,unit.Team)) return true;
         if (distance> (long)IdleLeashMm*IdleLeashMm) return false;
-        return Units.Any(ally=>ally.Id!=unit.Id && ally.Team==unit.Team && ally.Present
+        return ActiveUnits.Any(ally=>ally.Id!=unit.Id && ally.Team==unit.Team && ally.Present
             && SeparationSquared(unit,ally)<=(long)IdleAwarenessMm*IdleAwarenessMm
             && ((ally.Target==enemy.Id && (ally.Attacking || ally.StrikeActive))
                 || (enemy.Target==ally.Id && (enemy.Attacking || enemy.StrikeActive))));

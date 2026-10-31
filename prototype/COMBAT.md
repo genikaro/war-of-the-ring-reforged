@@ -7,6 +7,15 @@ and combat spacing use source-derived per-type envelopes, with explicit
 
 ## Definitions and provenance
 
+Build-95 tunes Human Workers to the owner's requested 5 base damage per hit at
+an average speed (one hit every 30 ticks / 1.5 seconds). Loading combat rules
+adapts existing content packs to the source `G_Human_Worker_Attack_Melee_01`
+single-punch clip, with its hit at tick 18. The animation is sampled over that
+same 30-tick cycle; gathering and construction keep their own clips. The former
+two- and three-punch variants are no longer combat choices. `DamagePerHitMilli`
+keeps the base hit exactly 5 HP despite the integer DPS readout of 3.333; armor,
+matchups and bonuses still adjust damage normally. Raw source data stays intact.
+
 | Unit / source ID | Health | Armor points | Weapon DPS | Damage classification | Weapon ID |
 |---|---:|---:|---:|---|---:|
 | Aragorn / 16 | 485 | 3 | 20 | HERO (3) | 15 |
@@ -65,8 +74,12 @@ The simulation runs at 20 Hz using integer positions, milli-health and rule
 values. Import quantization uses decimal half-up rounding, with 1,000 units per
 armor/DPS point and 1,000,000 units per multiplier/event scale.
 
-Each swing selects a positive-weight `ATTACK_MELEE_01` choice using stable
-per-unit/attack-sequence weighted selection. This is a prototype selection
+Each swing selects a positive-weight `ATTACK_MELEE_01` choice using deterministic
+shuffled weighted cycles (build-118). Common weight factors are removed first;
+source weights of 10000 therefore behave like weights of 1. Each cycle includes
+every equal-weight clip, while unequal weights retain their relative frequency.
+Unit attacks and building attacks share this selector; ranged missile/contact
+variants remain separate. This is a prototype selection
 policy, not the recovered original RNG. Windup precedes the hit events; recovery
 lasts until the full cycle ends. Source times are normalized fractions:
 
@@ -96,18 +109,25 @@ current movement and timed hits continue every tick. Force Attack, stationary
 orders and queued primary-target completion have separate regressions. See
 [the engagement correction and performance measurements](ENGAGEMENT.md).
 
-The damage policy is explicitly approximate:
+The damage policy is explicitly approximate. Since build-116, the displayed
+base damage is authoritative for every strike. Animation variants keep their
+source durations and hit-event timing; they do not change damage per strike.
+Aragorn's unupgraded attacks all deal 26 base damage, including each strike in
+his two-hit animation. Other units use the same rule; missile and contact
+weapons have separate cadences.
 
 ```
 scale = sourcePairScale if the pair has a source row, else typeScale
+baseHitMilli = explicit per-hit value, or roundedHUD(weaponDpsMilli * weightedMeanSecondsBetweenHits)
 typedDpsMilli = attackerDpsMilli * scale / 1_000_000
 rateMilli = max(0, typedDpsMilli - victimArmorMilli)
-hitDamageMilli = rateMilli * cycleTicks * eventScale / (20 * sumOfClipHitScales)
+hitDamageMilli = baseHitMilli * rateMilli / weaponDpsMilli
 ```
 
 Integer division truncates; damage is capped at remaining health. Invincibility
-produces a zero-damage hit. Dividing by total hit scales keeps Aragorn's
-two-event choice at its cycle DPS instead of doubling it. Fractional damage
+produces a zero-damage hit. Upgrades, hero levels, target-specific bonuses and
+armor still adjust the fixed hit. The tooltip reports effective DPS using the
+actual fixed damage and mean attack cadence. Fractional damage
 stays in milli-health. The HUD rounds HP upward and uses imported maximum health
 for bars. A hostile lethal hit awards exactly one `KillCount` to its attacker;
 later hits on the dead victim cannot award it again. Friendly force kills do
@@ -283,8 +303,13 @@ joint motion remain intact. Refresh older model caches with `--units-only`.
 
 Ranged facing now advances at simulation ticks and is interpolated for drawing,
 so render frame rate cannot determine when combat starts. A new windup waits
-until both ends of the interpolated turn are within 0.5 degrees of the target.
-Active attacks can track moving targets; replacements still cancel normally.
+until both ends of the interpolated turn are within 0.5 degrees of the target
+on first acquisition. Build-97 lets an established track compare the previous
+heading with the previous tick's aim at that same target, while the current
+heading must match its current bearing. Requiring both headings to match the
+new bearing could prevent all shots at a circling runner. The aim sample expires
+after a tick without aiming and is included in the state digest. Active attacks
+can track moving targets; replacements still cancel normally.
 Movement redirects turn from the current heading, and tiny arrival corrections
 do not change it. Facing is included in replay state.
 

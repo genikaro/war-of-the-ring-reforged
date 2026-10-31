@@ -81,20 +81,20 @@ public sealed partial class SimWorld
         foreach (var other in Grid.AlongMovement(unit.X,unit.Z,x,z,unit.Definition.BodyRadiusMm+Grid.MaxBodyRadiusMm,_groundStepNeighbors))
         {
             if (other.Id==unit.Id || !other.Present) continue;
-            bool Near(int ax,int ay,int az,int bx,int by,int bz)
+            static bool Near(SimUnit unit,int x,int y,int z,SimUnit other,int ax,int ay,int az,int bx,int by,int bz)
                 => Math.Min(unit.Y,y) < Math.Max(ay,by)+other.Definition.BodyHeightMm && Math.Min(ay,by) < Math.Max(unit.Y,y)+unit.Definition.BodyHeightMm
                 && IntegerMotion.SegmentsNear(unit.X,unit.Z,x,z,ax,az,bx,bz,BodySeparation(unit,other));
-            if (Near(other.X,other.Y,other.Z,other.X,other.Y,other.Z)) return false;
+            if (Near(unit,x,y,z,other,other.X,other.Y,other.Z,other.X,other.Y,other.Z)) return false;
             if (other.TransitNode >= 0 && !other.GroundSegment)
             {
                 var (ax,az) = Navigation.Center(other.Node); var (bx,bz) = Navigation.Center(other.TransitNode);
-                if (Near(ax,Navigation.NodeHeight(other.Node),az,bx,Navigation.NodeHeight(other.TransitNode),bz)) return false;
+                if (Near(unit,x,y,z,other,ax,Navigation.NodeHeight(other.Node),az,bx,Navigation.NodeHeight(other.TransitNode),bz)) return false;
             }
             if (other.MovementTick == Tick)
                 for (int i = 1; i < other.Movement.Count; i++)
                 {
                     var a = other.Movement[i-1]; var b = other.Movement[i];
-                    if (Near(a.X,a.Y,a.Z,b.X,b.Y,b.Z)) return false;
+                    if (Near(unit,x,y,z,other,a.X,a.Y,a.Z,b.X,b.Y,b.Z)) return false;
                 }
         }
         return true;

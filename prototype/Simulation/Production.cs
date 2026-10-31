@@ -8,7 +8,7 @@ public sealed record ProductionDefinition(string Unit,string DisplayName,int Foo
     public override string ToString() => $"{Unit},{DisplayName},{FoodCost},{OreCost},{Population},{DurationTicks},{Unique},{string.Join('/',Prerequisites ?? [])}"
         + (FateCost > 0 || UniqueGroup >= 0 ? $",{FateCost},{UniqueGroup}" : "");
 }
-public sealed record QueuedUnit(string Unit,int Sequence);
+public sealed record QueuedUnit(string Unit,int Sequence,int FoodPaid = -1,int OrePaid = -1,int FatePaid = -1);
 
 public sealed class ProductionBuilding(int id,int team,int x,int z,int exitAnchor,string[] units)
 {
@@ -51,18 +51,18 @@ public sealed partial class SimWorld
         .Select(s => UniqueGroupCapacity.TryGetValue(s.Building!,out var held) && held.Group == group ? held.Amount : 0).DefaultIfEmpty(0).Max();
 
     /// <summary>Living and queued heroes of the group.</summary>
-    public int UniqueGroupUsed(int team,int group) => Units.Count(u => u.Team == team && u.Health > 0 && ProductionRules.GetValueOrDefault(u.Definition.Name)?.UniqueGroup == group)
+    public int UniqueGroupUsed(int team,int group) => ActiveUnits.Count(u => u.Team == team && u.Health > 0 && ProductionRules.GetValueOrDefault(u.Definition.Name)?.UniqueGroup == group)
         + Producers.Values.Where(p => p.Team == team).Sum(p => p.Queue.Count(q => ProductionRules[q.Unit].UniqueGroup == group));
 
-    public int PopulationCapacity(int team) => Math.Min(MaxPopulation,InitialPopulationCapacity
+    public int PopulationCapacity(int team) => Math.Min(MaxPopulation,InitialPopulationCapacity + UnitPopulation(team)
         + (StartBuildings.GetValueOrDefault(team) ?? []).Sum(name => PopulationProvided.GetValueOrDefault(name))
         // A start building is both a StartBuildings entry and a prebuilt site; count it once.
         + ConstructionSites.Values.Where(s => s.Team == team && s.Complete && !s.Prebuilt)
             .Sum(s => PopulationProvided.GetValueOrDefault(SiteRules(s).Name)));
 
     /// <summary>Living units plus queued training: the original reserves population when a unit is queued.</summary>
-    public int PopulationUsed(int team) => Units.Where(u => u.Team == team && u.Health > 0)
-            .Sum(u => ProductionRules.GetValueOrDefault(u.Definition.Name)?.Population ?? 0)
+    public int PopulationUsed(int team) => ActiveUnits.Where(u => u.Team == team && u.Health > 0)
+            .Sum(u => ProductionRules.GetValueOrDefault(u.PopulationUnit)?.Population ?? 0)
         + Producers.Values.Where(p => p.Team == team).Sum(p => p.Queue.Sum(q => ProductionRules[q.Unit].Population));
 
     public bool CanTrain(int team,int building,int slot,out string reason)
@@ -72,13 +72,16 @@ public sealed partial class SimWorld
             || !ProductionRules.TryGetValue(producer.Units[slot],out var rules) || !Economies.TryGetValue(team,out var bank)) return false;
         if (MissingPrerequisite(team,rules.Prerequisites ?? []) is { } missing) { reason = RequirementReason(missing); return false; }
         if (producer.Queue.Count >= ProductionQueueLimit) { reason = "Training queue full"; return false; }
-        if (rules.Unique && (Units.Any(u => u.Team == team && u.Health > 0 && u.Definition.Name == rules.Unit)
+        if (AtUnitLimit(team,rules.Unit)) { reason = $"You may have only {PopulationByUnit[rules.Unit].Max} {rules.DisplayName}s"; return false; }
+        if (Rules.Units.GetValueOrDefault(rules.Unit)?.Hero == true && HeroLostToLegacy(team,rules.Unit)) { reason = "Heroic Legacy prevents this hero from returning"; return false; }
+        if (rules.Unique && (ActiveUnits.Any(u => u.Team == team && u.Health > 0 && u.Definition.Name == rules.Unit)
             || Producers.Values.Any(p => p.Team == team && p.Queue.Any(q => q.Unit == rules.Unit))))
         { reason = rules.DisplayName+" is already in play"; return false; }
         if (rules.UniqueGroup >= 0 && UniqueGroupUsed(team,rules.UniqueGroup) >= UniqueGroupLimit(team,rules.UniqueGroup))
-        { reason = $"Hero limit reached ({UniqueGroupLimit(team,rules.UniqueGroup)}); upgrade the Citadel for more"; return false; }
-        if (bank.FoodMilli < rules.FoodCost*1000L || bank.OreMilli < rules.OreCost*1000L) { reason = "Insufficient resources"; return false; }
-        if (bank.Fate < rules.FateCost) { reason = $"Requires {rules.FateCost} Fate"; return false; }
+        { reason = $"Hero limit reached ({UniqueGroupLimit(team,rules.UniqueGroup)}); upgrade the {(FactionOf(team) == Evil ? "Fortress" : "Citadel")} for more"; return false; }
+        var cost = TrainingCost(team,rules);
+        if (bank.FoodMilli < cost.FoodCost*1000L || bank.OreMilli < cost.OreCost*1000L) { reason = "Insufficient resources"; return false; }
+        if (bank.Fate < cost.FateCost) { reason = $"Requires {cost.FateCost} Fate"; return false; }
         if (PopulationUsed(team)+rules.Population > PopulationCapacity(team)) { reason = "Population limit reached"; return false; }
         reason = "Ready to train"; return true;
     }
@@ -87,8 +90,9 @@ public sealed partial class SimWorld
     {
         if (!CanTrain(command.Team,command.Target,command.Cell,out _)) return;
         var producer = Producers[command.Target]; var rules = ProductionRules[producer.Units[command.Cell]]; var bank = Economies[command.Team];
-        bank.FoodMilli -= rules.FoodCost*1000L; bank.OreMilli -= rules.OreCost*1000L; bank.Fate -= rules.FateCost;
-        producer.Queue.Add(new(rules.Unit,command.Sequence));
+        var cost = TrainingCost(command.Team,rules);
+        bank.FoodMilli -= cost.FoodCost*1000L; bank.OreMilli -= cost.OreCost*1000L; bank.Fate -= cost.FateCost;
+        producer.Queue.Add(new(rules.Unit,command.Sequence,cost.FoodCost,cost.OreCost,cost.FateCost));
     }
 
     private void CancelTraining(SimCommand command)
@@ -96,11 +100,11 @@ public sealed partial class SimWorld
         if (!Producers.TryGetValue(command.Target,out var producer) || producer.Team != command.Team) return;
         int index = command.Cell < 0 ? producer.Queue.Count-1 : command.Cell;
         if (index < 0 || index >= producer.Queue.Count) return;
-        var rules = ProductionRules[producer.Queue[index].Unit]; var bank = Economies[command.Team];
+        var queued = producer.Queue[index]; var rules = ProductionRules[queued.Unit]; var bank = Economies[command.Team];
         // ponytail: no source field states a training refund; cancellation returns the full cost, capped by storage.
-        bank.FoodMilli = Math.Min(bank.FoodCapacityMilli,bank.FoodMilli+rules.FoodCost*1000L);
-        bank.OreMilli = Math.Min(bank.OreCapacityMilli,bank.OreMilli+rules.OreCost*1000L);
-        AddFate(bank,rules.FateCost);
+        bank.FoodMilli = Math.Min(bank.FoodCapacityMilli,bank.FoodMilli+(queued.FoodPaid < 0 ? rules.FoodCost : queued.FoodPaid)*1000L);
+        bank.OreMilli = Math.Min(bank.OreCapacityMilli,bank.OreMilli+(queued.OrePaid < 0 ? rules.OreCost : queued.OrePaid)*1000L);
+        AddFate(bank,queued.FatePaid < 0 ? rules.FateCost : queued.FatePaid);
         producer.Queue.RemoveAt(index);
         if (index == 0) producer.ProgressTicks = 0;
     }
@@ -143,7 +147,7 @@ public sealed partial class SimWorld
     private int RallySpot(ProductionBuilding producer,SimUnit unit)
     {
         var taken = OccupiedNodes(unit.Id);
-        taken.UnionWith(Units.Where(u => u.Id != unit.Id && u.Present && u.Goal >= 0).Select(u => u.Goal));
+        taken.UnionWith(ActiveUnits.Where(u => u.Id != unit.Id && u.Present && u.Goal >= 0).Select(u => u.Goal));
         int spot = Nav(unit).Nearest(producer.RallyCell,taken,connectedTo: unit.Node);
         return spot >= 0 ? spot : producer.RallyCell;
     }
@@ -174,6 +178,7 @@ public sealed partial class SimWorld
 
     private string ProductionDigest() => ":production-rules:"+string.Join(';',ProductionRules.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => p.Value))
         + ":producers:"+string.Join(';',Producers.Values.Select(p => $"{p.Id},{p.Team},{p.X},{p.Z},{p.ExitAnchor},{string.Join('/',p.Units)},{p.ProgressTicks},{p.RallyCell},{p.RallyResource},{string.Join('/',p.Queue.Select(q => q.Unit+"#"+q.Sequence))}"))
+        + ":training-payments:"+string.Join(';',Producers.Values.SelectMany(p => p.Queue).Select(q => $"{q.Sequence},{q.FoodPaid},{q.OrePaid},{q.FatePaid}"))
         + ":population:"+MaxPopulation+","+InitialPopulationCapacity+","+string.Join(';',PopulationProvided.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => p.Key+"="+p.Value))
         + (UniqueGroupCapacity.Count > 0 ? ":heroes:"+MaxFate+","+string.Join(';',UniqueGroupCapacity.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => $"{p.Key}={p.Value.Group}:{p.Value.Amount}")) : "")
         + ":instant:"+string.Join(',',InstantBuildTeams.Order());

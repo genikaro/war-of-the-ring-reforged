@@ -60,12 +60,12 @@ public partial class CommandPanel
         (string Building,string Portrait)[] choices,StructureDetails? structure)
     {
         _constructionNames = choices.Select(c => c.Building).ToArray();
-        bool workers = world.ConstructionRules.Count > 0 && units.Any(u => u.Team == PlayerTeam && world.Workers.ContainsKey(u.Definition.Name))
-            && units.All(u => u.Team == PlayerTeam && u.Definition.Abilities?.Length is not > 0);
+        bool workers = world.ConstructionRules.Count > 0 && units.Any(u => u.Team == PlayerTeam && world.IsBuilder(u))
+            && units.All(u => u.Team == PlayerTeam && (world.IsBuilder(u) || u.Definition.Abilities?.Length is not > 0));
         bool page = workers && BuildMenuOpen;
         _buildButton.Visible = workers && !BuildMenuOpen;
         _buildButton.Icon ??= _art.GetValueOrDefault("console_g_action_build");
-        _advancedBuildButton.Visible = _buildButton.Visible;
+        _advancedBuildButton.Visible = _buildButton.Visible && !units.Any(u=>u.Ability(1)!=null);
         _advancedBuildButton.Icon ??= _art.GetValueOrDefault("console_g_action_build");
         _backButton.Visible = page;
         bool cancel = structure is { UnderConstruction: true } && structure.Team == PlayerTeam;
@@ -78,7 +78,7 @@ public partial class CommandPanel
             button.SetPressedNoSignal(targeting && pending == choices[index].Building);
             var (building,portrait) = choices[index];
             button.Icon = _art.GetValueOrDefault(portrait);
-            var resource = world.ConstructionRules.Values.FirstOrDefault(r => r.Name == building);
+            var resource = world.FactionConstructionRules.Values.Concat(world.ConstructionRules.Values).FirstOrDefault(r => r.Name == building);
             if (resource?.Kind is { } kind)
             {
                 _resourceSlots[kind] = index; var bank = world.Economies[PlayerTeam];

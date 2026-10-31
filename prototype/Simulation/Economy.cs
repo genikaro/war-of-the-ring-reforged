@@ -164,11 +164,7 @@ public sealed partial class SimWorld
         if (unit.GatherPhase == GatherPhase.PuttingDown)
         {
             if (elapsed < worker.PutDownTicks) return;
-            long space = unit.CargoKind == ResourceKind.Ore ? bank.OreCapacityMilli-bank.OreMilli : bank.FoodCapacityMilli-bank.FoodMilli;
-            long amount = Math.Min(unit.CargoMilli,Math.Max(0,space));
-            if (unit.CargoKind == ResourceKind.Ore) { bank.OreMilli += amount; bank.GatheredOreMilli += amount; }
-            else { bank.FoodMilli += amount; bank.GatheredFoodMilli += amount; }
-            unit.CargoMilli -= amount;
+            DepositCargo(unit,bank);
             if (unit.CargoMilli > 0) return; // Keep cargo while storage is full.
             unit.GatherPhase = GatherPhase.None; unit.ReturningCargo = false; unit.GatherPlanTick = -1;
             if (!canGather) FinishGather(unit);
@@ -197,7 +193,7 @@ public sealed partial class SimWorld
         }
         if (!improved) { BeginPhase(unit,GatherPhase.Mining); return; }
         // ponytail: one worker inside at a time, as in a Warcraft III gold mine; the others wait at the door.
-        if (Units.Any(u => u.InsideSite == site!.Id)) return;
+        if (ActiveUnits.Any(u => u.InsideSite == site!.Id)) return;
         unit.InsideSite = site!.Id; unit.Path.Clear(); unit.Waypoint = 0;
         BeginPhase(unit,GatherPhase.Inside);
     }
@@ -219,7 +215,7 @@ public sealed partial class SimWorld
     {
         var nav = Nav(unit);
         var reserved = ignoreUnits ? [] : OccupiedNodes(unit.Id);
-        if(!ignoreUnits) reserved.UnionWith(Units.Where(u => u.Id != unit.Id && u.Present && u.Goal >= 0).Select(u => u.Goal));
+        if(!ignoreUnits) reserved.UnionWith(ActiveUnits.Where(u => u.Id != unit.Id && u.Present && u.Goal >= 0).Select(u => u.Goal));
         int minX = Math.Max(0,(area.X-area.RadiusMm)/nav.CellSize),maxX = Math.Min(nav.Width-1,(area.X+area.RadiusMm)/nav.CellSize);
         int minZ = Math.Max(0,(area.Z-area.RadiusMm)/nav.CellSize),maxZ = Math.Min(nav.Height-1,(area.Z+area.RadiusMm)/nav.CellSize);
         var candidates = new List<int>();
@@ -253,5 +249,5 @@ public sealed partial class SimWorld
         + ":resources:"+string.Join(';',Resources.Values.Select(r => $"{r.Id},{r.Kind},{r.X},{r.Z},{r.RadiusMm},{r.RemainingMilli},{r.RawFloorMilli},{r.RateMilliPerTick},{r.ImprovedRateMilliPerTick},{r.ImprovedFloorMilli}"))
         + ":workers:"+string.Join(';',Workers.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => $"{p.Key},{p.Value}"))
         + ":depots:"+string.Join(';',DropOffs.Select(d => $"{d.Team},{d.X},{d.Z},{d.RadiusMm},{d.Obstacle}"))
-        + ":cargo:"+string.Join(';',Units.Select(u => $"{u.CargoMilli},{u.CargoKind},{u.ReturningCargo},{u.GatherPlanTick},{u.GatherPhase},{u.GatherPhaseTick},{u.InsideSite}"));
+        + ":cargo:"+string.Join(';',Units.Select(u => $"{u.CargoMilli},{u.CargoKind},{u.ReturningCargo},{u.GatherPlanTick},{u.GatherPhase},{u.GatherPhaseTick},{u.InsideSite},{u.ReturnCargoSource}"));
 }

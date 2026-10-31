@@ -4,7 +4,10 @@ namespace Reforged.Simulation;
 /// MaxPowerDistanceMultiplier, the chosen Power Acquisition rate, and the buildings flagged IsTownCenter.</summary>
 public sealed record FateRules(int LevelPerPoint,int ByDamagePpm,int ReductionPpm,int MaxDistancePpm,int AcquisitionPpm,string[] TownCenters)
 {
-    public override string ToString() => $"{LevelPerPoint},{ByDamagePpm},{ReductionPpm},{MaxDistancePpm},{AcquisitionPpm},{string.Join('/',TownCenters)}";
+    /// <summary>Build-133: source WarpostPowerAcquisitionRate in millionths of power per square metre of corrupted ground per second.</summary>
+    public int WarpostPpm { get; init; }
+    public override string ToString() => $"{LevelPerPoint},{ByDamagePpm},{ReductionPpm},{MaxDistancePpm},{AcquisitionPpm},{string.Join('/',TownCenters)}"
+        + (WarpostPpm > 0 ? ","+WarpostPpm : "");
 }
 
 /// <summary>Build-76: battle earns Fate, as Rings.exe does it (decoded from the shipped executable, SHA-256 7d9e30a7...,
@@ -75,6 +78,34 @@ public sealed partial class SimWorld
         long point = rules.LevelPerPoint*1_000_000L;
         while (bank.FateProgressMicro >= point && bank.Fate < MaxFate) { bank.FateProgressMicro -= point; bank.Fate++; bank.FateEarned++; }
         if (bank.Fate >= MaxFate) bank.FateProgressMicro = 0;
+    }
+
+    /// <summary>Build-133: an Evil team's War Posts earn power too, WarpostPowerAcquisitionRate per square metre of ground they
+    /// corrupt per second (the source says "for each square meter, per second"). The ground is the union of the posts' circles
+    /// counted on a 2 m lattice; like battle power it is scaled by the Power Acquisition rate and divided by (Fate held + queued
+    /// + 1) x PowerReductionScalar, and the start Hovel's ground earns nothing (adapter: the source has no start corruption).
+    /// Worked once a second.</summary>
+    private void UpdateWarpostFate()
+    {
+        if (FateRules is not { WarpostPpm: > 0 } rules || Corruption == null || Tick%TicksPerSecond != 0) return;
+        foreach (var (team,faction) in TeamFactions)
+        {
+            if (faction != Evil || !Economies.TryGetValue(team,out var bank) || bank.Fate >= MaxFate) continue;
+            var posts = ConstructionSites.Values.Where(s => s.Team == team && s.Complete && s.Health > 0 && s.Building != null
+                && Corruption.Creators.ContainsKey(s.Building)).Select(s => (s.X,s.Z,Radius: Corruption.Creators[s.Building!])).ToArray();
+            if (posts.Length == 0) continue;
+            const int lattice = 2000;
+            long samples = 0;
+            for (int x = posts.Min(p => p.X-p.Radius)/lattice*lattice; x <= posts.Max(p => p.X+p.Radius); x += lattice)
+            for (int z = posts.Min(p => p.Z-p.Radius)/lattice*lattice; z <= posts.Max(p => p.Z+p.Radius); z += lattice)
+                if (posts.Any(p => DistanceSquared(p.X,p.Z,x,z) <= (long)p.Radius*p.Radius)) samples++;
+            long areaMilli = samples*(lattice/1000)*(lattice/1000)*1000;
+            long micro = areaMilli*rules.WarpostPpm/1000*rules.AcquisitionPpm/1_000_000*PlaceFatePpm(team)/1_000_000;
+            bank.FateProgressMicro += micro*1_000_000/((bank.Fate+QueuedFate(team)+1L)*rules.ReductionPpm);
+            long point = rules.LevelPerPoint*1_000_000L;
+            while (bank.FateProgressMicro >= point && bank.Fate < MaxFate) { bank.FateProgressMicro -= point; bank.Fate++; bank.FateEarned++; }
+            if (bank.Fate >= MaxFate) bank.FateProgressMicro = 0;
+        }
     }
 
     /// <summary>Progress toward the next Fate point, in percent.</summary>

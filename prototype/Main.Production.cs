@@ -14,7 +14,7 @@ public partial class Main
         if (production.GetProperty("format_version").GetInt32() != 1 || production.GetProperty("ticks_per_second").GetInt32() != SimWorld.TicksPerSecond)
             throw new InvalidOperationException("Unsupported production cache");
         var world = _world!;
-        foreach (var unit in production.GetProperty("units").EnumerateObject())
+        foreach (var unit in production.GetProperty("units").EnumerateObject().Where(u => Loaded(u.Name)))
         {
             var rules = unit.Value;
             world.ProductionRules.Add(unit.Name,new(unit.Name,rules.GetProperty("display_name").GetString()!,rules.GetProperty("food_cost").GetInt32(),
@@ -28,7 +28,7 @@ public partial class Main
                 rules.TryGetProperty("unique_group",out var group) ? group.GetInt32() : -1));
         }
         if (production.TryGetProperty("unique_group_capacity",out var capacity))
-            foreach (var building in capacity.EnumerateObject())
+            foreach (var building in capacity.EnumerateObject().Where(b => Loaded(b.Name)))
                 world.UniqueGroupCapacity.Add(building.Name,(building.Value.GetProperty("group").GetInt32(),building.Value.GetProperty("amount").GetInt32()));
         if (production.TryGetProperty("max_fate",out var maxFate)) world.MaxFate = maxFate.GetInt32();
         // Build-76: battle earns Fate by the source WorldVariables, at the Medium Power Acquisition rate.
@@ -36,19 +36,24 @@ public partial class Main
             world.FateRules = new(earning.GetProperty("level_per_point").GetInt32(),earning.GetProperty("by_damage_ppm").GetInt32(),
                 earning.GetProperty("reduction_ppm").GetInt32(),earning.GetProperty("max_distance_ppm").GetInt32(),
                 earning.GetProperty("acquisition_ppm").GetProperty("medium").GetInt32(),
-                earning.GetProperty("town_centers").EnumerateArray().Select(t => t.GetString()!).ToArray());
+                earning.GetProperty("town_centers").EnumerateArray().Select(t => t.GetString()!).ToArray())
+                { WarpostPpm = earning.TryGetProperty("warpost_ppm",out var warpost) ? warpost.GetInt32() : 0 };
         foreach (var building in production.GetProperty("population_provided").EnumerateObject()) world.PopulationProvided.Add(building.Name,building.Value.GetInt32());
         world.InitialPopulationCapacity = production.GetProperty("initial_population_capacity").GetInt32();
         world.MaxPopulation = production.GetProperty("max_population").GetInt32();
         var producers = production.GetProperty("producers");
-        foreach (var producer in producers.EnumerateObject())
+        // Build-133: the Goblin Slavemaster adds population while it lives, up to its per-player limit.
+        if (production.TryGetProperty("population_by_unit",out var byUnit))
+            foreach (var unit in byUnit.EnumerateObject().Where(u => Loaded(u.Name)))
+                world.PopulationByUnit[unit.Name] = (unit.Value.GetProperty("added").GetInt32(),unit.Value.GetProperty("max").GetInt32());
+        foreach (var producer in producers.EnumerateObject().Where(p => Loaded(p.Name)))
             world.ProducedUnits.Add(producer.Name,producer.Value.GetProperty("units").EnumerateArray().Select(u => u.GetString()!).ToArray());
-        foreach (var start in OpenBases(data))
+        foreach (var start in StartBases(data))
         {
-            if (!producers.TryGetProperty(start.GetProperty("building").GetString()!,out var producer)) continue;
-            int team = start.GetProperty("team").GetInt32(),id = start.GetProperty("footprint_object").GetInt32(); var at = start.GetProperty("position");
+            if (!producers.TryGetProperty(start.Building,out var producer)) continue;
+            int team = start.Team,id = start.Footprint;
             // Start workers already stand on ground connected to the rest of the map; exits must reach the same region.
-            world.Producers.Add(id,new(id,team,(int)Math.Round(at[0].GetDouble()*1000),(int)Math.Round(at[1].GetDouble()*1000),
+            world.Producers.Add(id,new(id,team,start.X,start.Z,
                 world.Units.First(u => u.Team == team).Node,producer.GetProperty("units").EnumerateArray().Select(u => u.GetString()!).ToArray()));
         }
         _waypointFlagFile = production.GetProperty("rally_banner").GetString()!;
@@ -104,11 +109,12 @@ public partial class Main
     {
         if (SelectedProducer() is not { } producer) return false;
         // A well, an ore pile, or the Mill or Foundry standing on one: new workers go straight to gathering.
-        if (StructureAt(mouse) is { } structure && _structureViews[structure.Id].Resource is int resource and >= 0)
+        var structure = StructureAt(mouse);
+        if (structure is { } target && _structureViews[target.Id].Resource is int resource and >= 0)
         {
             _world!.Enqueue(PlayerTeam,[],OrderKind.SetRallyResource,resource,producer.Id);
-            _status.Text = "Rally point set on "+_structureDefinitions[_structureViews[structure.Id].Type].GetProperty("display_name").GetString()+(_paused ? " (paused)" : "");
-            _hud.Destination = mouse; _hud.DestinationTime = 0.7f;
+            _status.Text = "Rally point set on "+_structureDefinitions[_structureViews[target.Id].Type].GetProperty("display_name").GetString()+(_paused ? " (paused)" : "");
+            ShowStructureCommandFeedback(target.Id);
             return true;
         }
         Vector3 origin = _camera.ProjectRayOrigin(mouse),direction = _camera.ProjectRayNormal(mouse);
@@ -117,7 +123,8 @@ public partial class Main
         if (cell < 0) { _status.Text = "No walkable space at this point"; return true; }
         _world!.Enqueue(PlayerTeam,[],OrderKind.SetRallyPoint,cell,producer.Id);
         _status.Text = "Rally point set"+(_paused ? " (paused)" : "");
-        _hud.Destination = mouse; _hud.DestinationTime = 0.7f;
+        if (structure is { } hitStructure) ShowStructureCommandFeedback(hitStructure.Id);
+        else ShowGroundCommandFeedback(new(-hit!.Position.X,hit.Position.Y,hit.Position.Z),hit.Ground);
         return true;
     }
 

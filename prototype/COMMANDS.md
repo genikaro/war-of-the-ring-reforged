@@ -7,6 +7,20 @@ remain approximations documented in [combat notes](COMBAT.md).
 
 ## Player controls
 
+Build-101 aligns Fate with the round ornament on the middle arch and removes
+the rectangular hover, pressed and focus frames from Fate and the group strip.
+The selection roster keeps ten portraits per row and two visible rows. More
+than 20 units adds a slim vertical scrollbar; the mouse wheel over the roster
+scrolls its portraits without zooming the camera. Scrolled portraits keep their
+health bars, tooltips and selection modifiers. A new group starts at the top;
+removing units from the same army keeps the current scroll position when possible.
+
+Build-95 places Fate in the console's middle arch. The original orb carries a
+centered 0–20 counter; hovering shows the progress percentage toward the next
+point, or that Fate is full. Click it to open the global-abilities command page.
+Its four disabled slots are placeholders. Back, V, Esc, clicking the orb again,
+or changing selection closes the page and restores the selection's commands.
+
 Select units with a click, drag, or control group. The console now uses the
 original Good faction atlas, portraits, command icons and targeting cursors,
 decoded from source UVA rectangles. It preserves the 1024x212 artwork proportions
@@ -79,7 +93,7 @@ pointer tooltip is hidden over the console. Hero portraits, the observer overvie
 the setup screen keep pointer tooltips.
 
 The console scales uniformly with screen height, clamps to narrow windows and
-stays centered on ultrawide screens. **Menu/F4 → Interface size** adjusts it from 75% to
+stays centered on ultrawide screens. **Menu → Settings → Interface size** adjusts it from 75% to
 150%; the setting persists in `user://interface.cfg`. Resize updates are live.
 Text renders at the display resolution; original bitmap artwork remains at its
 source resolution and is filtered when enlarged.
@@ -96,7 +110,7 @@ supports click recall. Portrait clicks select one unit; Shift-click removes it.
 | --- | --- | --- |
 | Move | M, then left-click | Move in formation. Ignore combat and damage en route. Return to Idle on arrival. |
 | Attack | A, then left-click | Enemy: attack and pursue. Neutral/friendly: force attack. Ground: attack-move, engaging enemies and resuming the destination; with no enemy unit to fight, it razes enemy buildings it passes (within 10 m), then marches on. |
-| Stop | S | Cancel the current order, swing and queued route immediately, then resume default idle guarding from the next tick. |
+| Stop | S | Cancel the current order, swing, cast and waiting orders immediately, then resume default idle guarding from the next tick. A cast stopped before its effect spends no cooldown. |
 | Hold Position | H | Stop at the current position and proactively attack within melee reach. Drop an out-of-range target; never chase or yield. |
 | Guard | G, then friendly unit or terrain | Follow and defend a friendly unit, or defend a fixed location; return after an engagement. |
 | Patrol | T, then terrain | Repeatedly travel between the starting point and destination. Engage enemies and resume the route. |
@@ -109,6 +123,13 @@ left to right. Move and Stop retain their controls without visible buttons.
 Attack-move and force attack are target-dependent results of the one Attack/A
 action; their separate buttons and F/B shortcuts have been removed. The Attack
 button highlights for all three attack outcomes. Esc/right-click cancels targeting.
+
+A casting unit finishes its full ability animation before carrying out a new
+order, even without Shift. The latest replacement wins; later Shift orders
+follow it. Stop cancels the cast and all waiting orders immediately. Cooldown
+starts when the effect applies; stopping after that point keeps the released
+effect and its cooldown. Units still approaching an ability target can accept
+a replacement order immediately.
 
 Shift-click or Shift+right-click queues orders behind unfinished actions. A
 targeted Shift-click keeps targeting active for the next waypoint. Queued squad
@@ -130,12 +151,14 @@ cancels targeting. **Ctrl + right-click now issues Attack-move**, following the
 addendum's default Force-Move behavior. **Ctrl + Alt + right-click** picks terrain
 below bridges. Alt + right-click still toggles obstacles.
 
-Arrow keys and middle-drag pan the camera; Menu buttons rotate and the wheel zooms.
-Camera preset buttons remain in Menu; F1/F2/F3 and Q/E camera shortcuts are removed.
-F4 opens/closes debug tools: live selection/orders, Pause/Resume, a paused
-single-tick step, encounter restart, camera tools and interface sizing. The
-controls guide is collapsed by default; last-action feedback is separate from
-live state. Opening the menu does not pause the simulation. Reserving A/S/H for
+Arrow keys and middle-drag pan the camera; debug tools buttons rotate and the wheel zooms.
+Camera preset buttons remain in the debug tools; F1/F2/F3 and Q/E camera shortcuts are removed.
+F4 or the top-right Debug button opens/closes debug tools: live selection/orders,
+Pause/Resume, a paused single-tick step, encounter restart and camera tools;
+last-action feedback is separate from live state. Opening them does not pause the
+simulation. The console's Menu button opens the game menu instead (build-96): it
+pauses play, and its Settings hold the health bars, interface size and the controls
+guide. Reserving A/S/H for
 orders replaces the old WASD camera and H help bindings. The camera shifts the scene upward while the HUD is visible so
 the encounter stays above the command panel. F10 hides the entire HUD.
 

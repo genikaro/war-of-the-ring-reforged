@@ -111,7 +111,7 @@ public static class AiChecks
             for (int i = 0; i < 1200; i++) { w.Step(); most = Math.Max(most,w.Units.Count(u => u.Team == 1 && u.Order is OrderKind.Build or OrderKind.PlaceBuilding)); }
             return most;
         })];
-        check(crews.SequenceEqual([1,2,3]),"Easy, Normal and Hard put 1, 2 and 3 builders on a project: "+string.Join('/',crews));
+        check(crews.SequenceEqual([1,2,2]),"Easy uses one builder; Normal and Hard use two per project: "+string.Join('/',crews));
         var tests = new AiPersonality("test","Test",1,50,50,50,50,true,true);
         AiProfile farmer = AiProfile.For(tests,new(0,100,0)),scholar = AiProfile.For(tests,new(0,0,100)),balanced = AiProfile.For(tests,AiStyle.Balanced);
         check(farmer.Workers == 16 && scholar.Workers == 10 && farmer.ExpansionTicks < balanced.ExpansionTicks && balanced.ExpansionTicks < scholar.ExpansionTicks
@@ -725,7 +725,7 @@ public static class AiChecks
         check(cheap.Units.FirstOrDefault(u => u.Team == 1 && u.Definition.Name is "soldier" or "knight")?.Definition.Name == "soldier",
             "a Rusher trains the cheaper soldier where the others train the knight: "+cheap.AiPlayers[1].Status);
 
-        // Defender: two towers by its keep, and no third.
+        // Defender: at least two towers, with more as its completed base grows (build-117).
         var walls = Fixture(); walls.AiPlayers[1] = Bot(1,50,traits: [AiTrait.Defender]); walls.Economies[1] = new(5000,5000);
         walls.PlaceableBuildings.Add("tower");
         walls.BuildingRules.Add("tower",new("tower","tower",null,0,60,60,300,750000,750000,100000,50000,["keep"]));
@@ -733,7 +733,8 @@ public static class AiChecks
         walls.AiBuildings.Add("tower",new("DEFENSIVE",true,-1,true));
         Step(walls,9000);
         int towers = walls.ConstructionSites.Values.Count(s => s.Team == 1 && s.Building == "tower" && s.Health > 0);
-        check(towers == 2,$"a Defender keeps two towers by its keep: {towers} ({walls.AiPlayers[1].Status})");
+        int towerGoal = walls.AiTowerTarget(walls.AiPlayers[1],walls.ConstructionSites[Keep1]);
+        check(towers >= 2 && towers == towerGoal,$"a Defender keeps the growing base's tower budget: {towers}/{towerGoal} ({walls.AiPlayers[1].Status})");
 
         // Relentless: a party of two in eight does not fall back.
         var stubborn = Fixture(); stubborn.AiPlayers[1] = Bot(1,50,traits: [AiTrait.Relentless]);

@@ -1,7 +1,13 @@
 namespace Reforged.Simulation;
 
-public enum OrderKind { Idle, Move, Attack, AttackMove, Stop, HoldGround, Guard, Patrol, ForceAttack, ToggleWalkRun, UseAbility, Gather, Build, CancelConstruction, Train, CancelTraining, SetRallyPoint, PlaceBuilding, AttackStructure, SetRallyResource, Upgrade, CancelUpgrade, Research, CancelResearch }
-public sealed record PendingOrder(OrderKind Kind,int Cell,int Target,int Sequence);
+public enum OrderKind { Idle, Move, Attack, AttackMove, Stop, HoldGround, Guard, Patrol, ForceAttack, ToggleWalkRun, UseAbility, Gather, Build, CancelConstruction, Train, CancelTraining, SetRallyPoint, PlaceBuilding, AttackStructure, SetRallyResource, Upgrade, CancelUpgrade, Research, CancelResearch, ApproachStructure, ReturnCargo, SetHerbsTargeting, PurchaseAbility, UseGlobalPower, UsePlacePower }
+public sealed record PendingOrder(OrderKind Kind,int Cell,int Target,int Sequence,int AbilitySlot = 0,int? TargetX = null,int? TargetZ = null)
+{
+    public static PendingOrder From(SimCommand command)
+        => new(command.Kind,command.Cell,command.Target,command.Sequence,command.AbilitySlot,command.TargetX,command.TargetZ);
+    public SimCommand Command(int tick,int team,int[] units)
+        => new(tick,Sequence,team,units,Cell,Target,Kind,AbilitySlot:AbilitySlot,TargetX:TargetX,TargetZ:TargetZ);
+}
 
 public sealed partial class SimWorld
 {
@@ -55,23 +61,37 @@ public sealed partial class SimWorld
     private static bool HoldableOrder(OrderKind kind) => kind is OrderKind.Stop or OrderKind.Move or OrderKind.AttackMove or OrderKind.Attack
         or OrderKind.AttackStructure;
     private static bool UnitOrder(OrderKind kind) => HoldableOrder(kind) || kind is OrderKind.ForceAttack or OrderKind.Patrol or OrderKind.Guard
-        or OrderKind.HoldGround or OrderKind.Gather or OrderKind.Build or OrderKind.PlaceBuilding or OrderKind.UseAbility;
+        or OrderKind.HoldGround or OrderKind.Gather or OrderKind.Build or OrderKind.PlaceBuilding or OrderKind.UseAbility
+        or OrderKind.ApproachStructure or OrderKind.ReturnCargo;
 
     /// <summary>Applies an order from outside the simulation step (a player's or a bot's). Bot orders are patient
-    /// (build-50): any order cancels the swing under way, and a bot re-deciding twice a second cancelled swings before
-    /// they landed, so a patient order waits on each unit whose swing has not dealt its damage yet, at most one swing,
-    /// and applies the tick after. Every other order applies at once and drops an order still waiting.</summary>
+    /// (build-50): they wait for a swing's damage. All replacement orders except Stop also wait for a cast's full
+    /// animation (build-103). The latest replacement wins; subsequent Shift orders follow it. Stop cancels both.</summary>
     private void Dispatch(SimCommand command)
     {
-        if (UnitOrder(command.Kind) && !command.Queued)
+        if (UnitOrder(command.Kind))
         {
             var now = new List<int>();
             foreach (int id in command.Units)
             {
                 if (id < 0 || id >= Units.Count || Units[id].Team != command.Team) { now.Add(id); continue; }
                 var unit = Units[id];
+                // Explicit Herbs can redirect an automatic wind-up before its heal applies.
+                if (unit.RedirectableHerbs && command.Kind == OrderKind.UseAbility
+                    && unit.Ability(command.AbilitySlot) is { Kind:AbilityKind.HealingHerbs } herbs
+                    && command.Target >= 0 && command.Target < Units.Count && ValidAbilityTarget(unit,herbs,Units[command.Target])
+                    && Nav(unit).IsConnected(unit.Node,Units[command.Target].Node)) CancelAutomaticHerbs(unit);
+                if (unit.Present && unit.Casting && command.Kind != OrderKind.Stop)
+                {
+                    if (!command.Queued || command.Kind == OrderKind.HoldGround)
+                    { unit.HeldOrder = PendingOrder.From(command); unit.OrderQueue.Clear(); continue; }
+                    if (command.Kind == OrderKind.UseAbility)
+                    { unit.OrderQueue.Add(PendingOrder.From(command)); continue; }
+                }
+                if (command.Queued && command.Kind is not (OrderKind.Stop or OrderKind.HoldGround))
+                { now.Add(id); continue; }
                 if (command.Patient && HoldableOrder(command.Kind) && unit.Present && SwingPending(unit))
-                { unit.HeldOrder = new(command.Kind,command.Cell,command.Target,command.Sequence); continue; }
+                { unit.HeldOrder = PendingOrder.From(command); unit.OrderQueue.Clear(); continue; }
                 unit.HeldOrder = null; now.Add(id);
             }
             if (now.Count == 0) return;
@@ -82,21 +102,23 @@ public sealed partial class SimWorld
 
     private void ReleaseHeldOrders()
     {
-        foreach (var unit in Units)
+        var ready = ActiveUnits.Where(u => u.HeldOrder != null && (!u.Present || !u.Casting && !SwingPending(u)))
+            .GroupBy(u => (u.Team,Order: u.HeldOrder!)).ToArray();
+        foreach (var group in ready)
         {
-            if (unit.HeldOrder is not { } held || unit.Present && SwingPending(unit)) continue;
-            unit.HeldOrder = null;
-            if (unit.Present) Apply(new(Tick,held.Sequence,unit.Team,[unit.Id],held.Cell,held.Target,held.Kind));
+            foreach (var unit in group) unit.HeldOrder = null;
+            int[] ids = group.Where(u => u.Present).Select(u => u.Id).ToArray();
+            if (ids.Length > 0) Apply(group.Key.Order.Command(Tick,group.Key.Team,ids),activating: true);
         }
     }
 
     private void ActivateQueuedOrders()
     {
-        foreach (var unit in Units.Where(u => u.Present && u.Order == OrderKind.Idle))
+        foreach (var unit in ActiveUnits.Where(u => u.Present && u.Order == OrderKind.Idle))
             while (unit.Order == OrderKind.Idle && unit.OrderQueue.Count > 0)
             {
                 var next = unit.OrderQueue[0]; unit.OrderQueue.RemoveAt(0);
-                Apply(new(Tick,next.Sequence,unit.Team,[unit.Id],next.Cell,next.Target,next.Kind),activating: true);
+                Apply(next.Command(Tick,unit.Team,[unit.Id]),activating: true);
             }
     }
 
@@ -113,7 +135,7 @@ public sealed partial class SimWorld
             PlanOrderRoute(unit,unit.OrderDestination); return;
         }
         // An attack-move standing at a building it razes has not reached its destination.
-        if (unit.Order is OrderKind.Guard or OrderKind.ForceAttack or OrderKind.Gather or OrderKind.Build or OrderKind.PlaceBuilding
+        if (unit.Order is OrderKind.Guard or OrderKind.ForceAttack or OrderKind.Gather or OrderKind.Build or OrderKind.PlaceBuilding or OrderKind.ApproachStructure or OrderKind.ReturnCargo
             || unit.Order==OrderKind.AttackMove && unit.SiteTarget>=0) return;
         CompleteTravelOrder(unit);
     }
@@ -149,7 +171,7 @@ public sealed partial class SimWorld
         unit.GuardPlanTick = Tick;
         if (DistanceSquared(unit.X,unit.Z,anchor.X,anchor.Z) <= 3000L*3000) return;
         var reserved = OccupiedNodes(unit.Id);
-        reserved.UnionWith(Units.Where(u => u.Id != unit.Id && u.Present && u.Goal >= 0).Select(u => u.Goal));
+        reserved.UnionWith(ActiveUnits.Where(u => u.Id != unit.Id && u.Present && u.Goal >= 0).Select(u => u.Goal));
         int goal = Nav(unit).FormationSlot(anchor.Node,reserved);
         if (goal >= 0 && (goal != unit.Goal || unit.Path.Count == 0)) { unit.OrderDestination = goal; PlanOrderRoute(unit,goal); }
     }
@@ -157,7 +179,7 @@ public sealed partial class SimWorld
     private bool MayAcquire(SimUnit unit,SimUnit enemy,bool flank=false)
     {
         // The Ring-bearer neither picks fights nor can be found by enemies; a training dummy picks none.
-        if (unit.RingActive || enemy.RingActive || unit.Definition.Passive) return false;
+        if (unit.RingActive || unit.Concealed || !CanSeeUnit(unit.Team,enemy) || unit.Definition.Passive) return false;
         if (!MayInterruptSiege(unit,enemy)) return false;
         if (IdleGuardEnabled(unit)) return IdleGuardMayAcquire(unit,enemy);
         if (unit.Order==OrderKind.AttackMove && unit.Definition.BodyRadiusMm>350)
@@ -224,8 +246,9 @@ public sealed partial class SimWorld
         // A force move keeps its destination even when struck. A stationary
         // order can return blows within reach, but can never start a pursuit.
         // A force attack never provokes its victim: only the owner's own order turns friendly units on each other.
-        if (attacker.Order == OrderKind.ForceAttack || attacker.Team == victim.Team || victim.Definition.Passive) return;
-        if (!victim.Present || victim.Order is OrderKind.Move or OrderKind.UseAbility or OrderKind.Gather or OrderKind.Build or OrderKind.PlaceBuilding
+        if (attacker.Order == OrderKind.ForceAttack || attacker.Team == victim.Team || victim.Definition.Passive
+            || victim.Concealed || !CanSeeUnit(victim.Team,attacker)) return;
+        if (!victim.Present || victim.Order is OrderKind.Move or OrderKind.UseAbility or OrderKind.Gather or OrderKind.Build or OrderKind.PlaceBuilding or OrderKind.ApproachStructure or OrderKind.ReturnCargo
             or OrderKind.AttackStructure || victim.AttackMoveReturning) return;
         if (HoldsPosition(victim) && !AttackReach(victim,victim.Node,victim.X,victim.Y,victim.Z,attacker)) return;
         victim.AutoEngage = !HoldsPosition(victim);

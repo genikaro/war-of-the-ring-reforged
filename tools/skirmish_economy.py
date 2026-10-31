@@ -8,6 +8,7 @@ from decimal import Decimal, ROUND_CEILING
 from pathlib import Path
 
 import lsk
+import skirmish_map
 from resolve_model import Resolver
 from wor import ROOT
 
@@ -55,8 +56,7 @@ def worker_animations(resolver, name):
     return gather_animations(model, {clip.name: clip.duration for clip in skeleton.clips})
 
 
-def economy_data(resolver):
-    worker = resolver.db['Units'].get('UNIT_G_HUMAN_WORKER')
+def economy_data(resolver, factions=('good', 'evil')):
     variables = resolver.db['WorldVariables'].records[0]
     sources = {}
     for name in ('OBJECT_RESOURCE_ORE_PILE', 'OBJECT_RESOURCE_FOOD_WELL'):
@@ -69,9 +69,12 @@ def economy_data(resolver):
             # No open-ground building within this distance of the resource (build-42).
             'building_clearance_mm': round(record['MinBuildingPlacementRadius'] * 1000)}
     return {'format_version': 2, 'ticks_per_second': 20,
-            'workers': {'UNIT_G_HUMAN_WORKER': {'food_capacity': worker['MaxCarriedFood'], 'ore_capacity': worker['MaxCarriedOre'],
-                                                'raw_ore_load': RAW_ORE_LOAD, 'inside_ticks': INSIDE_TICKS,
-                                                'animations': worker_animations(resolver, 'UNIT_G_HUMAN_WORKER')}},
+            # Build-133: the Goblin Slave gathers as the Good worker does, with its own carry capacity and clips.
+            'workers': {name: {'food_capacity': resolver.db['Units'].get(name)['MaxCarriedFood'],
+                               'ore_capacity': resolver.db['Units'].get(name)['MaxCarriedOre'],
+                               'raw_ore_load': RAW_ORE_LOAD, 'inside_ticks': INSIDE_TICKS,
+                               'animations': worker_animations(resolver, name)}
+                        for name in [faction['worker'] for key, faction in skirmish_map.FACTIONS.items() if key in factions]},
             'food_capacity': variables['DefaultInitialFoodCapacity'], 'ore_capacity': variables['DefaultInitialOreCapacity'],
             'sources': sources,
             'adapter': 'Owner-defined trips: a raw ore pile yields one ore per pickaxe hit (source gather clip and its '

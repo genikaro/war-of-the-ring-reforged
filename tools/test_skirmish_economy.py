@@ -26,7 +26,7 @@ class EconomyImportTests(unittest.TestCase):
                                         'OBJECT_RESOURCE_FOOD_WELL': {'ResourceGatherRateRaw': 0, 'MaxGatherPercentageRaw': 0,
                                              'ResourceGatherRateWithBuilding': .4, 'MaxGatherPercentageWithBuilding': 1, 'MinBuildingPlacementRadius': 7.5}})}
         with mock.patch.object(skirmish_economy, 'worker_animations', return_value={'mine': 'clips'}):
-            data = skirmish_economy.economy_data(FakeResolver())
+            data = skirmish_economy.economy_data(FakeResolver(), ('good',))
         self.assertEqual(data['workers']['UNIT_G_HUMAN_WORKER'], {'food_capacity': 13, 'ore_capacity': 7, 'raw_ore_load': 5,
                                                                   'inside_ticks': 40, 'animations': {'mine': 'clips'}})
         self.assertEqual(data['sources']['ore'], {'rate_milli_per_tick': 30, 'raw_fraction_ppm': 250000,

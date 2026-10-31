@@ -33,7 +33,7 @@ def in_place(gltf, binary, center_pivot=False):
         channels = {c['target']['node']: c for c in animation['channels'] if c['target']['path'] == 'translation'}
         for skin in gltf.get('skins', []):
             joints = set(skin['joints'])
-            markers = [j for j in skin['joints'] if gltf['nodes'][j].get('name', '').replace('_', '').replace(' ', '').lower() == 'jposition']
+            markers = [j for j in skin['joints'] if gltf['nodes'][j].get('name', '').replace('_', '').replace(' ', '').lower() in ('jposition', 'jpositional')]
             if not markers or (not center_pivot and markers[0] not in channels):
                 continue
             marker = markers[0]
@@ -71,7 +71,7 @@ def in_place(gltf, binary, center_pivot=False):
     if center_pivot:
         for skin in gltf.get('skins', []):
             joints = set(skin['joints'])
-            marker = next((j for j in joints if gltf['nodes'][j].get('name','').replace('_','').replace(' ','').lower() == 'jposition'), None)
+            marker = next((j for j in joints if gltf['nodes'][j].get('name','').replace('_','').replace(' ','').lower() in ('jposition', 'jpositional')), None)
             if marker is None: continue
             pivot = gltf['nodes'][marker].get('translation',[0,0,0])[:]
             for root in [j for j in joints if parents.get(j) not in joints]:

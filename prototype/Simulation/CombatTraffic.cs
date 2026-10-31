@@ -10,12 +10,12 @@ public sealed partial class SimWorld
 
     private void MonitorCombatTraffic()
     {
-        foreach(var unit in Units)
+        foreach (var unit in ActiveUnits)
         {
             if (!unit.Present || unit.Target<0 || unit.Attacking || HoldsPosition(unit)
                 || unit.Definition.BodyRadiusMm<=350 || unit.Node>=Navigation.GroundCount
                 || unit.TransitNode>=0 && !unit.GroundSegment || unit.Order is OrderKind.Move or OrderKind.Gather or OrderKind.Build
-                    or OrderKind.PlaceBuilding or OrderKind.AttackStructure or OrderKind.UseAbility)
+                    or OrderKind.PlaceBuilding or OrderKind.AttackStructure or OrderKind.UseAbility or OrderKind.ApproachStructure or OrderKind.ReturnCargo)
             { ResetCombatTraffic(unit); continue; }
             var first=unit.Movement[0];
             unit.CombatMotionTravel+=IntegerMotion.Length(unit.X-first.X,0,unit.Z-first.Z)/1000;

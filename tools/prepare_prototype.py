@@ -25,6 +25,7 @@ import prototype_navigation
 import prototype_obstacles
 import prototype_interface
 import combat_rules
+import game_audio
 import sandbox_map
 from lms2gltf import convert_model
 from resolve_model import Resolver
@@ -136,7 +137,7 @@ def export_units(output, resolver, roster=None):
             return next((c for c in clips if all(t.lower() in c.lower() for t in terms)), '')
         models.append({'unit': unit_name, 'file': 'units/' + target.name,
                        'in_place_locomotion': locomotion,
-                       'idle': clip('Idle_01'), 'walk': clip('Run'),
+                       'idle': clip('Idle_01'), 'walk': clip('Run') or clip('Walk'),
                        'attack': clip('Attack', '01'), 'death': clip('Death') or clip('Defeated')})
     return models
 
@@ -179,7 +180,7 @@ def open_resolver(output, install=None):
         if not (db_path / 'Models.lqr').is_file():
             raise ValueError('installation has no Database/Models.lqr')
         for name in ['Cloths', 'Effects', 'Levels', 'Materials', 'Meshes', 'MeshPathLookups',
-                     'Models', 'Projectiles', 'Skeletons', 'SoundEffects', 'TerrainSets', 'TextureAnimations', 'Textures', 'UVAs', 'Weights']:
+                     'Models', 'Projectiles', 'Skeletons', 'SoundEffects', 'SpeechFX', 'Music', 'TerrainSets', 'TextureAnimations', 'Textures', 'UVAs', 'Weights']:
             source = install / 'Archives' / (name + '.H2O')
             # Validate paths before using the archive extractor.
             archive = h2o.H2OArchive(str(source))
@@ -268,14 +269,17 @@ def finish_cache(output, resolver, manifest, models, extra_files=()):
     """Interface art, combat rules, body clearance, hashes and the file index."""
     prototype_interface.export(output, resolver)
     combat_rules.export(output, resolver, roster=[m['unit'] for m in models])
+    game_audio.export(output, resolver, roster=[m['unit'] for m in models])
     import prototype_clearance
     prototype_clearance.refresh(output)
     manifest['interface'] = 'interface/index.json'
     manifest['combat_rules'] = 'combat/rules.json'
+    manifest['audio'] = 'audio/index.json'
     files = [output / 'map/scene.glb', output / 'navigation.json', output / 'heights.bin'] + [output / m['file'] for m in models]
     files += [output / f for f in extra_files]
     files += sorted((output / 'interface').glob('*'))
     files += [p for p in sorted((output/'combat').rglob('*')) if p.is_file()]
+    files += [p for p in sorted((output/'audio').rglob('*')) if p.is_file()]
     manifest['files'] = {str(p.relative_to(output)).replace('\\', '/'): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     index = [{'unit': manifest['name'], 'file': manifest['map'], 'clips': []}]
@@ -311,7 +315,8 @@ def prepare(output, install=None):
     return manifest
 
 
-SKIRMISH_ROSTER = combat_rules.UNITS + skirmish_map.SKIRMISH_UNITS
+# The summoned giants of the Fate powers (the Giant Ent, the Balrog) are in the roster but no building trains them.
+SKIRMISH_ROSTER = list(dict.fromkeys(combat_rules.UNITS + skirmish_map.SKIRMISH_UNITS + ['UNIT_G_GIANT_ENT', 'UNIT_E_HERO_BALROG']))
 CITADEL_OBJECT_BASE = 10000
 
 

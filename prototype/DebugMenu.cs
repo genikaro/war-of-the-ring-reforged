@@ -4,10 +4,10 @@ public partial class Main
 {
     private PanelContainer _toolsPanel = null!;
     private readonly Dictionary<string,Button> _cameraButtons = [];
-    private HSlider _hudScale = null!;
-    private Label _debugSummary = null!, _debugSelection = null!, _help = null!;
+    private Label _debugSummary = null!, _debugSelection = null!;
     private Button _debugPause = null!, _debugStep = null!, _debugFocus = null!, _debugGrant = null!, _setupButton = null!;
     private CheckButton _debugInstant = null!;
+    private DebugToggle _debugToggle = null!;
     private const int CheatGrant = 1000;
     /// <summary>Fate the cheat grants: enough for a Fate hero (3-4) twice over.</summary>
     private const int CheatFate = 10;
@@ -28,7 +28,11 @@ public partial class Main
 
     private void CreateDebugMenu()
     {
+        // The tools have their own button at the top right (build-96); the console's Menu button opens the game menu.
+        _debugToggle = new DebugToggle { TooltipText = "Debug tools" }; _debugToggle.Pressed += ToggleDebugMenu;
+        _hud.AddChild(_debugToggle);
         _toolsPanel = new PanelContainer { Position = new(16,16), Visible = false };
+        _toolsPanel.VisibilityChanged += () => _debugToggle.SetPressedNoSignal(_toolsPanel.Visible);
         _toolsPanel.AddThemeStyleboxOverride("panel", new StyleBoxFlat {
             BgColor = new Color(.035f,.055f,.07f,.97f), ContentMarginLeft = 16, ContentMarginRight = 16,
             ContentMarginTop = 12, ContentMarginBottom = 12, CornerRadiusTopLeft = 8, CornerRadiusBottomRight = 8 });
@@ -49,7 +53,7 @@ public partial class Main
         _debugPause = DebugButton("Pause",() => SetPaused(!_paused)); session.AddChild(_debugPause);
         _debugStep = DebugButton("Step one tick",() => { if (_paused) _singleStepRequested = true; });
         _debugStep.TooltipText = "Advance the paused simulation by one 50 ms tick."; session.AddChild(_debugStep);
-        session.AddChild(DebugButton("Restart encounter",() => GetTree().ReloadCurrentScene()));
+        session.AddChild(DebugButton("Restart encounter",() => _ = ReloadWithAudio()));
         _setupButton = DebugButton("Skirmish setup",ReturnToSetup); _setupButton.TooltipText = "Back to the setup screen, keeping this match's choices.";
         session.AddChild(_setupButton);
         body.AddChild(new HSeparator()); body.AddChild(DebugText("Camera"));
@@ -87,18 +91,6 @@ public partial class Main
             _status.Text = on ? "Cheat: instant building and training on" : "Cheat: instant building and training off";
         };
         cheats.AddChild(_debugInstant);
-        body.AddChild(new HSeparator()); body.AddChild(DebugText("Interface size"));
-        var sizing = new HBoxContainer(); body.AddChild(sizing);
-        _hudScale = new HSlider { MinValue = 75,MaxValue = 150,Step = 5,Value = 100,
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        sizing.AddChild(_hudScale);
-        var valueLabel = new Label { Text = "100%", CustomMinimumSize = new(48,0) }; sizing.AddChild(valueLabel);
-        _hudScale.ValueChanged += value => { _commands.SetScalePercent(value); valueLabel.Text = $"{value:0}%"; };
-        sizing.AddChild(DebugButton("Reset",() => _hudScale.Value = 100));
-        var controls = new Button { Text = "Show controls", FocusMode = Control.FocusModeEnum.None }; body.AddChild(controls);
-        _help = DebugText("Selection: click or drag; Shift-click adds/removes; Shift-drag adds.\nDouble-click or Ctrl-click selects all living units of the same type and team.\nGroups: Ctrl+number assigns, Shift+number adds, number recalls, double-tap centers.\nOrders: A Attack, M Move, S Stop, H Hold Position, G Guard, T Patrol. Shift-click queues.\nMovement: F2 toggles global Walk / Run for your army without replacing orders.\nRight-click: move / attack; Ctrl adds attack-move. Esc or right-click cancels targeting.\nCamera: arrows or middle-drag pan; wheel zooms.\nTesting: Space pauses, Alt+right-click toggles an obstacle, Ctrl+Alt+right-click targets terrain beneath a bridge. F10 hides the interface.");
-        _help.Visible = false; body.AddChild(_help);
-        controls.Pressed += () => { _help.Visible = !_help.Visible; controls.Text = _help.Visible ? "Hide controls" : "Show controls"; };
         body.AddChild(new HSeparator()); body.AddChild(DebugText("Last action"));
         _status = DebugText("Loading assets…"); body.AddChild(_status);
     }
@@ -113,6 +105,7 @@ public partial class Main
     private void SetPaused(bool paused)
     {
         _paused = paused; _singleStepRequested = false;
+        _audio.SetWorldPaused(paused);
         if (_world == null) return;
         foreach (var (id,view) in _views)
             if (view.Player != null) view.Player.SpeedScale = paused || _world.Units[id].StrikeActive || _world.Units[id].Casting ? 0 : 1;
@@ -144,6 +137,5 @@ public partial class Main
             string.Join(" · ",units.GroupBy(u => u.Order).Select(g => $"{CommandPanel.OrderName(g.Key)} ×{g.Count()}"));
         _debugPause.Text = _paused ? "Resume" : "Pause";
         _debugFocus.Disabled = units.Length == 0;
-        _hudScale.SetValueNoSignal(_commands.ScalePercent);
     }
 }

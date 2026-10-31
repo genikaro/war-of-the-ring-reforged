@@ -12,6 +12,8 @@ public partial class BattleMinimap : Control
     /// <summary>Ground corners of the battlefield view in map millimetres.</summary>
     public Vector2[] View { get; set; } = [];
     public bool Dragging { get; private set; }
+    /// <summary>The viewing player; a negative value observes both teams.</summary>
+    public int ViewerTeam { get; set; }
     /// <summary>Each player slot's colour; unit dots draw a lighter shade of it.</summary>
     public Color[] TeamColors { get; set; } = [];
     public IReadOnlyList<(Texture2D Icon,float X,float Z)> Markers => _markers;
@@ -80,11 +82,13 @@ public partial class BattleMinimap : Control
             DrawColoredPolygon(outline,complete ? color : color with { A = .5f });
             DrawPolyline([..outline,outline[0]],color.Darkened(.55f),1);
         }
-        foreach (var unit in _world.Units.Where(u => u.Present))
+        foreach (var unit in VisibleUnits())
             DrawRect(new Rect2(MapPoint(unit.X,unit.Z)-new Vector2(1.5f,1.5f),new(3,3)),unit.Team >= 0 && unit.Team < TeamColors.Length ? TeamColors[unit.Team].Lightened(.25f) : new Color("ded2a5"));
         if (View.Length > 2) DrawPolyline([..View.Select(p => MapPoint(p.X,p.Y)),MapPoint(View[0].X,View[0].Y)],Colors.White,1.5f);
         DrawRect(new(Vector2.Zero,Size),new Color("c4aa6e"),false,1);
     }
+
+    public IEnumerable<SimUnit> VisibleUnits() => _world!.Units.Where(u => u.Present && _world.CanSeeUnit(ViewerTeam,u));
 
     public override void _GuiInput(InputEvent input)
     {

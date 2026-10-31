@@ -14,7 +14,7 @@ public sealed partial class SimWorld
         for (int i = 0; i < threats.Length; i++)
         {
             var enemy = threats[i];
-            int outside = Units.Count(u => u.Present && u.Team == ai.Team && !available.Contains(u.Id) && Answering(u,enemy.Id));
+            int outside = ActiveUnits.Count(u => u.Present && u.Team == ai.Team && !available.Contains(u.Id) && Answering(u,enemy.Id));
             int fair = (available.Count+threats.Length-i-1)/(threats.Length-i);
             int quota = Math.Min(fair,Math.Max(0,ThreatResponseLimit(enemy)-outside));
             var response = soldiers.Where(u => available.Contains(u.Id))
@@ -45,8 +45,8 @@ public sealed partial class SimWorld
     private bool AiRecallDefenders(AiPlayer ai,(int X,int Z)[] buildings,ref SimUnit[] home)
     {
         ai.HomeDefenders.RemoveWhere(id => !Units[id].Present);
-        var attackers = Units.Where(u => u.Team != ai.Team && u.Present && !u.RingActive && AiAttacksAssets(ai,u,buildings)).ToArray();
-        bool holding = Units.Any(e => e.Team != ai.Team && e.Present && AttackingUnit(e,ai.Team) && ai.HomeDefenders.Contains(e.Target));
+        var attackers = ActiveUnits.Where(u => u.Team != ai.Team && u.Present && CanSeeUnit(ai.Team,u) && AiAttacksAssets(ai,u,buildings)).ToArray();
+        bool holding = ActiveUnits.Any(e => e.Team != ai.Team && e.Present && AttackingUnit(e,ai.Team) && ai.HomeDefenders.Contains(e.Target));
         if (attackers.Length > 0 || holding) ai.HomeDefenseUntil = Tick+RecentThreatTicks;
         if (Tick > ai.HomeDefenseUntil)
         { ai.HomeDefenders.Clear(); return false; }

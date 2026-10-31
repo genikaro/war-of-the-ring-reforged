@@ -18,7 +18,7 @@ public partial class Main
     private void ApplySetup(SkirmishSetup setup)
     {
         _cache = setup.Cache; _observing = setup.Human < 0; _humanTeam = Math.Max(0,setup.Human);
-        _bots = setup.Bots; _speed = setup.Speed; _matchSeed = setup.Seed;
+        _bots = setup.Bots; _speed = setup.Speed; _matchSeed = setup.Seed; _factions = setup.Factions ?? [];
         _closedTeams.Clear(); _closedTeams.UnionWith(setup.Closed);
     }
 
@@ -29,9 +29,12 @@ public partial class Main
         _setupScreen = new SetupScreen { ConvertedPath = ProjectSettings.GlobalizePath("res://../converted"),
             SourcesPath = ProjectSettings.GlobalizePath("res://../extracted/Levels/Multiplayer"),Speeds = Speeds,Previous = _lastSetup };
         layer.AddChild(_setupScreen);
+        _audio.Load(ProjectSettings.GlobalizePath("res://../converted/content/good/audio/index.json"));
+        _audio.PlayMusic(Reforged.Presentation.MusicContext.Menu);
+        _audio.HookControls(_setupScreen);
         layer.AddChild(new BuildOverlay());
         _setupScreen.Started += setup => _ = StartSetupMatch(setup);
-        _setupScreen.QuitChosen += () => GetTree().Quit();
+        _setupScreen.QuitChosen += () => _ = FinishCombatAudio(0);
     }
 
     /// <summary>Shows "Loading" for a frame, then reloads into the chosen match.</summary>
@@ -42,14 +45,14 @@ public partial class Main
         // Two frames: the first draws the loading line (headless runs draw nothing, so no draw signal is awaited).
         await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
         await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
-        GetTree().ReloadCurrentScene();
+        await ReloadWithAudio();
     }
 
     /// <summary>Back to the setup screen from a match started there; the screen starts from that match's choices.</summary>
     private void ReturnToSetup()
     {
         _chosenSetup = null;
-        GetTree().ReloadCurrentScene();
+        _ = ReloadWithAudio();
     }
 
     private bool SlotOpen(int team) => !_closedTeams.Contains(team);

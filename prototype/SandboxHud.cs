@@ -3,8 +3,6 @@ using Godot;
 public partial class SandboxHud : Control
 {
     public Rect2? SelectionBox;
-    public Vector2 Destination;
-    public float DestinationTime;
     /// <summary>Screen-space legs between queued order points, and pennants where no flag model is loaded.</summary>
     public readonly List<(Vector2 From,Vector2 To,Color Color)> Waypoints = [];
     public readonly List<Vector2> WaypointMarks = [];
@@ -26,6 +24,5 @@ public partial class SandboxHud : Control
             DrawRect(rect, new Color(0.2f, 0.85f, 0.65f, 0.1f));
             DrawRect(rect, new Color("63ddba"), false, 1.5f);
         }
-        if (DestinationTime > 0) DrawArc(Destination, 12, 0, Mathf.Tau, 24, new Color("d8b574"), 2);
     }
 }

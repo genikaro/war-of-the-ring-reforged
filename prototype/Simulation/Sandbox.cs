@@ -55,7 +55,7 @@ public sealed partial class SimWorld
         var start = StartStructures.First(s => s.Team == team);
         var missing = new List<string>();
         foreach (var site in ConstructionSites.Values.Where(s => s.Team == team && s.Complete).ToArray()) PromoteFully(site);
-        foreach (string building in PlaceableBuildings.Where(b => !HasBuilding(team,b)).ToArray())
+        foreach (string building in PlaceableBuildings.Where(b => FactionOfName(b) == FactionOf(team) && !HasBuilding(team,b)).ToArray())
         {
             int cell = SandboxSpot(start.X,start.Z,building);
             if (cell < 0) { missing.Add(building); continue; }
@@ -64,11 +64,11 @@ public sealed partial class SimWorld
             CompleteBuilding(site,exitAnchor);
             PromoteFully(site);
         }
-        foreach (var rules in ConstructionRules.Values.Where(r => !HasBuilding(team,r.Name)))
+        foreach (var rules in ResourceRulesOf(team).Select(p => p.Value).Where(r => !HasBuilding(team,r.Name)))
         {
             var site = ConstructionSites.Values.Where(s => s.Building == null && s.Team < 0 && Resources[s.Resource].Kind == rules.Kind
                     && Resources[s.Resource].RemainingMilli > 0
-                    && !Units.Any(u => u.Present && Nav(u).ObstacleCoversGroundBody(s.Obstacle,u.X,u.Z)))
+                    && !ActiveUnits.Any(u => u.Present && Nav(u).ObstacleCoversGroundBody(s.Obstacle,u.X,u.Z)))
                 .OrderBy(s => DistanceSquared(start.X,start.Z,Resources[s.Resource].X,Resources[s.Resource].Z)).ThenBy(s => s.Id).FirstOrDefault();
             if (site == null) { missing.Add(rules.Name); continue; }
             site.Team = team; Finish(site);

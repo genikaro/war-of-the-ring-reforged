@@ -20,6 +20,7 @@ public sealed partial class SimWorld
     /// <summary>Forms, steers or ends the place squad; returns the home soldiers left after it took its members.</summary>
     private SimUnit[] AiCapturePlaces(AiPlayer ai,SimUnit[] home,int bx,int bz,bool threatened)
     {
+        AiPlacePowers(ai);
         ai.PlaceSquad.RemoveAll(id => !Units[id].Present || AiTrapped(Units[id]));
         if (PlacesOfPower.Count == 0) return home;
         if (ai.PlaceSquad.Count == 0)
@@ -50,7 +51,7 @@ public sealed partial class SimWorld
             return home;
         }
         // Every enemy in the zone, workers too, keeps the place from changing hands: each idle member attacks the nearest one.
-        var inside = Units.Where(u => u.Present && u.Team >= 0 && u.Team != ai.Team && !u.RingActive
+        var inside = ActiveUnits.Where(u => u.Present && u.Team >= 0 && u.Team != ai.Team && CanSeeUnit(ai.Team,u)
             && DistanceSquared(u.X,u.Z,place.X,place.Z) <= (long)place.RadiusMm*place.RadiusMm).ToArray();
         foreach (var member in squad.Where(AiIdle))
         {
@@ -97,5 +98,21 @@ public sealed partial class SimWorld
             return true;
         }
         return false;
+    }
+
+    private void AiPlacePowers(AiPlayer ai)
+    {
+        if (!ai.Personality.UsesSpecialAbilities) return;
+        foreach (var place in PlacesOfPower.Where(p => p.Owner == ai.Team && CanUsePlacePower(ai.Team,p.Id,out _)))
+        {
+            var power = PlacePowers[place.Type];
+            var target = ActiveUnits.Where(u => u.Present && u.Team >= 0 && u.Team != ai.Team
+                && CanSeeUnit(ai.Team,u)
+                && (power.Kind != "Willow" || u.WillowUntil <= Tick)
+                && (power.RangeMm <= 0 || DistanceSquared(place.X,place.Z,u.X,u.Z) <= (long)power.RangeMm*power.RangeMm)
+                && ActiveUnits.Any(a => a.Team == ai.Team && a.Present && SeparationSquared(a,u) <= 25000L*25000))
+                .OrderBy(u => DistanceSquared(place.X,place.Z,u.X,u.Z)).ThenBy(u => u.Id).FirstOrDefault();
+            if (target != null) Dispatch(new(Tick,_sequence++,ai.Team,[],target.Node,place.Id,OrderKind.UsePlacePower,TargetX:target.X,TargetZ:target.Z));
+        }
     }
 }

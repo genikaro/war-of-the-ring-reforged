@@ -26,6 +26,21 @@ class HeroAbilityTests(unittest.TestCase):
         self.assertEqual(HEROES['UNIT_G_HERO_FRODO'], {7: 'The One Ring', 12: 'Heroic Aura', 50: 'Sting'})
 
     @unittest.skipUnless((ROOT / 'TLOTR - War of the Ring/Database/Units.lqr').exists(), 'owner install not available')
+    def test_original_hero_purchase_flags_and_fate_prices(self):
+        import lsk
+        from resolve_model import Resolver
+        resolver = Resolver()
+        for name, prices in {'ARAGORN': [0, 2, 1], 'FRODO': [1, 1, 0], 'GIMLI': [2, 3, 0],
+                             'LEGOLAS': [2, 2, 0], 'GANDALF': [2, 1, 0, 3]}.items():
+            unit = resolver.db['Units'].get('UNIT_G_HERO_'+name)
+            model = resolver.resolve(unit.name, recurse=False)
+            skeleton = lsk.parse((ROOT/model['skeletons'][0]['file']).read_bytes())
+            for ability in export(resolver, unit, model, skeleton):
+                with self.subTest(hero=name, ability=ability['Name']):
+                    self.assertEqual(ability['PurchaseFateCost'], prices[ability['Slot']])
+                    self.assertEqual(ability['Purchasable'], prices[ability['Slot']] > 0)
+
+    @unittest.skipUnless((ROOT / 'TLOTR - War of the Ring/Database/Units.lqr').exists(), 'owner install not available')
     def test_original_frodo_abilities(self):
         import lsk
         from resolve_model import Resolver

@@ -6,6 +6,32 @@ are read sequentially to EOF. See NOTES-presentation-assets.md for readers.
 """
 from asset_io import Reader
 import struct
+import math
+
+
+def spin_parameters(projectile):
+    """Bounded constant-spin adapter: the axe files' first motion vec4 is the local rotation axis,
+    followed by its angular speed, read as degrees per second. Preserve all other motion fields as raw data."""
+    keys = projectile.get('motion_keys', [])
+    if not keys:
+        return None
+    if len(keys) != 1 or keys[0]['time'] != 0:
+        raise ValueError('only constant projectile spin is supported')
+    values = keys[0]['values']
+    if len(values) != 13 or not isinstance(values[0], list) or len(values[0]) != 4:
+        raise ValueError('invalid projectile spin fields')
+    def number(word):
+        return struct.unpack('<f', struct.pack('<I', word))[0]
+    speed = number(values[1])
+    axis = [number(word) for word in values[0][:3]]
+    if not all(math.isfinite(v) for v in [speed, *axis]) or abs(speed) > 36000:
+        raise ValueError('invalid projectile spin')
+    if speed == 0:
+        return None
+    length = math.sqrt(sum(v*v for v in axis))
+    if length < 1e-6:
+        raise ValueError('zero projectile spin axis')
+    return {'Axis': [v/length for v in axis], 'DegreesPerSecond': speed}
 
 
 def launch_sound_events(projectile):

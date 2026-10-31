@@ -14,7 +14,7 @@ public sealed record UnitOrderReadout(string Order,string Distance,string Activi
 
     public static string Name(OrderKind kind) => kind switch { OrderKind.AttackMove => "Attack-move",OrderKind.HoldGround => "Hold Position",
         OrderKind.ForceAttack => "Force Attack",OrderKind.UseAbility => "Ability",OrderKind.PlaceBuilding => "Build",OrderKind.AttackStructure => "Attack",
-        _ => kind.ToString() };
+        OrderKind.ApproachStructure => "Move",OrderKind.ReturnCargo => "Return resources",_ => kind.ToString() };
 
     public static string Metres(long millimetres) => millimetres < 10_000
         ? (millimetres/1000m).ToString("0.#",CultureInfo.InvariantCulture)+" m" : $"{millimetres/1000} m";
@@ -37,9 +37,15 @@ public sealed record UnitOrderReadout(string Order,string Distance,string Activi
                 => ($"{Name(unit.Order)} → {Unit(unit.OrderTarget)}",ToUnit(unit.OrderTarget)),
             OrderKind.Guard => ("Guard → post",ToCell(unit.GuardOrigin)),
             OrderKind.ForceAttack => ("Force Attack → ground",ToCell(destination)),
+            OrderKind.UseAbility when unit.Ability(unit.AbilitySlot)?.GroundTarget == true
+                => ($"{unit.Ability(unit.AbilitySlot)!.Name} → ground",Away(unit.AbilityGroundX,unit.AbilityGroundZ)),
+            OrderKind.UseAbility when unit.Ability(unit.AbilitySlot)?.BuildingTarget == true
+                => ($"Capture → {Site(unit.OrderTarget)}",ToSite(unit.OrderTarget)),
             OrderKind.UseAbility => ($"{unit.Ability(unit.AbilitySlot)?.Name ?? "Ability"} → {Unit(unit.OrderTarget)}",ToUnit(unit.OrderTarget)),
-            OrderKind.AttackStructure or OrderKind.Build => ((unit.Order == OrderKind.Build && world.ConstructionSites.GetValueOrDefault(unit.OrderTarget)?.Complete == true
+            OrderKind.AttackStructure or OrderKind.Build or OrderKind.ApproachStructure => ((unit.Order == OrderKind.Build && world.ConstructionSites.GetValueOrDefault(unit.OrderTarget)?.Complete == true
                 ? "Repair" : Name(unit.Order))+" → "+Site(unit.OrderTarget),ToSite(unit.OrderTarget)),
+            OrderKind.ReturnCargo when world.OwnedDropOff(unit.Team,unit.OrderTarget) is { } depot
+                => ("Return resources → "+Site(unit.OrderTarget),Away(depot.X,depot.Z)),
             OrderKind.PlaceBuilding when unit.OrderTarget >= 0 && unit.OrderTarget < world.PlaceableBuildings.Count
                 => ($"Build → new {world.BuildingRules[world.PlaceableBuildings[unit.OrderTarget]].DisplayName}",ToCell(unit.PlacementCell)),
             OrderKind.Gather when world.Resources.TryGetValue(unit.OrderTarget,out var source)

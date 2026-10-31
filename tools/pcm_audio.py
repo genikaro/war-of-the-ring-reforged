@@ -1,4 +1,4 @@
-"""Decode the demo's mono Microsoft ADPCM impact WAVs to 16-bit PCM.
+"""Decode original mono/stereo Microsoft ADPCM effects and speech WAVs to 16-bit PCM.
 
 Only the source format used by this slice is accepted. Original bytes remain
 untouched. Coefficients and sample count come from the RIFF header.
@@ -28,35 +28,46 @@ def decode_ms_adpcm(data):
     if len(fmt) < 22 or len(fact) != 4:
         raise ValueError('missing ADPCM format/sample count')
     tag, channels, rate, _, block, bits, extra, samples, count = struct.unpack_from('<HHIIHHHHH',fmt)
-    if tag != 2 or channels != 1 or bits != 4 or not 8000 <= rate <= 192000:
-        raise ValueError('unsupported WAV format; expected mono Microsoft ADPCM')
-    if block < 7 or samples != 2+(block-7)*2 or len(fmt) != 18+extra or len(fmt) != 22+count*4 or not count:
+    if tag != 2 or channels not in (1, 2) or bits != 4 or not 8000 <= rate <= 192000:
+        raise ValueError('unsupported WAV format; expected mono/stereo Microsoft ADPCM')
+    header = 7*channels
+    if block < header or samples != 2+(block-header)*2//channels or len(fmt) != 18+extra or len(fmt) != 22+count*4 or not count:
         raise ValueError('invalid ADPCM format')
-    if not payload or len(payload)%block:
+    remainder = len(payload)%block
+    if not payload or 0 < remainder < header:
         raise ValueError('incomplete ADPCM block')
     coefficients = [struct.unpack_from('<hh',fmt,22+i*4) for i in range(count)]
     total = struct.unpack('<I',fact)[0]
-    if not 0 < total <= len(payload)//block*samples:
+    available = len(payload)//block*samples + (2+(remainder-header)*2//channels if remainder else 0)
+    # Shipped speech often ends in a short block; odd-length source recordings
+    # can declare one final sample whose nibble the original encoder omitted.
+    if remainder and total == available+1:
+        total = available
+    if not 0 < total <= available:
         raise ValueError('invalid ADPCM sample count')
     output = bytearray()
     for start in range(0,len(payload),block):
-        predictor, delta, recent, older = struct.unpack_from('<Bhhh',payload,start)
-        if predictor >= count or delta < 16:
+        predictors = payload[start:start+channels]
+        deltas = list(struct.unpack_from('<'+'h'*channels,payload,start+channels))
+        recent = list(struct.unpack_from('<'+'h'*channels,payload,start+3*channels))
+        older = list(struct.unpack_from('<'+'h'*channels,payload,start+5*channels))
+        if any(p >= count for p in predictors) or any(d < 16 for d in deltas):
             raise ValueError('invalid ADPCM block header')
-        first, second = coefficients[predictor]
-        output.extend(struct.pack('<hh',older,recent))
-        for value in payload[start+7:start+block]:
-            for nibble in (value>>4,value&15):
-                value = recent*first+older*second
+        output.extend(struct.pack('<'+'h'*(channels*2),*older,*recent))
+        for value in payload[start+header:min(start+block,len(payload))]:
+            for channel,nibble in enumerate((value>>4,value&15)):
+                channel = channel if channels == 2 else 0
+                first, second = coefficients[predictors[channel]]
+                value = recent[channel]*first+older[channel]*second
                 # Signed integer division truncates toward zero, including
                 # negative predictions (Python // would round down).
                 predicted = (abs(value)//256)*(1 if value >= 0 else -1)
-                sample = max(-32768,min(32767,predicted+(nibble if nibble < 8 else nibble-16)*delta))
-                older, recent = recent, sample
-                delta = max(16,ADAPTATION[nibble]*delta//256)
+                sample = max(-32768,min(32767,predicted+(nibble if nibble < 8 else nibble-16)*deltas[channel]))
+                older[channel], recent[channel] = recent[channel], sample
+                deltas[channel] = max(16,ADAPTATION[nibble]*deltas[channel]//256)
                 output.extend(struct.pack('<h',sample))
     result = io.BytesIO()
     with wave.open(result,'wb') as wav:
-        wav.setnchannels(1); wav.setsampwidth(2); wav.setframerate(rate)
-        wav.writeframes(output[:total*2])
+        wav.setnchannels(channels); wav.setsampwidth(2); wav.setframerate(rate)
+        wav.writeframes(output[:total*channels*2])
     return result.getvalue()

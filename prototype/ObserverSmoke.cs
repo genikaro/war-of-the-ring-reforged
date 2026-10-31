@@ -138,10 +138,12 @@ public partial class Main
                     && _commands.DisplayedMatchState == $"Paused · Player {world.Winner+1} · {world.AiPlayers[world.Winner].Personality.Id} wins";
                 // Every bot order goes straight into the simulation; nothing came from the keyboard or mouse.
                 _observerChecks["observer_never_issued_a_command"] = world.Commands.Count == 0;
-                // Bodies leave a minute after death: gone ones are hidden and disabled, none goes early.
+                // Bodies leave a minute after death: heavy children and managed view references are released.
                 var gone = _views.Where(p => p.Value.Buried).ToArray();
                 _observerChecks["corpses_leave_after_a_minute"] = gone.Length > 0
                     && gone.All(p => !p.Value.Root.Visible && p.Value.Root.ProcessMode == Node.ProcessModeEnum.Disabled && world.Units[p.Key].Health <= 0
+                        && p.Value.Root.GetChildCount() == 1 && p.Value.Ring.Mesh == null && p.Value.Player == null
+                        && p.Value.Appearance == null && p.Value.Health == null && p.Value.Ghost == null && p.Value.HeroGlow == null
                         && world.Tick-p.Value.DeathTick >= CorpseTicks)
                     // A unit killed on the final tick has no presented death yet (DeathTick -1).
                     && _views.Where(p => !p.Value.Buried && world.Units[p.Key].Health <= 0 && p.Value.DeathTick >= 0)

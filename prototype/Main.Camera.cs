@@ -9,14 +9,17 @@ public partial class Main
     private readonly List<(string Type,float X,float Z)> _minimapMarkers = [];
 
     // Rendered automation must not consume live desktop input between its scripted events.
-    private bool BlocksDesktopInput => (_constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _tier2Smoke || _researchSmoke)
+    private bool BlocksDesktopInput => (_placesSmoke || _interactionSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _tier2Smoke || _researchSmoke)
         && !_injectingConstructionInput;
 
     private void WatchPointer()
     {
         var window = GetWindow();
         window.MouseExited += () => { if (!BlocksDesktopInput) _pointerInWindow = false; };
-        window.FocusExited += () => { if (!BlocksDesktopInput) _windowFocused = false; };
+        window.FocusExited += () => {
+            if (BlocksDesktopInput) return;
+            _windowFocused = false; _dragging = _panning = false; _hud.SelectionBox = null;
+        };
         window.FocusEntered += () => _windowFocused = true;
     }
 

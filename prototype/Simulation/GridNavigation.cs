@@ -163,6 +163,11 @@ public sealed partial class GridNavigation
         return true;
     }
 
+    /// <summary>Build-138: whether a body of this size has its clearance profile on this map. A cache imported before a unit with a new
+    /// body was added has none, and the unit cannot appear there.</summary>
+    public bool HasBody(int radius,int height) => radius == BodyRadiusMm && height == BodyHeightMm || _bodyGraphs.ContainsKey((radius,height))
+        || _profiles.Count == 0 || _profiles.ContainsKey((radius,height));
+
     public GridNavigation ForBody(int radius,int height)
     {
         if (radius == BodyRadiusMm && height == BodyHeightMm) return this;

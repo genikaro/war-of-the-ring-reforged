@@ -20,7 +20,7 @@ public partial class Main
         {
             case 2:
                 // Test fixture: the start bank (115 food) cannot afford Frodo (150 food, 100 ore). Everything after this uses UI input.
-                world.Economies[0].FoodMilli += 300_000; world.Economies[0].OreMilli += 300_000; break;
+                world.Economies[0].FoodMilli += 300_000; world.Economies[0].OreMilli += 300_000;world.GrantResources(0,0,fate:2);break;
             case 3: _focus = _structureViews[10000].Root.GlobalPosition; UpdateCamera(); Click(StructureSmokePoint(10000)); break;
             case 6:
                 _frodoChecks["citadel_offers_frodo_with_source_cost"] = citadel.Units.Take(2).SequenceEqual(["UNIT_G_HUMAN_WORKER",SmokeFrodo])
@@ -48,12 +48,15 @@ public partial class Main
             case 763:
                 _frodoChecks["portrait_click_selects_frodo"] = _selected.SetEquals([_frodoId]) && _commands.DisplayedName == "Frodo" && _commands.DisplayedHealth == "305/305";
                 _frodoChecks["source_abilities_in_qwe"] = _commands.AbilityButton(0) is { Visible: true,Disabled: false,ButtonPressed: false,Icon: not null }
-                    && _commands.AbilityButton(1) is { Visible: true,Disabled: true,Icon: not null } && _commands.AbilityButton(2) is { Visible: true,Disabled: true,Icon: not null }
-                    && !_commands.AbilityButton(3).Visible && _commands.AbilityButton(0).TooltipText.StartsWith("The One Ring [Q]");
+                    && _commands.AbilityButton(1) is { Visible: true,Disabled: false,Icon: not null } && _commands.AbilityButton(2) is { Visible: true,Disabled: true,Icon: not null }
+                    && !_commands.AbilityButton(3).Visible && _commands.AbilityButton(0).TooltipText.StartsWith("The One Ring\n");
                 _focus = _structureViews[10000].Root.GlobalPosition+new Vector3(-40,0,30); UpdateCamera();
                 GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left,Pressed = true,DoubleClick = true,Position = Portrait(),GlobalPosition = Portrait() },true); break;
             case 764: Release(Portrait()); break;
+            case 765: PushKey(Key.Q);break;
             case 766:
+                _frodoChecks["ring_purchase_costs_one_fate_without_toggling"] = world.Economies[0].Fate==1
+                    && world.Units[_frodoId].AbilityPurchased(world.Units[_frodoId].Ability(0)!) && !world.Units[_frodoId].RingActive;
                 var at = UnitPosition(world.Units[_frodoId]);
                 _frodoChecks["portrait_double_click_centers_camera"] = new Vector2(_focus.X-at.X,_focus.Z-at.Z).Length() < 1 && _selected.SetEquals([_frodoId]);
                 PushKey(Key.Q); break;
@@ -62,6 +65,7 @@ public partial class Main
                 _frodoChecks["q_puts_on_the_ring"] = world.Units[_frodoId].RingActive && _commands.AbilityButton(0).ButtonPressed
                     && _heroBar.Portrait(0).TooltipText.Contains("One Ring") && world.Commands.Last() is { Kind: OrderKind.UseAbility,AbilitySlot: 0,Target: -1 };
                 _frodoChecks["ring_bearer_drawn_translucent"] = Faded(true);
+                _frodoChecks["invisible_hero_glow_is_hidden"] = !_views[_frodoId].HeroGlow!.Ground.Visible;
                 if (_capture != "") _ = CaptureFrame(false);
                 break;
             case 808:
@@ -70,9 +74,10 @@ public partial class Main
                     && _heroBar.HealthWidth(0) < .0437f*1024;
                 PushKey(Key.Q); break;
             case 810:
-                _frodoChecks["q_takes_the_ring_off"] = !world.Units[_frodoId].RingActive && !_commands.AbilityButton(0).ButtonPressed && Faded(false); break;
+                _frodoChecks["q_takes_the_ring_off"] = !world.Units[_frodoId].RingActive && !_commands.AbilityButton(0).ButtonPressed && Faded(false);
+                _frodoChecks["visible_hero_glow_returns"] = _views[_frodoId].HeroGlow!.Ground.Visible;break;
             case 812:
-                var report = new { build = BuildInfo.Label,checks = _frodoChecks,passed = _frodoChecks.Count == 13 && _frodoChecks.Values.All(v => v),
+                var report = new { build = BuildInfo.Label,checks = _frodoChecks,passed = _frodoChecks.Count == 16 && _frodoChecks.Values.All(v => v),
                     fixture = "Start bank credited 300 food and 300 ore at frame 2",
                     frodo = _frodoId < 0 ? null : new { world.Units[_frodoId].Id,world.Units[_frodoId].HealthMilli,world.Units[_frodoId].RingActive },
                     hero_portrait = _heroBar.Portrait(0).GetGlobalRect() is var r ? new[] { r.Position.X,r.Position.Y,r.Size.X,r.Size.Y } : null,

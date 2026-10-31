@@ -23,18 +23,24 @@ public sealed class ConstructionSite(int id,int obstacle,int radiusMm,string? bu
     public long RepairMicroTicks { get; internal set; }
     public int Health { get; internal set; }
     public bool Complete { get; internal set; }
-    /// <summary>Ticks until a defending building's next arrow, and the unit it is shooting (-1 for none).</summary>
+    /// <summary>Ticks until a defending building's next arrow, and its unit or building target (-1 for none).</summary>
     public int DefenseCooldown { get; internal set; }
     public int DefenseTarget { get; internal set; } = -1;
+    public int DefenseSiteTarget { get; internal set; } = -1;
     /// <summary>The same for each further weapon (the Ballista Tower's bolt), sized when the building gets one.</summary>
     public int[] ExtraDefenseCooldowns { get; internal set; } = [];
     public int[] ExtraDefenseTargets { get; internal set; } = [];
+    public int[] ExtraDefenseSiteTargets { get; internal set; } = [];
     /// <summary>An upgrade in progress and its fixed-tick progress toward the promoted building.</summary>
     public bool Upgrading { get; internal set; }
     public int UpgradeTicks { get; internal set; }
     /// <summary>The technique being researched here, or null, and its fixed-tick progress.</summary>
     public string? Research { get; internal set; }
     public int ResearchTicks { get; internal set; }
+    public int FirePpm { get; internal set; }
+    public int FireSource { get; internal set; } = -1;
+    public long FireDamageCarry { get; internal set; }
+    public long FireHealthCarry { get; internal set; }
 }
 
 /// <summary>Foundations, integer cooperative construction and owned gathering improvements.</summary>
@@ -44,7 +50,9 @@ public sealed partial class SimWorld
     public SortedDictionary<int,ConstructionSite> ConstructionSites { get; } = [];
     public Dictionary<int,HashSet<string>> StartBuildings { get; } = [];
 
-    public ConstructionDefinition SiteRules(ConstructionSite site) => site.Building is { } name ? BuildingRules[name] : ConstructionRules[Resources[site.Resource].Kind];
+    /// <summary>A claimed resource site follows its owner's side (Mill or Slaughterhouse); an unclaimed one the default rules.</summary>
+    public ConstructionDefinition SiteRules(ConstructionSite site) => site.Building is { } name ? BuildingRules[name]
+        : (site.Team >= 0 ? ResourceRules(site.Team,Resources[site.Resource].Kind) : null) ?? ConstructionRules[Resources[site.Resource].Kind];
     public (int X,int Z) SitePosition(ConstructionSite site) => site.Building != null ? (site.X,site.Z) : (Resources[site.Resource].X,Resources[site.Resource].Z);
 
     /// <summary>A Mill or Foundry foundation sits inside its resource, which keeps blocking the ground around
@@ -64,12 +72,12 @@ public sealed partial class SimWorld
     {
         reason = "Unknown resource site";
         if (!ConstructionSites.TryGetValue(resource,out var site) || !Resources.TryGetValue(resource,out var source)
-            || !ConstructionRules.TryGetValue(source.Kind,out var rules) || !Economies.TryGetValue(team,out var bank)) return false;
+            || ResourceRules(team,source.Kind) is not { } rules || !Economies.TryGetValue(team,out var bank)) return false;
         if (site.Team >= 0) { reason = site.Team != team ? "Enemy resource building" : site.Complete ? "Already completed" : "Already under construction"; return false; }
         if (source.RemainingMilli <= 0) { reason = "Resource exhausted"; return false; }
         if (MissingPrerequisite(team,rules.Prerequisites) is { } missing) { reason = RequirementReason(missing); return false; }
         if (bank.FoodMilli < rules.FoodCost*1000L || bank.OreMilli < rules.OreCost*1000L) { reason = "Insufficient resources"; return false; }
-        foreach (var unit in Units.Where(u => u.Present))
+        foreach (var unit in ActiveUnits.Where(u => u.Present))
         {
             var nav = Nav(unit);
             if ((unit.Node < nav.GroundCount ? nav.ObstacleCoversGroundBody(site.Obstacle,unit.X,unit.Z) : nav.ObstacleCovers(site.Obstacle,unit.Node))
@@ -142,7 +150,7 @@ public sealed partial class SimWorld
             AwaitClearGround(unit,reason,x,z,area.RadiusMm,(other,px,pz) => Nav(other).ObstacleCoversGroundBody(site.Obstacle,px,pz));
             return;
         }
-        var rules = SiteRules(site); var bank = Economies[unit.Team];
+        var rules = ResourceRules(unit.Team,Resources[site.Resource].Kind) ?? SiteRules(site); var bank = Economies[unit.Team];
         bank.FoodMilli -= rules.FoodCost*1000L; bank.OreMilli -= rules.OreCost*1000L;
         site.Team = unit.Team; site.Health = Math.Max(1,(int)((long)SiteMaxHealth(site)*rules.InitialHealthPpm/1_000_000));
         Navigation.SetObstacle(site.Obstacle,true);
@@ -155,7 +163,7 @@ public sealed partial class SimWorld
         var rules = SiteRules(site); var bank = Economies[command.Team];
         bank.FoodMilli = Math.Min(bank.FoodCapacityMilli,bank.FoodMilli+rules.FoodCost*1000L*rules.FoodRefundPpm/1_000_000);
         bank.OreMilli = Math.Min(bank.OreCapacityMilli,bank.OreMilli+rules.OreCost*1000L*rules.OreRefundPpm/1_000_000);
-        foreach (var unit in Units.Where(u => u.Order == OrderKind.Build && u.OrderTarget == site.Id))
+        foreach (var unit in ActiveUnits.Where(u => u.Order == OrderKind.Build && u.OrderTarget == site.Id))
             Apply(command with { Units = [unit.Id],Kind = OrderKind.Stop },activating: true);
         // ponytail: a cancelled placement keeps its inactive runtime obstacle; ids are never reused.
         if (site.Building != null) ConstructionSites.Remove(site.Id);
@@ -187,14 +195,18 @@ public sealed partial class SimWorld
         foreach (var site in ConstructionSites.Values.Where(s => s.Team >= 0 && !s.Complete))
         {
             var rules = SiteRules(site);
-            var builders = Units.Where(u => u.Team == site.Team && u.Present && u.Order == OrderKind.Build && u.OrderTarget == site.Id).ToArray();
+            var builders = ActiveUnits.Where(u => u.Team == site.Team && u.Present && u.Order == OrderKind.Build && u.OrderTarget == site.Id).ToArray();
             var working = builders.Where(IsBuilding).ToArray();
             bool instant = InstantBuildTeams.Contains(site.Team) && builders.Length > 0;
             if (working.Length == 0 && !instant) continue;
             long duration = rules.DurationTicks*1_000_000L;
+            long before = site.ProgressMicroTicks;
             site.ProgressMicroTicks = instant ? duration : Math.Min(duration,site.ProgressMicroTicks+1_000_000L+(working.Length-1L)*rules.ExtraWorkerPpm);
             int max = SiteMaxHealth(site); long initial = Math.Max(1,(long)max*rules.InitialHealthPpm/1_000_000);
-            site.Health = (int)(initial+(max-initial)*site.ProgressMicroTicks/duration);
+            // Add only the health earned by this work. Damage already taken remains missing,
+            // including on the final tick; subtracting the two totals preserves fractional work.
+            int gained = (int)((max-initial)*site.ProgressMicroTicks/duration-(max-initial)*before/duration);
+            site.Health = Math.Min(max,site.Health+gained);
             if (site.ProgressMicroTicks < duration) continue;
             site.Complete = true;
             if (site.Building != null) CompleteBuilding(site,(working.FirstOrDefault() ?? builders[0]).Node);

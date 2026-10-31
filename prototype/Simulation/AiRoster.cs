@@ -30,7 +30,7 @@ public sealed record AiSkill(string Name,int ThinkTicks,int StrategicEvery,int B
         <= 0 => new("Easy",3*SimWorld.TicksPerSecond,1,8,1,false,AiTargeting.Nearest,20),
         1 => new("Normal",SimWorld.TicksPerSecond,1,10,2,true,AiTargeting.Spread,33),
         // Hard decides tactics twice a second, but strategy once, so the placement search costs no more than Normal's.
-        _ => new("Hard",SimWorld.TicksPerSecond/2,2,12,3,true,AiTargeting.Focus,50,PullsWounded: true) };
+        _ => new("Hard",SimWorld.TicksPerSecond/2,2,12,2,true,AiTargeting.Focus,50,PullsWounded: true) };
 }
 
 /// <summary>Which techniques a bot researches: those that help a unit type it has alive, only with the bank holding
@@ -52,7 +52,8 @@ public sealed record AiTraitInfo(AiTrait Trait,string Description,AiTrait[] Excl
     public string Name => Trait.ToString();
 }
 
-/// <summary>A bot slot's choice: a personality and its traits, written "Gimli" or "Gimli+Defender+Marksman".</summary>
+/// <summary>A bot slot's choice: a personality or difficulty-limited random choice and its traits,
+/// written "Gimli", "Gimli+Defender+Marksman" or "Random:1+Defender".</summary>
 public sealed record AiBotChoice(string Id,AiTrait[] Traits)
 {
     public override string ToString() => string.Join('+',Traits.Select(t => t.ToString()).Prepend(Id));
@@ -68,7 +69,8 @@ public sealed record AiProfile
     public required AiStyle Style { get; init; }
     /// <summary>No assault party forms before this tick: (100 - Aggression) x 6 s.</summary>
     public int AssaultFromTicks { get; init; }
-    /// <summary>Workers before the 2 per Mill: the skill's base plus Expansion x 6 / 100.</summary>
+    /// <summary>Desired workers before the 2 per Mill: the skill's base plus Expansion x 6 / 100.
+    /// Actual recruitment is capped at five per usable source plus the skill's one or two builders.</summary>
     public int Workers { get; init; }
     public int ExpansionTicks { get; init; }
     public int ExpansionIntervalTicks { get; init; }
@@ -91,7 +93,8 @@ public sealed record AiProfile
     public bool CheapSoldiers { get; init; }
     /// <summary>No research before this tick (Rusher: 15:00).</summary>
     public int ResearchFromTicks { get; init; }
-    /// <summary>Watchtowers each Citadel keeps around it, 0 for just the first-pass one (Defender: 2).</summary>
+    /// <summary>Minimum towers per Citadel (Defender: 2). Zero uses the normal minimum of one;
+    /// every four completed local buildings add another, up to three extra towers (build-117).</summary>
     public int TowersPerCitadel { get; init; }
     /// <summary>Expansion guards of a full party instead of half (Defender).</summary>
     public bool FullGuards { get; init; }
@@ -172,7 +175,7 @@ public static class AiRoster
         new(AiTrait.Rusher,"Small parties from the first soldiers, the cheapest units, more Barracks; no research or expansion before 15:00, fewer workers.",
             [AiTrait.Expansionist,AiTrait.Defender]),
         new(AiTrait.Expansionist,"A new Citadel from 4:00 and every 3:00 after, up to five, and more workers.",[AiTrait.Rusher]),
-        new(AiTrait.Defender,"A tower first and two by every Citadel, guards of a full party; attacks only with three towers and twelve soldiers, or from 20:00.",
+        new(AiTrait.Defender,"A tower first and at least two by every Citadel, with more as the base grows; guards of a full party. Attacks with three towers and twelve soldiers, or from 20:00.",
             [AiTrait.Rusher]),
         new(AiTrait.Relentless,"Parties never fall back and the wounded never retreat; half a party at home joins the one out.",[]),
         new(AiTrait.Marksman,"An army of 60% ranged units instead of 20%.",[]),

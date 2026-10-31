@@ -56,7 +56,7 @@ static class FrodoChecks
         int Recharge(int cell)
         {
             var aura = Open(); aura.Spawn(0,403,Frodo); var healer = aura.Spawn(0,cell,Healer); var hurt = aura.Spawn(0,cell+2); hurt.Health = 40;
-            aura.EnqueueAbility(0,[healer.Id],0,hurt.Id); aura.Step();
+            aura.EnqueueAbility(0,[healer.Id],0,hurt.Id); Advance(aura,9);
             for (int tick = 1; tick < 400; tick++) { aura.Step(); if (healer.AbilityReadyAt[0] <= aura.Tick) return tick; }
             return -1;
         }

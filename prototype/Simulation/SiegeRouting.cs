@@ -12,7 +12,7 @@ public sealed partial class SimWorld
         var blocked=OccupiedNodes(unit.Id,combatSpacing:!unit.Definition.IsRanged);
         // An attack spot reserves room for a body, not just its cell. Routes themselves are not reserved.
         var reserved=new HashSet<int>();
-        foreach(var other in Units.Where(u=>u.Id!=unit.Id && u.Team==unit.Team && u.Present && SiegeTarget(u)==site.Id && u.Goal>=0))
+        foreach(var other in ActiveUnits.Where(u=>u.Id!=unit.Id && u.Team==unit.Team && u.Present && SiegeTarget(u)==site.Id && u.Goal>=0))
         {
             var (x,z)=Navigation.Center(other.Goal);
             Navigation.AddBodyNodes(reserved,x,Navigation.NodeHeight(other.Goal),z,other.Definition.BodyHeightMm,

@@ -25,7 +25,7 @@ SKIRMISH_UNITS = ['UNIT_G_HUMAN_WORKER', 'UNIT_G_GONDOR_SWORDSMAN', 'UNIT_G_DWAR
                   'UNIT_G_ROHAN_RIDER', 'UNIT_G_DWARVEN_SHIELDBREAKER', 'UNIT_G_RANGER',
                   # Tier 3-4: Elven Sanctuary and Nature's Haven (the Elven Archer is a combat demo unit already), and
                   # the Fate heroes the Citadel calls (Aragorn is a combat demo unit already).
-                  'UNIT_G_ELVEN_LIGHTBRINGER', 'UNIT_G_BEORNING', 'UNIT_G_HUORN',
+                  'UNIT_G_ELVEN_LIGHTBRINGER', 'UNIT_G_BEORNING', 'UNIT_G_HUORN', 'UNIT_G_BEAR',
                   'UNIT_G_HERO_GIMLI', 'UNIT_G_HERO_LEGOLAS', 'UNIT_G_HERO_GANDALF']
 TIER1_BUILDINGS = ['BUILDING_G_TOWN_CENTER_LEVEL_1', 'BUILDING_G_FOOD_STRUCTURE', 'BUILDING_G_BLACKSMITH',
                    'BUILDING_G_WORKER_STRUCTURE', 'BUILDING_G_GONDORIAN_BARRACKS', 'BUILDING_G_DWARF_BARRACKS',
@@ -39,8 +39,43 @@ TIER2_BUILDINGS = ['BUILDING_G_TOWN_CENTER_LEVEL_2', 'BUILDING_G_POPULATION_STRU
 TIER3_BUILDINGS = ['BUILDING_G_TOWN_CENTER_LEVEL_3', 'BUILDING_G_STABLES', 'BUILDING_G_ELF_BARRACKS', 'BUILDING_G_HOSPITAL']
 TIER4_BUILDINGS = ['BUILDING_G_TOWN_CENTER_LEVEL_4', 'BUILDING_G_TOWER_UPGRADE']
 TIER5_BUILDINGS = ['BUILDING_G_TOWN_CENTER_LEVEL_5']
-SKIRMISH_BUILDINGS = TIER1_BUILDINGS + TIER2_BUILDINGS + TIER3_BUILDINGS + TIER4_BUILDINGS + TIER5_BUILDINGS
+GOOD_BUILDINGS = TIER1_BUILDINGS + TIER2_BUILDINGS + TIER3_BUILDINGS + TIER4_BUILDINGS + TIER5_BUILDINGS
+
+# The Evil faction (build-133). Its drop-off, worker producer and start building is the Goblin Hovel (source
+# IsTownCenter); the Fortress of Mordor trains the heroes and opens the tree like the Citadel, and every building but
+# the Slaughterhouse, Smelter and War Post stands on corrupted ground (source CanOnlyBePlacedOnCorruption).
+EVIL_TOWN_CENTER = 'BUILDING_E_WORKER_STRUCTURE'
+EVIL_FORTRESS = 'BUILDING_E_TOWN_CENTER_LEVEL_1'
+EVIL_WARPOST = 'BUILDING_E_TERRITORY_MARKER'
+EVIL_UNITS = ['UNIT_E_GOBLIN_SLAVE', 'UNIT_E_GOBLIN_SPEARMAN', 'UNIT_E_GOBLIN_SLAVE_MASTER',
+              'UNIT_E_ORC_SLASHER', 'UNIT_E_ORC_BOWMAN', 'UNIT_E_URUK_HAI', 'UNIT_E_WARG_RIDER', 'UNIT_E_GIANT_SPIDER',
+              'UNIT_E_WRAITH', 'UNIT_E_HARADRIM_ASSASSIN', 'UNIT_E_TROLL_STONEHURLER', 'UNIT_E_TROLL_BONECLEAVER',
+              'UNIT_E_HERO_GOLLUM', 'UNIT_E_HERO_NAZGUL_KING', 'UNIT_E_HERO_QAMARA', 'UNIT_E_HERO_GRISHNAKH', 'UNIT_E_HERO_SARUMAN',
+              # The Nazgul King's Shadow Bind turns a Wraith into this unit; nothing trains it.
+              'UNIT_E_BONUS_BLACK_RIDER']
+EVIL_TIER1_BUILDINGS = [EVIL_TOWN_CENTER, EVIL_WARPOST, 'BUILDING_E_FOOD_STRUCTURE', 'BUILDING_E_BLACKSMITH', EVIL_FORTRESS,
+                        'BUILDING_E_ORC_BARRACKS', 'BUILDING_E_STABLES', 'BUILDING_E_TOWER', 'BUILDING_E_ARMORY']
+EVIL_TIER2_BUILDINGS = ['BUILDING_E_TOWN_CENTER_LEVEL_2', 'BUILDING_E_HARADRIM_BARRACKS', 'BUILDING_E_BEAST_UPGRADES_STRUCTURE']
+EVIL_TIER3_BUILDINGS = ['BUILDING_E_TOWN_CENTER_LEVEL_3', 'BUILDING_E_TROLL_BARRACKS', 'BUILDING_E_HOSPITAL']
+EVIL_TIER4_BUILDINGS = ['BUILDING_E_TOWN_CENTER_LEVEL_4']
+EVIL_TIER5_BUILDINGS = ['BUILDING_E_TOWN_CENTER_LEVEL_5']
+EVIL_BUILDINGS = EVIL_TIER1_BUILDINGS + EVIL_TIER2_BUILDINGS + EVIL_TIER3_BUILDINGS + EVIL_TIER4_BUILDINGS + EVIL_TIER5_BUILDINGS
+SKIRMISH_BUILDINGS = GOOD_BUILDINGS + EVIL_BUILDINGS
+# Per faction: the start building (source IsTownCenter), the worker, the buildings raised on a well and on an ore pile, and
+# the buildings the pack lists for it.
+FACTIONS = {
+    'good': {'name': 'Good', 'prefix': ('BUILDING_G_', 'UNIT_G_'), 'town_center': CITADEL, 'tech_root': CITADEL, 'worker': 'UNIT_G_HUMAN_WORKER',
+             'food': 'BUILDING_G_FOOD_STRUCTURE', 'ore': 'BUILDING_G_BLACKSMITH', 'buildings': GOOD_BUILDINGS},
+    'evil': {'name': 'Evil', 'prefix': ('BUILDING_E_', 'UNIT_E_'), 'town_center': EVIL_TOWN_CENTER, 'tech_root': EVIL_FORTRESS, 'worker': 'UNIT_E_GOBLIN_SLAVE',
+             'food': 'BUILDING_E_FOOD_STRUCTURE', 'ore': 'BUILDING_E_BLACKSMITH', 'buildings': EVIL_BUILDINGS},
+}
+SKIRMISH_UNITS = SKIRMISH_UNITS + EVIL_UNITS
 WORKER_RING = (9.0, 13.0)
+
+
+def faction_of(name):
+    """The faction a source unit or building name belongs to ("good" for a name of neither side)."""
+    return next((key for key, faction in FACTIONS.items() if name.startswith(faction['prefix'])), 'good')
 
 
 def parse_markers(data, metadata, names):

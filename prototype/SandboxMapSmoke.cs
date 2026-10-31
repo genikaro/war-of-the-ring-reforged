@@ -16,7 +16,7 @@ public partial class Main
     private bool _sandboxDistanceMoved;
     private int _sandboxIdleStart,_sandboxIdleSequence,_sandboxIdleHealth;
     private bool _sandboxIdleAcquired,_sandboxIdleHit;
-    private const int SandboxMapSmokeChecks = 42;
+    private const int SandboxMapSmokeChecks = 43;
     private const string SandboxGandalf = "UNIT_G_HERO_GANDALF",SandboxGimli = "UNIT_G_HERO_GIMLI";
     private static readonly string[] SandboxDummyLookalikes = ["UNIT_G_GONDOR_SWORDSMAN","UNIT_G_ELVEN_ARCHER"];
     private static readonly string[] SandboxFateHeroes = ["UNIT_G_HERO_GIMLI","UNIT_G_HERO_ARAGORN","UNIT_G_HERO_LEGOLAS",SandboxGandalf];
@@ -32,6 +32,14 @@ public partial class Main
         var barracks = Site(1,SandboxBarracks)!;
         switch (_frames-_sandboxMapHold)
         {
+            case 1:
+            {
+                var tower = Site(teams[0],"BUILDING_G_TOWER_UPGRADE")!;
+                SelectStructure(tower.Obstacle); Focus(tower.X,tower.Z);
+                _commands.RefreshStructure(SelectedStructureDetails());
+                HoverAbilityPoint(_commands.StructureAttackValue(1).GetGlobalRect().GetCenter());
+                break;
+            }
             case 2:
             {
                 string[] resourceBuildings = [.. world.ConstructionRules.Values.Select(r => r.Name)];
@@ -61,11 +69,16 @@ public partial class Main
                     && SandboxFateHeroes.All(hero => world.CanTrain(t,citadel.Id,Array.IndexOf(citadel.Units,hero),out _)))
                     && world.MaxFate == 20 && _commands.FateReadout == "20"
                     // Build-76: the Fate cell's tooltip states the count and that nothing more can be earned.
-                    && _commands.FateTooltip.StartsWith("Fate 20/20 · pays for heroes · full");
+                    && _commands.FateTooltip.StartsWith("Fate 20/20\nMaximum Fate reached");
                 _sandboxMapChecks["no_bots_and_no_chasing"] = world.AiPlayers.Count == 0 && world.AggressiveIdleTeams.Count == 0;
                 // Build-61: the Ballista Tower's info lists both its weapons.
                 var shown = _selectedStructure; _selectedStructure = Site(teams[0],"BUILDING_G_TOWER_UPGRADE")!.Obstacle;
-                _sandboxMapChecks["ballista_tower_lists_both_weapons"] = SelectedStructureDetails()?.Attack == "Arrows  14 dps · 19 m\nBallista  35 dps · 10–22 m";
+                var towerDetails = SelectedStructureDetails(); _commands.RefreshStructure(towerDetails);
+                _sandboxMapChecks["ballista_tower_lists_both_weapons"] = towerDetails is { Attack: "14 / 50",Weapons: [_,{ Tooltip: var boltTip }] }
+                    && boltTip.Contains("a hit every 3 s") && _commands.DisplayedStructureAttacks.SequenceEqual(["14","50"]);
+                _sandboxMapChecks["tower_attack_tooltip_uses_unit_damage_and_speed_format"] = _commands.DisplayedTooltipTitle == "Ballista"
+                    && _commands.DisplayedTooltipBody.Contains("Damage per hit: 50") && _commands.DisplayedTooltipBody.Contains("a hit every 3 s");
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-tower.png");
                 _selectedStructure = shown;
                 // The widest trainable body finds open ground beside every producer, connected to its base.
                 var widest = world.ProductionRules.Keys.Select(n => _rules.Units[n]).MaxBy(u => u.BodyRadiusMm)!;
@@ -211,7 +224,7 @@ public partial class Main
                         && Descendants(_views[id].Root.GetNode("ModelSize")).OfType<MeshInstance3D>().Any(m => m.GetSurfaceOverrideMaterial(0) is BaseMaterial3D { EmissionEnabled: true }));
                 _sandboxMapChecks["group_0_selects_the_dummies_with_their_buttons"] = _selected.SetEquals(_sandboxDummies)
                     && Enumerable.Range(0,3).All(slot => _commands.AbilityButton(slot) is { Visible: true,Disabled: false,Icon: not null })
-                    && !_commands.AbilityButton(3).Visible && _commands.AbilityButton(0).TooltipText.StartsWith("Armor +1 [Q]");
+                    && !_commands.AbilityButton(3).Visible && _commands.AbilityButton(0).TooltipText.StartsWith("Armor +1\n");
                 PushKey(Key.Q); break;
             case 33: PushKey(Key.Q); break;
             case 35:

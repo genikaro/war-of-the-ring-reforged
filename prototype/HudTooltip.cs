@@ -12,7 +12,7 @@ public partial class CommandPanel
     public const float TooltipWidth = 244;
     private PanelContainer _tip = null!;
     private PanelContainer _tipTitleBand = null!, _tipDescriptionStrip = null!;
-    private Label _tipTitle = null!, _tipBody = null!;
+    private Label _tipTitle = null!, _tipBody = null!, _tipDescription = null!;
     private HBoxContainer _tipCosts = null!;
     private string _tipText = "";
     private static readonly Regex CostPart = new(@"^(?:(\d+) (food|ore|Fate)|(population) (\d+))$");
@@ -30,7 +30,7 @@ public partial class CommandPanel
         _tipTitle = TipLabel(15,TipLight); _tipTitle.HorizontalAlignment = HorizontalAlignment.Center; _tipTitleBand.AddChild(_tipTitle);
         _tipCosts = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore }; _tipCosts.AddThemeConstantOverride("separation",4); rows.AddChild(_tipCosts);
         _tipDescriptionStrip = new PanelContainer { MouseFilter = MouseFilterEnum.Ignore }; rows.AddChild(_tipDescriptionStrip);
-        _tipDescriptionStrip.AddChild(TipLabel(13,TipInk,"Description"));
+        _tipDescription = TipLabel(13,TipInk,"Description"); _tipDescriptionStrip.AddChild(_tipDescription);
         _tipBody = TipLabel(13,TipInk); _tipBody.AddThemeConstantOverride("line_spacing",-2); rows.AddChild(_tipBody);
         _tip.Resized += PlaceTooltip;
         _content.AddChild(_tip);
@@ -66,9 +66,22 @@ public partial class CommandPanel
 
     private void LoadTooltipArt()
     {
-        _tip.AddThemeStyleboxOverride("panel",TipFrame("console_tooltip_g_right_backing",new Color("b49b6f"),7,10,9,tile: true));
+        _tip.AddThemeStyleboxOverride("panel",TipFrame("console_tooltip_g_right_backing",new Color(EvilSkin ? "27231e" : "b49b6f"),7,10,9,tile: true));
         _tipTitleBand.AddThemeStyleboxOverride("panel",TipFrame("console_tooltip_g_right_title_inset",new Color("6e5e45"),4,6,3));
-        _tipDescriptionStrip.AddThemeStyleboxOverride("panel",TipFrame("console_tooltip_g_right_text_separator_outset",new Color("c7b088"),4,7,1));
+        _tipDescriptionStrip.AddThemeStyleboxOverride("panel",TipFrame("console_tooltip_g_right_text_separator_outset",new Color(EvilSkin ? "3a342e" : "c7b088"),4,7,1));
+        // The Good parchment takes dark ink; Evil's stone needs light text over its textured surface.
+        foreach (var label in new[] {_tipDescription,_tipBody})
+        {
+            label.AddThemeColorOverride("font_color",EvilSkin ? TipLight : TipInk);
+            label.AddThemeColorOverride("font_shadow_color",EvilSkin ? new Color("15120f") : Colors.Transparent);
+            label.AddThemeColorOverride("font_outline_color",new Color("15120f"));
+            label.AddThemeConstantOverride("outline_size",EvilSkin ? 2 : 0);
+            label.AddThemeConstantOverride("shadow_offset_x",EvilSkin ? 1 : 0);
+            label.AddThemeConstantOverride("shadow_offset_y",EvilSkin ? 1 : 0);
+        }
+        // Cost cells own their frames too. Rebuild an already open tooltip against the newly selected skin.
+        string text = _tipText; _tipText = "";
+        if (text != "") ShowTooltip(text);
     }
 
     /// <summary>Above the console's right section, flush with its right edge, growing upward with the text.</summary>
@@ -102,7 +115,7 @@ public partial class CommandPanel
             // A cost line: food, ore, Fate and population become the source's icon cells; the rest (time, health) leads the description.
             var parts = lines[0].Split(" · ");
             var costs = parts.Select(p => CostPart.Match(p)).Where(m => m.Success).ToArray();
-            if (costs.Any(m => m.Groups[2].Value is "food" or "ore"))
+            if (costs.Length > 0)
             {
                 foreach (var cost in costs) _tipCosts.AddChild(CostCell(cost.Groups[3].Success ? "population" : cost.Groups[2].Value,
                     cost.Groups[3].Success ? cost.Groups[4].Value : cost.Groups[1].Value));
@@ -135,6 +148,8 @@ public partial class CommandPanel
     public string DisplayedTooltip => _tip.Visible ? _tipText : "";
     public string DisplayedTooltipTitle => _tipTitle.Text;
     public string DisplayedTooltipBody => _tipBody.Visible ? _tipBody.Text : "";
+    public Color TooltipBodyInk => _tipBody.GetThemeColor("font_color");
+    public Color TooltipDescriptionInk => _tipDescription.GetThemeColor("font_color");
     public string[] DisplayedTooltipCosts => [.. _tipCosts.GetChildren().Select(c => c.GetChild(0).GetChild<TextureRect>(0).Name+" "+c.GetChild(1).GetChild<Label>(0).Text)];
     public Rect2 TooltipRect => _tip.GetGlobalRect();
     public bool DefaultTooltipsHidden => Theme?.GetStylebox("panel","TooltipPanel") is StyleBoxEmpty && Theme.GetColor("font_color","TooltipLabel").A == 0;

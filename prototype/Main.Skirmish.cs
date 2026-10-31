@@ -29,29 +29,29 @@ public partial class Main
     private void LoadSkirmishScene(JsonElement manifest)
     {
         var data = manifest.GetProperty("skirmish");
+        SeatFactions(data);
         LoadStructureDefinitions(data);
         var files = data.GetProperty("building_files");
         // A closed slot has no base: its start footprint frees the ground.
         foreach (var start in Bases(data).Where(b => !SlotOpen(b.GetProperty("team").GetInt32())))
             _world!.Navigation.SetObstacle(start.GetProperty("footprint_object").GetInt32(),false);
-        foreach (var start in OpenBases(data))
+        foreach (var start in StartBases(data))
         {
-            int team = start.GetProperty("team").GetInt32();
-            var at = start.GetProperty("position");
+            int team = start.Team;
+            var at = start.Position;
             var root = new Node3D { Name = "Building_" + _buildingViews.Count,
                 // Source metres are Z-up; the map export uses (-x, z, y) for placements.
                 Position = new(-at[0].GetSingle(),at[2].GetSingle(),at[1].GetSingle()) };
-            string file = files.GetProperty(start.GetProperty("building").GetString()!).GetString()!;
-            var model = TurnModel(LoadGlb(file,_teamColors[team]),start.GetProperty("building").GetString()!); root.AddChild(model);
+            string file = files.GetProperty(start.Building).GetString()!;
+            var model = TurnModel(LoadGlb(file,_teamColors[team]),start.Building); root.AddChild(model);
             // Restored building models carry every source state; show the healthy one.
             var appearance = Reforged.Rendering.UnitAppearance.Read(CachePath(file));
             new Reforged.Rendering.UnitAppearance(model,appearance).Apply(BuildingStateClips(appearance)[3],0);
             AddChild(root); _buildingViews.Add(root);
-            int obstacle = start.GetProperty("footprint_object").GetInt32();
-            RegisterStructure(obstacle,team,start.GetProperty("building").GetString()!,root);
+            int obstacle = start.Footprint;
+            RegisterStructure(obstacle,team,start.Building,root);
             _obstacleViews[obstacle] = root;
-            _startBuildings.Add((obstacle,team,start.GetProperty("building").GetString()!,
-                (int)Math.Round(at[0].GetDouble()*1000),(int)Math.Round(at[1].GetDouble()*1000),root,model,appearance));
+            _startBuildings.Add((obstacle,team,start.Building,start.X,start.Z,root,model,appearance));
         }
         _skirmishResourceCount = data.GetProperty("resources").GetArrayLength();
         var state = data.GetProperty("start_state");
@@ -82,8 +82,10 @@ public partial class Main
     public static string FateTip(SimWorld world,int team)
     {
         var bank = world.Economies[team];
-        string progress = world.FateRules == null ? "not earned" : bank.Fate >= world.MaxFate ? "full" : $"next point {world.FateProgressPercent(team)}%";
-        return $"Fate {bank.Fate}/{world.MaxFate} · pays for heroes · {progress} · {bank.FateEarned} earned in battle";
+        string progress = world.FateRules == null ? "Not earned in this match" : bank.Fate >= world.MaxFate ? "Maximum Fate reached"
+            : $"Progress to next point: {world.FateProgressPercent(team)}%";
+        string earned = world.FactionOf(team) == SimWorld.Evil ? "earned in battle and from the ground its War Posts corrupt" : "earned in battle";
+        return $"Fate {bank.Fate}/{world.MaxFate}\n{progress}\n{bank.FateEarned} {earned}. Pays for heroes, ability unlocks and global abilities.\nClick for global abilities.";
     }
 
     private void LoadSkirmishEconomy(JsonElement data)
@@ -97,18 +99,17 @@ public partial class Main
         foreach (var source in economy.GetProperty("sources").EnumerateObject())
             _world!.ResourceClearanceMm[source.Name == "ore" ? ResourceKind.Ore : ResourceKind.Food] = source.Value.TryGetProperty("building_clearance_mm",out var clearance)
                 ? clearance.GetInt32() : throw new InvalidOperationException("Refresh skirmish economy: python tools/skirmish_economy.py --cache converted/skirmish");
-        foreach (var worker in economy.GetProperty("workers").EnumerateObject())
+        foreach (var worker in economy.GetProperty("workers").EnumerateObject().Where(w => Loaded(w.Name)))
         {
             _world!.Workers.Add(worker.Name,WorkerEconomy.Parse(worker.Value));
             _workerClips[worker.Name] = worker.Value.GetProperty("animations").EnumerateObject()
                 .ToDictionary(c => c.Name,c => (c.Value.GetProperty("state").GetString()!,c.Value.GetProperty("clip").GetString()!));
         }
-        foreach (var start in OpenBases(data))
+        foreach (var start in StartBases(data))
         {
-            int team = start.GetProperty("team").GetInt32(); var at = start.GetProperty("position");
+            int team = start.Team;
             _world!.Economies.Add(team,new(_startState.Food,_startState.Ore,economy.GetProperty("food_capacity").GetInt32(),economy.GetProperty("ore_capacity").GetInt32()));
-            int x = (int)Math.Round(at[0].GetDouble()*1000),z = (int)Math.Round(at[1].GetDouble()*1000);
-            int footprint = start.GetProperty("footprint_object").GetInt32();
+            int x = start.X,z = start.Z,footprint = start.Footprint;
             _world.DropOffs.Add(new(team,x,z,SkirmishInteractionRadius(footprint,x,z),footprint));
         }
         foreach (var resource in data.GetProperty("resources").EnumerateArray())
@@ -140,12 +141,15 @@ public partial class Main
             var bar = new Reforged.Rendering.HealthBar(barWidth,barHeight) { Position = new(0,.14f,0) };
             root.AddChild(bar);
             _constructionViews.Add(obstacle,new BuildingVisual(root,model,new Reforged.Rendering.UnitAppearance(model,appearance),
-                Descendants(model).OfType<AnimationPlayer>().FirstOrDefault(),BuildingStateClips(appearance),bar,name) { Stage = 3 });
+                Descendants(model).OfType<AnimationPlayer>().FirstOrDefault(),BuildingStateClips(appearance),bar,name));
         }
     }
 
     private int SkirmishInteractionRadius(int objectId,int x,int z)
     {
+        // An Evil start building's footprint was laid at load (SeatFactions); the map's saved layers hold the Citadel's.
+        if (_startFootprints.TryGetValue(objectId,out var polygon))
+            return InteractionRadius(polygon.Max(p => Math.Sqrt(Math.Pow(p.X*1000.0-x,2)+Math.Pow(p.Y*1000.0-z,2))));
         var layer = _obstacleLayers.EnumerateArray().First(o => o.GetProperty("id").GetInt32() == objectId);
         return InteractionRadius(layer.GetProperty("footprints").EnumerateArray().SelectMany(b => b.GetProperty("polygon").EnumerateArray())
             .Max(p => Math.Sqrt(Math.Pow(p[0].GetDouble()*1000-x,2)+Math.Pow(p[1].GetDouble()*1000-z,2))));
@@ -175,6 +179,7 @@ public partial class Main
         _orders.Cancel();
         if (attackers.Length == 0) { _status.Text = "Nothing in the selection can attack a building"; return true; }
         _world.Enqueue(PlayerTeam,attackers,OrderKind.AttackStructure,cell: forced ? SimWorld.ForcedSiege : -1,target: site.Id,queued: queued);
+        ShowStructureCommandFeedback(structure.Id);
         _status.Text = (site.Team == PlayerTeam ? "Force-attack " : "Attack ")+_world.SiteRules(site).DisplayName
             +(_paused ? " queued (paused)" : " order issued");
         return true;
@@ -188,6 +193,7 @@ public partial class Main
             is { } owned && owned.Team == PlayerTeam && (!owned.Complete || _world.NeedsRepair(owned)))
         {
             _world.Enqueue(PlayerTeam,SelectedWorkers(),OrderKind.Build,target: owned.Id,queued: queued);
+            ShowStructureCommandFeedback(structure.Id);
             _status.Text = owned.Complete ? "Repair "+_world.SiteRules(owned).DisplayName : "Resume construction";
             return true;
         }
@@ -196,13 +202,16 @@ public partial class Main
         if (_world.ConstructionSites.TryGetValue(source.Id,out var site) && site.Team == PlayerTeam && !site.Complete)
         {
             _world.Enqueue(PlayerTeam,SelectedWorkers(),OrderKind.Build,target: source.Id,queued: queued);
+            ShowStructureCommandFeedback(site.Obstacle);
             _status.Text = "Resume construction"; return true;
         }
         if (!_world.CanGather(PlayerTeam,source.Id) && !_world.Units.Any(u => u.Team == PlayerTeam && _selected.Contains(u.Id) && u.Health > 0 && u.CargoMilli > 0))
-        { _status.Text = site is { Team: > 0 } ? "Enemy resource building" : source.Kind == ResourceKind.Food ? "Food gathering requires a Mill" : "No raw ore remains; a Foundry is required"; return true; }
+        { _status.Text = site is { Team: > 0 } ? "Enemy resource building" : source.Kind == ResourceKind.Food ? $"Food gathering requires a {_world.ResourceRules(PlayerTeam,ResourceKind.Food)?.DisplayName ?? "Mill"}"
+            : $"No raw ore remains; a {_world.ResourceRules(PlayerTeam,ResourceKind.Ore)?.DisplayName ?? "Foundry"} is required"; return true; }
         var workers = _world.Units.Where(u => u.Team == PlayerTeam && u.Health > 0 && _selected.Contains(u.Id)
             && _world.Workers.ContainsKey(u.Definition.Name)).Select(u => u.Id);
         _world.Enqueue(PlayerTeam,workers,OrderKind.Gather,target: source.Id,queued: queued);
+        if (StructureAt(mouse) is { } gathered) ShowStructureCommandFeedback(gathered.Id);
         _status.Text = "Gather "+source.Kind.ToString().ToLowerInvariant()+(_paused ? " queued (paused)" : " order issued");
         return true;
     }

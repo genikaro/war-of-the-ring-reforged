@@ -44,7 +44,7 @@ class ProductionImportTests(unittest.TestCase):
                   'WorldVariables': FakeTable({0: ('world', {'DefaultInitialPopulationCapacity': 1, 'MaxPopulationCap': 90, 'MaxPowerPoints': 20,
                       'PowerLevelPerPoint': 500, 'PowerByDamageRate': 0.7999999523162842, 'PowerReductionScalar': 1.0999999046325684,
                       'MaxPowerDistanceMultiplier': 1.4499999284744263, 'PowerAcquisitionRateLow': 0.75, 'PowerAcquisitionRateMedium': 1.0,
-                      'PowerAcquisitionRateHigh': 1.3499999046325684})})}
+                      'PowerAcquisitionRateHigh': 1.3499999046325684, 'WarpostPowerAcquisitionRate': 0.0001})})}
         for name, values in FakeResolver.db['Buildings'].by_key.items():
             values.setdefault('UniqueGroupBuildingAffects', -1); values.setdefault('AmountBuildingAffectsUniqueGroup', 0)
         data = skirmish_production.production_data(FakeResolver(), ['UNIT_G_WORKER', 'UNIT_G_CALLED', 'UNIT_G_LATER'])
@@ -66,7 +66,7 @@ class ProductionImportTests(unittest.TestCase):
     @unittest.skipUnless((wor.ROOT / 'TLOTR - War of the Ring/Database/Units.lqr').exists(), 'owner install not available')
     def test_original_citadel_training(self):
         import prepare_prototype
-        data = skirmish_production.production_data(Resolver(), prepare_prototype.SKIRMISH_ROSTER)
+        data = skirmish_production.production_data(Resolver(), prepare_prototype.SKIRMISH_ROSTER, ('good',))
         citadel = data['producers'][skirmish_map.CITADEL]
         # Build-58: the four Fate heroes follow the Worker and Frodo in the source UnitProduced order.
         self.assertEqual(citadel['units'], ['UNIT_G_HUMAN_WORKER', 'UNIT_G_HERO_FRODO', 'UNIT_G_HERO_GIMLI', 'UNIT_G_HERO_ARAGORN',
@@ -84,7 +84,7 @@ class ProductionImportTests(unittest.TestCase):
         self.assertEqual(data['max_fate'], 20)
         # Build-76: Rings.exe reads these WorldVariables when battle earns Fate; Citadels 1-5 are the Good town centres.
         self.assertEqual({key: value for key, value in data['fate'].items() if key != 'adapter'}, {
-            'max_points': 20, 'level_per_point': 500, 'by_damage_ppm': 800_000, 'reduction_ppm': 1_100_000, 'max_distance_ppm': 1_450_000,
+            'max_points': 20, 'level_per_point': 500, 'by_damage_ppm': 800_000, 'reduction_ppm': 1_100_000, 'max_distance_ppm': 1_450_000, 'warpost_ppm': 100,
             'acquisition_ppm': {'low': 750_000, 'medium': 1_000_000, 'high': 1_350_000},
             'town_centers': ['BUILDING_G_TOWN_CENTER_LEVEL_%d' % level for level in range(1, 6)]})
         # Tier 3-4 recruitment (atlas): Archer 80/75/3, Lightbearer 100/85/3 at Citadel 4, Beorning 100/70/3, Huorn 235/200/5 at Citadel 4.

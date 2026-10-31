@@ -9,6 +9,8 @@ public partial class Main
     private long _smokePausedProgress;
     private int _smokeConstructionTick;
     private double _smokePausedBuildingAnimation;
+    private double _smokeMillAnimationPosition = double.NaN,_smokePausedMillAnimation;
+    private int _smokeMillAnimationLoops;
     private readonly Dictionary<string,bool> _constructionChecks = [];
     private readonly HashSet<int> _smokeBuildingStages = [];
     private readonly Dictionary<int,int> _smokeInside = [];
@@ -26,6 +28,13 @@ public partial class Main
         if (_frames > 27 && _constructionViews.TryGetValue(_smokeFoodSite,out var foodView))
         {
             _smokeBuildingStages.Add(foodView.Stage);
+            if (foodView.Stage == 3 && foodView.Player is { } millPlayer)
+            {
+                double position = millPlayer.CurrentAnimationPosition;
+                if (!_paused && millPlayer.IsPlaying() && !double.IsNaN(_smokeMillAnimationPosition) && position < _smokeMillAnimationPosition-.1)
+                    _smokeMillAnimationLoops++;
+                _smokeMillAnimationPosition = position;
+            }
             if (foodView.Stage == 2 && !_constructionCaptured && _capture != "") { _constructionCaptured = true; _ = CaptureFrame(false); }
         }
         if (_frames > 27)
@@ -113,6 +122,19 @@ public partial class Main
                     && world.ConstructionSites[_smokeFoodSite].ProgressMicroTicks == _smokePausedProgress
                     && (_constructionViews[_smokeFoodSite].Player?.CurrentAnimationPosition ?? 0) == _smokePausedBuildingAnimation;
                 PushKey(Key.Space); break;
+            case 1180: PushKey(Key.Space); break;
+            case 1182:
+                _smokePausedMillAnimation = _constructionViews[_smokeFoodSite].Player!.CurrentAnimationPosition;
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-mill-paused.png");
+                break;
+            case 1190:
+                _constructionChecks["pause_freezes_healthy_mill_animation"] = _constructionViews[_smokeFoodSite].Player!.CurrentAnimationPosition == _smokePausedMillAnimation;
+                PushKey(Key.Space); break;
+            case 1194:
+                _constructionChecks["healthy_mill_animation_resumes"] = _constructionViews[_smokeFoodSite].Player is { } millPlayer
+                    && millPlayer.IsPlaying() && Math.Abs(millPlayer.CurrentAnimationPosition-_smokePausedMillAnimation) > .01;
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-mill-running.png");
+                break;
             case 1199: PushKey(Key.Key1); break; // Recall the workers that are outside the Mill.
             case 1200:
                 _constructionChecks["mill_complete_with_source_health"] = world.ConstructionSites[_smokeFoodSite] is { Complete: true,Health: 570 };
@@ -156,7 +178,12 @@ public partial class Main
                 var newcomer = world.Units.LastOrDefault(u => u.Team == 0);
                 _constructionChecks["trained_worker_gathers_at_the_rally_mill"] = world.Units.Count(u => u.Team == 0) == _smokeTrainedWorkers+1
                     && newcomer is { Order: OrderKind.Gather } && newcomer.OrderTarget == _smokeFoodSite;
-                var report = new { build = BuildInfo.Label,checks = _constructionChecks,passed = _constructionChecks.Count == 31 && _constructionChecks.Values.All(v => v),
+                _constructionChecks["healthy_mill_repeats_multiple_animation_cycles"] = _smokeMillAnimationLoops >= 2
+                    && _constructionViews[_smokeFoodSite].Player!.IsPlaying();
+                _constructionChecks["prebuilt_citadel_animation_started"] = _constructionViews[SmokeOwnCitadel].Player!.IsPlaying()
+                    && _constructionViews[SmokeOwnCitadel].Player!.GetAnimation(_constructionViews[SmokeOwnCitadel].Player!.CurrentAnimation).LoopMode == Animation.LoopModeEnum.Linear;
+                var report = new { build = BuildInfo.Label,checks = _constructionChecks,passed = _constructionChecks.Count == 35 && _constructionChecks.Values.All(v => v),
+                    mill_animation_loops = _smokeMillAnimationLoops,
                     mill,foundry,bank = new {world.Economies[0].FoodMilli,world.Economies[0].OreMilli},
                     workers = world.Units.Where(u => u.Team == 0).Select(u => new {u.Id,u.Order,u.Goal,u.X,u.Z,u.CargoMilli,u.ReturningCargo}),
                     selected = _selected,status = _status.Text,commands = world.Commands,digest = world.StateDigest() };

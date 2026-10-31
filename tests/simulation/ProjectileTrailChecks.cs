@@ -21,5 +21,18 @@ static class ProjectileTrailChecks
         var stationary = new ProjectileTrailPlayback(.25);
         for (int i = 0; i < 100; i++) stationary.Record(new(i/80d,1,2,3));
         check(stationary.Sample(2).Length == 0,"stationary or paused arrows cannot grow a trail history indefinitely");
+        const int SpinRate = 1_080_000,Release = 20;
+        float Angle(double time) => ProjectileSpinPlayback.AngleRadians(SpinRate,Release,time);
+        check(Angle(.5) == 0 && Angle(1) == 0,"axe rotation starts at release, never before the launch");
+        check(Math.Abs(Angle(1+1/12d)-Math.PI/2) < .00001,"the source 1080 degrees/second spins an axe a quarter turn in 1/12 second");
+        check(Math.Abs(Angle(1+1/6d)-Math.PI) < .00001,"axe spin reaches a half turn in 1/6 second");
+        check(Math.Abs(Math.Sin(Angle(1+1/3d))) < .00001 && Math.Cos(Angle(1+1/3d)) > .99999,
+            "an axe completes a full turn in 1/3 second");
+        float pausedSpin = Angle(1.15);
+        check(Enumerable.Range(0,100).All(_ => Angle(1.15) == pausedSpin),"paused projectile frames keep the same rotation");
+        float sparseAngle = Angle(1.25);
+        for (int frame = 0; frame <= 20; frame++) Angle(1+frame/80d);
+        check(Angle(1.25) == sparseAngle,"dense and sparse render sampling yield the same axe rotation");
+        check(ProjectileSpinPlayback.AngleRadians(0,Release,2) == 0,"unspun arrows retain their normal orientation");
     }
 }

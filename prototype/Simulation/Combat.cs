@@ -84,7 +84,7 @@ public sealed partial class SimWorld
         bool Near(int x,int z,int spacing) => DistanceSquared(target.X,target.Z,x,z) < (long)(outer+spacing)*(outer+spacing);
         var blockers = new List<SimUnit>();
         int bound=outer+unit.Definition.BodyRadiusMm+Grid.MaxBodyRadiusMm+400;
-        var nearby=NearUnits(target.X,target.Z,bound);
+        var nearby=NearUnits(target.X,target.Z,bound).ToList();
         nearby.AddRange(Grid.NearAttackPositions(target.X,target.Z,bound,[]));
         foreach (var other in nearby.DistinctBy(u=>u.Id))
         {
@@ -265,7 +265,9 @@ public sealed partial class SimWorld
     // position). Movement below this method still uses the normal body checks.
     private bool UpdateCombat(SimUnit unit)
     {
-        if (unit.Order is OrderKind.UseAbility or OrderKind.Gather or OrderKind.Build or OrderKind.PlaceBuilding or OrderKind.AttackStructure) return false;
+        if (unit.BlindUntil > Tick) return false;
+        if (unit.Order is OrderKind.UseAbility or OrderKind.Gather or OrderKind.Build or OrderKind.PlaceBuilding or OrderKind.AttackStructure
+            or OrderKind.ApproachStructure or OrderKind.ReturnCargo) return false;
         // Stop cancels the current action now; normal idle guarding resumes on
         // the following tick instead of starting another swing in this one.
         if (unit.LastStopTick==Tick) return true;
@@ -291,7 +293,7 @@ public sealed partial class SimWorld
             ReleaseCombat(unit); unit.Order=OrderKind.Idle; unit.OrderTarget=-1; unit.AutoEngage=false; return false;
         }
         bool released = false;
-        if (unit.Target >= 0 && (!Units[unit.Target].Present || (HoldsPosition(unit)
+        if (unit.Target >= 0 && (!Units[unit.Target].Present || !CanSeeUnit(unit.Team,Units[unit.Target]) || (HoldsPosition(unit)
             && !AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,Units[unit.Target]))))
         {
             if(!Units[unit.Target].Present) unit.CombatFlankTried=false;
@@ -344,8 +346,9 @@ public sealed partial class SimWorld
             unit.FreeMovement = false; unit.AttackNode = unit.Node; unit.CombatTarget = target.Id;
             unit.CombatWaiting = false; unit.BlockedTicks = 0; unit.Attacking = true;
             unit.CombatRequestTick=-1;
-            if (!FaceForAttack(unit,target) && !unit.StrikeActive) return true;
-            Strike(unit,target);
+            bool facingReady = FaceForAttack(unit,target);
+            if (!facingReady && !unit.StrikeActive) return true;
+            Strike(unit,target,facingReady);
             return true;
         }
         CancelStrike(unit);

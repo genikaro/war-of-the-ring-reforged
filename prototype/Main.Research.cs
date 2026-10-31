@@ -12,7 +12,7 @@ public partial class Main
         if (!data.TryGetProperty("research",out var research) || research.GetProperty("format_version").GetInt32() != 1
             || research.GetProperty("ticks_per_second").GetInt32() != SimWorld.TicksPerSecond)
             throw new InvalidOperationException("Refresh research: python tools/skirmish_research.py --cache converted/skirmish");
-        foreach (var item in research.GetProperty("techniques").EnumerateObject())
+        foreach (var item in research.GetProperty("techniques").EnumerateObject().Where(t => Loaded(t.Value.GetProperty("building").GetString()!)))
         {
             var rules = item.Value;
             string? Optional(string key) => rules.GetProperty(key).ValueKind == JsonValueKind.Null ? null : rules.GetProperty(key).GetString();
@@ -23,7 +23,9 @@ public partial class Main
                     b => (b.Value.GetProperty("damage_milli").GetInt32(),b.Value.GetProperty("armor_milli").GetInt32())),
                 // Build-58 effects: missile range, a replaced missile weapon and building health.
                 Effect("range_ppm"),Effect("missile_dps_milli"),
-                rules.TryGetProperty("building_health_ppm",out var health) ? health.GetInt32() : 1_000_000));
+                rules.TryGetProperty("building_health_ppm",out var health) ? health.GetInt32() : 1_000_000,
+                rules.TryGetProperty("description",out var description) ? description.GetString()! : "",Effect("sight_ppm"),Effect("time_scale_ppm"),
+                rules.TryGetProperty("building_weapon",out var weapon) ? weapon.Deserialize<BuildingWeaponUpgrade>() : null));
             _techniquePortraits[item.Name] = rules.GetProperty("portrait").GetString()!;
             Dictionary<string,int>? Effect(string key)
             {
@@ -32,9 +34,12 @@ public partial class Main
                 return found.Count > 0 ? found : null;
             }
         }
+        if (research.TryGetProperty("building_fire",out var fire))
+            foreach (var item in fire.EnumerateObject().Where(f => Loaded(f.Name)))
+                _world!.BuildingFireRules.Add(item.Name,item.Value.Deserialize<BuildingFireDefinition>()!);
         // Build-58 lists the research the simulation cannot carry out yet, shown disabled with the reason.
         if (research.TryGetProperty("unsimulated",out var unsimulated))
-            foreach (var item in unsimulated.EnumerateObject())
+            foreach (var item in unsimulated.EnumerateObject().Where(t => Loaded(t.Value.GetProperty("building").GetString()!)))
             {
                 var rules = item.Value;
                 _world!.UnsimulatedTechniques.Add(new(item.Name,rules.GetProperty("display_name").GetString()!,rules.GetProperty("building").GetString()!,

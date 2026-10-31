@@ -33,7 +33,7 @@ public partial class Main
         var choices = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         choices.AddThemeConstantOverride("separation",16); box.AddChild(choices);
         _outcomeContinue = DebugButton("Continue",ContinueAfterOutcome); _outcomeContinue.CustomMinimumSize = new(140,40); choices.AddChild(_outcomeContinue);
-        _outcomeRestart = DebugButton("Restart",() => GetTree().ReloadCurrentScene()); _outcomeRestart.CustomMinimumSize = new(140,40); choices.AddChild(_outcomeRestart);
+        _outcomeRestart = DebugButton("Restart",() => _ = ReloadWithAudio()); _outcomeRestart.CustomMinimumSize = new(140,40); choices.AddChild(_outcomeRestart);
         // Back to the skirmish setup screen, when the match was chosen there.
         _outcomeSetup = DebugButton("Setup",ReturnToSetup); _outcomeSetup.CustomMinimumSize = new(140,40); choices.AddChild(_outcomeSetup);
     }

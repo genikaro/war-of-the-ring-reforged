@@ -89,5 +89,6 @@ public static class DefenseChecks
         int before = ruin.Projectiles.Count;
         Step(ruin,60);
         check(before == 1 && ruin.Projectiles.Count == 0 && ruin.Units[0].HealthMilli == 86_000,"a fallen tower stops shooting, though its last arrow lands");
+        TowerChecks.Run(check);
     }
 }

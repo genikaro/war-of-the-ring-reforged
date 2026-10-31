@@ -10,6 +10,8 @@ public partial class Main
     private long _dwarfVictimHealth;
     private int _dwarfCitadelHealth = -1,_dwarfSiegeAimSamples;
     private bool _dwarfSiegeAimed = true;
+    private readonly Dictionary<int,Quaternion> _dwarfAxeRotations = [];
+    private bool _dwarfAxeSpinObserved;
     /// <summary>Frames spent waiting for the workers to reach the Hall's spot, which the frame numbers below skip.</summary>
     private int _dwarfHold;
     private const string SmokeDwarfHall = "BUILDING_G_DWARF_BARRACKS",SmokeAxethrower = "UNIT_G_DWARVEN_AXETHROWER";
@@ -18,6 +20,13 @@ public partial class Main
     {
         var world = _world!; var citadel = world.StartStructures.First(s => s.Team == 0);
         ConstructionSite? Hall() => world.ConstructionSites.Values.FirstOrDefault(s => s.Building == SmokeDwarfHall);
+        foreach (var axe in world.Projectiles.Where(p => p.Unit == _dwarfTrained && p.Site >= 0))
+        {
+            if (!_arrowViews.TryGetValue(axe.Id,out var view)) continue;
+            var rotation = view.Basis.GetRotationQuaternion();
+            if (_dwarfAxeRotations.TryGetValue(axe.Id,out var previous) && previous.AngleTo(rotation) > .1f) _dwarfAxeSpinObserved = true;
+            _dwarfAxeRotations[axe.Id] = rotation;
+        }
         if (_dwarfTrained >= 0 && !_dwarfCaptured && _capture != "" && world.Projectiles.Count > 0) { _dwarfCaptured = true; _ = CaptureFrame(false); }
         if (_dwarfCitadelHealth >= 0) SampleSiegeAxes(world);
         bool Hold(bool waiting) { if (waiting) _dwarfHold++; return waiting; }
@@ -61,6 +70,9 @@ public partial class Main
                     .MinBy(u => SimWorld.DistanceSquared(u.X,u.Z,world.Units[_dwarfTrained].X,world.Units[_dwarfTrained].Z));
                 _dwarfChecks["axethrower_selected_with_source_stats"] = _selected.SetEquals([_dwarfTrained]) && _commands.DisplayedName == "Dwarf Axethrower"
                     && _commands.DisplayedHealth == "140/140" && victim != null;
+                _dwarfChecks["axe_passives_visible_but_locked"] = new[] {2,3}.All(slot => _commands.AbilityButton(slot) is { Visible: true,Disabled: true,Icon: not null }
+                    && _commands.AbilityButton(slot).GetThemeColor("icon_disabled_color").R < .5f
+                    && _commands.AbilityButton(slot).TooltipText.EndsWith(world.Units[_dwarfTrained].Ability(slot)!.Description));
                 if (victim == null) break;
                 _dwarfVictim = victim.Id; _dwarfVictimHealth = victim.HealthMilli;
                 PushKey(Key.A); Click(_camera.UnprojectPosition(UnitPosition(victim)+Vector3.Up)); break;
@@ -80,9 +92,10 @@ public partial class Main
                 _dwarfChecks["axes_thrown_at_a_building_damage_it"] = world.Units[_dwarfTrained] is { Order: OrderKind.AttackStructure,SiegeForced: true }
                     && world.ConstructionSites[SmokeOwnCitadel].Health < _dwarfCitadelHealth;
                 _dwarfChecks["axes_at_a_building_fly_toward_it"] = _dwarfSiegeAimSamples > 0 && _dwarfSiegeAimed;
+                _dwarfChecks["axe_model_rotates_in_flight"] = _dwarfAxeSpinObserved;
                 PushKey(Key.S); break;
             case 2104:
-                var report = new { build = BuildInfo.Label,checks = _dwarfChecks,passed = _dwarfChecks.Count == 12 && _dwarfChecks.Values.All(v => v),
+                var report = new { build = BuildInfo.Label,checks = _dwarfChecks,passed = _dwarfChecks.Count == 14 && _dwarfChecks.Values.All(v => v),
                     fixture = "Start bank credited 300 food and 300 ore at frame 2",cell = _dwarfCell,
                     axethrower = world.Units[_dwarfTrained] is var a ? new { a.Id,a.X,a.Z,a.Order,a.Health } : null,
                     victim = _dwarfVictim < 0 ? null : new { world.Units[_dwarfVictim].Id,world.Units[_dwarfVictim].Health },

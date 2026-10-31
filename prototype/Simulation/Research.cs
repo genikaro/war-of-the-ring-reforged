@@ -6,13 +6,17 @@ namespace Reforged.Simulation;
 /// (Dwarven Engineering).</summary>
 public sealed record TechniqueDefinition(string Name,string DisplayName,string Building,int Slot,int FoodCost,int OreCost,int DurationTicks,
     string? Prerequisite,string? Previous,IReadOnlyDictionary<string,(int DpsMilli,int ArmorMilli)> Bonuses,
-    IReadOnlyDictionary<string,int>? RangePpm = null,IReadOnlyDictionary<string,int>? MissileDpsMilli = null,int BuildingHealthPpm = 1_000_000)
+    IReadOnlyDictionary<string,int>? RangePpm = null,IReadOnlyDictionary<string,int>? MissileDpsMilli = null,int BuildingHealthPpm = 1_000_000,string Description = "",
+    IReadOnlyDictionary<string,int>? SightPpm = null,IReadOnlyDictionary<string,int>? TimeScalePpm = null,BuildingWeaponUpgrade? BuildingWeapon = null)
 {
     public override string ToString() => $"{Name},{Building},{Slot},{FoodCost},{OreCost},{DurationTicks},{Prerequisite},{Previous},"
         +string.Join('/',Bonuses.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => $"{p.Key}={p.Value.DpsMilli}:{p.Value.ArmorMilli}"))
         +(RangePpm is { Count: > 0 } ? ",range:"+string.Join('/',RangePpm.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => $"{p.Key}={p.Value}")) : "")
         +(MissileDpsMilli is { Count: > 0 } ? ",missile:"+string.Join('/',MissileDpsMilli.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => $"{p.Key}={p.Value}")) : "")
-        +(BuildingHealthPpm != 1_000_000 ? ",buildings:"+BuildingHealthPpm : "");
+        +(SightPpm is { Count: > 0 } ? ",sight:"+string.Join('/',SightPpm.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => $"{p.Key}={p.Value}")) : "")
+        +(TimeScalePpm is { Count: > 0 } ? ",time:"+string.Join('/',TimeScalePpm.OrderBy(p=>p.Key,StringComparer.Ordinal).Select(p=>$"{p.Key}={p.Value}")) : "")
+        +(BuildingWeapon != null ? ",building-weapon:"+BuildingWeapon : "")
+        +(BuildingHealthPpm != 1_000_000 ? ",buildings:"+BuildingHealthPpm : "")+",description:"+Description;
 }
 
 /// <summary>A technique button the simulation cannot carry out yet (an ability grant, sight, a cloak), shown disabled with
@@ -104,7 +108,7 @@ public sealed partial class SimWorld
             done.Add(rules.Name);
             // ponytail: unverified; every building of the team keeps its share of the raised maximum, as units do.
             foreach (var (building,max) in standing) building.Health = Math.Max(1,(int)((long)building.Health*SiteMaxHealth(building)/Math.Max(1,max)));
-            foreach (var unit in Units.Where(u => u.Team == site.Team && u.Health > 0)) ApplyTechniques(unit);
+            foreach (var unit in ActiveUnits.Where(u => u.Team == site.Team && u.Health > 0)) ApplyTechniques(unit);
         }
     }
 
@@ -112,9 +116,15 @@ public sealed partial class SimWorld
     /// the earlier one.</summary>
     private void ApplyTechniques(SimUnit unit)
     {
-        unit.TechniqueDpsMilli = unit.TechniqueArmorMilli = unit.TechniqueMissileDpsMilli = 0; unit.TechniqueRangePpm = 1_000_000;
+        unit.AbilityResearch.Clear();
+        if (Researched.TryGetValue(unit.Team,out var researched)) unit.AbilityResearch.UnionWith(researched);
+        unit.TechniqueDpsMilli = unit.TechniqueArmorMilli = unit.TechniqueMissileDpsMilli = 0; unit.TechniqueRangePpm = unit.TechniqueSightPpm = unit.TechniqueTimeScalePpm = 1_000_000;
         foreach (var technique in Techniques.Where(t => TechniqueApplies(unit.Team,t)))
         {
+            if (technique.TimeScalePpm?.TryGetValue(unit.Definition.Name,out int time) == true)
+                unit.TechniqueTimeScalePpm = (int)((long)unit.TechniqueTimeScalePpm*time/1_000_000);
+            if (technique.SightPpm?.TryGetValue(unit.Definition.Name,out int sight) == true)
+                unit.TechniqueSightPpm = (int)((long)unit.TechniqueSightPpm*sight/1_000_000);
             if (technique.Bonuses.TryGetValue(unit.Definition.Name,out var bonus))
             { unit.TechniqueDpsMilli += bonus.DpsMilli; unit.TechniqueArmorMilli += bonus.ArmorMilli; }
             if (technique.RangePpm?.TryGetValue(unit.Definition.Name,out int range) == true)
@@ -123,10 +133,14 @@ public sealed partial class SimWorld
             if (unit.Definition.IsRanged && technique.MissileDpsMilli?.TryGetValue(unit.Definition.Name,out int missile) == true)
                 unit.TechniqueMissileDpsMilli = missile-unit.Definition.DpsMilli;
         }
+        unit.ParalyzeRangeMm=unit.Definition.Abilities?.FirstOrDefault(a=>a.Kind==AbilityKind.Paralyze
+            && (a.RequiredTechnique==null || unit.AbilityResearch.Contains(a.RequiredTechnique)))?.RangeMm ?? 0;
+        unit.Grid?.MeasureReach(unit.ReachMm);
     }
 
     private string ResearchDigest() => ":techniques:"+string.Join(';',Techniques)
         + ":researched:"+string.Join(';',Researched.OrderBy(p => p.Key).Select(p => p.Key+"="+string.Join(',',p.Value.Order(StringComparer.Ordinal))))
+        + ":ability-research:"+string.Join(';',Units.Select(u => string.Join(',',u.AbilityResearch.Order(StringComparer.Ordinal))))
         + ":technique-bonuses:"+string.Join(';',Units.Select(u => $"{u.TechniqueDpsMilli},{u.TechniqueArmorMilli}"
             +(u.TechniqueRangePpm != 1_000_000 || u.TechniqueMissileDpsMilli != 0 ? $",{u.TechniqueRangePpm},{u.TechniqueMissileDpsMilli}" : "")));
 }
