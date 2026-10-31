@@ -5,16 +5,26 @@ using System.Text.RegularExpressions;
 
 /// <summary>The match chosen on the setup screen: the map's cache, the human's slot (-1 to watch), each slot's bot
 /// personality with its traits ("Gimli+Defender"; "" for the human and closed slots), the closed slots, the start speed,
-/// and the seed that draws its random places of power and bots, new for every Start.</summary>
-public sealed record SkirmishSetup(string Cache,string Map,int Human,string[] Bots,int[] Closed,int Speed,int Seed = 0,string[]? Factions = null);
+/// and the seed that draws its random places of power and bots, new for every Start. Build-147: the Sandbox setup
+/// screen's choices, instant building and the training dummies (both on otherwise).</summary>
+public sealed record SkirmishSetup(string Cache,string Map,int Human,string[] Bots,int[] Closed,int Speed,int Seed = 0,string[]? Factions = null,
+    bool SandboxInstantBuild = true,bool SandboxTrainingDummies = true);
 
-/// <summary>The skirmish setup screen, a lobby in the manner of Warcraft III and StarCraft II: every multiplayer map
+/// <summary>The setup screens. Skirmish, a lobby in the manner of Warcraft III and StarCraft II: every multiplayer map
 /// with its player count and a preview of its start positions, one row per start position (you, a bot personality or
-/// closed; with nobody playing, you watch) with the bot's traits (build-51), a card describing the bot last chosen or
-/// clicked (its difficulty, its style in the Aggression / Expansion / Tech triangle, its traits and how it plays;
-/// build-49), the start speed, and Start. Maps not imported yet are listed with the command that imports them.</summary>
+/// closed; with nobody playing, you watch) with the side and the bot's traits (build-51), a card describing the bot
+/// last chosen or clicked (its difficulty, its style in the Aggression / Expansion / Tech triangle, its traits and how
+/// it plays; build-49), the start speed, and Start. Maps not imported yet are listed with the command that imports
+/// them. Sandbox (build-147): the Sandbox test map alone, both start positions yours with a side each, the start speed,
+/// and whether building and training finish at once and the training dummies stand by the blue base.
+/// Build-147 also puts both in the original game-creation screen (Screens/MENU_SKIRMISH.lsr, 1024 × 768): the stone
+/// frame (Game_Creation_BG) with the title at the top left, the player table across the middle (rows from y 0.293, one
+/// every 0.035, between thin rules), the map list at the bottom left, the minimap and the map's name and size beside
+/// it, the game settings at the bottom right under a gold rule, and the gold-edged Back and Start boxes in the corner,
+/// lettered in the Immortal font. The frame keeps its shape in any window, with dark stone beside it.</summary>
 public partial class SetupScreen : Control
 {
+    public enum SetupKind { Skirmish,Sandbox }
     public sealed record MapEntry(string Stem,string Title,string? Cache,int Players,(int X,int Z)[] Bases,(bool Food,int X,int Z)[] Resources,
         int WidthMm,int HeightMm,Color[] Colors,AiBotOption[] Personalities,string DefaultPersonality,bool Sandbox = false)
     {
@@ -22,25 +32,32 @@ public partial class SetupScreen : Control
     }
 
     public event Action<SkirmishSetup>? Started;
-    public event Action? QuitChosen;
-    /// <summary>Set before the screen enters the tree: the converted caches, the source map folder, the speeds, and
-    /// the last match chosen here (to start from its choices).</summary>
+    /// <summary>Back to the main menu (Quit when the screen was opened on its own with --setup).</summary>
+    public event Action? BackChosen;
+    /// <summary>Set before the screen enters the tree: which screen, the converted caches, the source map folder, the
+    /// speeds, the last match chosen here (to start from its choices) and the Back button's caption.</summary>
+    public SetupKind Kind { get; set; }
     public string ConvertedPath { get; set; } = "";
     public string SourcesPath { get; set; } = "";
     public int[] Speeds { get; set; } = [1];
     public SkirmishSetup? Previous { get; set; }
+    public string BackText { get; set; } = "Back";
 
     private const int Slots = 8,You = 0,Closed = 1,FirstBot = 2;
-    private static readonly Color Gold = new("d8b574"),Ink = new("fff3cb"),Dim = new("c9b98a"),Edge = new("6f6040");
+    private static readonly Vector2 ScreenSize = new(1024,768);
+    private static readonly Color Gold = new("d8b574"),Ink = new("efe4c8"),Dim = new("b9ab86"),Edge = new("6f6040"),Rule = new(.85f,.7f,.4f,.28f),
+        Shadow = new(0,0,0,.8f),Highlight = new("f7d16a");
     private readonly List<MapEntry> _maps = [];
     private readonly Dictionary<string,Button> _mapButtons = [];
     private readonly Dictionary<string,ImageTexture?> _terrain = [];
     private Control _frame = null!;
     private ScrollContainer _scroll = null!;
-    private Label _mapTitle = null!,_mapDetail = null!,_status = null!;
+    private Label _title = null!,_mapTitle = null!,_mapDetail = null!,_status = null!,_sandboxText = null!;
     private readonly (Control Row,ColorRect Swatch,Label Name,OptionButton Choice,MenuButton Traits)[] _slots = new (Control,ColorRect,Label,OptionButton,MenuButton)[Slots];
     /// <summary>Each slot's side (build-133): Good or Evil. The Sandbox lets you choose both of yours.</summary>
     private readonly OptionButton[] _sides = new OptionButton[Slots];
+    /// <summary>Each row's bot in a few words: its difficulty and style (build-147).</summary>
+    private readonly Label[] _summaries = new Label[Slots];
     private const int GoodSide = 0,EvilSide = 1;
     /// <summary>Each slot's bot traits, kept while the slot stays a bot.</summary>
     private readonly SortedSet<AiTrait>[] _traits = [.. Enumerable.Range(0,Slots).Select(_ => new SortedSet<AiTrait>())];
@@ -51,6 +68,7 @@ public partial class SetupScreen : Control
     /// <summary>The slot the bot card describes: the last one changed or clicked (-1: the first bot slot).</summary>
     private int _cardSlot = -1;
     private SpeedSlider _speed = null!;
+    private CheckBox _instantBuild = null!,_trainingDummies = null!;
     private Button _start = null!,_quit = null!;
     private MapEntry? _selected;
     private bool _loading;
@@ -59,47 +77,41 @@ public partial class SetupScreen : Control
     {
         Name = "SetupScreen"; MouseFilter = MouseFilterEnum.Stop;
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        var shade = new ColorRect { Color = new Color(.025f,.03f,.035f),MouseFilter = MouseFilterEnum.Ignore };
+        bool sandbox = Kind == SetupKind.Sandbox;
+        var art = FrontEndArt.Shared;
+        var shade = new ColorRect { Color = new Color("1a1918"),MouseFilter = MouseFilterEnum.Ignore };
         AddChild(shade); shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        _frame = new Control { Size = new(1120,700),MouseFilter = MouseFilterEnum.Ignore }; AddChild(_frame);
-        var panel = new PanelContainer { Size = _frame.Size };
-        panel.AddThemeStyleboxOverride("panel",new StyleBoxFlat { BgColor = new Color(.06f,.05f,.03f,.96f),BorderColor = Gold,
-            BorderWidthLeft = 2,BorderWidthRight = 2,BorderWidthTop = 2,BorderWidthBottom = 2,CornerRadiusTopLeft = 8,CornerRadiusBottomRight = 8,
-            ContentMarginLeft = 24,ContentMarginRight = 24,ContentMarginTop = 16,ContentMarginBottom = 18 });
-        _frame.AddChild(panel);
-        var root = new VBoxContainer(); root.AddThemeConstantOverride("separation",12); panel.AddChild(root);
-        var header = new HBoxContainer(); root.AddChild(header);
-        header.AddChild(Caption("Skirmish",30,Gold));
-        header.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
-        header.AddChild(Caption("Choose a map and who holds each start position",14,Dim));
-        var body = new HBoxContainer(); body.AddThemeConstantOverride("separation",20); root.AddChild(body);
+        _frame = new Control { Size = ScreenSize,MouseFilter = MouseFilterEnum.Ignore }; AddChild(_frame);
+        // The Immortal font for everything on the screen; Godot's default font fills in what it lacks.
+        _frame.Theme = new Theme { DefaultFont = art.Immortal(16),DefaultFontSize = 15 };
+        if (art.Art("game_creation_bg") is { } stone)
+            Place(new TextureRect { Texture = stone,MouseFilter = MouseFilterEnum.Ignore,ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.Scale },0,0,1024,768);
+        else
+        {
+            var panel = Place(new Panel { MouseFilter = MouseFilterEnum.Ignore },0,0,1024,768);
+            panel.AddThemeStyleboxOverride("panel",new StyleBoxFlat { BgColor = new Color("3c3b3a"),BorderColor = Gold,BorderWidthLeft = 2,BorderWidthRight = 2,BorderWidthTop = 2,BorderWidthBottom = 2 });
+        }
+        _title = Place(Caption(sandbox ? "Sandbox" : "Skirmish",34,Ink,true),36,142,560,50);
 
-        var left = new VBoxContainer { CustomMinimumSize = new(300,0) }; left.AddThemeConstantOverride("separation",6); body.AddChild(left);
-        left.AddChild(Caption("Map",14,Dim));
-        var scroll = _scroll = new ScrollContainer { CustomMinimumSize = new(300,560),HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
-        left.AddChild(scroll);
-        var list = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill }; list.AddThemeConstantOverride("separation",2); scroll.AddChild(list);
-
-        var right = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill }; right.AddThemeConstantOverride("separation",14); body.AddChild(right);
-        var top = new HBoxContainer(); top.AddThemeConstantOverride("separation",20); right.AddChild(top);
-        _preview = new MapPreview { CustomMinimumSize = new(320,320) }; top.AddChild(_preview);
-        var info = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill }; info.AddThemeConstantOverride("separation",4); top.AddChild(info);
-        _mapTitle = Caption("",24,Gold); info.AddChild(_mapTitle);
-        _mapDetail = Caption("",13,Dim); info.AddChild(_mapDetail);
-        info.AddChild(new Control { CustomMinimumSize = new(0,6) });
+        // The player table (MENU_SKIRMISH: header at y 0.256, rows from 0.293 one every 0.0349, x 0.067 to 0.935).
+        const float tableLeft = 69,tableRight = 950,headerY = 197,rowTop = 225,rowStep = 26.8f;
+        foreach (var (text,x) in new[] { ("Player",76f),(sandbox ? "Commander" : "Controller",190f),("Side",448f),(sandbox ? "" : "Traits",556f),(sandbox ? "" : "Bot",684f) })
+            Place(Caption(text,16,Gold,true),x,headerY,180,25);
+        Place(new ColorRect { Color = Rule,MouseFilter = MouseFilterEnum.Ignore },tableLeft,rowTop-3,tableRight-tableLeft,1);
         for (int slot = 0; slot < Slots; slot++)
         {
-            int index = slot;
-            var row = new HBoxContainer(); row.AddThemeConstantOverride("separation",10); info.AddChild(row);
-            var swatch = new ColorRect { CustomMinimumSize = new(14,14),SizeFlagsVertical = SizeFlags.ShrinkCenter }; row.AddChild(swatch);
-            var name = Caption($"Player {slot+1}",15,Ink); name.CustomMinimumSize = new(66,0); row.AddChild(name);
-            var choice = new OptionButton { CustomMinimumSize = new(168,30),FocusMode = FocusModeEnum.None };
-            StyleDropDown(choice,choice.GetPopup()); choice.ItemSelected += item => ChooseSlot(index,(int)item); row.AddChild(choice);
+            int index = slot; float y = rowTop+slot*rowStep;
+            var row = Place(new Control { MouseFilter = MouseFilterEnum.Ignore },tableLeft,y,tableRight-tableLeft,rowStep);
+            var swatch = PlaceIn(row,new ColorRect { MouseFilter = MouseFilterEnum.Ignore },8,7,13,13);
+            var name = PlaceIn(row,Caption($"Player {slot+1}",15,Ink),27,0,90,24);
+            var choice = PlaceIn(row,new OptionButton { FocusMode = FocusModeEnum.None },121,1,250,23);
+            StyleDropDown(choice,choice.GetPopup()); choice.ItemSelected += item => ChooseSlot(index,(int)item);
             choice.Pressed += () => { _cardSlot = index; Refresh(); };
-            var side = new OptionButton { CustomMinimumSize = new(70,30),FocusMode = FocusModeEnum.None,TooltipText = "The side this player commands: the Free Peoples (Good) or the Minions of Sauron (Evil)" };
-            side.AddItem("Good"); side.AddItem("Evil"); StyleDropDown(side,side.GetPopup()); side.ItemSelected += _ => Refresh(); row.AddChild(side); _sides[slot] = side;
+            var side = PlaceIn(row,new OptionButton { FocusMode = FocusModeEnum.None,TooltipText = "The side this player commands: the Free Peoples (Good) or the Minions of Sauron (Evil)" },379,1,100,23);
+            side.AddItem("Good"); side.AddItem("Evil"); StyleDropDown(side,side.GetPopup()); side.ItemSelected += _ => Refresh(); _sides[slot] = side;
             // Traits (build-51): check items that stay open, so several can be ticked in one go.
-            var traits = new MenuButton { Text = "Traits",CustomMinimumSize = new(80,30),FocusMode = FocusModeEnum.None,Flat = false };
+            var traits = PlaceIn(row,new MenuButton { Text = "Traits",FocusMode = FocusModeEnum.None,Flat = false },487,1,120,23);
             var menu = traits.GetPopup(); menu.HideOnCheckableItemSelection = false;
             foreach (var trait in AiRoster.Traits)
             {
@@ -108,36 +120,65 @@ public partial class SetupScreen : Control
             }
             StyleDropDown(traits,menu); menu.IdPressed += id => ToggleTrait(index,(AiTrait)id);
             traits.Pressed += () => { _cardSlot = index; Refresh(); };
-            row.AddChild(traits);
+            traits.Visible = !sandbox;
+            _summaries[slot] = PlaceIn(row,Caption("",13,Dim),615,0,262,24);
+            PlaceIn(row,new ColorRect { Color = Rule,MouseFilter = MouseFilterEnum.Ignore },0,rowStep-1,tableRight-tableLeft,1);
             _slots[slot] = (row,swatch,name,choice,traits);
         }
-        var card = new PanelContainer(); _card = card;
-        var cardBox = Box(new Color(0,0,0,.3f),Edge); cardBox.ContentMarginTop = cardBox.ContentMarginBottom = 6;
-        card.AddThemeStyleboxOverride("panel",cardBox); right.AddChild(card);
-        var cardRow = new HBoxContainer(); cardRow.AddThemeConstantOverride("separation",14); card.AddChild(cardRow);
-        _triangle = new StyleTriangle { CustomMinimumSize = new(240,104),
+        _status = Place(Caption("",14,Dim),76,446,872,26); _status.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+
+        // Bottom left: the map list (0.03, 0.6225, 0.306 × 0.329), or the Sandbox's description.
+        Place(new ColorRect { Color = Rule,MouseFilter = MouseFilterEnum.Ignore },27,475,316,1);
+        Place(new ColorRect { Color = Rule,MouseFilter = MouseFilterEnum.Ignore },27,728,316,1);
+        _scroll = Place(new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,Visible = !sandbox },31,480,309,245);
+        var list = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill }; list.AddThemeConstantOverride("separation",1); _scroll.AddChild(list);
+        // Wrapping from the start: a label first sized to its unwrapped text keeps that width.
+        _sandboxText = Caption("",15,Ink); _sandboxText.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        Place(_sandboxText,35,484,302,240); _sandboxText.Text = SandboxDescription;
+        _sandboxText.VerticalAlignment = VerticalAlignment.Top; _sandboxText.Visible = sandbox;
+
+        // Middle: the minimap (0.344, 0.6225, 0.151 × 0.191) and the map's name and size under it.
+        _preview = Place(new MapPreview(),352,478,154,147);
+        _mapTitle = Place(Caption("",18,Gold,true),352,628,190,26);
+        _mapDetail = Place(Caption("",13,Dim),352,656,190,72); _mapDetail.AutowrapMode = TextServer.AutowrapMode.WordSmart; _mapDetail.VerticalAlignment = VerticalAlignment.Top;
+
+        // Bottom right: Game settings under the gold rule (0.548, 0.665, 0.426).
+        Place(Caption("Game settings",18,Gold,true),565,480,380,27);
+        if (art.Art("control_golden_panel_thin") is { } rule)
+            Place(new TextureRect { Texture = rule,MouseFilter = MouseFilterEnum.Ignore,ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,StretchMode = TextureRect.StretchModeEnum.Scale },561,509,436,6);
+        Place(Caption("Start speed",15,Ink),565,520,120,26);
+        _speed = Place(new SpeedSlider { TooltipText = "Game speed at the start · - and + change it during the match" },700,515,280,40);
+        _speed.Chosen += _ => Refresh();
+        _instantBuild = Place(Check("Instant building and training","Buildings, units, upgrades and research finish at once for both players (F4 still turns it off in the match)."),561,560,420,30);
+        _trainingDummies = Place(Check("Training dummies","Four gilded dummies stand by the blue base, one per damage type, showing every hit's damage."),561,592,420,30);
+        _instantBuild.Visible = _trainingDummies.Visible = sandbox;
+        _instantBuild.ButtonPressed = Previous?.SandboxInstantBuild ?? true; _trainingDummies.ButtonPressed = Previous?.SandboxTrainingDummies ?? true;
+        _instantBuild.Toggled += _ => Refresh(); _trainingDummies.Toggled += _ => Refresh();
+
+        var card = new PanelContainer { Visible = !sandbox }; _card = card;
+        var cardBox = Box(new Color(0,0,0,.45f),Edge); cardBox.ContentMarginTop = cardBox.ContentMarginBottom = 4; cardBox.ContentMarginLeft = cardBox.ContentMarginRight = 6;
+        card.AddThemeStyleboxOverride("panel",cardBox); Place(card,561,557,436,132);
+        var cardRow = new HBoxContainer(); cardRow.AddThemeConstantOverride("separation",8); card.AddChild(cardRow);
+        _triangle = new StyleTriangle { CustomMinimumSize = new(150,104),
             TooltipText = "The bot's style: Aggression, Expansion and Tech sum to 100.\nThe shaded centre is Balanced, each 25 or more." };
         cardRow.AddChild(_triangle);
         var cardText = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill,Alignment = BoxContainer.AlignmentMode.Center };
-        cardText.AddThemeConstantOverride("separation",2); cardRow.AddChild(cardText);
-        _cardTitle = Caption("",17,Gold); cardText.AddChild(_cardTitle);
-        _cardDetail = Caption("",13,Ink); cardText.AddChild(_cardDetail);
-        _cardTraits = Caption("",13,Gold); cardText.AddChild(_cardTraits);
-        _cardDescription = Caption("",14,Dim); _cardDescription.AutowrapMode = TextServer.AutowrapMode.WordSmart; cardText.AddChild(_cardDescription);
-        var speedRow = new HBoxContainer(); speedRow.AddThemeConstantOverride("separation",14); right.AddChild(speedRow);
-        var speedLabel = Caption("Start speed",15,Ink); speedLabel.SizeFlagsVertical = SizeFlags.ShrinkCenter; speedRow.AddChild(speedLabel);
-        _speed = new SpeedSlider { CustomMinimumSize = new(240,44),TooltipText = "Game speed at the start · - and + change it during the match" };
-        _speed.Chosen += _ => Refresh(); speedRow.AddChild(_speed);
-        _status = Caption("",14,Dim); _status.AutowrapMode = TextServer.AutowrapMode.WordSmart; _status.CustomMinimumSize = new(0,42); right.AddChild(_status);
-        var actions = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End }; actions.AddThemeConstantOverride("separation",14); right.AddChild(actions);
-        _quit = ActionButton("Quit",new(120,42)); _quit.Pressed += () => QuitChosen?.Invoke(); actions.AddChild(_quit);
-        _start = ActionButton("Start",new(180,42)); _start.AddThemeFontSizeOverride("font_size",20); _start.Pressed += Start; actions.AddChild(_start);
+        cardText.AddThemeConstantOverride("separation",1); cardRow.AddChild(cardText);
+        _cardTitle = Caption("",15,Gold); _cardTitle.AutowrapMode = TextServer.AutowrapMode.WordSmart; cardText.AddChild(_cardTitle);
+        _cardDetail = Caption("",12,Ink); _cardDetail.AutowrapMode = TextServer.AutowrapMode.WordSmart; cardText.AddChild(_cardDetail);
+        _cardTraits = Caption("",12,Gold); cardText.AddChild(_cardTraits);
+        _cardDescription = Caption("",12,Dim); _cardDescription.AutowrapMode = TextServer.AutowrapMode.WordSmart; cardText.AddChild(_cardDescription);
+        foreach (var label in new[] { _cardTitle,_cardDetail,_cardTraits,_cardDescription }) label.CustomMinimumSize = new(250,0);
 
-        _maps.AddRange(FindMaps(ConvertedPath,SourcesPath));
-        foreach (var map in _maps)
+        // The corner boxes (0.653 and 0.809, 0.908).
+        _quit = Place(ActionButton(BackText),669,698,154,42); _quit.Pressed += () => BackChosen?.Invoke();
+        _start = Place(ActionButton("Start"),829,698,167,42); _start.AddThemeFontSizeOverride("font_size",20); _start.Pressed += Start;
+
+        _maps.AddRange(FindMaps(ConvertedPath,SourcesPath).Where(m => m.Sandbox == sandbox));
+        foreach (var map in _maps.Where(_ => !sandbox))
         {
             var button = new Button { Text = map.Title,ToggleMode = true,FocusMode = FocusModeEnum.None,Alignment = HorizontalAlignment.Left,
-                CustomMinimumSize = new(286,30),TooltipText = map.Sandbox && map.Imported ? SandboxDescription : map.Imported ? map.Title : $"Not imported yet\n{ImportCommand(map.Stem)}" };
+                CustomMinimumSize = new(300,24),TooltipText = map.Imported ? map.Title : $"Not imported yet\n{ImportCommand(map.Stem)}" };
             StyleListItem(button,map.Imported);
             var count = Caption($"{map.Players}",14,map.Imported ? Dim : Edge); count.HorizontalAlignment = HorizontalAlignment.Right;
             count.SetAnchorsAndOffsetsPreset(LayoutPreset.RightWide); count.OffsetLeft = -40; count.OffsetRight = -10; button.AddChild(count);
@@ -148,21 +189,32 @@ public partial class SetupScreen : Control
         var first = _maps.FirstOrDefault(m => m.Imported && m.Cache == Previous?.Cache) ?? _maps.FirstOrDefault(m => m.Imported && m.Stem.Contains("Bilbo"))
             ?? _maps.FirstOrDefault(m => m.Imported) ?? _maps.FirstOrDefault();
         if (first != null) Select(first,Previous);
+        else Refresh();
         Resize(); GetViewport().SizeChanged += Resize;
     }
 
     public override void _ExitTree() => GetViewport().SizeChanged -= Resize;
 
+    /// <summary>The 1024 × 768 frame as large as the window allows, centred.</summary>
     private void Resize()
     {
         var viewport = GetViewportRect().Size;
-        float scale = Math.Clamp(Math.Min(viewport.X/1180,viewport.Y/760),.5f,3);
-        _frame.Scale = new(scale,scale); _frame.Position = (viewport-_frame.Size*scale)/2;
+        float scale = Math.Clamp(Math.Min(viewport.X/ScreenSize.X,viewport.Y/ScreenSize.Y),.4f,4);
+        _frame.Scale = new(scale,scale); _frame.Position = ((viewport-ScreenSize*scale)/2).Floor();
     }
 
     public override void _UnhandledKeyInput(InputEvent input)
     {
         if (input is InputEventKey { Pressed: true,Echo: false,Keycode: Key.Enter or Key.KpEnter } && !_start.Disabled) { Start(); GetViewport().SetInputAsHandled(); }
+        else if (input is InputEventKey { Pressed: true,Echo: false,Keycode: Key.Escape } && !_quit.Disabled && BackText == "Back") { BackChosen?.Invoke(); GetViewport().SetInputAsHandled(); }
+    }
+
+    private T Place<T>(T control,float x,float y,float width,float height) where T : Control => PlaceIn(_frame,control,x,y,width,height);
+
+    private static T PlaceIn<T>(Control parent,T control,float x,float y,float width,float height) where T : Control
+    {
+        parent.AddChild(control); control.Position = new(x,y); control.Size = new(width,height);
+        return control;
     }
 
     /// <summary>A map's slots start from the previous match's choices when it was this map, else you in slot 1 and bots.</summary>
@@ -253,6 +305,19 @@ public partial class SetupScreen : Control
         button.TooltipText = button.Disabled ? "Traits are for bots" : chosen.Count == 0 ? "Pick traits for this bot" : "Traits: "+AiRoster.TraitList(chosen);
     }
 
+    /// <summary>A row's bot in a few words, beside its trait button.</summary>
+    private string Summary(MapEntry map,int slot)
+    {
+        if (map.Sandbox) return "Commanded by you";
+        int choice = Choice(slot);
+        if (choice == You) return "Commanded by you";
+        if (choice == Closed) return "";
+        var bot = map.Personalities[choice-FirstBot];
+        if (bot.IsRandom) return $"Random {AiRoster.Difficulty(bot.Difficulty)} bot";
+        var entry = AiRoster.Entry(bot.Id);
+        return $"{AiRoster.Difficulty(bot.Difficulty)} · {entry.Style.Label}";
+    }
+
     /// <summary>The bot card shows the focused slot's bot, else the first bot slot's.</summary>
     private void RefreshCard(MapEntry? map,int players)
     {
@@ -263,7 +328,7 @@ public partial class SetupScreen : Control
         {
             _cardTitle.Text = "Sandbox · test map"; _cardDetail.Text = "Player 1 and Player 2 · both yours";
             _cardTraits.Text = ""; _cardTraits.Visible = false; _cardDescription.Text = SandboxDescription;
-            _triangle.Display(null,Dim); return;
+            _triangle.Display(null,Dim); _card.Visible = Kind != SetupKind.Sandbox; return;
         }
         int slot = _cardSlot >= 0 && _cardSlot < players && Choice(_cardSlot) >= FirstBot ? _cardSlot
             : Enumerable.Range(0,players).FirstOrDefault(s => Choice(s) >= FirstBot,-1);
@@ -298,14 +363,21 @@ public partial class SetupScreen : Control
         int open = Enumerable.Range(0,players).Count(s => Choice(s) != Closed);
         int human = Enumerable.Range(0,players).FirstOrDefault(s => Choice(s) == You,-1);
         _preview.Display(map,map?.Cache is { } cache ? _terrain.GetValueOrDefault(cache) : null,Enumerable.Range(0,players).Select(Choice).ToArray());
-        for (int slot = 0; slot < players; slot++) { RefreshTraits(slot); _sides[slot].Disabled = Choice(slot) == Closed; }
+        for (int slot = 0; slot < players; slot++)
+        {
+            RefreshTraits(slot); _sides[slot].Disabled = Choice(slot) == Closed;
+            _summaries[slot].Text = Summary(map!,slot);
+        }
         RefreshCard(map,players);
+        string speed = _speed.Labels.ElementAtOrDefault(_speed.Index) ?? "";
         _start.Disabled = _loading || map is not { Imported: true } || open < 2;
-        _status.Text = map == null ? "No multiplayer maps found." : !map.Imported ? $"Not imported yet. Run: {ImportCommand(map.Stem)}"
+        _status.Text = map == null ? (Kind == SetupKind.Sandbox ? $"The Sandbox is not imported yet. Run: {ImportCommand(SandboxStem)}" : "No multiplayer maps found.")
+            : !map.Imported ? $"Not imported yet. Run: {ImportCommand(map.Stem)}"
             : open < 2 ? "At least two start positions must be open."
-            : map.Sandbox ? $"Sandbox: you command Player 1 and Player 2 · Tab switches · {_speed.Labels.ElementAtOrDefault(_speed.Index)} speed"
-            : human >= 0 ? $"You play Player {human+1} ({(_sides[human].Selected == EvilSide ? "Evil" : "Good")}) against {open-1} bot{(open == 2 ? "" : "s")} · {_speed.Labels.ElementAtOrDefault(_speed.Index)} speed"
-            : $"Nobody plays: you watch {open} bots · {_speed.Labels.ElementAtOrDefault(_speed.Index)} speed";
+            : map.Sandbox ? $"Sandbox: you command Player 1 and Player 2 · Tab switches · {speed} speed"
+                + (_instantBuild.ButtonPressed ? "" : " · building and training take their time") + (_trainingDummies.ButtonPressed ? "" : " · no training dummies")
+            : human >= 0 ? $"You play Player {human+1} ({(_sides[human].Selected == EvilSide ? "Evil" : "Good")}) against {open-1} bot{(open == 2 ? "" : "s")} · {speed} speed"
+            : $"Nobody plays: you watch {open} bots · {speed} speed";
     }
 
     private void Start()
@@ -315,12 +387,13 @@ public partial class SetupScreen : Control
         var bots = choices.Select((c,slot) => c >= FirstBot ? new AiBotChoice(map.Personalities[c-FirstBot].Id,[.. _traits[slot]]).ToString() : "").ToArray();
         Started?.Invoke(new(cache,map.Title,Array.IndexOf(choices,You),bots,
             Enumerable.Range(0,map.Players).Where(s => choices[s] == Closed).ToArray(),Speeds[_speed.Index],Random.Shared.Next(),
-            Enumerable.Range(0,map.Players).Select(s => _sides[s].Selected == EvilSide ? "evil" : "good").ToArray()));
+            Enumerable.Range(0,map.Players).Select(s => _sides[s].Selected == EvilSide ? "evil" : "good").ToArray(),
+            SandboxInstantBuild: !map.Sandbox || _instantBuild.ButtonPressed,SandboxTrainingDummies: !map.Sandbox || _trainingDummies.ButtonPressed));
     }
 
     private const string SandboxStem = "Sandbox";
     private const string SandboxDescription = "An empty level field for trying units out. You command both players: every building "
-        + "stands finished and fully upgraded, banks stay full, units train at once and gather in front of their base, "
+        + "stands finished and fully upgraded, banks stay full, units gather in front of their base, "
         + "no bots play and nothing ends the match. "
         + "Tab or the console tabs switch players; clicking the other player's unit or building does too.";
 
@@ -404,57 +477,87 @@ public partial class SetupScreen : Control
         catch (Exception error) when (error is JsonException or IOException or FormatException or KeyNotFoundException) { GD.PushWarning($"No preview for {cache}: {error.Message}"); return null; }
     }
 
-    private static Label Caption(string text,int size,Color color)
+    private static Label Caption(string text,int size,Color color) => Caption(text,size,color,false);
+
+    /// <summary>A label; an engraved one (titles and headers) casts the original's dark shadow.</summary>
+    private static Label Caption(string text,int size,Color color,bool engraved)
     {
         var label = new Label { Text = text,MouseFilter = MouseFilterEnum.Ignore,VerticalAlignment = VerticalAlignment.Center };
         label.AddThemeFontSizeOverride("font_size",size); label.AddThemeColorOverride("font_color",color);
-        label.AddThemeColorOverride("font_shadow_color",new Color("201b12")); label.AddThemeConstantOverride("shadow_offset_x",1); label.AddThemeConstantOverride("shadow_offset_y",1);
+        label.AddThemeColorOverride("font_shadow_color",engraved ? Shadow : new Color("201b12"));
+        int offset = engraved ? 2 : 1;
+        label.AddThemeConstantOverride("shadow_offset_x",offset); label.AddThemeConstantOverride("shadow_offset_y",offset);
         return label;
     }
 
     private static StyleBoxFlat Box(Color fill,Color edge,int border = 1) => new() { BgColor = fill,BorderColor = edge,
-        BorderWidthLeft = border,BorderWidthRight = border,BorderWidthTop = border,BorderWidthBottom = border,ContentMarginLeft = 10,ContentMarginRight = 10 };
+        BorderWidthLeft = border,BorderWidthRight = border,BorderWidthTop = border,BorderWidthBottom = border,ContentMarginLeft = 8,ContentMarginRight = 8 };
+
+    /// <summary>An original gold-edged box (control_yellowbox_*), stretched by its edges; the flat stand-in otherwise.</summary>
+    private static StyleBox ArtBox(string name,StyleBox fallback,float marginX = 8)
+        => FrontEndArt.Shared.Art(name) is { } texture ? new StyleBoxTexture { Texture = texture,TextureMarginLeft = 5,TextureMarginRight = 5,
+            TextureMarginTop = 5,TextureMarginBottom = 5,ContentMarginLeft = marginX,ContentMarginRight = marginX,ContentMarginTop = 1,ContentMarginBottom = 1 } : fallback;
 
     private static void StyleListItem(Button button,bool enabled)
     {
         button.AddThemeStyleboxOverride("normal",Box(new Color(0,0,0,0),new Color(0,0,0,0),0));
-        button.AddThemeStyleboxOverride("hover",Box(new Color(1,.9f,.5f,.1f),Edge));
-        button.AddThemeStyleboxOverride("pressed",Box(new Color(1,.8f,.2f,.2f),Gold));
-        button.AddThemeStyleboxOverride("hover_pressed",Box(new Color(1,.8f,.2f,.26f),Gold));
+        button.AddThemeStyleboxOverride("hover",Box(new Color(1,.9f,.5f,.08f),new Color(0,0,0,0),0));
+        button.AddThemeStyleboxOverride("pressed",ArtBox("control_yellowbox_long",Box(new Color(0,0,0,.6f),Gold)));
+        button.AddThemeStyleboxOverride("hover_pressed",ArtBox("control_yellowbox_long_highlighted",Box(new Color(0,0,0,.6f),Highlight)));
         button.AddThemeFontSizeOverride("font_size",15);
         button.AddThemeColorOverride("font_color",enabled ? Ink : Edge);
-        foreach (string state in new[] {"font_hover_color","font_pressed_color","font_hover_pressed_color"}) button.AddThemeColorOverride(state,enabled ? Gold : Dim);
+        foreach (string state in new[] {"font_hover_color","font_pressed_color","font_hover_pressed_color"}) button.AddThemeColorOverride(state,enabled ? Highlight : Dim);
     }
 
+    /// <summary>A drop-down as the original's: a black box with a gold edge and the gold arrow button at its end.</summary>
     private static void StyleDropDown(Button choice,PopupMenu popup)
     {
-        choice.AddThemeStyleboxOverride("normal",Box(new Color(0,0,0,.35f),Edge));
-        choice.AddThemeStyleboxOverride("hover",Box(new Color(1,.9f,.5f,.1f),Gold));
-        choice.AddThemeStyleboxOverride("pressed",Box(new Color(1,.8f,.2f,.2f),Gold));
-        choice.AddThemeStyleboxOverride("disabled",Box(new Color(0,0,0,.2f),new Color(Edge,.5f)));
+        var normal = ArtBox("control_yellowbox_long",Box(new Color(0,0,0,.7f),Edge));
+        choice.AddThemeStyleboxOverride("normal",normal);
+        choice.AddThemeStyleboxOverride("hover",ArtBox("control_yellowbox_long_highlighted",Box(new Color(.1f,.08f,.04f,.8f),Gold)));
+        choice.AddThemeStyleboxOverride("pressed",ArtBox("control_yellowbox_long_pressed",Box(new Color(.16f,.12f,.05f,.85f),Gold)));
+        choice.AddThemeStyleboxOverride("disabled",Box(new Color(0,0,0,.35f),new Color(Edge,.5f)));
+        choice.AddThemeStyleboxOverride("focus",new StyleBoxEmpty());
         choice.AddThemeFontSizeOverride("font_size",14);
-        choice.AddThemeColorOverride("font_color",Ink); choice.AddThemeColorOverride("font_hover_color",Gold);
-        choice.AddThemeColorOverride("font_disabled_color",Edge);
-        popup.AddThemeStyleboxOverride("panel",Box(new Color(.06f,.05f,.03f,.98f),Gold));
+        choice.AddThemeColorOverride("font_color",Ink); choice.AddThemeColorOverride("font_hover_color",Highlight);
+        choice.AddThemeColorOverride("font_pressed_color",Highlight); choice.AddThemeColorOverride("font_disabled_color",Edge);
+        if (choice is OptionButton && FrontEndArt.Shared.Art("control_arrowbutton_normal") is { } arrow) choice.AddThemeIconOverride("arrow",arrow);
+        popup.AddThemeStyleboxOverride("panel",Box(new Color(.03f,.03f,.03f,.97f),Gold));
         popup.AddThemeStyleboxOverride("hover",Box(new Color(1,.8f,.2f,.22f),new Color(0,0,0,0),0));
-        popup.AddThemeColorOverride("font_color",Ink); popup.AddThemeColorOverride("font_hover_color",Gold);
+        popup.AddThemeColorOverride("font_color",Ink); popup.AddThemeColorOverride("font_hover_color",Highlight);
         popup.AddThemeFontSizeOverride("font_size",14);
+        if (FrontEndArt.Shared.Immortal(16) is { } font) popup.AddThemeFontOverride("font",font);
+        if (FrontEndArt.Shared.Art("control_checkbox_checked") is { } check) popup.AddThemeIconOverride("checked",check);
+        if (FrontEndArt.Shared.Art("control_checkbox_empty") is { } empty) popup.AddThemeIconOverride("unchecked",empty);
     }
 
-    private static Button ActionButton(string text,Vector2 size)
+    private static Button ActionButton(string text)
     {
-        var button = new Button { Text = text,CustomMinimumSize = size,FocusMode = FocusModeEnum.None };
-        button.AddThemeStyleboxOverride("normal",Box(new Color(.1f,.08f,.04f),Gold,2));
-        button.AddThemeStyleboxOverride("hover",Box(new Color(.22f,.17f,.07f),new Color("f7d16a"),2));
-        button.AddThemeStyleboxOverride("pressed",Box(new Color(.3f,.22f,.08f),new Color("f7d16a"),2));
-        button.AddThemeStyleboxOverride("disabled",Box(new Color(.06f,.05f,.04f),Edge,2));
-        button.AddThemeFontSizeOverride("font_size",17);
-        button.AddThemeColorOverride("font_color",Ink); button.AddThemeColorOverride("font_hover_color",new Color("f7d16a"));
-        button.AddThemeColorOverride("font_disabled_color",Edge);
+        var button = new Button { Text = text,FocusMode = FocusModeEnum.None };
+        button.AddThemeStyleboxOverride("normal",ArtBox("control_yellowbox_regular",Box(new Color(.1f,.08f,.04f),Gold,2)));
+        button.AddThemeStyleboxOverride("hover",ArtBox("control_yellowbox_highlighted",Box(new Color(.22f,.17f,.07f),Highlight,2)));
+        button.AddThemeStyleboxOverride("pressed",ArtBox("control_yellowbox_pressed",Box(new Color(.3f,.22f,.08f),Highlight,2)));
+        button.AddThemeStyleboxOverride("disabled",Box(new Color(.06f,.05f,.04f,.9f),Edge,1));
+        button.AddThemeStyleboxOverride("focus",new StyleBoxEmpty());
+        button.AddThemeFontSizeOverride("font_size",18);
+        button.AddThemeColorOverride("font_color",Ink); button.AddThemeColorOverride("font_hover_color",Highlight);
+        button.AddThemeColorOverride("font_pressed_color",Highlight); button.AddThemeColorOverride("font_disabled_color",Edge);
         return button;
     }
 
-    // For the setup smoke.
+    /// <summary>A check box with the original gold check (control_checkbox_*).</summary>
+    private static CheckBox Check(string text,string tooltip)
+    {
+        var box = new CheckBox { Text = text,TooltipText = tooltip,FocusMode = FocusModeEnum.None };
+        box.AddThemeFontSizeOverride("font_size",15);
+        foreach (string color in new[] { "font_color","font_pressed_color","font_focus_color" }) box.AddThemeColorOverride(color,Ink);
+        foreach (string color in new[] { "font_hover_color","font_hover_pressed_color" }) box.AddThemeColorOverride(color,Highlight);
+        if (FrontEndArt.Shared.Art("control_checkbox_checked") is { } check) box.AddThemeIconOverride("checked",check);
+        if (FrontEndArt.Shared.Art("control_checkbox_empty") is { } empty) box.AddThemeIconOverride("unchecked",empty);
+        return box;
+    }
+
+    // For the setup and menu smokes.
     public IReadOnlyList<MapEntry> Maps => _maps;
     public MapEntry? SelectedMap => _selected;
     public Button MapButton(string stem) => _mapButtons[stem];
@@ -464,13 +567,19 @@ public partial class SetupScreen : Control
     public bool SlotShown(int slot) => _slots[slot].Row.Visible;
     public SpeedSlider SpeedSlider => _speed;
     public Button StartButton => _start;
+    public Button BackButton => _quit;
+    public CheckBox InstantBuildBox => _instantBuild;
+    public CheckBox TrainingDummiesBox => _trainingDummies;
     public string StatusText => _status.Text;
+    public string TitleText => _title.Text;
+    public bool MapListShown => _scroll.Visible;
     public bool PreviewDrawn => _preview.Drawn;
     public string CardText => _card.Visible ? $"{_cardTitle.Text}\n{_cardDetail.Text}\n{(_cardTraits.Visible ? _cardTraits.Text+"\n" : "")}{_cardDescription.Text}" : "";
     public MenuButton TraitButton(int slot) => _slots[slot].Traits;
     public IReadOnlyCollection<AiTrait> SlotTraits(int slot) => _traits[slot];
     public AiStyle? CardStyle => _triangle.Style;
     public string BotTooltip(int slot,int item) => _slots[slot].Choice.GetItemTooltip(item);
+    public string SlotSummary(int slot) => _summaries[slot].Text;
 }
 
 /// <summary>The bot card's style triangle: Aggression at the top, Expansion bottom left, Tech bottom right, the

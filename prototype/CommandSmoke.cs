@@ -280,7 +280,7 @@ public partial class Main
                 _commandChecks["menu_ok_applies_and_returns"] = _settings.ReforgedEdition == GameSettings.Edition.Custom && _gameMenu.Visible && !_gameMenu.SettingsOpen;
                 Click(_gameMenu.ExitButton.GetGlobalRect().GetCenter()); break;
             case 235:
-                _commandChecks["menu_exit_asks"] = _gameMenu.ExitOpen && _gameMenu.ExitToMainMenuButton.Disabled == !_setupMode;
+                _commandChecks["menu_exit_asks"] = _gameMenu.ExitOpen && !_gameMenu.ExitToMainMenuButton.Disabled;
                 CaptureMenu("exit"); break;
             case 236: PushKey(Key.Escape); break;
             case 237:

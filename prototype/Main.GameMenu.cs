@@ -27,7 +27,7 @@ public partial class Main
             _audio.Speak(unit,4,preview: true);
         };
         _gameMenu.ResumeChosen += CloseGameMenu;
-        _gameMenu.ExitToMainMenuChosen += ReturnToSetup;
+        _gameMenu.ExitToMainMenuChosen += ReturnToMainMenu;
         _gameMenu.ExitToWindowsChosen += () => _ = FinishCombatAudio(0);
         _gameMenu.SettingsApplied += (settings,interfaceScale) => {
             UseSettings(settings); _commands.SetScalePercent(interfaceScale);
@@ -49,11 +49,11 @@ public partial class Main
 
     private void OpenGameMenu()
     {
-        if (_world == null || _loadFailed || _gameMenu.Visible || _outcome.Visible) return;
+        if (_world == null || _loadFailed || _loading || _gameMenu.Visible || _outcome.Visible) return;
         if (_orders.Pending != null || _constructionTargeting) CancelTargeting();
         _dragging = _panning = false; _hud.SelectionBox = null;
         _pausedBeforeMenu = _paused; SetPaused(true);
-        _gameMenu.Open(_commands.Art,_settings,_commands.ScalePercent,_setupMode);
+        _gameMenu.Open(_commands.Art,_settings,_commands.ScalePercent,true);
         _audio.Effect(245);
     }
 

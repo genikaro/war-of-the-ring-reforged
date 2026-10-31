@@ -16,6 +16,8 @@ public partial class GameMenu : Control
     public event Action<GameSettings,double>? SettingsApplied;
     public event Action<GameSettings>? AudioPreviewed;
     public event Action? VoicePreviewChosen;
+    /// <summary>Build-147: the main menu's Settings left by OK, Cancel or Esc.</summary>
+    public event Action? SettingsClosed;
     /// <summary>The key and mouse reference on the Controls tab.</summary>
     public string ControlsText { get; set; } = "";
 
@@ -46,7 +48,7 @@ public partial class GameMenu : Control
     private Label _scaleValue = null!,_controls = null!;
     private Page _page;
     private float _scale = 1;
-    private bool _artApplied;
+    private bool _artApplied,_settingsOnly;
     private GameSettings _current = new(),_draft = new();
     private double _currentScale = 100,_draftScale = 100;
 
@@ -172,7 +174,17 @@ public partial class GameMenu : Control
         _current = settings.Copy(); _currentScale = interfaceScale; _controls.Text = ControlsText;
         _exitToMain.Disabled = !canExitToMainMenu;
         _exitToMain.TooltipText = canExitToMainMenu ? "" : "This match did not start from the setup screen.";
+        _settingsOnly = false;
         ShowPage(Page.Main); Visible = true;
+    }
+
+    /// <summary>Build-147: the Settings page alone, for the main menu; leaving it closes the menu.</summary>
+    public void OpenSettings(Func<string,Texture2D?> art,GameSettings settings,double interfaceScale)
+    {
+        if (!_artApplied) { ApplyArt(art); _artApplied = true; }
+        _current = settings.Copy(); _currentScale = interfaceScale; _controls.Text = ControlsText;
+        _page = Page.Main; _settingsOnly = true;
+        ShowPage(Page.Settings); Visible = true;
     }
 
     public void Close() { AudioPreviewed?.Invoke(_current.Copy()); Visible = false; }
@@ -186,9 +198,17 @@ public partial class GameMenu : Control
 
     public void ShowSettings() => ShowPage(Page.Settings);
 
+    /// <summary>In a match Main routes Esc here; on the main menu's Settings the page takes it itself.</summary>
+    public override void _UnhandledKeyInput(InputEvent input)
+    {
+        if (!_settingsOnly || !Visible || input is not InputEventKey { Pressed: true,Echo: false,Keycode: Key.Escape }) return;
+        Back(); GetViewport().SetInputAsHandled();
+    }
+
     private void ShowPage(Page page)
     {
         if (_page == Page.Settings && page != Page.Settings) AudioPreviewed?.Invoke(_current.Copy());
+        if (_settingsOnly && page != Page.Settings) { _settingsOnly = false; _page = Page.Main; Visible = false; SettingsClosed?.Invoke(); return; }
         _page = page;
         _main.Visible = page == Page.Main; _settings.Visible = page == Page.Settings; _exit.Visible = page == Page.Exit;
         if (page != Page.Settings) return;

@@ -1,5 +1,15 @@
 # Godot C# skirmish sandbox
 
+**build-147:** A main menu and a game executable. `./prototype/export.ps1` builds
+`build/WarOfTheRingReforged.exe`, which opens (like a bare `./prototype/run.ps1`) on
+the main menu: Campaign (disabled), Skirmish, Sandbox, Settings and Exit on the
+original's torn-parchment buttons in its Immortal font, over the original 3D menu
+scene of Barad-dûr and an orc army. Skirmish and Sandbox each open a setup screen
+in the original stone game-creation frame. Every map now loads behind the original
+loading screen, the One Ring filling with light, instead of freezing the window;
+loads are also much faster (the cache check no longer re-hashes unchanged files).
+Run `python tools/frontend_assets.py` once first. See [MENUS.md](MENUS.md).
+
 **builds 137-141:** The Evil heroes' battle gear. All sixteen gears of Gollum, the Nazgul King, Saleme, Grishnakh and Saruman are simulated: Prison of Ice, Invisible Force, Pestilence and
 Twisting Influence (137), Shadow Bind and Shadow Walk (138, adds the Black Rider; rebuild the pack only, the maps already cover its body), Mystic Blades, Blood Mark and Poison Trap (139), Torch and Satchel Charge (140),
 Sneak, Surprise Attack and Dark Tracking (141). Rules, source numbers and adapters are in [EVIL.md](EVIL.md); `-EvilSmoke -Sandbox` casts them through the HUD.
@@ -641,6 +651,11 @@ From the repository root, with the current local cache and portable tools:
 ```powershell
 ./prototype/run.ps1
 ```
+
+With no scene-choosing parameters it opens the main menu (build-147,
+[MENUS.md](MENUS.md)); `-View squad` (or `-View fortress`, `-CapturePath`, the
+smokes) loads the Helm's Deep scene described below, as a bare run did before.
+`./prototype/export.ps1` builds the stand-alone `build/WarOfTheRingReforged.exe`.
 
 The launcher builds C# first. It uses portable tools in ignored
 `converted/tooling`, or accepts `-GodotPath` and `-DotnetPath` explicitly.

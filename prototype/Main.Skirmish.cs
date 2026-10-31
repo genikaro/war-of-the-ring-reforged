@@ -26,11 +26,12 @@ public partial class Main
         return resolved;
     }
 
-    private void LoadSkirmishScene(JsonElement manifest)
+    private async Task LoadSkirmishScene(JsonElement manifest)
     {
         var data = manifest.GetProperty("skirmish");
         SeatFactions(data);
         LoadStructureDefinitions(data);
+        await LoadingStep("Placing the bases",.64f);
         var files = data.GetProperty("building_files");
         // A closed slot has no base: its start footprint frees the ground.
         foreach (var start in Bases(data).Where(b => !SlotOpen(b.GetProperty("team").GetInt32())))
@@ -52,19 +53,24 @@ public partial class Main
             RegisterStructure(obstacle,team,start.Building,root);
             _obstacleViews[obstacle] = root;
             _startBuildings.Add((obstacle,team,start.Building,start.X,start.Z,root,model,appearance));
+            await LoadingStep(null,null);
         }
         _skirmishResourceCount = data.GetProperty("resources").GetArrayLength();
         var state = data.GetProperty("start_state");
         _startState = (state.GetProperty("population").GetInt32(),state.GetProperty("population_cap").GetInt32(),
             state.GetProperty("food").GetInt32(),state.GetProperty("ore").GetInt32());
+        await LoadingStep("Placing resources",.72f);
         LoadSkirmishEconomy(data);
         LoadSkirmishConstruction(data);
         RegisterStartBuildings();
+        await LoadingStep("Placing places of power",.78f);
         LoadPlacesOfPower(data);
         LoadNeutralStructures(data);
+        await LoadingStep("Preparing training and research",.84f);
         LoadSkirmishProduction(data);
         LoadSkirmishResearch(data);
-        if (_sandboxMap) PrepareSandboxMap();
+        if (_sandboxMap) { await LoadingStep("Building the Sandbox bases",.86f); PrepareSandboxMap(); }
+        await LoadingStep("Preparing the bots",.9f);
         LoadSkirmishAi(data);
         ApplySkirmishHud(_commands);
     }

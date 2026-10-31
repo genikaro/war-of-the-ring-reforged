@@ -40,6 +40,8 @@ param(
     [switch]$ObserverSmoke,
     [switch]$Setup,
     [switch]$SetupSmoke,
+    [switch]$Menu,
+    [switch]$MenuSmoke,
     [switch]$Sandbox,
     [switch]$SandboxSmoke,
     [switch]$Observe,
@@ -83,6 +85,8 @@ if (-not $GodotPath) {
 # -Skirmish with nothing else that chooses the match opens the setup screen; -Setup always does.
 $launchOnly = @('Skirmish','GodotPath','DotnetPath','Resolution','HideHud','DebugMenu','View','Unmuted')
 $setupMode = $Setup -or $SetupSmoke -or ($Skirmish -and -not ($PSBoundParameters.Keys | Where-Object { $_ -notin $launchOnly }))
+# Build-147: nothing that chooses a scene (or -Menu) opens the main menu; -View, -CapturePath and the like keep Helm's Deep.
+$menuMode = $Menu -or $MenuSmoke -or -not ($PSBoundParameters.Keys | Where-Object { $_ -notin @('GodotPath','DotnetPath','Resolution','Unmuted','DebugMenu') })
 $env:DOTNET_ROOT = Split-Path -Parent $DotnetPath
 $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
@@ -98,7 +102,7 @@ if ($LASTEXITCODE -ne 0) { throw 'C# build failed' }
 $arguments = @('--path', $PSScriptRoot)
 if ($Resolution) { $arguments += @('--resolution',$Resolution) }
 if ($SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $TechSmoke -or $Tier2Smoke -or $EvilSmoke -or $ResearchSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $Observe -or $Map -or $Sandbox -or $SandboxSmoke) { $Skirmish = $true }
-if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $InteractionSmoke -or $OrdersSmoke -or $AbilitySmoke -or $SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $TechSmoke -or $Tier2Smoke -or $EvilSmoke -or $ResearchSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $SetupSmoke -or $SandboxSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
+if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $InteractionSmoke -or $OrdersSmoke -or $AbilitySmoke -or $SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $TechSmoke -or $Tier2Smoke -or $EvilSmoke -or $ResearchSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $SetupSmoke -or $MenuSmoke -or $SandboxSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
     $renderRate = if ($MotionSmoke -or $FormationSmoke) { '80' } else { '20' }
     if (-not $CapturePath) { $arguments += '--headless' }
     $arguments += @('--fixed-fps', $renderRate)
@@ -152,6 +156,8 @@ if ($ExpansionSmoke) { $arguments += '--expansion-smoke' }
 if ($ObserverSmoke) { $arguments += @('--observer-smoke','--observe','--bots=Gimli,Aragorn') }
 if ($setupMode) { $arguments += '--setup' }
 if ($SetupSmoke) { $arguments += '--setup-smoke' }
+if ($menuMode) { $arguments += '--menu' }
+if ($MenuSmoke) { $arguments += '--menu-smoke' }
 if ($SandboxSmoke) { $arguments += '--sandbox-smoke' }
 if ($Observe) { $arguments += '--observe' }
 if ($Bots) { $arguments += "--bots=$($Bots -join ',')" }

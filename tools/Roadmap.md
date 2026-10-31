@@ -819,6 +819,10 @@ Archer, now has projectile/hit resolution. Follow with workers, resources, const
 fog of war to form a complete skirmish loop. Full UI reconstruction, first-run
 installer packaging, campaign, multiplayer and broad presentation polish remain
 later work. Do not expand this slice to all 85 unit records.
+Build-147 added the front end and a game executable: the original main menu over its
+3D menu scene, Skirmish and Sandbox setup screens in the original game-creation frame,
+the One Ring loading screen with staged loading, and `prototype/export.ps1` building
+`build/WarOfTheRingReforged.exe` ([MENUS.md](../prototype/MENUS.md)). Campaign stays disabled.
 
 ## Next milestone: original-game command and combat corrections
 

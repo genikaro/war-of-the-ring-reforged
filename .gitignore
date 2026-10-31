@@ -18,3 +18,8 @@ __pycache__/
 **/bin/
 **/obj/
 /prototype/Assets/
+
+# Exported game (prototype/export.ps1)
+/build/
+# Godot editor UID sidecars (the headless export writes one per script)
+*.uid

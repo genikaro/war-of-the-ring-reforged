@@ -15,6 +15,8 @@ using Reforged.Simulation;
 public partial class Main
 {
     private bool _sandboxMap;
+    /// <summary>Build-147: the Sandbox setup screen's choices, both on unless it turned them off.</summary>
+    private bool _sandboxInstantBuild = true,_sandboxTrainingDummies = true;
     /// <summary>The two sides one person commands.</summary>
     private static readonly int[] SandboxMapTeams = [0,1];
     /// <summary>Each player's control groups, swapped in with the player.</summary>
@@ -39,12 +41,14 @@ public partial class Main
         }
         // Build-59: four training dummies beside the blue base (Player 1), on control group 0.
         _sandboxDummies.Clear();
-        _sandboxDummies.AddRange(world.SpawnTrainingDummies(SandboxDummyTeam,SandboxDummyDefinitions(),world.Units.First(u => u.Team == SandboxDummyTeam).Node).Select(u => u.Id));
-        if (PlayerTeam == SandboxDummyTeam) _controlGroups.Assign(9,_sandboxDummies,LivingFriendly);
+        if (_sandboxTrainingDummies)
+            _sandboxDummies.AddRange(world.SpawnTrainingDummies(SandboxDummyTeam,SandboxDummyDefinitions(),world.Units.First(u => u.Team == SandboxDummyTeam).Node).Select(u => u.Id));
+        if (PlayerTeam == SandboxDummyTeam && _sandboxDummies.Count > 0) _controlGroups.Assign(9,_sandboxDummies,LivingFriendly);
         foreach (int team in SandboxMapTeams) world.RallyTowardCentre(team);
         RefillSandboxMapBanks();
-        // The owner's choice: building, training, upgrades and research finish at once here (the debug menu turns it off).
-        world.InstantBuildTeams.UnionWith(SandboxMapTeams);
+        // The owner's choice: building, training, upgrades and research finish at once here (the debug menu turns it
+        // off; build-147: so does the Sandbox setup screen).
+        if (_sandboxInstantBuild) world.InstantBuildTeams.UnionWith(SandboxMapTeams);
         _commands.SandboxPlayerChosen += CommandSandboxPlayer;
         _commands.RefreshSandboxTabs(true);
         _status.Text = _sandboxMapMissing.Count == 0 ? "Sandbox · you command Player 1 and Player 2 · Tab switches"

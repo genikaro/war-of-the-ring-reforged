@@ -7,15 +7,15 @@ using System.Text.Json;
 /// and the bot card must describe the bots chosen (build-49), and Gimli's traits, ticked in the lobby (Defender, then
 /// Marksman, then Rusher, which drops Defender), must reach the match and come back with the setup (build-51). The debug menu's
 /// Skirmish setup button then returns to the screen, which keeps those choices, and an observer match of a Normal random bot
-/// against Aragorn on Bilbo's Bluffs at 16x must load as chosen. Restart must retain its random draw. The Sandbox test map heads the list and, chosen, makes
-/// both start positions yours (build-56). Clicks press and release on separate frames.</summary>
+/// against Aragorn on Bilbo's Bluffs at 16x must load as chosen. Restart must retain its random draw. The Sandbox test map has its own
+/// setup screen since build-147 and stays out of the list. Clicks press and release on separate frames.</summary>
 public partial class Main
 {
     private bool _setupSmoke;
     /// <summary>Which screen or match the smoke is in; static, like the checks, because each start reloads the scene.</summary>
     private static int _setupPhase;
     private static readonly Dictionary<string,bool> SetupChecks = [];
-    private const int SetupSmokeChecks = 28;
+    private const int SetupSmokeChecks = 27;
     private const string SetupBigMap = "MP08_Boneyard",SetupSmallMap = "MP02_Bilbos_Bluffs";
     private static string _setupBigTitle = "";
     private static bool _setupCardOk;
@@ -51,20 +51,10 @@ public partial class Main
                         && maps.Any(m => m.Stem == SetupSmallMap && m.Imported && m.Players == 2)
                         && screen.SelectedMap?.Stem == SetupSmallMap && screen.SlotChoice(0).Selected == 0;
                     _setupBigTitle = big?.Title ?? "";
-                    // Build-56: the Sandbox test map heads the list; choosing it makes both start positions yours.
-                    SetupChecks["sandbox_heads_the_list"] = maps[0] is { Stem: "Sandbox",Title: "Sandbox",Imported: true,Sandbox: true,Players: 2 };
-                    Press(screen.MapButton("Sandbox").GetGlobalRect().GetCenter());
+                    // Build-147: the Sandbox has its own setup screen (the menu smoke covers it), so the Skirmish list leaves it out.
+                    SetupChecks["skirmish_lists_no_sandbox"] = !maps.Any(m => m.Sandbox || m.Stem == "Sandbox") && screen.Kind == SetupScreen.SetupKind.Skirmish;
                 }
-                if (_frames == 4)
-                {
-                    Release(screen.MapButton("Sandbox").GetGlobalRect().GetCenter());
-                    SetupChecks["sandbox_slots_are_both_yours"] = screen.SelectedMap?.Sandbox == true && screen.SlotShown(1) && !screen.SlotShown(2)
-                        && Enumerable.Range(0,2).All(s => screen.SlotChoice(s) is { Selected: 0,Disabled: true } && screen.TraitButton(s).Disabled)
-                        && screen.CardText.StartsWith("Sandbox · test map\nPlayer 1 and Player 2 · both yours\nAn empty level field")
-                        && !screen.StartButton.Disabled && screen.StatusText.StartsWith("Sandbox: you command Player 1 and Player 2");
-                    if (_capture != "") _ = CaptureScreen(System.IO.Path.ChangeExtension(_capture,null)+"-sandbox-setup.png");
-                    screen.RevealMap(SetupBigMap);
-                }
+                if (_frames == 4) screen.RevealMap(SetupBigMap);
                 if (_frames == 5) Press(screen.MapButton(SetupBigMap).GetGlobalRect().GetCenter());
                 if (_frames == 6) Release(screen.MapButton(SetupBigMap).GetGlobalRect().GetCenter());
                 if (_frames == 8)

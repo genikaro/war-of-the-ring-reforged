@@ -42,6 +42,7 @@ assets, previews, validation reports and portable tools stay in ignored
 
 | Script | Purpose |
 |---|---|
+| `frontend_assets.py` | Build-147: menu art, the Immortal bitmap font (`LIQDFONT`), the Mordor sky panorama and the Barad-dûr menu scene (`MenuScene.wor`) into `converted/frontend` for the main menu, setup and loading screens ([MENUS.md](../prototype/MENUS.md)). |
 | `combat_rules.py` | Export traced definitions, fixed-tick melee events and impact sounds for the three demo types. |
 | `pcm_audio.py` | Decode selected mono Microsoft ADPCM impact WAVs to PCM without an external codec. |
 | `h2o.py` | List/extract Liquid Entertainment `.H2O` archives (v6). Format notes in the module docstring. |

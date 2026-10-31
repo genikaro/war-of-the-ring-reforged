@@ -168,25 +168,49 @@ public partial class Main : Node3D
             if (arg == "--engagement-smoke") _engagementSmoke = true;
             if (arg == "--attack-move-engagement-smoke") _attackMoveEngagementSmoke=_engagementSmoke=true;
             if (arg == "--formation-smoke") _formationSmoke=_engagementSmoke=true;
+            if (arg == "--menu") _menuMode = true;
+            if (arg == "--menu-smoke") _menuSmoke = _menuMode = true;
         }
+        // Started with nothing to choose a match (the exported game, the editor's Play button): the main menu.
+        if (OS.GetCmdlineUserArgs().Length == 0) _menuMode = true;
+        // Build-147: the main menu, or the setup screen a match returns to, until a match is chosen.
+        if (_chosenSetup == null && (_nextScreen ?? (_menuMode ? FrontEndScreen.MainMenu : null)) is { } screen) { ShowFrontEnd(screen); return; }
         // The setup screen chooses the match; once chosen, its choice replaces the launch arguments.
-        if (_setupMode && _chosenSetup is { } setup) ApplySetup(setup);
-        else if (_setupMode) { ShowSetupScreen(); return; }
-        _setupButton.Visible = _outcomeSetup.Visible = _setupMode;
-        _hud.Visible = !_hideHud;
+        if (_chosenSetup is { } setup) ApplySetup(setup);
+        else if (_setupMode) { ShowFrontEnd(FrontEndScreen.SkirmishSetup); return; }
+        _setupButton.Visible = _outcomeSetup.Visible = FromSetup;
         _commands.PlayerTeam = PlayerTeam;
         if (!Speeds.Contains(_speed)) throw new ArgumentOutOfRangeException(nameof(_speed),"Game speed is 1, 2, 4, 8 or 16");
-        if (_cache == "") _cache = System.IO.Path.GetFullPath(ProjectSettings.GlobalizePath("res://../converted/prototype"));
-        try { LoadSandbox(); if (_openDebugMenu) { _hud.Show(); _toolsPanel.Show(); RefreshDebugMenu(); } }
+        if (_cache == "") _cache = GamePaths.Data("converted/prototype");
+        _ = LoadMatch();
+    }
+
+    /// <summary>Build-147: the map loads behind the loading screen over many frames; nothing plays until it is done.</summary>
+    private async Task LoadMatch()
+    {
+        _loading = true; _hud.Visible = false;
+        ShowLoadingScreen(_chosenSetup?.Map ?? "");
+        try
+        {
+            await LoadSandboxAsync();
+            await FinishLoadingScreen();
+            // Play starts on a physics frame, so the first physics step still comes before the first drawn frame (it
+            // gives the units spawned late in the load, such as the Sandbox's dummies, their models).
+            await ToSignal(GetTree(),SceneTree.SignalName.PhysicsFrame);
+            _hud.Visible = !_hideHud;
+            if (_openDebugMenu) { _hud.Show(); _toolsPanel.Show(); RefreshDebugMenu(); }
+        }
         catch (Exception error)
         {
             _loadFailed = true;
+            _hud.Visible = true;
             _toolsPanel.Visible = true;
             RefreshDebugMenu();
             _status.Text = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             GD.PushError(error.ToString());
-            if (_placesSmoke || _economyRecoverySmoke || _performanceSmoke || _audioSmoke || _smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _interactionSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _tier2Smoke || _evilSmoke || _researchSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke || _observerSmoke || _setupSmoke || _engagementSmoke || _sandboxMapSmoke || _capture != "") GetTree().Quit(1);
+            if (_placesSmoke || _economyRecoverySmoke || _performanceSmoke || _audioSmoke || _smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _interactionSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _tier2Smoke || _evilSmoke || _researchSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke || _observerSmoke || _setupSmoke || _engagementSmoke || _sandboxMapSmoke || _menuSmoke || _capture != "") GetTree().Quit(1);
         }
+        finally { _loading = false; HideLoadingScreen(); }
     }
 
     /// <summary>The cache's manifest merged with its content pack, and where each of its files lives (build-48).</summary>
@@ -199,40 +223,53 @@ public partial class Main : Node3D
     private Node3D LoadGlb(string relative, Color? teamColor = null)
         => _presentation.Load(CachePath(relative), relative, teamColor);
 
-    private void LoadSandbox()
+    /// <summary>Build-147: the cache loads in steps behind the loading screen. Reading files, checking their hashes,
+    /// parsing the rules and building the navigation grid and its path regions run off the main thread; the steps
+    /// that make Godot nodes run on it, a frame apart, so the screen keeps drawing. The order and the results are the
+    /// load's of before, so the match starts exactly as it did.</summary>
+    private async Task LoadSandboxAsync()
     {
-        _cacheFiles = CacheManifest.Load(_cache);
+        await LoadingStep("Reading the map",.01f);
+        _cacheFiles = await Task.Run(() => CacheManifest.Load(_cache));
         var manifest = _cacheFiles.Root;
         if (manifest.GetProperty("format_version").GetInt32() != 1) throw new InvalidOperationException("Unsupported cache format");
         _skirmish = manifest.TryGetProperty("mode",out var mode) && mode.GetString() == "skirmish";
         _sandboxMap = _skirmish && manifest.TryGetProperty("sandbox",out var sandbox) && sandbox.GetBoolean();
         _mapName = manifest.GetProperty("name").GetString()!.Split(" — ")[0];
-        _cacheFiles.Verify();
+        if (_loadingScreen != null) _loadingScreen.Title = _mapName;
+        await LoadingStep("Checking the map files",.03f);
+        await Task.Run(_cacheFiles.Verify);
         if (manifest.TryGetProperty("team_colors", out var colors))
             _teamColors = colors.EnumerateArray().Select(c => new Color(c[0].GetSingle(), c[1].GetSingle(), c[2].GetSingle())).ToArray();
         string rulesPath = manifest.GetProperty("combat_rules").GetString()!;
-        _rules = CombatRules.Parse(System.IO.File.ReadAllText(CachePath(rulesPath)));
-        LoadCombatAudio(ReadJson(rulesPath));
+        await LoadingStep("Reading the rules",.16f);
+        (_rules,var rulesData) = await Task.Run(() => (CombatRules.Parse(System.IO.File.ReadAllText(CachePath(rulesPath))),ReadJson(rulesPath)));
+        LoadCombatAudio(rulesData);
         LoadBlood();
-        var nav = ReadJson("navigation.json");
-        byte[] bytes = System.IO.File.ReadAllBytes(CachePath("heights.bin"));
-        int[] heights = new int[bytes.Length / 4];
-        for (int i = 0; i < heights.Length; i++) heights[i] = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(i * 4, 4));
-        bool dynamic = nav.TryGetProperty("runtime_obstacles", out _obstacleLayers);
-        var navigation = new GridNavigation(nav.GetProperty("width").GetInt32(), nav.GetProperty("height").GetInt32(),
-            nav.GetProperty("cell_size_mm").GetInt32(), Convert.FromBase64String(nav.GetProperty(dynamic ? "painted_allowed_base64" : "allowed_base64").GetString()!).Select(b => b != 0).ToArray(), heights,
-            nav.TryGetProperty("surface_nodes", out var surfaces) ? surfaces.EnumerateArray().Select(s => new SurfaceCell(
-                s.GetProperty("cell").GetInt32(), s.GetProperty("height_mm").GetInt32(),
-                s.GetProperty("links").EnumerateArray().Select(n => n.GetInt32()).ToArray(),
-                s.TryGetProperty("x_mm", out var x) ? x.GetInt32() : null, s.TryGetProperty("z_mm", out var z) ? z.GetInt32() : null)).ToArray() : null,
-            dynamic ? _obstacleLayers.EnumerateArray().Select(NavigationObstacle.Parse).ToArray() : null);
-        navigation.LoadBodyProfiles(nav);
-        if (nav.TryGetProperty("inactive_obstacles",out var inactive))
-            foreach (var id in inactive.EnumerateArray()) navigation.SetObstacle(id.GetInt32(),false);
+        await LoadingStep("Building the ground",.22f);
+        var (nav,navigation,dynamic) = await Task.Run(() => {
+            var nav = ReadJson("navigation.json");
+            byte[] bytes = System.IO.File.ReadAllBytes(CachePath("heights.bin"));
+            int[] heights = new int[bytes.Length / 4];
+            for (int i = 0; i < heights.Length; i++) heights[i] = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(i * 4, 4));
+            bool dynamic = nav.TryGetProperty("runtime_obstacles", out _obstacleLayers);
+            var navigation = new GridNavigation(nav.GetProperty("width").GetInt32(), nav.GetProperty("height").GetInt32(),
+                nav.GetProperty("cell_size_mm").GetInt32(), Convert.FromBase64String(nav.GetProperty(dynamic ? "painted_allowed_base64" : "allowed_base64").GetString()!).Select(b => b != 0).ToArray(), heights,
+                nav.TryGetProperty("surface_nodes", out var surfaces) ? surfaces.EnumerateArray().Select(s => new SurfaceCell(
+                    s.GetProperty("cell").GetInt32(), s.GetProperty("height_mm").GetInt32(),
+                    s.GetProperty("links").EnumerateArray().Select(n => n.GetInt32()).ToArray(),
+                    s.TryGetProperty("x_mm", out var x) ? x.GetInt32() : null, s.TryGetProperty("z_mm", out var z) ? z.GetInt32() : null)).ToArray() : null,
+                dynamic ? _obstacleLayers.EnumerateArray().Select(NavigationObstacle.Parse).ToArray() : null);
+            navigation.LoadBodyProfiles(nav);
+            if (nav.TryGetProperty("inactive_obstacles",out var inactive))
+                foreach (var id in inactive.EnumerateArray()) navigation.SetObstacle(id.GetInt32(),false);
+            return (nav,navigation,dynamic);
+        });
         _world = new SimWorld(navigation,_rules);
         if (nav.TryGetProperty("building_allowed_base64",out var building))
             _world.BuildingGround = Convert.FromBase64String(building.GetString()!).Select(b => b != 0).ToArray();
         _picker = NavigationPicker.FromCache(navigation, nav);
+        await LoadingStep("Loading the terrain",.32f);
         var map = LoadGlb(manifest.GetProperty("map").GetString()!); AddChild(map);
         _terrainMesh = Descendants(map).OfType<MeshInstance3D>().FirstOrDefault(m => m.Name == "Terrain");
         var gate = Descendants(map).OfType<Node3D>().FirstOrDefault(n => n.Name.ToString() == "MAIN_GATE");
@@ -262,8 +299,11 @@ public partial class Main : Node3D
                 var (x,z) = navigation.Center(n); return navigation.NodeHeight(n)-navigation.GroundHeight(x,z);
             }).First() : -1;
         foreach (var model in manifest.GetProperty("models").EnumerateArray()) _unitModels[model.GetProperty("unit").GetString()!] = model;
+        await LoadingStep("Placing the armies",.52f);
         foreach (var spawn in manifest.GetProperty("spawns").EnumerateArray())
         {
+            // A model's first load takes a while: give the screen a frame after it.
+            if (_modelTemplates.Count > _loadedTemplates) { _loadedTemplates = _modelTemplates.Count; await LoadingStep(null,null); }
             int team = spawn.GetProperty("team").GetInt32(), cell = spawn.GetProperty("cell").GetInt32();
             if (_skirmish && !SlotOpen(team)) continue;
             bool primary = team == PlayerTeam && _primarySquad.Count < 6;
@@ -281,24 +321,27 @@ public partial class Main : Node3D
         _friendlySquads.AddRange(_world.Units.Where(u => u.Team == PlayerTeam).Select(u => u.Id).Chunk(6));
         for (int slot = 0; slot < _friendlySquads.Count; slot++) _controlGroups.Assign(slot,_friendlySquads[slot],LivingFriendly);
         _commands.TeamColors = _teamColors;
+        await LoadingStep("Preparing the console",.6f);
         // HUD art is faction content: in the pack, or in a self-contained cache.
         _commands.LoadArtwork(_cacheFiles.Content,_world,EvilTeam(PlayerTeam));
         _heroBar.LoadArtwork(_commands);
-        if (_skirmish) LoadSkirmishScene(manifest);
+        if (_skirmish) await LoadSkirmishScene(manifest);
         var framed = _skirmish && !_observing ? _world.Units.Where(u => u.Team == PlayerTeam).ToList() : _world.Units;
         float spanX = (framed.Max(u => u.X)-framed.Min(u => u.X))/1000f;
         float spanZ = (framed.Max(u => u.Z)-framed.Min(u => u.Z))/1000f;
         _squadDistance = Math.Max(48,Math.Max(spanX,spanZ)*1.9f);
         // Build each spawned body's region cache during loading, before a
         // mouse command can trigger a full-map connectivity pass mid-frame.
+        await LoadingStep("Preparing paths",.93f);
         long warmStart=System.Diagnostics.Stopwatch.GetTimestamp();
-        foreach (var type in _world.Units.GroupBy(u=>(u.Definition.BodyRadiusMm,u.Definition.BodyHeightMm)))
-            navigation.ForBody(type.Key.BodyRadiusMm,type.Key.BodyHeightMm).WarmConnectedRegion(type.First().Node);
+        var bodies = _world.Units.GroupBy(u=>(u.Definition.BodyRadiusMm,u.Definition.BodyHeightMm)).Select(t => (t.Key,t.First().Node)).ToArray();
+        await Task.Run(() => { foreach (var (body,node) in bodies) navigation.ForBody(body.BodyRadiusMm,body.BodyHeightMm).WarmConnectedRegion(node); });
         _navigationWarmMs=System.Diagnostics.Stopwatch.GetElapsedTime(warmStart).TotalMilliseconds;
         SetCameraView(_smoke || _surfaceSmoke || _obstacleSmoke ? "squad" : _view);
         if (_surfaceSmoke) _focus = UnitPosition(_world.Units[0]);
         UpdateCamera();
         _initialDigest = _world.StateDigest();
+        await LoadingStep("Loading sounds",.97f);
         _audio.Load(CachePath(manifest.TryGetProperty("audio",out var audioIndex) ? audioIndex.GetString()! : "audio/index.json"),CachePath,_cache,_cacheFiles.Content);
         PlayFactionMusic();
         ResetWorldAudio();
@@ -431,7 +474,7 @@ public partial class Main : Node3D
 
     public override void _UnhandledInput(InputEvent input)
     {
-        if (_world is null || _loadFailed) return;
+        if (_world is null || _loadFailed || _loading) return;
         // The game menu holds play: Esc steps back out of it, and nothing reaches the battlefield.
         if (_gameMenu.Visible) { if (input is InputEventKey { Pressed: true,Echo: false,Keycode: Key.Escape }) _gameMenu.Back(); return; }
         // The result stops play, but an observer can still page the overview, the Stats tab above all.
@@ -754,7 +797,7 @@ public partial class Main : Node3D
 
     public override void _PhysicsProcess(double delta)
     {
-        if (_world is null || _loadFailed || (_paused && !_singleStepRequested)) return;
+        if (_world is null || _loadFailed || _loading || (_paused && !_singleStepRequested)) return;
         _presentStep = _paused;
         _singleStepRequested = false;
         // Game speed: several fixed ticks per physics frame. A single step while paused stays a single step,
@@ -870,8 +913,8 @@ public partial class Main : Node3D
     public override void _Process(double delta)
     {
         if (_closing) return;
-        if (_setupScreen != null) { _frames++; if (_setupSmoke) SetupSmokeInput(); return; }
-        if (_world is null || _loadFailed) return;
+        if (_frontEndLayer != null) { _frames++; if (_setupSmoke) SetupSmokeInput(); if (_menuSmoke) MenuSmokeInput(); return; }
+        if (_world is null || _loadFailed || _loading) return;
         using var processTime = SimProfiler.Time("godot process frame");
         PresentOrderSpeech();
         if (_audioSmoke) AudioSmokeInput();
@@ -1039,6 +1082,7 @@ public partial class Main : Node3D
         }
         if (_engagementSmoke) { if (_formationSmoke) FormationSmokeInput(); else EngagementSmokeInput(); }
         if (_setupSmoke) SetupSmokeInput();
+        if (_menuSmoke) MenuSmokeInput();
         if (_sandboxMapSmoke) SandboxMapSmokeInput();
         if (_obstacleSmoke) ObstacleSmokeInput();
         if (_surfaceSmoke && _frames == 5)

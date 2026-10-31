@@ -60,22 +60,69 @@ public sealed class CacheManifest
         return File.Exists(map) || Content == Cache ? map : Path.Combine(Content,relative);
     }
 
-    /// <summary>Every listed file is inside its folder and matches its recorded SHA-256.</summary>
+    /// <summary>Every listed file is inside its folder and matches its recorded SHA-256. Build-147: the files are hashed
+    /// in parallel, and a file already found matching is not hashed again while its size and write time stay the same
+    /// (the pack's 3,900 files took 19 s one by one, the bulk of a map's loading).</summary>
     public void Verify()
     {
-        Check(Cache,_mapFiles);
-        if (Content != Cache) Check(Content,_packFiles);
+        bool hashed = Check(Cache,_mapFiles);
+        if (Content != Cache) hashed |= Check(Content,_packFiles);
+        if (hashed) SaveVerified();
     }
 
-    private static void Check(string folder,JsonElement files)
+    private static bool Check(string folder,JsonElement files)
     {
-        foreach (var file in files.EnumerateObject())
+        var entries = files.EnumerateObject().Select(f => (Name: f.Name,Hash: f.Value.GetString() ?? "")).ToArray();
+        int hashed = 0;
+        try
         {
-            string path = Path.GetFullPath(Path.Combine(folder,file.Name));
-            if (!path.StartsWith(folder+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Cache path escapes its folder");
-            string hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
-            if (!hash.Equals(file.Value.GetString(),StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Stale or damaged cache: "+file.Name);
+            Parallel.ForEach(entries,file => {
+                string path = Path.GetFullPath(Path.Combine(folder,file.Name));
+                if (!path.StartsWith(folder+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Cache path escapes its folder");
+                var info = new FileInfo(path);
+                if (info.Exists && Verified.TryGetValue(path,out var seen) && seen.Size == info.Length && seen.Written == info.LastWriteTimeUtc.Ticks
+                    && seen.Hash.Equals(file.Hash,StringComparison.OrdinalIgnoreCase)) return;
+                using var stream = File.OpenRead(path);
+                string hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream));
+                if (!hash.Equals(file.Hash,StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Stale or damaged cache: "+file.Name);
+                Verified[path] = (info.Length,info.LastWriteTimeUtc.Ticks,hash);
+                Interlocked.Increment(ref hashed);
+            });
         }
+        catch (AggregateException error) { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error.InnerExceptions[0]).Throw(); }
+        return hashed > 0;
+    }
+
+    /// <summary>Files found matching, with the size and write time they had then; kept between runs in the user's local
+    /// application data, outside the caches (whose own listings must not change).</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string,(long Size,long Written,string Hash)> Verified = LoadVerified();
+    private static string VerifiedPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"WarOfTheRingReforged","verified-files.json");
+
+    private static System.Collections.Concurrent.ConcurrentDictionary<string,(long,long,string)> LoadVerified()
+    {
+        var verified = new System.Collections.Concurrent.ConcurrentDictionary<string,(long,long,string)>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            if (File.Exists(VerifiedPath))
+                foreach (var file in JsonDocument.Parse(File.ReadAllText(VerifiedPath)).RootElement.EnumerateObject())
+                    verified[file.Name] = (file.Value[0].GetInt64(),file.Value[1].GetInt64(),file.Value[2].GetString() ?? "");
+        }
+        catch (Exception error) when (error is IOException or JsonException or InvalidOperationException or UnauthorizedAccessException or FormatException) { verified.Clear(); }
+        return verified;
+    }
+
+    /// <summary>Written whole to a temporary file and moved over the old one; a run that cannot write simply hashes again next time.</summary>
+    private static void SaveVerified()
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(VerifiedPath)!);
+            var snapshot = Verified.ToDictionary(f => f.Key,f => new object[] { f.Value.Size,f.Value.Written,f.Value.Hash });
+            string temporary = VerifiedPath+"."+Environment.ProcessId+".tmp";
+            File.WriteAllText(temporary,JsonSerializer.Serialize(snapshot));
+            File.Move(temporary,VerifiedPath,true);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
     }
 }
