@@ -107,6 +107,8 @@ public sealed class AiPlayer(int team,AiPersonality personality,AiStyle? style =
     public long CrewDistance { get; internal set; }
     /// <summary>What the last think decided, for the debug menu and the smoke report.</summary>
     public string Status { get; internal set; } = "";
+    /// <summary>Its macro decisions so far, for the observer's journal view (build-148).</summary>
+    public AiJournal Journal { get; } = new();
 }
 
 /// <summary>The skirmish AI. The source gives the knobs and tables; the decision code is in Rings.exe and not
@@ -164,7 +166,7 @@ public sealed partial class SimWorld
     private void UpdateAi()
     {
         foreach (var ai in AiPlayers.Values)
-            if ((Tick+ai.Team*7)%ai.Profile.Skill.ThinkTicks == 0 && !DefeatedTeams.Contains(ai.Team)) Think(ai);
+            if ((Tick+ai.Team*7)%ai.Profile.Skill.ThinkTicks == 0 && !DefeatedTeams.Contains(ai.Team)) { Think(ai); AiJournalUpdate(ai); }
     }
 
     /// <summary>Order discipline (build-50): a bot never repeats an order a unit is already carrying out or waiting to,

@@ -756,7 +756,11 @@ income per minute, population, workers, army, buildings), a Units tab (a portrai
 per unit type with its count) or a Stats tab (build-55: food and ore gathered over
 the match, units killed and lost; the tooltips list them by type with the buildings
 razed and lost), and the console's action grid, which has nothing to command, shows
-the map, the game clock and the speed controls.
+the map, the game clock and the speed controls. The page button beside a bot's name
+opens its decision journal under the overview (build-148): its macro decisions with
+the game time, newest first (buildings and expansions laid, tech, its army plan and
+each new soldier type, every attack with its size, mix and target, raids, place
+squads, guards, base defence, heroes, Fate powers and surrender), never unit orders.
 
 ```powershell
 ./prototype/run.ps1 -Observe -Bots Gimli,Aragorn -Speed 4
@@ -859,6 +863,7 @@ caches and Helm's Deep.
 | Observing: Tab or the overview's chevron | Fold or unfold the overview |
 | Sandbox: Tab, or the Player 1 / Player 2 tabs beside the console menu | Command the other player (clicking its unit or building does too) |
 | Observing: a player's name in the overview | Center the camera on that player's base |
+| Observing: the page button beside a bot's name | Open, switch or close its decision journal |
 | Observing: speed slider / pause button | Choose the game speed / pause and resume |
 | Esc | Cancel targeting; then close the build page; otherwise clear selection. In the game menu: back out (Settings drops changes, Main Menu resumes) |
 | Right-click while targeting | Cancel targeting and retain the current order |

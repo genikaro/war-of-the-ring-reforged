@@ -6,14 +6,15 @@ using System.Text.Json;
 /// or a free-for-all of one bot per start point on any imported map (-Map MP04_Wasteland -Bots a,b,c,d), watched by
 /// nobody's side. Checks the spectator HUD (the top-right overview's tabs, fold, unit counts, end-of-match stats and player names, and
 /// the console's match panel with its speed slider and pause button), read-only inspection of another side, that no
-/// player command is ever issued, the speed keys, and a fast-forwarded match to its result.</summary>
+/// player command is ever issued, the speed keys, the bots' decision journals (build-148), and a fast-forwarded match
+/// to its result.</summary>
 public partial class Main
 {
     private bool _observerSmoke;
     private readonly Dictionary<string,bool> _observerChecks = [];
-    private int _observerPhase,_observerStep,_observerTickMark,_observerFrameMark,_observerBurst,_observerInspected = -1,_observerSnapshotTick,_observerCaptures;
+    private int _observerPhase,_observerStep,_observerJournalStep,_observerTickMark,_observerFrameMark,_observerBurst,_observerInspected = -1,_observerSnapshotTick,_observerCaptures;
     private bool _observerOk = true; // the running result of a check spread over several frames
-    private const int ObserverSmokeChecks = 17;
+    private const int ObserverSmokeChecks = 19;
     private readonly List<string> _observerTimeline = [];
     /// <summary>A report key per bot: the player as well as the bot, so a mirror match (Gimli against Gimli) keeps both.</summary>
     private static string BotKey(AiPlayer bot) => $"Player {bot.Team+1} {bot.Personality.Id}";
@@ -120,6 +121,7 @@ public partial class Main
                 // 40 game minutes for a duel, 20 more per extra player.
                 if (!world.MatchOver && world.Tick < 48000+24000*(world.Contenders.Count-2))
                 {
+                    if (_observerJournalStep <= 12 && _observerCaptures >= 3 && world.Tick >= 15*60*SimWorld.TicksPerSecond) { ObserverJournalSmoke(world); break; }
                     if (++_observerStep == 2 && _capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-observer.png");
                     // Mid-game frames of every tab, for reviewing the spectator HUD with armies on the field.
                     if (_capture != "" && _observerCaptures < 3 && world.Tick >= (10+2*_observerCaptures)*60*SimWorld.TicksPerSecond)
@@ -130,6 +132,7 @@ public partial class Main
                     }
                     break;
                 }
+                _observerChecks.TryAdd("journal_buttons_open_switch_and_close",false); // The match ended before 15:00.
                 // The Stats tab, checked once the match has its kills and losses (a capture may have left it open already).
                 if (_observerHud.Tab == ObserverHud.Page.Stats && !_observerHud.Collapsed) _observerHud.Choose(ObserverHud.Page.Economy);
                 PushKey(Key.S);
@@ -163,6 +166,14 @@ public partial class Main
                         (int)(world.Economies[team].GatheredOreMilli/1000),records[i].UnitKills.Values.Sum(),records[i].UnitLosses.Values.Sum()])).All(v => v)
                     && world.Records.Values.Sum(r => r.UnitLosses.Values.Sum()) == world.Units.Count(u => u.Health <= 0)
                     && world.Records.Values.Sum(r => r.UnitKills.Values.Sum()) is int kills && kills > 0 && kills <= world.Units.Count(u => u.Health <= 0);
+                // Build-148: each bot's journal holds its macro decisions in order, one line per attack, raid and place squad it sent.
+                bool Sent(AiJournalEntry entry,AiJournalKind kind,string word) => entry.Kind == kind
+                    && System.Text.RegularExpressions.Regex.IsMatch(entry.Text,$"^{word} #[0-9]+: [0-9]+ units ");
+                _observerChecks["bot_journals_log_macro_decisions"] = world.AiPlayers.Values.All(a => a.Journal.Entries is var entries
+                    && entries.Count == a.Journal.Written && entries.Zip(entries.Skip(1)).All(p => p.First.Tick <= p.Second.Tick)
+                    && entries.Any(e => e.Kind == AiJournalKind.Build) && (a.Composition != null) == entries.Any(e => e.Text.StartsWith("Army plan: "))
+                    && entries.Count(e => Sent(e,AiJournalKind.Attack,"Attack")) == a.PartiesSent && entries.Count(e => Sent(e,AiJournalKind.Raid,"Raid")) == a.RaidsSent
+                    && entries.Count(e => Sent(e,AiJournalKind.Place,"Squad")) == a.PlaceSquadsSent);
                 var report = new { build = BuildInfo.Label,checks = _observerChecks,
                     passed = _observerChecks.Count == ObserverSmokeChecks && _observerChecks.Values.All(v => v),
                     fixture = $"{System.IO.Path.GetFileName(_cache)} --observe --bots={string.Join(',',_bots)}; the match runs at 16x after the speed checks",
@@ -182,11 +193,41 @@ public partial class Main
                     }),
                     corpses_buried = _corpsesBuried,winner = world.Winner,outcome_tick = world.OutcomeTick,ticks_per_frame_at_16x = _observerBurst,
                     bots = world.AiPlayers.Values.Select(a => $"{a.Personality.Id}: {a.Status}").ToArray(),
+                    journals = world.AiPlayers.Values.ToDictionary(BotKey,a => a.Journal.Entries.Select(e =>
+                        $"{TimeSpan.FromSeconds(e.Tick/SimWorld.TicksPerSecond):mm\\:ss} {e.Kind} {e.Text}").ToArray()),
                     ticks = world.Tick,status = _status.Text,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"observer-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("OBSERVER_SMOKE "+JsonSerializer.Serialize(report)); _observerPhase = 6;
                 _ = FinishCombatAudio(report.passed ? 0 : 1); break;
+        }
+    }
+
+    /// <summary>Build-148, mid-match: the first bot's journal button opens its decision journal, newest first, the second
+    /// bot's switches to that bot, and the cross closes it. The match waits paused meanwhile, so view and journal agree.</summary>
+    private void ObserverJournalSmoke(SimWorld world)
+    {
+        var teams = world.Contenders.ToArray();
+        bool Shows(int team) => world.AiPlayers[team].Journal.Entries is var entries && entries.Count > 0 && _observerHud.JournalTeam == team
+            && _observerHud.JournalVisible && _observerHud.JournalLines.Count == entries.Count && _observerHud.JournalLines[0].EndsWith(entries[^1].Text);
+        Vector2 At(Control control) => control.GetGlobalRect().GetCenter();
+        switch (_observerJournalStep++)
+        {
+            case 0: SetPaused(true); break;
+            case 1: Press(At(_observerHud.JournalButton(0))); break;
+            case 2: Release(At(_observerHud.JournalButton(0))); break;
+            case 4:
+                _observerOk = Shows(teams[0]) && _observerHud.JournalButton(0).ButtonPressed;
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-journal.png");
+                break;
+            case 6: Press(At(_observerHud.JournalButton(1))); break;
+            case 7: Release(At(_observerHud.JournalButton(1))); break;
+            case 9: _observerOk &= Shows(teams[1]) && _observerHud.JournalButton(1).ButtonPressed && !_observerHud.JournalButton(0).ButtonPressed; break;
+            case 10: Press(At(_observerHud.JournalCloseButton)); break;
+            case 11: Release(At(_observerHud.JournalCloseButton)); break;
+            case 12:
+                _observerChecks["journal_buttons_open_switch_and_close"] = _observerOk && _observerHud.JournalTeam < 0 && !_observerHud.JournalVisible;
+                SetPaused(false); break;
         }
     }
 }

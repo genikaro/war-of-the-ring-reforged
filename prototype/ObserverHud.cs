@@ -6,16 +6,26 @@ using Reforged.Simulation;
 /// population, workers, army, buildings), a Units tab (a portrait per unit type with its count) or a Stats tab
 /// (food and ore gathered over the match, units killed and lost). E, U and S open a tab; the open tab's key or
 /// button, the chevron or Tab folds the panel down to its tab strip. A click on a player's name centres the
-/// camera on that player's base.</summary>
+/// camera on that player's base; the page button beside a bot's name opens its decision journal under the panel
+/// (build-148), newest decision first, and closes it again.</summary>
 public partial class ObserverHud : Control
 {
     public enum Page { Economy,Units,Stats }
     public event Action<int>? PlayerChosen;
     public Page Tab { get; private set; }
     public bool Collapsed { get; private set; }
+    /// <summary>The bot whose journal is open, or -1.</summary>
+    public int JournalTeam { get; private set; } = -1;
     /// <summary>Delivered food and ore per team, sampled each game second; shared with offscreen captures.</summary>
     public IncomeHistory Income { get; set; } = new();
-    private const float NameWidth = 66,BodyWidth = 376;
+    private const float NameWidth = 66,BodyWidth = 376,JournalButtonWidth = 18,JournalWidth = 430;
+    /// <summary>The player cell: swatch, name, journal button and the gaps between them.</summary>
+    private const float PlayerWidth = NameWidth+8+JournalButtonWidth+2;
+    private static readonly Dictionary<AiJournalKind,Color> KindColors = new() {
+        [AiJournalKind.Build] = new("c9b98a"),[AiJournalKind.Expand] = new("f7d16a"),[AiJournalKind.Tech] = new("8ab8ea"),
+        [AiJournalKind.Army] = new("96d27e"),[AiJournalKind.Attack] = new("f07a5e"),[AiJournalKind.Raid] = new("f0a65e"),
+        [AiJournalKind.Place] = new("c79af0"),[AiJournalKind.Defend] = new("f2dc6b"),[AiJournalKind.Hero] = new("ffd88a"),
+        [AiJournalKind.Power] = new("b79cff"),[AiJournalKind.Surrender] = new("9a958a")};
     private static readonly (string Tip,float Width)[] EconomyColumns = [
         ("Food in the bank",44),("Ore in the bank",44),("Income · food and ore delivered per game minute",46),
         ("Population · used / capacity",48),("Workers",28),("Army · every unit that is not a worker",28),("Buildings, including foundations",26),
@@ -32,15 +42,21 @@ public partial class ObserverHud : Control
     private readonly List<(Control Row,ColorRect Swatch,Label Name,HBoxContainer Portraits,Label Empty)> _unitRows = [];
     private readonly List<int> _teams = [];
     private bool _foldShown;
+    private readonly List<(Button Button,int Index)> _journalButtons = [];
+    private PanelContainer _journal = null!;
+    private ColorRect _journalSwatch = null!;
+    private Label _journalTitle = null!;
+    private Button _journalClose = null!;
+    private RichTextLabel _journalText = null!;
+    private (int Team,int Written) _journalShown = (-1,-1);
+    private readonly List<string> _journalLines = [];
 
     public override void _Ready()
     {
         Name = "ObserverHud"; MouseFilter = MouseFilterEnum.Ignore;
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _frame = new PanelContainer { MouseFilter = MouseFilterEnum.Stop };
-        _frame.AddThemeStyleboxOverride("panel",new StyleBoxFlat { BgColor = new Color(.06f,.05f,.03f,.84f),BorderColor = new Color(.74f,.65f,.42f,.7f),
-            BorderWidthLeft = 1,BorderWidthRight = 1,BorderWidthTop = 1,BorderWidthBottom = 1,
-            ContentMarginLeft = 6,ContentMarginRight = 6,ContentMarginTop = 3,ContentMarginBottom = 5 });
+        _frame.AddThemeStyleboxOverride("panel",PanelBox());
         AddChild(_frame);
         var root = new VBoxContainer(); root.AddThemeConstantOverride("separation",3); _frame.AddChild(root);
         var header = new HBoxContainer(); header.AddThemeConstantOverride("separation",2); root.AddChild(header);
@@ -55,7 +71,7 @@ public partial class ObserverHud : Control
         _foldGlyph.Draw += () => _foldGlyph.DrawPolyline(_foldShown ? [new(7,9),new(12,14),new(17,9)] : [new(7,14),new(12,9),new(17,14)],new Color("f7d16a"),2,true);
         _economy = new VBoxContainer { CustomMinimumSize = new(BodyWidth,0) }; _economy.AddThemeConstantOverride("separation",1); root.AddChild(_economy);
         var columns = Row(); _economy.AddChild(columns);
-        columns.AddChild(new Control { CustomMinimumSize = new(NameWidth+8,18),MouseFilter = MouseFilterEnum.Ignore });
+        columns.AddChild(new Control { CustomMinimumSize = new(PlayerWidth,18),MouseFilter = MouseFilterEnum.Ignore });
         for (int column = 0; column < EconomyColumns.Length; column++)
         {
             var (tip,width) = EconomyColumns[column];
@@ -65,13 +81,43 @@ public partial class ObserverHud : Control
         _units = new VBoxContainer { CustomMinimumSize = new(BodyWidth,0) }; _units.AddThemeConstantOverride("separation",2); root.AddChild(_units);
         _stats = new VBoxContainer { CustomMinimumSize = new(BodyWidth,0) }; _stats.AddThemeConstantOverride("separation",1); root.AddChild(_stats);
         var statsColumns = Row(); _stats.AddChild(statsColumns);
-        statsColumns.AddChild(new Control { CustomMinimumSize = new(NameWidth+8,18),MouseFilter = MouseFilterEnum.Ignore });
+        statsColumns.AddChild(new Control { CustomMinimumSize = new(PlayerWidth,18),MouseFilter = MouseFilterEnum.Ignore });
         for (int column = 0; column < StatsColumns.Length; column++)
         {
             var (tip,width) = StatsColumns[column];
             if (column < _statsIcons.Length) statsColumns.AddChild(_statsIcons[column] = HeaderIcon(width,tip));
             else statsColumns.AddChild(Heading(column == 2 ? "Kills" : "Losses",width,tip));
         }
+        CreateJournal();
+    }
+
+    private static StyleBoxFlat PanelBox() => new() { BgColor = new Color(.06f,.05f,.03f,.84f),BorderColor = new Color(.74f,.65f,.42f,.7f),
+        BorderWidthLeft = 1,BorderWidthRight = 1,BorderWidthTop = 1,BorderWidthBottom = 1,
+        ContentMarginLeft = 6,ContentMarginRight = 6,ContentMarginTop = 3,ContentMarginBottom = 5 };
+
+    /// <summary>The journal view: a header with the bot's colour, name and a close button over the decisions as a
+    /// three-column table (game time, kind, decision) that scrolls.</summary>
+    private void CreateJournal()
+    {
+        _journal = new PanelContainer { MouseFilter = MouseFilterEnum.Stop,Visible = false };
+        _journal.AddThemeStyleboxOverride("panel",PanelBox()); AddChild(_journal);
+        var root = new VBoxContainer(); root.AddThemeConstantOverride("separation",3); _journal.AddChild(root);
+        var header = Row(); root.AddChild(header);
+        _journalSwatch = new ColorRect { CustomMinimumSize = new(5,16),SizeFlagsVertical = SizeFlags.ShrinkCenter,MouseFilter = MouseFilterEnum.Ignore };
+        header.AddChild(_journalSwatch);
+        _journalTitle = Cell("",0,13,HorizontalAlignment.Left); _journalTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _journalTitle.MouseFilter = MouseFilterEnum.Stop; header.AddChild(_journalTitle);
+        _journalClose = new Button { CustomMinimumSize = new(24,22),FocusMode = FocusModeEnum.None,TooltipText = "Close the journal" };
+        Style(_journalClose,false); _journalClose.Pressed += () => JournalTeam = -1; header.AddChild(_journalClose);
+        var cross = new Control { Size = new(24,22),MouseFilter = MouseFilterEnum.Ignore }; _journalClose.AddChild(cross);
+        cross.Draw += () => { var c = new Color("f7d16a"); cross.DrawLine(new(8,7),new(16,15),c,2,true); cross.DrawLine(new(16,7),new(8,15),c,2,true); };
+        _journalText = new RichTextLabel { ScrollActive = true,SelectionEnabled = false,FocusMode = FocusModeEnum.None,MouseFilter = MouseFilterEnum.Stop,
+            CustomMinimumSize = new(JournalWidth,200) };
+        _journalText.AddThemeFontSizeOverride("normal_font_size",12);
+        _journalText.AddThemeColorOverride("default_color",new Color("fff3cb"));
+        _journalText.AddThemeColorOverride("font_shadow_color",new Color("201b12"));
+        _journalText.AddThemeConstantOverride("shadow_offset_x",1); _journalText.AddThemeConstantOverride("shadow_offset_y",1);
+        root.AddChild(_journalText);
     }
 
     private static TextureRect HeaderIcon(float width,string tip) => new() { CustomMinimumSize = new(width,18),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
@@ -125,8 +171,22 @@ public partial class ObserverHud : Control
             if (input is not InputEventMouseButton { ButtonIndex: MouseButton.Left,Pressed: true } || index >= _teams.Count) return;
             PlayerChosen?.Invoke(_teams[index]); name.AcceptEvent();
         };
-        row.AddChild(swatch); row.AddChild(name); return (swatch,name);
+        // A drawn page: the bot's decision journal.
+        var journal = new Button { ToggleMode = true,CustomMinimumSize = new(JournalButtonWidth,20),FocusMode = FocusModeEnum.None,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        Style(journal,false);
+        journal.Pressed += () => { if (index < _teams.Count) ToggleJournal(_teams[index]); };
+        var page = new Control { Size = new(JournalButtonWidth,20),MouseFilter = MouseFilterEnum.Ignore }; journal.AddChild(page);
+        page.Draw += () => {
+            var c = new Color("e6d39a"); page.DrawRect(new Rect2(4,3,10,14),c,false,1.5f);
+            for (int line = 0; line < 3; line++) page.DrawLine(new(6.5f,7+3*line),new(11.5f,7+3*line),c,1.5f);
+        };
+        _journalButtons.Add((journal,index));
+        row.AddChild(swatch); row.AddChild(name); row.AddChild(journal); return (swatch,name);
     }
+
+    /// <summary>A bot's journal button: open its journal, or close it when it is the one open.</summary>
+    public void ToggleJournal(int team) => JournalTeam = JournalTeam == team ? -1 : team;
 
     /// <summary>E, U or S: open that tab, or fold the panel when it is already open.</summary>
     public void Choose(Page page)
@@ -138,10 +198,11 @@ public partial class ObserverHud : Control
     public void Toggle() => Collapsed = !Collapsed;
 
     /// <summary>An offscreen capture's copy shows what the live panel shows.</summary>
-    public void Mirror(ObserverHud live) { Tab = live.Tab; Collapsed = live.Collapsed; Income = live.Income; }
+    public void Mirror(ObserverHud live) { Tab = live.Tab; Collapsed = live.Collapsed; Income = live.Income; JournalTeam = live.JournalTeam; }
 
-    /// <summary>Lays the panel out under the build label at the console's scale and fills in every contender.</summary>
-    public void Refresh(SimWorld world,Func<int,Color> color,Func<string,Texture2D?> art,float scale)
+    /// <summary>Lays the panel out under the build label at the console's scale and fills in every contender; an open
+    /// journal reaches down to just above the console's top.</summary>
+    public void Refresh(SimWorld world,Func<int,Color> color,Func<string,Texture2D?> art,float scale,float consoleTop)
     {
         Income.Sample(world);
         if (_headerIcons[0].Texture == null)
@@ -156,10 +217,52 @@ public partial class ObserverHud : Control
         if (_economy.Visible) RefreshEconomy(world,color);
         if (_units.Visible) RefreshUnits(world,color,art);
         if (_stats.Visible) RefreshStats(world,color);
-        // The build label (BuildOverlay) keeps the top-right corner; the panel hangs just below it.
+        foreach (var (button,index) in _journalButtons)
+        {
+            bool bot = index < _teams.Count && world.AiPlayers.ContainsKey(_teams[index]);
+            button.Disabled = !bot; button.Modulate = bot ? Colors.White : Colors.Transparent;
+            button.SetPressedNoSignal(bot && JournalTeam == _teams[index]);
+            button.TooltipText = bot ? $"Decision journal · {PlayerName(world,_teams[index])}" : "";
+        }
+        // The build label (BuildOverlay) keeps the top-right corner; the panel hangs just below it, the journal below that.
         var viewport = GetViewportRect().Size; float overlay = Math.Clamp(viewport.Y/800f,.75f,3);
         _frame.Scale = new(scale,scale); _frame.ResetSize();
         _frame.Position = new(viewport.X-12*overlay-_frame.Size.X*scale,40*overlay);
+        RefreshJournal(world,color,scale,consoleTop,overlay);
+    }
+
+    private void RefreshJournal(SimWorld world,Func<int,Color> color,float scale,float consoleTop,float overlay)
+    {
+        var bot = world.AiPlayers.GetValueOrDefault(JournalTeam);
+        _journal.Visible = bot != null;
+        if (bot == null) return;
+        float top = _frame.Position.Y+_frame.Size.Y*scale+4*overlay;
+        // Down to just above the console; the header row and margins take 36 px.
+        _journalText.CustomMinimumSize = new(JournalWidth,Math.Clamp((consoleTop-8*overlay-top)/scale-36,120,460));
+        _journal.Scale = new(scale,scale); _journal.ResetSize();
+        _journal.Position = new(GetViewportRect().Size.X-12*overlay-_journal.Size.X*scale,top);
+        var entries = bot.Journal.Entries;
+        if (_journalShown == (JournalTeam,bot.Journal.Written)) return;
+        _journalShown = (JournalTeam,bot.Journal.Written);
+        _journalSwatch.Color = color(JournalTeam);
+        _journalTitle.Text = $"{PlayerName(world,JournalTeam)} · decisions";
+        _journalTitle.TooltipText = $"Player {JournalTeam+1} · {bot.Journal.Written} decisions"
+            +(bot.Journal.Written > entries.Count ? $", the last {entries.Count} kept" : "");
+        _journalLines.Clear(); _journalText.Clear();
+        if (entries.Count == 0) { _journalText.AddText("No decisions yet"); return; }
+        _journalText.PushTable(3);
+        _journalText.SetTableColumnExpand(0,false); _journalText.SetTableColumnExpand(1,false); _journalText.SetTableColumnExpand(2,true);
+        for (int i = entries.Count-1; i >= 0; i--)
+        {
+            var (tick,kind,text) = entries[i];
+            int seconds = tick/SimWorld.TicksPerSecond;
+            string time = $"{seconds/60}:{seconds%60:00}";
+            _journalText.PushCell(); _journalText.PushColor(new Color("a89d7a")); _journalText.AddText(time+"  "); _journalText.Pop(); _journalText.Pop();
+            _journalText.PushCell(); _journalText.PushColor(KindColors[kind]); _journalText.AddText(kind+"  "); _journalText.Pop(); _journalText.Pop();
+            _journalText.PushCell(); _journalText.AddText(text); _journalText.Pop();
+            _journalLines.Add($"{time} {kind} {text}");
+        }
+        _journalText.Pop();
     }
 
     private string PlayerName(SimWorld world,int team) => world.AiPlayers.GetValueOrDefault(team)?.Personality.Id ?? $"Player {team+1}";
@@ -288,6 +391,12 @@ public partial class ObserverHud : Control
     public bool BodyVisible => _economy.IsVisibleInTree() || _units.IsVisibleInTree() || _stats.IsVisibleInTree();
     public Button TabFor(Page page) => page switch { Page.Units => _unitsTab,Page.Stats => _statsTab,_ => _economyTab };
     public Button FoldButton => _fold;
+    /// <summary>A row's journal button on the open tab.</summary>
+    public Button JournalButton(int index) => _journalButtons.Where(b => b.Index == index).Select(b => b.Button).First(b => b.IsVisibleInTree());
+    public Button JournalCloseButton => _journalClose;
+    public bool JournalVisible => _journal.IsVisibleInTree();
+    /// <summary>The journal view's lines, newest first: "12:34 Attack Attack #2: ...".</summary>
+    public IReadOnlyList<string> JournalLines => _journalLines;
     public Label NameCell(int index) => Tab switch { Page.Units => _unitRows[index].Name,Page.Stats => _statsRows[index].Name,_ => _economyRows[index].Name };
     /// <summary>The Stats tab's numbers for a row: food and ore gathered, kills, losses.</summary>
     public int[] DisplayedStats(int index) => _statsRows[index].Values.Select(v => int.Parse(v.Text)).ToArray();

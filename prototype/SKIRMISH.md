@@ -3573,3 +3573,49 @@ adapters and what is still open, is in [EVIL.md](EVIL.md).
 ./prototype/run.ps1 -EvilSmoke -Observe -Factions evil,good -Bots Saruman,Gimli -Speed 16
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --evil-checks
 ```
+
+## Build-148: bot decision journal
+
+The owner asked to see a log of each bot's decisions in observer mode: macro decisions only (buildings, attack directions, unit
+compositions, parties), opened from a button in the observer's player list.
+
+**Journal button.** Every bot's row in the observer overview (all three tabs) has a page button after the name. It opens that
+bot's journal under the overview, in the bot's colour and at the console's scale; another bot's button switches to that bot, and
+the same button or the cross in the journal's header closes it. The journal is a scrolling table of game time, kind and decision,
+newest first, kept down to just above the console.
+
+**What it records** (`Simulation/AiJournal.cs`, kinds coloured in the view):
+
+- **Build / Expand:** every foundation the bot lays, with distance and compass direction when it is away from home (north is the
+  map's +Z, the original's north); a Citadel away from home is an expansion, one at home a rebuild; projects abandoned after 30 s
+  without progress and Citadel spots with no room.
+- **Tech:** Citadel, Fortress and tower upgrades started, and each technique researched with its building.
+- **Army:** the army plan chosen at Tier 2 (the composition and its weights, or Balanced with its melee share), and the first unit
+  of each soldier type it trains, with the producer. Later units of a type already fielded are not decisions.
+- **Attack:** each party sent (number, size, unit mix, target building with its owner, distance and direction, all in), a party
+  reinforced by three or more, a new target (after razing the last one, or turning on a tower), and its end (falls back with the
+  survivors, or wiped out).
+- **Raid / Place:** each raid and place-of-power squad sent, where it moves on to, and its return.
+- **Defend:** an enemy soldier in the base (once per fight; a new fight after 30 s without one), soldiers recalled from the field,
+  guards posted at an expansion.
+- **Hero / Power / Surrender:** a hero queued, a Fate power cast or a place's power used, and the surrender.
+
+Unit orders, gathering, worker moves and further units of a type are left out. A think compares the bot's state with what the
+journal saw after the last one (sites, upgrades, research, queues, party, raid and squad counters and members, power recharges), so
+foundations a walking crew lays between thinks are caught too. The journal only reads the world and stays out of the state
+digest; the last 500 lines are kept.
+
+Validation: `SimulationTests --target-priority-checks` 114 checks (1 new: in the bot duel each journal has a line per party sent,
+naming its target, and its buildings, in time order). The observer smoke grows to 19 cases: at 15:00 it pauses, clicks Gimli's
+journal button (the journal shows Gimli's lines, newest first, and the button stays pressed), Aragorn's (it switches) and the cross
+(it closes), capturing `-journal.png`; at the end every bot's journal is in order, has its buildings and army plan, and one line per
+attack, raid and place squad it sent. Build-147 and build-148 play the same match tick for tick (digest `0333BA5C...` at tick
+48064 for both). In that match Aragorn's journal shows nine attacks on Gimli's base 150-165 m south-west, a Nature host army plan
+at 8:52, two expansions south-west and 22 research lines; Gimli's shows a Ranger company plan, six place squads and its defence.
+The smoke's `fast_forward_reaches_a_result`, `observer_result_names_the_winner` and `bots_earn_fate_in_battle` fail at build-147
+too: Gimli's base outlasts the 40-minute limit, and bots now spend Fate on heroes and powers.
+
+```powershell
+./prototype/run.ps1 -ObserverSmoke -CapturePath converted/skirmish/build-148-observer.png -Resolution 1600x900
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --target-priority-checks
+```

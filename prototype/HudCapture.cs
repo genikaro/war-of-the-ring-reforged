@@ -37,7 +37,7 @@ public partial class Main
         {
             hud.RefreshMatch(_mapName,_world.Tick,Speeds,_speed,_paused,MatchState(_world),_actualSpeed);
             var overview = new ObserverHud { Visible = _hud.Visible }; root.AddChild(overview); overview.Mirror(_observerHud);
-            overview.Refresh(_world,TeamColor,hud.Art,hud.EffectiveScale);
+            overview.Refresh(_world,TeamColor,hud.Art,hud.EffectiveScale,hud.Visible ? hud.GetGlobalRect().Position.Y : _captureResolution.Y);
         }
         if (_skirmish)
         {

@@ -200,6 +200,13 @@ public static class AiChecks
             "bots on both sides build, attack and decide the match: "+string.Join(" | ",duel.AiPlayers.Values.Select(a => a.Status)));
         var duelReplay = Fixture(mirror: true); Step(duelReplay,duel.Tick);
         check(duelReplay.StateDigest() == duel.StateDigest(),"a bot-against-bot match replays identically");
+        // Build-148: the decision journal has a line per party sent, naming its target, and the buildings the bot laid.
+        check(duel.AiPlayers.Values.All(a => a.Journal.Entries.Count(e => e.Kind == AiJournalKind.Attack
+                && System.Text.RegularExpressions.Regex.IsMatch(e.Text,@"^Attack #[0-9]+: [0-9]+ units \(.+\) → .+'s ")) == a.PartiesSent
+            && a.Journal.Entries.Any(e => e.Kind == AiJournalKind.Build)
+            && a.Journal.Entries.Zip(a.Journal.Entries.Skip(1)).All(p => p.First.Tick <= p.Second.Tick)),
+            "each bot's journal logs every attack it sent with its target, and its buildings: "
+            +string.Join(" | ",duel.AiPlayers.Values.Select(a => string.Join("; ",a.Journal.Entries.TakeLast(3).Select(e => e.Text)))));
 
         // Build-49: bots thinking at different rates (Hard twice a second, Easy every 3 s) still replay identically. Who
         // wins is judged on Bilbo's Bluffs (SKIRMISH.md): here the bases stand 52 m apart, inside each other's 30 m

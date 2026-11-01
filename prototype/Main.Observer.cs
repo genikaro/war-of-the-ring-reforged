@@ -97,7 +97,8 @@ public partial class Main
         MeasureSpeed(delta);
         if (!_observing || _world == null) return;
         _observerHud.Visible = true;
-        _observerHud.Refresh(_world,TeamColor,_commands.Art,_commands.EffectiveScale);
+        _observerHud.Refresh(_world,TeamColor,_commands.Art,_commands.EffectiveScale,
+            _hud.Visible ? _commands.GetGlobalRect().Position.Y : GetViewport().GetVisibleRect().End.Y);
         _commands.RefreshMatch(_mapName,_world.Tick,Speeds,_speed,_paused,MatchState(_world),_actualSpeed);
     }
 }
