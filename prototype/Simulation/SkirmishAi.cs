@@ -25,7 +25,7 @@ public sealed class AiGuardPost(int cell)
 
 /// <summary>A bot side. The personality gives its id and difficulty; its style is the roster's unless given (build-49),
 /// and the player may add traits (build-51).</summary>
-public sealed class AiPlayer(int team,AiPersonality personality,AiStyle? style = null,IReadOnlyList<AiTrait>? traits = null)
+public sealed partial class AiPlayer(int team,AiPersonality personality,AiStyle? style = null,IReadOnlyList<AiTrait>? traits = null)
 {
     public int Team { get; } = team;
     public AiPersonality Personality { get; } = personality;
@@ -211,7 +211,9 @@ public sealed partial class SimWorld
     {
         bool strategic = ai.Thinks++%ai.Profile.Skill.StrategicEvery == 0;
         var mine = ActiveUnits.Where(u => u.Team == ai.Team && u.Present).ToArray();
-        var workers = mine.Where(IsAiWorker).ToArray();
+        // A worker out scouting (build-150) is nobody's gatherer or builder until it is home.
+        var workers = mine.Where(u => IsAiWorker(u) && u.Id != ai.Scout).ToArray();
+        AiUpdateContacts(ai);
         int living = ActiveUnits.Count(u => u.Team == ai.Team && u.Health > 0 && IsAiWorker(u));
         if (strategic && AiSurrenders(ai))
         {
@@ -225,9 +227,11 @@ public sealed partial class SimWorld
         foreach (int id in ai.Unreachable.Where(p => Units[p.Key].HealthMilli < p.Value).Select(p => p.Key).ToArray()) ai.Unreachable.Remove(id);
         var expansions = AiExpansions(ai);
         var home = mine.Where(u => IsAiSoldier(u) && !ai.Party.Contains(u.Id) && !ai.Raid.Contains(u.Id) && !ai.PlaceSquad.Contains(u.Id)
-            && !ai.Guards.Values.Any(g => g.Units.Contains(u.Id))).ToArray();
+            && !ai.Guards.Values.Any(g => g.Units.Contains(u.Id)) && u.Id != ai.Scout).ToArray();
         var (bx,bz) = AiBase(ai);
         bool threatened = AiDefend(ai,ref home);
+        home = AiScout(ai,home,workers,bx,bz,threatened);
+        workers = [.. workers.Where(u => u.Id != ai.Scout)];
         if (strategic)
         {
             AiChooseComposition(ai);
@@ -260,7 +264,12 @@ public sealed partial class SimWorld
         int held = PlacesOfPower.Count(p => p.Owner == ai.Team);
         string places = (ai.PlaceSquad.Count > 0 ? $" · to a place {ai.PlaceSquad.Count}/{ai.PlaceSquadStart}" : "")+(held > 0 ? $" · places {held}" : "");
         int heroes = mine.Count(u => u.Definition.Hero);
-        ai.Status = (ai.Composition is { } composition ? composition.Name+" · " : "")+$"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)}{march}{waits}{raid}{places}{defense}{(guards > 0 ? $" · guards {guards}" : "")}{(heroes > 0 ? $" · heroes {heroes} ({ai.RecoveringHeroes.Count} recovering)" : "")} · {ai.Plan}{(ai.TechPlan != "" ? " · "+ai.TechPlan : "")} · parties {ai.PartiesSent}{(ai.RaidsSent > 0 ? $" · raids {ai.RaidsSent}" : "")}";
+        // Build-150: what fog leaves the bot knowing, while there is fog.
+        string intel = !FogOfWar ? "" : $" · knows {AiKnownSites(ai).Length} enemy buildings, {ai.Contacts.Count} soldiers"
+            +(ai.Scout >= 0 ? $" · scout #{ai.Scout} {ai.ScoutStops+1}/{AiScoutStopsPerTrip(ai)}" : "")
+            +(ai.SearchCell >= 0 && ai.Party.Count > 0 ? " · searching" : "")
+            +(ai.Holding is (int enemy,int ours) ? $" · holding: seen army {enemy} vs {ours}" : "");
+        ai.Status = (ai.Composition is { } composition ? composition.Name+" · " : "")+$"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)}{march}{waits}{raid}{places}{defense}{(guards > 0 ? $" · guards {guards}" : "")}{(heroes > 0 ? $" · heroes {heroes} ({ai.RecoveringHeroes.Count} recovering)" : "")}{intel} · {ai.Plan}{(ai.TechPlan != "" ? " · "+ai.TechPlan : "")} · parties {ai.PartiesSent}{(ai.RaidsSent > 0 ? $" · raids {ai.RaidsSent}" : "")}";
     }
 
     /// <summary>The bot's Citadels away from its start (foundations too), with the guards of fallen ones released and
@@ -322,8 +331,7 @@ public sealed partial class SimWorld
     /// stays out of the gatherers' way; the Citadel's own cell when no such cell exists.</summary>
     private int AiGuardCell(AiPlayer ai,ConstructionSite site,SimUnit soldier)
     {
-        var enemy = ConstructionSites.Values.Where(s => s.Team >= 0 && s.Team != ai.Team && s.Health > 0)
-            .OrderBy(s => DistanceSquared(SitePosition(s).X,SitePosition(s).Z,site.X,site.Z)).ThenBy(s => s.Id).Select(SitePosition).DefaultIfEmpty((site.X,site.Z)).First();
+        var enemy = AiEnemyPoint(ai,site.X,site.Z) ?? (site.X,site.Z);
         double facing = Math.Atan2(enemy.Z-site.Z,enemy.X-site.X);
         var nav = Nav(soldier);
         for (int ring = 12000; ring <= 24000; ring += 3000)
@@ -453,9 +461,9 @@ public sealed partial class SimWorld
         return !(living.Length > 0 && citadel != null && BuildingRules.TryGetValue(citadel,out var c) && Affords(c.FoodCost,c.OreCost));
     }
 
-    /// <summary>Within the defence radius of a standing enemy building, where its soldiers and towers pick off workers.</summary>
+    /// <summary>Within the defence radius of a standing enemy building the bot knows of, where its soldiers and towers pick off workers.</summary>
     private bool AiUnsafe(AiPlayer ai,int x,int z) => ConstructionSites.Values.Any(s => s.Team >= 0 && s.Team != ai.Team && s.Health > 0
-        && SitePosition(s) is var (sx,sz) && DistanceSquared(sx,sz,x,z) <= (long)AiDefenseRadiusMm*AiDefenseRadiusMm);
+        && KnowsSite(ai.Team,s) && SitePosition(s) is var (sx,sz) && DistanceSquared(sx,sz,x,z) <= (long)AiDefenseRadiusMm*AiDefenseRadiusMm);
 
     /// <summary>The first expansion: 15:00 at Expansion 0, 5:00 at 100.</summary>
     public static int AiExpansionTick(AiPlayer ai) => ai.Profile.ExpansionTicks;
@@ -656,8 +664,8 @@ public sealed partial class SimWorld
     /// range of the Citadel and rank resource-worker coverage before spacing. Citadels use AiCitadelSite.</summary>
     private int AiPlacementCell(AiPlayer ai,string building,int bx,int bz)
     {
-        var enemy = ConstructionSites.Values.Where(s => s.Team >= 0 && s.Team != ai.Team && s.Health > 0).Select(SitePosition).DefaultIfEmpty((bx,bz)).First();
-        double facing = Math.Atan2(enemy.Item2-bz,enemy.Item1-bx)
+        var enemy = AiEnemyPoint(ai,bx,bz) ?? (bx,bz);
+        double facing = Math.Atan2(enemy.Z-bz,enemy.X-bx)
             +(building == StartStructures.FirstOrDefault(s => s.Team == ai.Team)?.Building ? Math.PI : 0);
         bool tower = AiBuildings.GetValueOrDefault(building)?.Class == "DEFENSIVE";
         int first = tower ? 6000 : 12000;
@@ -861,7 +869,9 @@ public sealed partial class SimWorld
 
     private void AiAssault(AiPlayer ai,SimUnit[] home,int bx,int bz,bool threatened)
     {
-        var enemyBuildings = ConstructionSites.Values.Where(s => s.Team >= 0 && s.Team != ai.Team && s.Health > 0).ToArray();
+        // Build-150: only the enemy buildings the bot knows of (all of them without fog).
+        var enemyBuildings = AiKnownSites(ai);
+        ai.Holding = null;
         // Hard may pull a soldier below a quarter of its health that is being hit out of the fight (build-50): it rolls once
         // per party, the first time, and one in three walks home at once (urgent), joining the home army and the next
         // party there; the rest fight on. Every wounded soldier retreating made them impossible to finish (owner
@@ -896,8 +906,11 @@ public sealed partial class SimWorld
                 if (Tick < ai.Profile.AssaultFromTicks && !AiEarlyAssault(ai)) return;
                 // A spent bot (no soldier trained or sent for 3 minutes, none affordable now) throws in whatever it has left.
                 bool spent = ready.Length > 0 && Tick-ai.LastArmyTick >= AiStagnationTicks && !AiAffordsSoldier(ai);
-                if (ready.Length < AiPartySize(ai) && !spent || enemyBuildings.Length == 0) return;
-                ai.Party.AddRange(ready.Select(u => u.Id)); ai.PartyTarget = -1; ai.AllIn = ready.Length < AiPartySize(ai);
+                // Under fog a bot that has found no enemy building still sets out, to search (build-150), unless the army it has
+                // seen is too strong for it.
+                if (ready.Length < AiPartySize(ai) && !spent || enemyBuildings.Length == 0 && !(FogOfWar && AiOpponentsLeft(ai))) return;
+                if (!spent && AiHoldsAttack(ai,ready,bx,bz)) return;
+                ai.Party.AddRange(ready.Select(u => u.Id)); ai.PartyTarget = ai.SearchCell = -1; ai.AllIn = ready.Length < AiPartySize(ai);
             }
             // Reinforcements (build-40): a full party's worth idle at home while one is out joins it and marches on its
             // target, so a remnant held up for good (two units for 36 minutes on Wasteland) no longer keeps every later
@@ -912,13 +925,19 @@ public sealed partial class SimWorld
         var widest = party.OrderByDescending(u => u.Definition.BodyRadiusMm).ThenByDescending(u => Nav(u).CanStand(u.Node)).ThenBy(u => u.Id).First();
         if (!ConstructionSites.TryGetValue(ai.PartyTarget,out var target) || target.Health <= 0 || target.Team == ai.Team || target.Team < 0)
         {
+            if (AiMarchOnGhost(ai,party)) return;
             // The next building by the profile's target order, each rank down counting as 12 m farther (build-50), among
             // those the party can walk to: across a river without a crossing, another waits.
-            var (rx,rz) = ai.PartyTarget < 0 ? (bx,bz) : (cx,cz);
+            bool fresh = ai.PartyTarget < 0 && ai.SearchCell < 0;
+            var (rx,rz) = fresh ? (bx,bz) : (cx,cz);
             target = enemyBuildings.OrderBy(s => (long)Math.Sqrt(DistanceSquared(SitePosition(s).X,SitePosition(s).Z,rx,rz))+AiRank(ai,AiClassOf(s))*AiTargetRankMm)
                 .ThenBy(s => s.Id).FirstOrDefault(s => AiReaches(widest,s));
-            if (target == null) { ai.Party.Clear(); ai.PartyTarget = -1; return; }
-            bool fresh = ai.PartyTarget < 0;
+            if (target == null)
+            {
+                if (AiSearch(ai,party,widest,fresh)) return;
+                ai.Party.Clear(); ai.PartyTarget = ai.SearchCell = -1; return;
+            }
+            ai.SearchCell = -1;
             // Counted once it has somewhere to go: a party with no reachable target disbands without counting.
             if (fresh) { ai.PartiesSent++; ai.LastArmyTick = Tick; }
             ai.PartyTarget = target.Id;
@@ -1120,5 +1139,5 @@ public sealed partial class SimWorld
         +$":home-defense:{a.HomeDefenseUntil}:{string.Join(',',a.HomeDefenders)}"
         +$":legs:{a.Leg},{a.LegMovedTick},{a.LegGap}:{string.Join(',',a.Legs)}:wounded:{string.Join('/',a.WoundedRolls)}:recovering:{string.Join(',',a.Recovering)}:raid:{a.RaidStart},{a.RaidCell},{a.RaidSite},{a.RaidsSent},{a.NextRaidTick}:{string.Join(',',a.Raid)}:stray:{string.Join('/',a.StraySince)}"
         +$":place:{a.PlaceSquadStart},{a.PlaceTarget},{a.PlaceCell},{a.PlaceSince},{a.PlaceSquadsSent},{a.NextPlaceTick}:{string.Join(',',a.PlaceSquad)}"
-        +$":hero-recovery:{string.Join(',',a.RecoveringHeroes)}:composition:{a.Composition?.Id}"));
+        +$":hero-recovery:{string.Join(',',a.RecoveringHeroes)}:hero-retreats:{string.Join(';',a.HeroRetreats)}:composition:{a.Composition?.Id}"+(FogOfWar ? AiScoutingDigest(a) : "")));
 }

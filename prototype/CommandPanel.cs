@@ -335,6 +335,8 @@ public partial class CommandPanel : Control
             .Where(m => m.Icon != null).Select(m => (m.Icon!,m.X,m.Z)));
     public void SetMinimapView(Vector2[] corners) => _map.View = corners;
     public BattleMinimap Minimap => _map;
+    /// <summary>Build-150: whose sight the minimap shows (fog of war), when not the player's own; -1 shows everything.</summary>
+    public int? SightTeam { get; set; }
     public Texture2D? Art(string name) => _art.GetValueOrDefault(name);
 
     public static string OrderName(OrderKind kind) => kind switch { OrderKind.AttackMove => "Attack-move",OrderKind.HoldGround => "Hold Position",OrderKind.ForceAttack => "Force Attack",OrderKind.ToggleWalkRun => "Walk / Run",OrderKind.UseAbility => "Greater Kingsfoil",OrderKind.PlaceBuilding => "Build",OrderKind.ApproachStructure => "Move to building",OrderKind.ReturnCargo => "Return resources",_ => kind.ToString() };
@@ -355,7 +357,7 @@ public partial class CommandPanel : Control
 
     public void Refresh(IReadOnlyList<SimUnit> units,Func<int,string> name,OrderKind? pending,bool paused,IReadOnlyList<int[]>? groups = null,int allies = 0,int enemies = 0,bool walking = false,int tick = 0,int pendingAbilitySlot = -1)
     {
-        _map.ViewerTeam = PlayerTeam;
+        _map.ViewerTeam = SightTeam ?? PlayerTeam;
         bool available = units.Count > 0;
         // Each control's visibility has one owner and is assigned once per frame: hiding a
         // button between a press and its release (separate frames) would drop the click.

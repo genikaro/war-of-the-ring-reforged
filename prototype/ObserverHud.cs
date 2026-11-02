@@ -25,7 +25,7 @@ public partial class ObserverHud : Control
         [AiJournalKind.Build] = new("c9b98a"),[AiJournalKind.Expand] = new("f7d16a"),[AiJournalKind.Tech] = new("8ab8ea"),
         [AiJournalKind.Army] = new("96d27e"),[AiJournalKind.Attack] = new("f07a5e"),[AiJournalKind.Raid] = new("f0a65e"),
         [AiJournalKind.Place] = new("c79af0"),[AiJournalKind.Defend] = new("f2dc6b"),[AiJournalKind.Hero] = new("ffd88a"),
-        [AiJournalKind.Power] = new("b79cff"),[AiJournalKind.Surrender] = new("9a958a")};
+        [AiJournalKind.Power] = new("b79cff"),[AiJournalKind.Surrender] = new("9a958a"),[AiJournalKind.Scout] = new("8fd6d0")};
     private static readonly (string Tip,float Width)[] EconomyColumns = [
         ("Food in the bank",44),("Ore in the bank",44),("Income · food and ore delivered per game minute",46),
         ("Population · used / capacity",48),("Workers",28),("Army · every unit that is not a worker",28),("Buildings, including foundations",26),

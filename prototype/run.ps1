@@ -45,6 +45,9 @@ param(
     [switch]$Sandbox,
     [switch]$SandboxSmoke,
     [switch]$Observe,
+    [switch]$FogSmoke,
+    [switch]$Fog,
+    [switch]$NoFog,
     [string[]]$Bots,
     [ValidateSet('good','evil')]
     [string[]]$Factions,
@@ -101,8 +104,8 @@ if ($ElvenSmoke -or $NatureSmoke -or $BloodSmoke -or $GlobalPowerSmoke -or $Plac
 if ($LASTEXITCODE -ne 0) { throw 'C# build failed' }
 $arguments = @('--path', $PSScriptRoot)
 if ($Resolution) { $arguments += @('--resolution',$Resolution) }
-if ($SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $TechSmoke -or $Tier2Smoke -or $EvilSmoke -or $ResearchSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $Observe -or $Map -or $Sandbox -or $SandboxSmoke) { $Skirmish = $true }
-if ($Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $InteractionSmoke -or $OrdersSmoke -or $AbilitySmoke -or $SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $TechSmoke -or $Tier2Smoke -or $EvilSmoke -or $ResearchSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $SetupSmoke -or $MenuSmoke -or $SandboxSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
+if ($SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $TechSmoke -or $Tier2Smoke -or $EvilSmoke -or $ResearchSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $FogSmoke -or $Observe -or $Map -or $Sandbox -or $SandboxSmoke) { $Skirmish = $true }
+if ($FogSmoke -or $Smoke -or $MotionSmoke -or $CombatSmoke -or $CommandSmoke -or $InteractionSmoke -or $OrdersSmoke -or $AbilitySmoke -or $SkirmishSmoke -or $ConstructionSmoke -or $StructureSmoke -or $ProductionSmoke -or $PlacementSmoke -or $DwarfHallSmoke -or $MinimapSmoke -or $FrodoSmoke -or $TechSmoke -or $Tier2Smoke -or $EvilSmoke -or $ResearchSmoke -or $SiegeSmoke -or $DefenseSmoke -or $VictorySmoke -or $AiSmoke -or $ObserverSmoke -or $SetupSmoke -or $MenuSmoke -or $SandboxSmoke -or $MeleeSmoke -or $EngagementSmoke -or $AttackMoveEngagementSmoke -or $FormationSmoke -or $SurfaceSmoke -or $ObstacleSmoke) {
     $renderRate = if ($MotionSmoke -or $FormationSmoke) { '80' } else { '20' }
     if (-not $CapturePath) { $arguments += '--headless' }
     $arguments += @('--fixed-fps', $renderRate)
@@ -154,6 +157,10 @@ if ($VictorySmoke) { $arguments += '--victory-smoke' }
 if ($AiSmoke) { $arguments += '--ai-smoke' }
 if ($ExpansionSmoke) { $arguments += '--expansion-smoke' }
 if ($ObserverSmoke) { $arguments += @('--observer-smoke','--observe','--bots=Gimli,Aragorn') }
+if ($FogSmoke) { $arguments += '--fog-smoke' }
+# Build-150: every skirmish has fog of war; the smokes written before it run without it unless -Fog.
+if ($NoFog -or (-not $Fog -and -not $FogSmoke -and ($arguments -contains '--fixed-fps'))) { $arguments += '--no-fog' }
+elseif ($Fog) { $arguments += '--fog' }
 if ($setupMode) { $arguments += '--setup' }
 if ($SetupSmoke) { $arguments += '--setup-smoke' }
 if ($menuMode) { $arguments += '--menu' }

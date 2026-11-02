@@ -22,7 +22,7 @@ public partial class Main
         overlay.Waypoints.AddRange(_hud.Waypoints.Select(w => (w.From*stretch,w.To*stretch,w.Color)));
         overlay.WaypointMarks.AddRange(_hud.WaypointMarks.Select(m => m*stretch));
         root.AddChild(new DebugToggle { Visible = _hud.Visible }); root.AddChild(new BuildOverlay { Visible = _hud.Visible,Line = 1 });
-        var hud = new CommandPanel { ManageCursor = false,BuildMenuOpen = _buildMenu,PlayerTeam = PlayerTeam }; root.AddChild(hud); hud.TeamColors = _teamColors; hud.LoadArtwork(_cacheFiles.Content,_world!,EvilTeam(PlayerTeam));
+        var hud = new CommandPanel { ManageCursor = false,BuildMenuOpen = _buildMenu,PlayerTeam = PlayerTeam,SightTeam = ViewTeam }; root.AddChild(hud); hud.TeamColors = _teamColors; hud.LoadArtwork(_cacheFiles.Content,_world!,EvilTeam(PlayerTeam));
         hud.Visible = _hud.Visible;
         var heroes = new HeroBar { Visible = _hud.Visible }; root.AddChild(heroes); heroes.LoadArtwork(hud);
         heroes.Refresh(FriendlyHeroes(),hud.Art,hud.EffectiveScale);
@@ -32,7 +32,7 @@ public partial class Main
         hud.RefreshSandboxTabs(_sandboxMap);
         var selected = _world!.Units.Where(u => _selected.Contains(u.Id) && u.Health > 0).ToList();
         hud.Refresh(selected,UnitName,_orders.Pending,_paused,Enumerable.Range(0,10).Select(slot => _controlGroups.Recall(slot,LivingFriendly)).ToArray(),
-            _world.Units.Count(u => u.Team == PlayerTeam && u.Health > 0),_world.Units.Count(u => u.Team != PlayerTeam && u.Health > 0),_world.IsWalking(PlayerTeam),_world.Tick,_pendingAbilitySlot);
+            _world.Units.Count(u => u.Team == PlayerTeam && u.Health > 0),VisibleEnemies(),_world.IsWalking(PlayerTeam),_world.Tick,_pendingAbilitySlot);
         if (_observing)
         {
             hud.RefreshMatch(_mapName,_world.Tick,Speeds,_speed,_paused,MatchState(_world),_actualSpeed);

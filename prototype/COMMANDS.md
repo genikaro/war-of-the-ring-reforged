@@ -282,7 +282,7 @@ modifier. Shift+number assignment, the new group strip and centered responsive
 layout are additions. The player-facing label is now Hold Position, matching the
 addendum and local tooltip; the internal enum remains HoldGround. Guard uses prototype 6 m threat and 8 m pursuit leashes and
 replans following twice per second; original guard ranges are unverified.
-The minimap is a simplified navigation/height overview without fog of war;
+The minimap is a simplified navigation/height overview, grey outside your sight since build-150 (fog of war, see FOG.md);
 economy/resource bars, abilities, original fonts, animated Palantir/alerts and
 full original binding/layout fidelity remain subsequent work.
 

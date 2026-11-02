@@ -255,6 +255,11 @@ if (args.Contains("--ai-hero-checks"))
     if(heroAiCache>=0) AiHeroChecks.Cached(Check,args[heroAiCache+1]);
     Console.WriteLine($"{passed} bot hero checks passed"); return;
 }
+if (args.Contains("--fog-checks"))
+{
+    FogChecks.Run(Check);
+    Console.WriteLine($"{passed} fog of war checks passed"); return;
+}
 if (args.Contains("--bot-choice-checks"))
 {
     BotChoiceChecks.Run(Check);
@@ -341,6 +346,7 @@ HeroExperienceChecks.Run(Check);
 HeroRevivalChecks.Run(Check);
 StatusChecks.Run(Check);
 RegenerationChecks.Run(Check);
+FogChecks.Run(Check);
 PlacesOfPowerChecks.Run(Check);
 HealingPlaybackChecks.Run(Check);
 MusicPlaylistChecks.Run(Check);

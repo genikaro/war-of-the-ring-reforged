@@ -144,7 +144,7 @@ static class AiHeroChecks
         wounded.Health=600;Step(recovery,20);
         check(recovery.AiPlayers[0].RecoveringHeroes.Contains(wounded.Id),"hero recovery does not end at half health");
         wounded.Health=800;Step(recovery,20);
-        check(!recovery.AiPlayers[0].RecoveringHeroes.Contains(wounded.Id) && wounded.Order==OrderKind.Guard,"heroes rejoin duty at 75 percent health");
+        check(!recovery.AiPlayers[0].RecoveringHeroes.Contains(wounded.Id) && wounded.Order==OrderKind.Guard,"a balanced bot's heroes rejoin duty from 69 percent health (build-150: 80 - 0.35 x Aggression)");
         wounded.Health=100;Step(recovery,20);wounded.Health=0;Step(recovery,20);
         check(!recovery.AiPlayers[0].RecoveringHeroes.Contains(wounded.Id),"dead heroes are removed from recovery state");
 

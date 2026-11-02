@@ -74,7 +74,7 @@ public partial class Main
         }
     }
 
-    private bool Audible(SimUnit unit) => (_observing || _world!.CanSeeUnit(PlayerTeam,unit))
+    private bool Audible(SimUnit unit) => _world!.CanSeeUnit(ViewTeam,unit)
         && UnitPosition(unit).DistanceSquaredTo(_focus) < 50*50;
 
     private void PresentWorldAudio()

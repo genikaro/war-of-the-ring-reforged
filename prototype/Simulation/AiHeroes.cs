@@ -1,9 +1,28 @@
 namespace Reforged.Simulation;
 
 /// <summary>Hero decisions use the player's training, purchase and ability commands. Heroes support the main army;
-/// they do not fill regular assault slots or get assigned to raids, expansion guards or place scouts.</summary>
+/// they do not fill regular assault slots or get assigned to raids, expansion guards or place scouts. Owner request
+/// (build-150): heroes kept so safe they never levelled, so their courage follows the bot's Aggression (A, 0-100). A hero
+/// runs home below 40 - 0.3 A % of its health (40% for the most careful bot, 10%, the very last moment, for the boldest)
+/// and comes back from 80 - 0.35 A %. It takes on enemies it sees within 20 + 0.3 A m of itself while the odds at the
+/// enemy, as power (AiPower) within 15 m, are no worse than (50 + 2 A)% can take: a careful hero wants two to one, a
+/// balanced one fights at two to three and the boldest at two to five, enemy heroes first. It breaks off a fight whose
+/// odds turned worse than that, toward its army or home. With no assault out, a hero of Aggression 40 or more goes along
+/// with a place-of-power squad or a raid instead of waiting at home.</summary>
+public sealed partial class AiPlayer
+{
+    /// <summary>Heroes walking out of a fight whose odds turned (build-150), and until when they walk on.</summary>
+    public SortedDictionary<int,int> HeroRetreats { get; } = [];
+}
+
 public sealed partial class SimWorld
 {
+    public const int AiHeroOddsMm = 15000,AiHeroBreakOffTicks = 10*TicksPerSecond;
+    public static int AiHeroRetreatPercent(AiPlayer ai) => 40-3*ai.Profile.Style.Aggression/10;
+    public static int AiHeroReturnPercent(AiPlayer ai) => 80-35*ai.Profile.Style.Aggression/100;
+    public static int AiHeroCourage(AiPlayer ai) => 50+2*ai.Profile.Style.Aggression;
+    public static int AiHeroHuntMm(AiPlayer ai) => 20000+300*ai.Profile.Style.Aggression;
+
     /// <summary>A hero of the team stands or is in training.</summary>
     private bool AiHasHero(AiPlayer ai) => ActiveUnits.Any(u => u.Team == ai.Team && u.Health > 0 && u.Definition.Hero)
         || Producers.Values.Any(p => p.Team == ai.Team && p.Queue.Any(q => Rules.Units.GetValueOrDefault(q.Unit)?.Hero == true));
@@ -72,10 +91,10 @@ public sealed partial class SimWorld
     {
         if (!ai.Personality.UsesHeroes) return;
         bool stranded = heroes.Length > 0 && AiFoodStranded(ai);
-        ai.RecoveringHeroes.RemoveWhere(id => !Units[id].Present || Units[id].HealthMilli*100 >= (long)Units[id].MaxHealth*1000*75);
+        ai.RecoveringHeroes.RemoveWhere(id => !Units[id].Present || Units[id].HealthMilli*100 >= (long)Units[id].MaxHealth*1000*AiHeroReturnPercent(ai));
         foreach (var hero in heroes)
         {
-            if (hero.HealthMilli*100 <= (long)hero.MaxHealth*1000*30) ai.RecoveringHeroes.Add(hero.Id);
+            if (hero.HealthMilli*100 <= (long)hero.MaxHealth*1000*AiHeroRetreatPercent(ai)) ai.RecoveringHeroes.Add(hero.Id);
             if (strategic && ai.Personality.UsesSpecialAbilities)
                 foreach (var ability in (hero.Definition.Abilities ?? []).OrderBy(a => a.Slot))
                     if (ability.Kind is not (AbilityKind.Sneak or AbilityKind.SurpriseAttack or AbilityKind.ShadowWalk) && CanPurchaseAbility(ai.Team,hero.Id,ability.Slot,out _))
@@ -97,7 +116,10 @@ public sealed partial class SimWorld
                 AiOrder(ai,[hero.Id],OrderKind.Attack,intruder.Node,intruder.Id);
                 continue;
             }
-            var party = ai.Party.Select(id => Units[id]).Where(u => u.Present && Nav(hero).IsConnected(hero.Node,u.Node)).ToArray();
+            // The army out, or with none out a bold hero goes with a place squad or a raid (build-150).
+            var escorted = ai.Party.Count > 0 || ai.Profile.Style.Aggression < 40 ? ai.Party : ai.PlaceSquad.Count > 0 ? ai.PlaceSquad : ai.Raid;
+            var party = escorted.Select(id => Units[id]).Where(u => u.Present && Nav(hero).IsConnected(hero.Node,u.Node)).ToArray();
+            if (AiHeroFight(ai,hero,party,bx,bz)) continue;
             if (party.Length > 0)
             {
                 int x = (int)party.Average(u => (long)u.X),z = (int)party.Average(u => (long)u.Z);
@@ -110,7 +132,7 @@ public sealed partial class SimWorld
             }
             else if ((!ActiveUnits.Any(u => u.Team == ai.Team && u.Health > 0 && (IsAiWorker(u) || IsAiSoldier(u)))
                     || stranded && !ActiveUnits.Any(u => u.Team == ai.Team && u.Present && IsAiSoldier(u)))
-                && ConstructionSites.Values.Where(s => s.Team >= 0 && s.Team != ai.Team && s.Health > 0)
+                && AiKnownSites(ai)
                     .OrderBy(s => stranded && s.Building == null && Resources.TryGetValue(s.Resource,out var food)
                         && food.Kind == ResourceKind.Food && CanGather(s.Team,food.Id) ? 0 : 1)
                     .ThenBy(s => DistanceSquared(hero.X,hero.Z,s.X,s.Z)).ThenBy(s => s.Id).FirstOrDefault(s => AiReaches(hero,s)) is { } lastTarget)
@@ -120,6 +142,39 @@ public sealed partial class SimWorld
     }
 
     private int AiHeroHomeCell(SimUnit hero,int bx,int bz) => Nav(hero).Nearest(Navigation.Cell(bx,bz),connectedTo:hero.Node);
+
+    /// <summary>The hero's own fights (build-150): it stays in one while the odds hold and breaks off when they turn,
+    /// toward the units it goes with or home; otherwise it attacks the best enemy in its hunting range whose odds it can
+    /// take, enemy heroes first, then soldiers before workers, the nearest first. True when it fights or breaks off.</summary>
+    private bool AiHeroFight(AiPlayer ai,SimUnit hero,SimUnit[] party,int bx,int bz)
+    {
+        bool Holds(int x,int z,bool join)
+        {
+            var (ours,theirs) = AiLocalBalance(ai,x,z,AiHeroOddsMm);
+            if (join && DistanceSquared(hero.X,hero.Z,x,z) > (long)AiHeroOddsMm*AiHeroOddsMm) ours += AiPower(hero);
+            return (long)ours*AiHeroCourage(ai) >= (long)theirs*100;
+        }
+        if (hero.Target >= 0 && Units[hero.Target] is { Present: true } foe && foe.Team != ai.Team)
+        {
+            if (Holds(foe.X,foe.Z,false)) return true;
+            var anchor = party.OrderBy(u => DistanceSquared(u.X,u.Z,hero.X,hero.Z)).ThenBy(u => u.Id).FirstOrDefault();
+            int cell = anchor != null && DistanceSquared(anchor.X,anchor.Z,foe.X,foe.Z) > (long)AiHeroOddsMm*AiHeroOddsMm ? anchor.Node : AiHeroHomeCell(hero,bx,bz);
+            if (cell >= 0) { AiOrder(ai,[hero.Id],OrderKind.Move,cell,urgent: true); ai.HeroRetreats[hero.Id] = Tick+AiHeroBreakOffTicks; }
+            return true;
+        }
+        // A hero on its way out of a lost fight walks on for up to 10 s; it fights again once it stands.
+        if (ai.HeroRetreats.TryGetValue(hero.Id,out int until) && until > Tick && hero.Order == OrderKind.Move && hero.Goal >= 0) return true;
+        ai.HeroRetreats.Remove(hero.Id);
+        int hunt = AiHeroHuntMm(ai);
+        var foes = NearUnits(hero.X,hero.Z,hunt).Where(e => e.Present && e.Team >= 0 && e.Team != ai.Team && CanSeeUnit(ai.Team,e)
+                && !ai.Unreachable.ContainsKey(e.Id) && (e.Definition.DpsMilli > 0 || IsAiWorker(e))
+                && SeparationSquared(hero,e) <= (long)hunt*hunt && !Rules.Pair(hero.Definition.Id,e.Definition.Id).Invincible
+                && Nav(hero).IsConnected(hero.Node,e.Node))
+            .OrderByDescending(e => e.Definition.Hero).ThenBy(e => IsAiWorker(e) ? 1 : 0).ThenBy(e => SeparationSquared(hero,e)).ThenBy(e => e.Id);
+        foreach (var enemy in foes)
+            if (Holds(enemy.X,enemy.Z,true)) { AiOrder(ai,[hero.Id],OrderKind.Attack,enemy.Node,enemy.Id); return true; }
+        return false;
+    }
 
     private void AiHeroGuard(AiPlayer ai,SimUnit hero,int cell,int target = -1)
     {

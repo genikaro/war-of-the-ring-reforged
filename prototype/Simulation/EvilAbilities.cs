@@ -247,7 +247,7 @@ public sealed partial class SimWorld
     public List<HealField> HealFields { get; } = [];
     public List<TrackedUnit> Tracks { get; } = [];
 
-    /// <summary>Dark Tracking has the team see the unit wherever it goes (the game has no fog of war, so this is the only thing a reveal changes).</summary>
+    /// <summary>Dark Tracking has the team see the unit wherever it goes, hidden or in fog (source START_REVEAL_FOW; fog of war since build-150).</summary>
     public bool IsTracked(int team,SimUnit target) => Tracks.Count > 0 && Tracks.Any(t => t.Team == team && t.Target == target.Id && t.Until > Tick);
 
     /// <summary>Sneak is a toggle. On: the unit stops, hides and no longer fights on its own; hostile units that had it let go. Off (the player, or a

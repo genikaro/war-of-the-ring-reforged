@@ -956,6 +956,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         Tick++;
         foreach (var unit in ActiveUnits) unit.ShieldBreaks.RemoveAll(s => s.Until <= Tick || !unit.Present);
         _roster.RetireSettledCorpses(Tick-1);
+        if (Tick%VisionTicks == 0) UpdateVision();
     }
 
     public static long DistanceSquared(int ax, int az, int bx, int bz)
@@ -1007,6 +1008,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         text += DefenseDigest();
         text += OutcomeDigest();
         text += AiDigest();
+        text += VisionDigest();
         text += EvilUpgradesDigest();
         text += ":"+_projectileSequence+":"+string.Join(';',Projectiles);
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));

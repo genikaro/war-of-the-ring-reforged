@@ -32,7 +32,7 @@ public partial class Main
                     shard.Position=new(Mathf.Sin(angle)*radius,0,Mathf.Cos(angle)*radius); shard.Rotation=new(0,angle,0);
                 }
             }
-            root.Position=UnitPosition(unit); root.Visible=_world.CanSeeUnit(PlayerTeam,unit);
+            root.Position=UnitPosition(unit); root.Visible=_world.CanSeeUnit(ViewTeam,unit);
         }
         foreach (int id in _natureRoots.Keys.Where(id => !_world.Units[id].Present || _world.Units[id].Dazed?.Ability.Kind != AbilityKind.Treeform || !(_world.Units[id].Dazed?.Until > _world.Tick)).ToArray())
         { _natureRoots[id].QueueFree(); _natureRoots.Remove(id); }

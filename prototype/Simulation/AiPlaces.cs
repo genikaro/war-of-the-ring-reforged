@@ -77,7 +77,7 @@ public sealed partial class SimWorld
     private bool AiPickPlace(AiPlayer ai,SimUnit[] squad,int fx,int fz)
     {
         var lead = squad.OrderByDescending(u => Nav(u).CanStand(u.Node)).ThenBy(u => u.Id).First();
-        var towers = ConstructionSites.Values.Where(s => s.Team >= 0 && s.Team != ai.Team && s.Complete && s.Health > 0 && SiteDefense(s) != null).ToArray();
+        var towers = AiKnownSites(ai).Where(s => s.Complete && SiteDefense(s) != null).ToArray();
         var ranked = new List<(long Score,PlaceOfPower Place)>();
         foreach (var place in PlacesOfPower.Where(p => p.Owner != ai.Team))
         {

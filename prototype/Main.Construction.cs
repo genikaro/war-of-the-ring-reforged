@@ -76,6 +76,9 @@ public partial class Main
         var world = _world!;
         foreach (var start in StartBases(data))
             world.StartBuildings.Add(start.Team,[start.Building]);
+        // Build-150: each building's source sight for fog of war (caches before it see the default 20 m).
+        foreach (var (name,definition) in _structureDefinitions)
+            if (definition.TryGetProperty("sight_mm",out var sight)) world.BuildingSightMm[name] = sight.GetInt32();
         int Armor(string name) => _structureDefinitions.TryGetValue(name,out var definition)
             ? (int)Math.Round(definition.GetProperty("armor").GetDouble()*1000) : 0;
         ConstructionDefinition Rules(JsonElement rules,ResourceKind? kind) => new(rules.GetProperty("name").GetString()!,rules.GetProperty("display_name").GetString()!,kind,
@@ -368,7 +371,9 @@ public partial class Main
 
     private void PresentConstruction()
     {
-        foreach (int id in _constructionViews.Keys.Where(id => !_world!.ConstructionSites.TryGetValue(id,out var s) || s.Team < 0).ToArray())
+        // Build-150: a building that fell out of the shown side's sight stays, as last seen, until its spot is seen.
+        PresentFog((float)GetProcessDeltaTime());
+        foreach (int id in _constructionViews.Keys.Where(id => (!_world!.ConstructionSites.TryGetValue(id,out var s) || s.Team < 0) && !GhostShown(id)).ToArray())
         {
             if (!_constructionViews.Remove(id,out var old)) continue;
             int obstacle = _structureViews.Values.First(v => v.Root == old!.Root).Id;
@@ -376,6 +381,8 @@ public partial class Main
             _obstacleViews.Remove(obstacle); _buildingViews.Remove(old.Root);
             old.Root.QueueFree();
         }
+        foreach (var (id,ghost) in _constructionViews.Where(p => !_world!.ConstructionSites.TryGetValue(p.Key,out var s) || s.Team < 0))
+        { ghost.Bar.Visible = false; ghost.Fire?.Refresh(0,_world!.Tick); }
         foreach (var site in _world!.ConstructionSites.Values.Where(s => s.Team >= 0))
         {
             var rules = _world.SiteRules(site); var (x,z) = _world.SitePosition(site);
@@ -393,6 +400,15 @@ public partial class Main
                 RegisterStructure(site.Obstacle,site.Team,rules.Name,root,site.Resource);
                 // Added after registration so the strip is not picked as the structure's own geometry.
                 root.AddChild(bar);
+            }
+            // Build-150: an enemy building never seen is hidden; one out of sight keeps the look it had when last seen.
+            var sight = SightOf(site);
+            view.Root.Visible = sight != SiteSight.Unknown;
+            if (sight != SiteSight.Live)
+            {
+                view.Bar.Visible = false; view.Fire?.Refresh(0,_world.Tick);
+                if (view.Player != null) view.Player.SpeedScale = _paused ? 0 : 1;
+                continue;
             }
             if (view.Building != rules.Name || _structureViews[site.Obstacle].Team != site.Team) SwapBuildingModel(site,view,rules.Name);
             int stage = site.Complete ? 3 : (int)Math.Min(2,site.ProgressMicroTicks*3/(rules.DurationTicks*1_000_000L));
@@ -420,5 +436,6 @@ public partial class Main
             if (fireIntensity > 0 && _buildingFireLayers.Length > 0) view.Fire ??= new BuildingFireEffect(view.Root,site.RadiusMm/1000f,_buildingFireLayers);
             view.Fire?.Refresh(fireIntensity,_world.Tick);
         }
+        if (_fogSmoke && _fogPhase < 99) FogSmokeInput();
     }
 }

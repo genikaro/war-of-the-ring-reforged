@@ -262,6 +262,8 @@ public partial class Main
                 view.Position += Vector3.Up*(4*rise*t*(1-t));
                 direction.Y += 4*rise*(1-2*t); // Point the arrow along the curve as it rises and falls.
             }
+            // Build-150: a missile in the fog of the shown side's sight is not drawn.
+            view.Visible = !Fogged || _world.InSight(ViewTeam,(int)(-view.Position.X*1000),(int)(view.Position.Z*1000));
             if (_arrowTrails.TryGetValue(arrow.Id,out var ribbon)) ribbon.Record(_projectileTime,view.Position);
             if (_projectileLights.TryGetValue(arrow.Id,out var lightEffect))
                 lightEffect.Draw(_projectileTime-arrow.ReleaseTick/(double)SimWorld.TicksPerSecond,view.Position,0,loop:true,direction:direction);

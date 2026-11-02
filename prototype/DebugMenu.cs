@@ -6,7 +6,7 @@ public partial class Main
     private readonly Dictionary<string,Button> _cameraButtons = [];
     private Label _debugSummary = null!, _debugSelection = null!;
     private Button _debugPause = null!, _debugStep = null!, _debugFocus = null!, _debugGrant = null!, _setupButton = null!;
-    private CheckButton _debugInstant = null!;
+    private CheckButton _debugInstant = null!,_debugReveal = null!;
     private DebugToggle _debugToggle = null!;
     private const int CheatGrant = 1000;
     /// <summary>Fate the cheat grants: enough for a Fate hero (3-4) twice over.</summary>
@@ -91,6 +91,11 @@ public partial class Main
             _status.Text = on ? "Cheat: instant building and training on" : "Cheat: instant building and training off";
         };
         cheats.AddChild(_debugInstant);
+        // Build-150: shows everything without changing what any side's simulation knows.
+        _debugReveal = new CheckButton { Text = "Reveal map", FocusMode = Control.FocusModeEnum.None,
+            TooltipText = "Show the whole map through the fog of war. Bots and your units still know only what they have seen." };
+        _debugReveal.Toggled += on => { _revealMap = on; _status.Text = on ? "Map revealed" : "Fog of war shown again"; };
+        cheats.AddChild(_debugReveal);
         body.AddChild(new HSeparator()); body.AddChild(DebugText("Last action"));
         _status = DebugText("Loading assets…"); body.AddChild(_status);
     }
@@ -130,6 +135,7 @@ public partial class Main
         if (!ready) { _debugSummary.Text = "Encounter unavailable"; _debugSelection.Text = ""; return; }
         var world = _world!;
         _debugInstant.SetPressedNoSignal(CheatTeams.All(world.InstantBuildTeams.Contains));
+        _debugReveal.Disabled = !world.FogOfWar || _observing; _debugReveal.SetPressedNoSignal(_revealMap);
         _debugSummary.Text = $"{(_paused ? "Paused" : "Running")} · Tick {world.Tick} · 20 ticks/s"+(_skirmish ? "\n"+AiSummary() : "");
         var units = world.Units.Where(u => u.Health > 0 && _selected.Contains(u.Id)).ToArray();
         _debugSelection.Text = units.Length == 0 ? "No units selected" :

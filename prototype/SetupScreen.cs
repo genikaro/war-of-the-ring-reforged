@@ -8,7 +8,7 @@ using System.Text.RegularExpressions;
 /// and the seed that draws its random places of power and bots, new for every Start. Build-147: the Sandbox setup
 /// screen's choices, instant building and the training dummies (both on otherwise).</summary>
 public sealed record SkirmishSetup(string Cache,string Map,int Human,string[] Bots,int[] Closed,int Speed,int Seed = 0,string[]? Factions = null,
-    bool SandboxInstantBuild = true,bool SandboxTrainingDummies = true);
+    bool SandboxInstantBuild = true,bool SandboxTrainingDummies = true,bool FogOfWar = true);
 
 /// <summary>The setup screens. Skirmish, a lobby in the manner of Warcraft III and StarCraft II: every multiplayer map
 /// with its player count and a preview of its start positions, one row per start position (you, a bot personality or
@@ -68,7 +68,7 @@ public partial class SetupScreen : Control
     /// <summary>The slot the bot card describes: the last one changed or clicked (-1: the first bot slot).</summary>
     private int _cardSlot = -1;
     private SpeedSlider _speed = null!;
-    private CheckBox _instantBuild = null!,_trainingDummies = null!;
+    private CheckBox _instantBuild = null!,_trainingDummies = null!,_fogOfWar = null!;
     private Button _start = null!,_quit = null!;
     private MapEntry? _selected;
     private bool _loading;
@@ -154,6 +154,9 @@ public partial class SetupScreen : Control
         _instantBuild.Visible = _trainingDummies.Visible = sandbox;
         _instantBuild.ButtonPressed = Previous?.SandboxInstantBuild ?? true; _trainingDummies.ButtonPressed = Previous?.SandboxTrainingDummies ?? true;
         _instantBuild.Toggled += _ => Refresh(); _trainingDummies.Toggled += _ => Refresh();
+        // Build-150: fog of war, on as in the original.
+        _fogOfWar = Place(Check("Fog of war","What no unit or building of a side sees is hidden from it, bots included; enemy buildings stay as last seen."),815,478,180,30);
+        _fogOfWar.Visible = !sandbox; _fogOfWar.ButtonPressed = Previous?.FogOfWar ?? true; _fogOfWar.Toggled += _ => Refresh();
 
         var card = new PanelContainer { Visible = !sandbox }; _card = card;
         var cardBox = Box(new Color(0,0,0,.45f),Edge); cardBox.ContentMarginTop = cardBox.ContentMarginBottom = 4; cardBox.ContentMarginLeft = cardBox.ContentMarginRight = 6;
@@ -376,8 +379,8 @@ public partial class SetupScreen : Control
             : open < 2 ? "At least two start positions must be open."
             : map.Sandbox ? $"Sandbox: you command Player 1 and Player 2 · Tab switches · {speed} speed"
                 + (_instantBuild.ButtonPressed ? "" : " · building and training take their time") + (_trainingDummies.ButtonPressed ? "" : " · no training dummies")
-            : human >= 0 ? $"You play Player {human+1} ({(_sides[human].Selected == EvilSide ? "Evil" : "Good")}) against {open-1} bot{(open == 2 ? "" : "s")} · {speed} speed"
-            : $"Nobody plays: you watch {open} bots · {speed} speed";
+            : (human >= 0 ? $"You play Player {human+1} ({(_sides[human].Selected == EvilSide ? "Evil" : "Good")}) against {open-1} bot{(open == 2 ? "" : "s")} · {speed} speed"
+            : $"Nobody plays: you watch {open} bots · {speed} speed")+(_fogOfWar.ButtonPressed ? "" : " · no fog of war");
     }
 
     private void Start()
@@ -388,7 +391,8 @@ public partial class SetupScreen : Control
         Started?.Invoke(new(cache,map.Title,Array.IndexOf(choices,You),bots,
             Enumerable.Range(0,map.Players).Where(s => choices[s] == Closed).ToArray(),Speeds[_speed.Index],Random.Shared.Next(),
             Enumerable.Range(0,map.Players).Select(s => _sides[s].Selected == EvilSide ? "evil" : "good").ToArray(),
-            SandboxInstantBuild: !map.Sandbox || _instantBuild.ButtonPressed,SandboxTrainingDummies: !map.Sandbox || _trainingDummies.ButtonPressed));
+            SandboxInstantBuild: !map.Sandbox || _instantBuild.ButtonPressed,SandboxTrainingDummies: !map.Sandbox || _trainingDummies.ButtonPressed,
+            FogOfWar: !map.Sandbox && _fogOfWar.ButtonPressed));
     }
 
     private const string SandboxStem = "Sandbox";
@@ -570,6 +574,7 @@ public partial class SetupScreen : Control
     public Button BackButton => _quit;
     public CheckBox InstantBuildBox => _instantBuild;
     public CheckBox TrainingDummiesBox => _trainingDummies;
+    public CheckBox FogOfWarBox => _fogOfWar;
     public string StatusText => _status.Text;
     public string TitleText => _title.Text;
     public bool MapListShown => _scroll.Visible;

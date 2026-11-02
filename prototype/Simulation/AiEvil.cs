@@ -22,8 +22,7 @@ public sealed partial class SimWorld
     /// first when <paramref name="away"/>, else the side facing the enemy; or -1.</summary>
     private int AiWarPostCell(AiPlayer ai,string post,int x,int z,int first,int last,bool away)
     {
-        var enemy = ConstructionSites.Values.Where(s => s.Team >= 0 && s.Team != ai.Team && s.Health > 0).Select(SitePosition)
-            .OrderBy(p => DistanceSquared(p.X,p.Z,x,z)).DefaultIfEmpty((X: x+1000,Z: z)).First();
+        var enemy = AiEnemyPoint(ai,x,z) ?? (x+1000,z);
         double facing = Math.Atan2(enemy.Z-z,enemy.X-x)+(away ? Math.PI : 0);
         for (int ring = first; ring <= last; ring += 2000)
             for (int step = 0; step < 24; step++)

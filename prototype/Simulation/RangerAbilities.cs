@@ -11,13 +11,15 @@ public sealed partial class SimWorld
 {
     /// <summary>Camouflage is normal invisibility (bit 0). Rangers detect it within their source sight radius;
     /// Eagle Eye doubles that radius. The Ring disables detection in its source spell and stays hidden.
-    /// This visibility rule covers units, not terrain fog. A negative viewer is an omniscient observer.</summary>
+    /// With fog of war (build-150) an enemy outside the side's sight is hidden too, unless an Aviary or Dark Tracking
+    /// reveals it. A negative viewer is an omniscient observer.</summary>
     public bool CanSeeUnit(int team,SimUnit target)
     {
         if (team < 0 || target.Team == team) return true;
         if (target.RingActive) return false;
         if (PlaceReveals(team,target)) return true;
         if (IsTracked(team,target)) return true;
+        if (!InSight(team,target.X,target.Z)) return false;
         if (!target.Camouflaged && !target.ElvenCloaked && !target.Sneaking) return true;
         return ActiveUnits.Any(source => source.Team == team && source.Present && (source.Definition.DetectionMask & 1) != 0
             && SeparationSquared(source,target) <= (long)source.SightRangeMm*source.SightRangeMm);

@@ -27,6 +27,7 @@ public partial class Main
         _bots = setup.Bots; _speed = setup.Speed; _matchSeed = setup.Seed; _factions = setup.Factions ?? [];
         _closedTeams.Clear(); _closedTeams.UnionWith(setup.Closed);
         _sandboxInstantBuild = setup.SandboxInstantBuild; _sandboxTrainingDummies = setup.SandboxTrainingDummies;
+        _fogOfWar = setup.FogOfWar;
     }
 
     private void ShowSetupScreen(SetupScreen.SetupKind kind)

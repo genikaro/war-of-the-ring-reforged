@@ -522,7 +522,7 @@ public partial class Main : Node3D
                 else { _selected.Clear(); _selectedStructure = null; }
                 _dragging = false; _hud.SelectionBox = null;
             }
-            if (_observing && ObserverHotkey(key)) return;
+            if (_observing && (ObserverHotkey(key) || FogHotkey(key))) return;
             if (_sandboxMap && key.Keycode == Key.Tab && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed) { SwitchSandboxPlayer(); return; }
             // Grid hotkeys go by key position, so they follow QWER/ASDF/ZXCV on any keyboard layout.
             int gridSlot = CommandPanel.GridSlot(key.PhysicalKeycode);
@@ -620,7 +620,7 @@ public partial class Main : Node3D
         int? previousStructure = _selectedStructure;
         _selectedStructure = null;
         if (!append || !_selected.All(LivingFriendly)) _selected.Clear();
-        foreach (var unit in _world!.Units.Where(u => (u.Team == PlayerTeam || _observing) && u.Present && _world.CanSeeUnit(PlayerTeam,u)))
+        foreach (var unit in _world!.Units.Where(u => (u.Team == PlayerTeam || _observing) && u.Present && _world.CanSeeUnit(ViewTeam,u)))
             if (InBox(rect,unit)) _selected.Add(unit.Id);
         // Units in the box (or retained by Shift) take priority. Structures
         // remain a separate inspection selection when no units are selected.
@@ -701,7 +701,7 @@ public partial class Main : Node3D
         var rayOrigin = new System.Numerics.Vector3(-origin.X,origin.Y,origin.Z);
         var rayDirection = new System.Numerics.Vector3(-direction.X,direction.Y,direction.Z);
         var terrain = _picker.Pick(rayOrigin,rayDirection);
-        return UnitPicker.Pick(_world!.Units.Where(u => _world.CanSeeUnit(PlayerTeam,u)),rayOrigin,rayDirection,Math.Min(limit ?? float.PositiveInfinity,terrain?.Distance+.03f ?? float.PositiveInfinity));
+        return UnitPicker.Pick(_world!.Units.Where(u => _world.CanSeeUnit(ViewTeam,u)),rayOrigin,rayDirection,Math.Min(limit ?? float.PositiveInfinity,terrain?.Distance+.03f ?? float.PositiveInfinity));
     }
 
     private void CancelTargeting()
@@ -961,7 +961,7 @@ public partial class Main : Node3D
         {
             var view = _views[unit.Id];
             if (view.Buried) continue;
-            view.Root.Visible = unit.InsideSite < 0 && _world.CanSeeUnit(PlayerTeam,unit) && !view.Exploded;
+            view.Root.Visible = unit.InsideSite < 0 && _world.CanSeeUnit(ViewTeam,unit) && !view.Exploded;
             PresentInvisibility(unit,view);
             view.HeroGlow?.Draw(view.Root.GlobalPosition,unit.Present && view.Root.Visible && !view.Translucent,
                 point => unit.Node < _world.Navigation.GroundCount
@@ -996,13 +996,13 @@ public partial class Main : Node3D
         UpdateCamera();
         _commands.SetMinimapView(ViewFootprint());
         long hudPresentation = SimProfiler.Start();
-        _selected.RemoveWhere(id => !LivingUnit(id) || !_world.CanSeeUnit(PlayerTeam,_world.Units[id]));
+        _selected.RemoveWhere(id => !LivingUnit(id) || !_world.CanSeeUnit(ViewTeam,_world.Units[id]));
         var units = _world.Units.Where(u => _selected.Contains(u.Id)).ToList();
         if (units.Count == 0 && _pendingGlobalPower < 0 && _pendingPlacePower < 0) _orders.Cancel();
         if (_skirmish) SyncBuildMenu();
         _commands.Refresh(units,UnitName,_orders.Pending,_paused,
             Enumerable.Range(0,10).Select(slot => _controlGroups.Recall(slot,LivingFriendly)).ToArray(),
-            _world.Units.Count(u => u.Team == PlayerTeam && u.Health > 0),_world.Units.Count(u => u.Team != PlayerTeam && u.Health > 0),_world.IsWalking(PlayerTeam),_world.Tick,_pendingAbilitySlot);
+            _world.Units.Count(u => u.Team == PlayerTeam && u.Health > 0),VisibleEnemies(),_world.IsWalking(PlayerTeam),_world.Tick,_pendingAbilitySlot);
         UpdateAbilityCursor();
         _heroBar.Refresh(FriendlyHeroes(),_commands.Art,_commands.EffectiveScale);
         if (_skirmish)
@@ -1108,7 +1108,7 @@ public partial class Main : Node3D
         if (_smoke) SmokeInput();
         if (_smoke && _capture != "" && _frames == (_combatSmoke ? 180 : 60)) _ = CaptureFrame(false);
         if (_smoke && _world.Tick >= 420) FinishSmoke();
-        else if (!_placesSmoke && !_audioSmoke && !_smoke && !_commandSmoke && !_interactionSmoke && !_ordersSmoke && !_abilitySmoke && !_elvenSmoke && !_natureSmoke && !_bloodSmoke && !_globalPowerSmoke && !_heroSkillSmoke && !_heroExperienceSmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_productionSmoke && !_placementSmoke && !_dwarfHallSmoke && !_minimapSmoke && !_frodoSmoke && !_techSmoke && !_tier2Smoke && !_evilSmoke && !_researchSmoke && !_siegeSmoke && !_defenseSmoke && !_victorySmoke && !_aiSmoke && !_observerSmoke && !_setupSmoke && !_engagementSmoke && !_sandboxMapSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
+        else if (!_placesSmoke && !_audioSmoke && !_smoke && !_commandSmoke && !_interactionSmoke && !_ordersSmoke && !_abilitySmoke && !_elvenSmoke && !_natureSmoke && !_bloodSmoke && !_globalPowerSmoke && !_heroSkillSmoke && !_heroExperienceSmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_productionSmoke && !_placementSmoke && !_dwarfHallSmoke && !_minimapSmoke && !_frodoSmoke && !_techSmoke && !_tier2Smoke && !_evilSmoke && !_researchSmoke && !_siegeSmoke && !_defenseSmoke && !_victorySmoke && !_aiSmoke && !_observerSmoke && !_setupSmoke && !_engagementSmoke && !_sandboxMapSmoke && !_fogSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
     }
 
     private string UnitName(int id) => _world!.Units[id].Definition.DisplayName;

@@ -1,14 +1,15 @@
 namespace Reforged.Simulation;
 
 /// <summary>What a journal line is about; the observer's journal view colours it by this.</summary>
-public enum AiJournalKind { Build,Expand,Tech,Army,Attack,Raid,Place,Defend,Hero,Power,Surrender }
+public enum AiJournalKind { Build,Expand,Tech,Army,Attack,Raid,Place,Defend,Hero,Power,Surrender,Scout }
 
 public readonly record struct AiJournalEntry(int Tick,AiJournalKind Kind,string Text);
 
 /// <summary>A bot's macro decisions, for the observer's journal view (owner request, build-148): buildings and expansions
 /// it lays, tech, its army plan and each soldier type it adds, attacks with their size, mix and target, retargets and
-/// fall-backs, raids, place-of-power squads, expansion guards, base defence, heroes, Fate powers and surrender. Unit
-/// orders, gathering and training of units already in the army stay out. Kept outside the digest.</summary>
+/// fall-backs, raids, place-of-power squads, expansion guards, base defence, heroes, Fate powers and surrender; under fog
+/// (build-150) also scouts, the enemy buildings found and attacks held back. Unit orders, gathering and training of units
+/// already in the army stay out. Kept outside the digest.</summary>
 public sealed class AiJournal
 {
     public const int Capacity = 500;
@@ -32,6 +33,11 @@ public sealed class AiJournal
     internal readonly List<int> Party = [],Raid = [],PlaceSquad = [];
     internal int DefenseTick = int.MinValue;
     internal bool Surrendered;
+    internal int Scouts,Scout = -1,HoldTick = int.MinValue,FindsSince = -1;
+    internal readonly HashSet<int> Known = [];
+    /// <summary>Enemy buildings found and not written yet, by site id.</summary>
+    internal readonly SortedSet<int> Finds = [];
+    internal bool Searching;
 
     internal void Add(int tick,AiJournalKind kind,string text)
     {
@@ -108,7 +114,7 @@ public sealed partial class SimWorld
         // Base defence: once per fight, a fight being over after 30 s without an enemy soldier in the base.
         if (ai.Intruder >= 0 && !IsAiWorker(Units[ai.Intruder]))
         {
-            if (Tick-journal.DefenseTick > AiJournalQuietTicks)
+            if ((long)Tick-journal.DefenseTick > AiJournalQuietTicks)
             {
                 var buildings = mine.Select(SitePosition).ToArray();
                 var raiders = ActiveUnits.Where(u => u.Present && u.Team >= 0 && u.Team != ai.Team && !IsAiWorker(u) && CanSeeUnit(ai.Team,u)
@@ -135,13 +141,18 @@ public sealed partial class SimWorld
         if (ai.PartiesSent > journal.Parties)
         {
             journal.Parties = ai.PartiesSent; journal.PartyStart = ai.Party.Count;
-            Write(AiJournalKind.Attack,$"Attack #{ai.PartiesSent}: {ai.Party.Count} units ({AiJournalMix(ai.Party)}) → {AiJournalSite(ai.PartyTarget,bx,bz)}"
+            // Build-150: a party that knows no enemy building sets out to search for one.
+            journal.Searching = ai.PartyTarget < 0 && ai.SearchCell >= 0;
+            string toward = journal.Searching && Navigation.Center(ai.SearchCell) is var (sx,sz) ? $"searching for the enemy, {AiJournalWhere(bx,bz,sx,sz)}" : AiJournalSite(ai.PartyTarget,bx,bz);
+            Write(AiJournalKind.Attack,$"Attack #{ai.PartiesSent}: {ai.Party.Count} units ({AiJournalMix(ai.Party)}) → {toward}"
                 +(ai.AllIn ? " · all in" : ""));
         }
         else if (ai.Party.Count > 0 && journal.Party.Count > 0)
         {
             int[] added = [.. ai.Party.Where(id => !journal.Party.Contains(id))];
             if (added.Length >= 3) { journal.PartyStart += added.Length; Write(AiJournalKind.Attack,$"Attack #{ai.PartiesSent} reinforced by {added.Length} units ({AiJournalMix(added)})"); }
+            if (ai.PartyTarget >= 0 && journal.PartyTarget < 0 && journal.Searching)
+                Write(AiJournalKind.Attack,$"Attack #{ai.PartiesSent} found its target → {AiJournalSite(ai.PartyTarget,bx,bz)}");
             if (ai.PartyTarget >= 0 && journal.PartyTarget >= 0 && ai.PartyTarget != journal.PartyTarget)
             {
                 bool razed = !ConstructionSites.TryGetValue(journal.PartyTarget,out var last) || last.Health <= 0 || last.Team == ai.Team;
@@ -194,6 +205,8 @@ public sealed partial class SimWorld
         journal.PlacesReady.Clear();
         foreach (var held in places) journal.PlacesReady[held.Id] = held.ReadyAt;
 
+        AiJournalIntel(ai,bx,bz);
+
         if (ai.Status == "surrendered" && !journal.Surrendered)
         {
             journal.Surrendered = true;
@@ -218,6 +231,53 @@ public sealed partial class SimWorld
         string[] compass = ["east","north-east","north","north-west","west","south-west","south","south-east"];
         int octant = (int)Math.Round(Math.Atan2(dz,dx)/(Math.PI/4));
         return $"{metres} m {compass[(octant+8)%8]}";
+    }
+
+    /// <summary>Build-150, under fog: scouts sent and back or lost, enemy buildings found, searches and attacks held back.</summary>
+    private void AiJournalIntel(AiPlayer ai,int bx,int bz)
+    {
+        if (!FogOfWar) return;
+        var journal = ai.Journal;
+        void Write(AiJournalKind kind,string text) => journal.Add(Tick,kind,text);
+        // Buildings found are written together: when the scout's trip ends, or 15 s after the first of them.
+        var known = AiKnownSites(ai);
+        foreach (var site in known.Where(s => !journal.Known.Contains(s.Id))) { journal.Finds.Add(site.Id); if (journal.FindsSince < 0) journal.FindsSince = Tick; }
+        journal.Known.Clear(); journal.Known.UnionWith(known.Select(s => s.Id));
+        bool tripOver = journal.Scout >= 0 && ai.Scout != journal.Scout;
+        if (journal.Finds.Count > 0 && (tripOver || Tick-journal.FindsSince >= 15*TicksPerSecond))
+        {
+            var found = journal.Finds.Where(ConstructionSites.ContainsKey).Select(id => ConstructionSites[id]).Where(s => s.Team >= 0).ToArray();
+            foreach (var team in found.GroupBy(s => s.Team).OrderBy(g => g.Key))
+            {
+                var nearest = team.OrderBy(s => DistanceSquared(SitePosition(s).X,SitePosition(s).Z,bx,bz)).ThenBy(s => s.Id).First();
+                var (x,z) = SitePosition(nearest);
+                Write(AiJournalKind.Scout,$"Found {team.Count()} {(team.Count() == 1 ? "building" : "buildings")} of {AiJournalPlayer(team.Key)}: "
+                    +string.Join(", ",team.GroupBy(s => SiteRules(s).DisplayName).OrderByDescending(g => g.Count()).ThenBy(g => g.Key,StringComparer.Ordinal)
+                        .Select(g => g.Count() == 1 ? g.Key : $"{g.Key} ×{g.Count()}"))+$" · {AiJournalWhere(bx,bz,x,z)}");
+            }
+            journal.Finds.Clear(); journal.FindsSince = -1;
+        }
+        if (ai.ScoutTrips > journal.Scouts && ai.Scout >= 0)
+        {
+            var (x,z) = Navigation.Center(ai.ScoutCell);
+            Write(AiJournalKind.Scout,$"Scout #{ai.ScoutTrips}: {Units[ai.Scout].Definition.DisplayName} #{ai.Scout} → {AiJournalWhere(bx,bz,x,z)}");
+        }
+        else if (tripOver)
+            Write(AiJournalKind.Scout,Units[journal.Scout].Health > 0 ? $"Scout #{journal.Scouts} heads home" : $"Scout #{journal.Scouts} lost");
+        journal.Scouts = ai.ScoutTrips; journal.Scout = ai.Scout;
+        bool searching = ai.SearchCell >= 0 && ai.Party.Count > 0;
+        if (searching && !journal.Searching)
+        {
+            var (x,z) = Navigation.Center(ai.SearchCell);
+            Write(AiJournalKind.Attack,$"Attack #{ai.PartiesSent} searches for the enemy → {AiJournalWhere(bx,bz,x,z)}");
+        }
+        journal.Searching = searching;
+        if (ai.Holding is (int enemy,int ours))
+        {
+            if ((long)Tick-journal.HoldTick > AiJournalQuietTicks)
+                Write(AiJournalKind.Attack,$"Holds the attack: the enemy army it has seen (power {enemy}) outweighs its own ({ours})");
+            journal.HoldTick = Tick;
+        }
     }
 
     private string AiJournalSite(int id,int bx,int bz)

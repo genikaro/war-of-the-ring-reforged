@@ -175,7 +175,9 @@ def construction_data(resolver, resources):
         buildings[name] = {'display_name': display_name(name, record),
             'max_health': record['MaxHealth'], 'armor': record['ArmorPoints'],
             'portrait': Path(portrait['Filename'].replace('\\', '/')).stem,
-            'selection_radius_mm': round(record['SelectionRingRadius']*1000)}
+            'selection_radius_mm': round(record['SelectionRingRadius']*1000),
+            # Build-150 fog of war: Buildings.SightRange, whole metres (20; the War Post 5).
+            'sight_mm': record['SightRange']*1000}
     return {'definitions': definitions, 'faction_definitions': faction_definitions, 'sites': sites, 'buildings': buildings}, footprints
 
 

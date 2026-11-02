@@ -105,7 +105,7 @@ public sealed partial class SimWorld
     {
         var towers = ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Complete && s.Health > 0 && AiIsTower(s)).ToArray();
         if (towers.FirstOrDefault(s => s.Upgrading) is { } busy) return ("upgrading to "+UpgradeRules(busy)!.DisplayName,0,0);
-        var enemies = ConstructionSites.Values.Where(s => s.Team >= 0 && s.Team != ai.Team && s.Health > 0).Select(SitePosition).ToArray();
+        var enemies = AiKnownSites(ai).Select(SitePosition).ToArray();
         foreach (var tower in towers.Where(s => !s.Upgrading && s.Research == null && UpgradeRules(s) != null)
             .OrderByDescending(s => s.DefenseTarget >= 0)
             .ThenBy(s => enemies.Select(e => DistanceSquared(s.X,s.Z,e.X,e.Z)).DefaultIfEmpty(long.MaxValue).Min()).ThenBy(s => s.Id))

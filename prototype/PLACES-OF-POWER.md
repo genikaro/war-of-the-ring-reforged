@@ -55,8 +55,8 @@ Bots can use their owned powers.
 | Radagast's Aviary | Scout a 25 m area for 15 seconds. The current visibility adapter reveals camouflage/cloak there; the One Ring stays hidden. |
 
 Willow parameters come from its spell graph's child spell, time-scale action
-and timer. Aviary's original action reveals fog of war; revealing concealed
-units is an explicit prototype adapter while terrain fog is absent, not a claim
+and timer. Aviary's original action reveals fog of war, which build-150 simulates (its area is in the side's
+sight while the power lasts); revealing concealed units there remains an explicit prototype adapter, not a claim
 about original-game invisibility detection. It targets anywhere on the map.
 Original effects 254 (Willow), 191 (Aviary) and sound event 376 are exported.
 

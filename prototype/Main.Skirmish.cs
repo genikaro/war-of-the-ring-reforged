@@ -72,6 +72,7 @@ public partial class Main
         if (_sandboxMap) { await LoadingStep("Building the Sandbox bases",.86f); PrepareSandboxMap(); }
         await LoadingStep("Preparing the bots",.9f);
         LoadSkirmishAi(data);
+        StartFogOfWar();
         ApplySkirmishHud(_commands);
     }
 

@@ -56,7 +56,7 @@ public partial class Main
         foreach (var unit in _world.Units)
         {
             if (unit.Health > 0 || !_bloodDeaths.Add(unit.Id) || unit.InsideSite >= 0 || !_bloodShown) continue;
-            if (_blood.Unit(unit.Definition.Name) is not { } source || !_world.CanSeeUnit(PlayerTeam,unit)) continue;
+            if (_blood.Unit(unit.Definition.Name) is not { } source || !_world.CanSeeUnit(ViewTeam,unit)) continue;
             if (unit.CriticalDeath && source.CriticalDeath is int burst && BloodAllowed(burst) && Explode(unit,burst,now)) continue;
             if (source.DeathPools.Length == 0) continue;
             int pool = source.DeathPools[(int)((uint)(unit.Id*31+_world.Tick)%source.DeathPools.Length)];
@@ -87,7 +87,7 @@ public partial class Main
     /// <summary>The struck unit's blood at the side facing the blow, and the attacker's weapon impact against it.</summary>
     private void Bleed(SimUnit victim,Vector3 from,SimUnit? attacker,bool missile,double now,long damageMilli,int hit)
     {
-        if (_blood!.Unit(victim.Definition.Name) is not { } source || !_world!.CanSeeUnit(PlayerTeam,victim)) return;
+        if (_blood!.Unit(victim.Definition.Name) is not { } source || !_world!.CanSeeUnit(ViewTeam,victim)) return;
         var view = _views[victim.Id];
         var feet = view.Root.Position;
         var away = feet-from; away.Y = 0;

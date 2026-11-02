@@ -8,6 +8,11 @@ public partial class BattleMinimap : Control
     public event Action<Vector2,bool,bool>? Ordered;
     private SimWorld? _world;
     private ImageTexture? _terrain;
+    /// <summary>Build-150: the terrain in colour and in grey, and the two mixed by the viewer's sight.</summary>
+    private byte[] _colour = [],_grey = [],_mixed = [];
+    private Image? _mixedImage;
+    private ImageTexture? _fogged;
+    private (int Team,int Updates) _foggedFor = (int.MinValue,-1);
     private (Texture2D Icon,float X,float Z)[] _markers = [];
     /// <summary>Ground corners of the battlefield view in map millimetres.</summary>
     public Vector2[] View { get; set; } = [];
@@ -38,6 +43,38 @@ public partial class BattleMinimap : Control
             image.SetPixel(x,nav.Height-1-z,nav.CanStand(node) ? new Color(.18f+shade,.25f+shade,.10f+shade) : new Color(.12f+shade,.14f+shade,.10f+shade));
         }
         _terrain = ImageTexture.CreateFromImage(image);
+        // Outside sight the original's minimap shows its terrain in grey (local-023): the same shades, desaturated and dimmed.
+        _colour = image.GetData(); _grey = new byte[_colour.Length]; _mixed = new byte[_colour.Length];
+        for (int i = 0; i < _colour.Length; i += 4)
+        {
+            byte luma = (byte)Math.Min(255,(_colour[i]*30+_colour[i+1]*59+_colour[i+2]*11)*85/10000);
+            _grey[i] = _grey[i+1] = _grey[i+2] = luma; _grey[i+3] = 255;
+        }
+        _fogged = null; _foggedFor = (int.MinValue,-1);
+    }
+
+    private bool Fogged => _world!.FogOfWar && ViewerTeam >= 0;
+
+    /// <summary>The terrain in colour where the viewer sees and in grey elsewhere, remade when its sight changes.</summary>
+    private Texture2D FoggedTerrain()
+    {
+        var world = _world!; var nav = world.Navigation;
+        if (_fogged != null && _foggedFor == (ViewerTeam,world.VisionUpdates)) return _fogged;
+        _foggedFor = (ViewerTeam,world.VisionUpdates);
+        var visible = world.Vision(ViewerTeam).Visible;
+        for (int z = 0; z < nav.Height; z++)
+        {
+            int row = Math.Min(world.VisionHeight-1,z*nav.CellSize/SimWorld.VisionCellMm)*world.VisionWidth;
+            int line = (nav.Height-1-z)*nav.Width*4;
+            for (int x = 0; x < nav.Width; x++)
+            {
+                var source = visible[row+Math.Min(world.VisionWidth-1,x*nav.CellSize/SimWorld.VisionCellMm)] != 0 ? _colour : _grey;
+                Buffer.BlockCopy(source,line+x*4,_mixed,line+x*4,4);
+            }
+        }
+        if (_mixedImage == null) { _mixedImage = Image.CreateFromData(nav.Width,nav.Height,false,Image.Format.Rgba8,_mixed); _fogged = ImageTexture.CreateFromImage(_mixedImage); }
+        else { _mixedImage.SetData(nav.Width,nav.Height,false,Image.Format.Rgba8,_mixed); _fogged!.Update(_mixedImage); }
+        return _fogged!;
     }
 
     public void SetMarkers(IEnumerable<(Texture2D Icon,float X,float Z)> markers) => _markers = markers.ToArray();
@@ -57,18 +94,33 @@ public partial class BattleMinimap : Control
         return new(point.X*nav.Width*nav.CellSize,(1-point.Y)*nav.Height*nav.CellSize);
     }
 
-    /// <summary>Every standing building and foundation as its footprint outline on the minimap, with its team.</summary>
+    /// <summary>Whether the minimap shows the map point in colour (in the viewer's sight) rather than grey; for smokes.</summary>
+    public bool ColouredAt(int x,int z)
+    {
+        var nav = _world!.Navigation;
+        if (!Fogged) return true;
+        FoggedTerrain();
+        int i = ((nav.Height-1-Math.Clamp(z/nav.CellSize,0,nav.Height-1))*nav.Width+Math.Clamp(x/nav.CellSize,0,nav.Width-1))*4;
+        return _mixed[i] != _mixed[i+1] || _mixed[i+1] != _mixed[i+2];
+    }
+
+    /// <summary>Every standing building and foundation as its footprint outline on the minimap, with its team. Under fog
+    /// (build-150) the viewer's own, and the enemy buildings it has found, as it last saw them.</summary>
     public IEnumerable<(int Team,bool Complete,Vector2[] Outline)> Buildings()
     {
-        foreach (var site in _world!.ConstructionSites.Values.Where(s => s.Team >= 0 && s.Health > 0))
-            foreach (var footprint in _world.Navigation.Footprints(site.Obstacle))
-                yield return (site.Team,site.Complete,footprint.Polygon.Select(p => MapPoint(p.X,p.Z)).ToArray());
+        var world = _world!;
+        var shown = !Fogged ? world.ConstructionSites.Values.Where(s => s.Team >= 0 && s.Health > 0).Select(s => (s.Team,s.Complete,s.Obstacle))
+            : world.ConstructionSites.Values.Where(s => s.Team == ViewerTeam && s.Health > 0).Select(s => (s.Team,s.Complete,s.Obstacle))
+                .Concat(world.Vision(ViewerTeam).Sites.Values.Select(s => (s.Team,s.Complete,s.Obstacle)));
+        foreach (var (team,complete,obstacle) in shown)
+            foreach (var footprint in world.Navigation.Footprints(obstacle))
+                yield return (team,complete,footprint.Polygon.Select(p => MapPoint(p.X,p.Z)).ToArray());
     }
 
     public override void _Draw()
     {
         if (_world == null || _terrain == null) return;
-        DrawTextureRect(_terrain,new(Vector2.Zero,Size),false);
+        DrawTextureRect(Fogged ? FoggedTerrain() : _terrain,new(Vector2.Zero,Size),false);
         foreach (var (icon,x,z) in _markers)
             DrawTextureRect(icon,new(MapPoint(x,z)-Vector2.One*MarkerSize/2,Vector2.One*MarkerSize),false);
         // A held place of power is ringed in its holder's colour (build-54).

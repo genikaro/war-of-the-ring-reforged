@@ -47,7 +47,7 @@ public sealed partial class SimWorld
             return home;
         }
         // On the spot: the workers first, each free raider at the nearest one, then the building.
-        var workers = ActiveUnits.Where(u => u.Present && u.Team != ai.Team && u.Team >= 0 && IsAiWorker(u)
+        var workers = ActiveUnits.Where(u => u.Present && u.Team != ai.Team && u.Team >= 0 && IsAiWorker(u) && CanSeeUnit(ai.Team,u)
             && DistanceSquared(u.X,u.Z,tx,tz) <= (long)AiRaidReachMm*AiRaidReachMm).ToArray();
         var free = raid.Where(u => u.Target < 0).ToArray();
         if (workers.Length > 0)
@@ -84,10 +84,18 @@ public sealed partial class SimWorld
         ai.Raid.Clear(); ai.RaidCell = ai.RaidSite = -1; ai.NextRaidTick = Tick+AiRaidRestTicks;
     }
 
-    /// <summary>Enemy soldiers (not workers) within the radius of any of these points.</summary>
+    /// <summary>Enemy soldiers (not workers) within the radius of any of these points: those in sight, and under fog
+    /// (build-150) also those seen there in the last minute.</summary>
     private int AiSoldiersNear(AiPlayer ai,IEnumerable<(int X,int Z)> points,int radius)
     {
         var seen = new HashSet<int>();
+        if (FogOfWar)
+        {
+            foreach (var (x,z) in points)
+                foreach (var (id,contact) in ai.Contacts)
+                    if (Tick-contact.Tick <= 60*TicksPerSecond && DistanceSquared(contact.X,contact.Z,x,z) <= (long)radius*radius) seen.Add(id);
+            return seen.Count;
+        }
         foreach (var (x,z) in points)
             foreach (var enemy in NearUnits(x,z,radius))
                 if (enemy.Present && enemy.Team != ai.Team && enemy.Team >= 0 && !IsAiWorker(enemy) && enemy.Definition.DpsMilli > 0
@@ -101,14 +109,16 @@ public sealed partial class SimWorld
     private bool AiPickRaid(AiPlayer ai,SimUnit[] raid,int fx,int fz,int done = -1)
     {
         var lead = raid.OrderByDescending(u => Nav(u).CanStand(u.Node)).ThenBy(u => u.Id).First();
-        var towers = ConstructionSites.Values.Where(s => s.Team >= 0 && s.Team != ai.Team && s.Complete && s.Health > 0 && SiteDefense(s) != null).ToArray();
+        // Build-150: the towers, Mills and Foundries the bot knows of, and the piles it sees enemy workers mine.
+        var known = AiKnownSites(ai);
+        var towers = known.Where(s => s.Complete && SiteDefense(s) != null).ToArray();
         bool Covered(int x,int z) => towers.Any(t => SiteDefense(t)!.RangeMm+3000L is var reach && DistanceSquared(t.X,t.Z,x,z) <= reach*reach);
         var points = new List<(int X,int Z,int Site)>();
-        foreach (var site in ConstructionSites.Values.Where(s => s.Team >= 0 && s.Team != ai.Team && s.Health > 0 && s.Building == null))
+        foreach (var site in known.Where(s => s.Building == null))
         {
             var (x,z) = SitePosition(site); points.Add((x,z,site.Id));
         }
-        var mined = ActiveUnits.Where(u => u.Present && u.Team >= 0 && u.Team != ai.Team && u.Order == OrderKind.Gather).Select(u => u.OrderTarget).ToHashSet();
+        var mined = ActiveUnits.Where(u => u.Present && u.Team >= 0 && u.Team != ai.Team && u.Order == OrderKind.Gather && CanSeeUnit(ai.Team,u)).Select(u => u.OrderTarget).ToHashSet();
         foreach (var pile in Resources.Values.Where(r => mined.Contains(r.Id) && (!ConstructionSites.TryGetValue(r.Id,out var claim) || claim.Team < 0)))
             points.Add((pile.X,pile.Z,-1));
         var ranked = new List<(long Score,int X,int Z,int Site)>();

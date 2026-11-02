@@ -150,7 +150,8 @@ no behavior and no AI; nothing in build-4 changes unit rules.
   Gathering amounts and times are owner-defined (build-17), not the source rates.
 - Start Citadel orientation is 0 degrees, not the original game's. Start-worker
   placement is an approximation of the original layout.
-- Fog of war, animated weather and original-game lighting reproduction remain open.
+- Animated weather and original-game lighting reproduction remain open. Fog of war arrived in build-150
+  ([FOG.md](FOG.md)).
 - Tier 1 here means buildings and units requiring only the Citadel (see the
   Roadmap plan); Shieldbreaker (Skills structure) and Rohan Rider (Citadel 2) are
   outside it.
@@ -2631,7 +2632,7 @@ observer reference (Gimli against Aragorn) is now Aragorn winning at tick 27344,
 
 The first of the traits that need new bot behaviour (build-51 left Raider, Scout
 and hero use open). Scout waits for fog of war, without which scouting changes
-nothing. Build-114 adds hero recruitment and tactics after the Fate heroes and
+nothing (build-150 added fog and scouting for every bot; a Scout trait remains open). Build-114 adds hero recruitment and tactics after the Fate heroes and
 their abilities became available.
 
 **Source.** Raids have their own war party, `AIWARPARTY_RAIDING`: 3 to 6 units,

@@ -210,7 +210,7 @@ public partial class Main
             .Concat(world.ExtraDefenses.GetValueOrDefault(building) ?? []).Select((defense,weapon) => DefenseHudStats.From(
                 _defenseLabels.TryGetValue(building,out var labels) && weapon < labels.Length ? labels[weapon] : "Attack",defense)).ToArray() : [];
         string attack = string.Join(" / ",weapons.Select(w => w.Attack));
-        return new(id,entry.Team,place?.Name ?? definition.GetProperty("display_name").GetString()!,definition.GetProperty("portrait").GetString()!,site?.Health ?? max,max,
+        return new(id,entry.Team,place?.Name ?? definition.GetProperty("display_name").GetString()!,definition.GetProperty("portrait").GetString()!,site != null ? ShownHealth(site) : max,max,
             definition.GetProperty("armor").GetDouble().ToString("0.##",System.Globalization.CultureInfo.InvariantCulture),progress,place == null ? resource : PlaceSummary(place),entry.Resource,
             !definition.TryGetProperty("has_health",out var hasHealth) || hasHealth.GetBoolean(),site?.Id ?? -1,
             place == null ? "" : place.Owner == PlayerTeam && !_observing ? "Place of power · yours until an enemy stands alone in its zone"

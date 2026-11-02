@@ -78,7 +78,7 @@ public partial class Main
         {
             if (time-burst.Start >= burst.Duration || burst.Target >= 0 && !_world.Units[burst.Target].Present)
             { burst.Effect.Free(); _elvenBursts.Remove(burst); continue; }
-            bool visible = burst.Target < 0 || _world.CanSeeUnit(PlayerTeam,_world.Units[burst.Target]);
+            bool visible = burst.Target < 0 || _world.CanSeeUnit(ViewTeam,_world.Units[burst.Target]);
             burst.Effect.Root.Visible = visible;
             burst.Effect.Draw(time-burst.Start,burst.Target < 0 ? burst.Position : _views[burst.Target].Root.Position,2);
         }
@@ -106,7 +106,7 @@ public partial class Main
                     var visual = new ElvenSpellEffect(data.Layers,protection:effect==350); AddChild(visual.Root);
                     attachment = (visual,_world.Tick); _elvenAttachments.Add(key,attachment);
                 }
-                attachment.Visual.Root.Visible = _world.CanSeeUnit(PlayerTeam,unit);
+                attachment.Visual.Root.Visible = _world.CanSeeUnit(ViewTeam,unit);
                 attachment.Visual.Draw(Math.Max(0,time-attachment.Start/(double)SimWorld.TicksPerSecond),_views[unit.Id].Root.Position,unit.Definition.BodyHeightMm/1000f,loop:true);
             }
         }
