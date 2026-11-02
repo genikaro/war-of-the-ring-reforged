@@ -1,5 +1,13 @@
 # Godot C# skirmish sandbox
 
+**build-150:** Fog of war, close to the original: what your side does not see sinks into a dim haze, enemy units
+there vanish, enemy buildings appear once found and stay as last seen, and the minimap is grey outside your sight
+(lobby: Game settings › Fog of war, on by default; observers press V to see one side's sight; F4 › Reveal map).
+Bots play by it: they scout (by their .rai Scouting), search when they know no enemy building, remember the armies
+they saw and hold an attack against a stronger one. Bot heroes fight more and retreat later, by the bot's
+Aggression. Patch or rebuild the content pack (`python tools/content_pack.py`) for the buildings' source sight;
+map caches can be reused. See [FOG.md](FOG.md).
+
 **build-147:** A main menu and a game executable. `./prototype/export.ps1` builds
 `build/WarOfTheRingReforged.exe`, which opens (like a bare `./prototype/run.ps1`) on
 the main menu: Campaign (disabled), Skirmish, Sandbox, Settings and Exit on the
