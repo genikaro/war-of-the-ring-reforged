@@ -1,5 +1,8 @@
 # Godot C# skirmish sandbox
 
+**build-154:** Cloud shadows only darken the ground, as in the original: build-152 also let them brighten it, so
+sunlit grass came out brighter than the retail game. See [LIGHTING.md](LIGHTING.md).
+
 **build-153:** The fog of war's haze takes each map's own fog colour from the original map files (dark green-grey on
 Bilbo's Bluffs, reddish brown on Dust and Blood, light tan on Freedom!), its strength scaled by the map's stored fog
 alpha. Needs the map caches refreshed by `python tools/map_lighting.py` (build-152). See [FOG.md](FOG.md).

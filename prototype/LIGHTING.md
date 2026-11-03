@@ -44,29 +44,35 @@ shows on screen at `texture × clamp(ambient + diffuse × sun × N·L × shadow)
 - Models have no vertex colour; their diffuse is white.
 - Cast shadows are Godot's shadow maps (the retail captures ran with stencil shadows on). A shadowed texel keeps the
   ambient.
-- The terrain and editor decals are multiplied by twice the cloud texel (`Textures/baseclouds.tga`, the terrain
-  materials' MODULATE2X stage), scrolled along the wind.
+- The terrain and editor decals are multiplied by twice the cloud texel, saturating at 1 (`Textures/baseclouds.tga`,
+  the terrain materials' MODULATE2X stage), scrolled along the wind. Clouds shade the ground and never brighten it.
 - Emission (team colours) is added after lighting, as before. Linear tonemapping, no glow, no specular.
 - Materials the game derives per instance (Ring/camouflage ghosts, gilded Sandbox dummies), effects and the menu scene
   keep Godot's own lighting with the map's ambient and sun colours.
 
-Three cloud numbers are not decoded and were chosen against the three retail Bilbo's Bluffs captures (local-008,
-016, 018). The cloud map covers 96 m. It drifts at 0.02 m/s per percent of initial wind. Its gain makes an average
-texel leave the ground unchanged, which takes out the 11% the plain 2× added. With that gain, the ground's mean,
-10th, 50th and 90th-percentile brightness all fall in the captures' range when simulated from the cloud-free render.
-The rendered frame keeps a brighter top 10%, partly because its framing shows more open grass than the captures.
+Two cloud numbers are not decoded and were chosen against the three retail Bilbo's Bluffs captures (local-008, 016,
+018): the cloud map covers 96 m and drifts at 0.02 m/s per percent of initial wind.
 
-| Ground brightness (gamma) | mean | 10% | 50% | 90% |
-|---|---|---|---|---|
-| Retail local-008/016/018 | 0.153-0.175 | 0.081-0.088 | 0.140-0.163 | 0.230-0.276 |
-| Build-151 preview lighting | 0.134 | 0.055 | 0.110 | 0.192 |
-| Build-152, no clouds | 0.166 | 0.099 | 0.162 | 0.216 |
-| Build-152 | 0.192 | 0.078 | 0.165 | 0.341 |
+Build-154: build-152 let clouds brighten too, at twice the texel with a gain that made an average texel neutral.
+The owner found the original less bright. Measured by surface, retail grass never has a bright tail: its brightest
+tenth sits just under build-152's cloud-free render, while build-152's clouds pushed it to 0.51. Saturating the cloud
+stage at 1 (darken only) puts the ground back in the retail range. A version that multiplied the doubled texel into
+the lit colour before clamping still brightened partly lit ground (grass median 0.267). Retail cloud shadows remain
+a little darker than ours: grass 10th percentile 0.133-0.145 against 0.165.
 
-All four rows measure the ground above the console (1920x1080, x 500-1900, y 0-760); build-151 and build-152 share
-the start camera, which shows more cliff and distant grass than the captures. Captures: `converted/lighting-build152/`
-(`compare-bilbo.png`: retail, build-151, build-152; `maps.png`: Wasteland, Dust and Blood, Lorien and the Bilbo's
-Bluffs overview with its skybox).
+| Ground brightness (gamma) | mean | 10% | 50% | 90% | grass 50% | grass 90% |
+|---|---|---|---|---|---|---|
+| Retail local-008/016/018 | 0.153-0.175 | 0.081-0.088 | 0.140-0.163 | 0.230-0.276 | 0.192-0.231 | 0.290-0.357 |
+| Build-151 preview lighting | 0.134 | 0.055 | 0.110 | 0.192 | 0.173 | 0.275 |
+| Build-152, no clouds | 0.166 | 0.099 | 0.162 | 0.216 | 0.227 | 0.302 |
+| Build-152 | 0.192 | 0.078 | 0.165 | 0.341 | 0.251 | 0.514 |
+| Build-154 | 0.163 | 0.094 | 0.156 | 0.217 | 0.227 | 0.310 |
+
+The ground columns measure everything above the console (1920x1080, x 500-1900, y 0-760); the grass columns take
+the HSV value of its green pixels (hue 60-150, saturation over 0.35). Our builds share the start camera, which shows
+more cliff and distant grass than the captures. Captures: `converted/lighting-build152/` (`compare-bilbo.png`:
+retail, build-151, build-152; `compare-bilbo-154.png`: retail, build-152, build-154; `maps.png`: Wasteland, Dust and
+Blood, Lorien and the Bilbo's Bluffs overview with its skybox, all build-152).
 
 ## Not done
 

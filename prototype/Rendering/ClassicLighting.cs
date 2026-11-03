@@ -55,8 +55,9 @@ public sealed record MapLighting(Color Ambient,Color Sun,Vector3 SunDirection,fl
 /// space, where the same numbers come out much brighter and flatter (an unlit side showed at about 63% of its texture
 /// instead of about 30%). The classic shader makes that sum in light() and converts it to linear once, so a texel shows
 /// on screen at texture x clamp(ambient + diffuse x sun x N.L x shadow), as in the original; the diffuse is a terrain
-/// vertex colour (painted colour and precomputed shadows) or white. Terrain and decals are also multiplied by the
-/// scrolling cloud map, doubled like the terrain materials' MODULATE2X stage (Materials/Two_Stage_CloudMap.lmt).
+/// vertex colour (painted colour and precomputed shadows) or white. On terrain and decals that lit colour also goes
+/// through the terrain materials' MODULATE2X cloud stage (Materials/Two_Stage_CloudMap.lmt): times twice the
+/// scrolling cloud texel, saturating at 1, so clouds shade the ground but never brighten it (build-154).
 /// Materials that are not converted (effects, ghosts, menu scene) keep Godot's own lighting, given the same colours.</summary>
 public static class ClassicLighting
 {
@@ -64,8 +65,7 @@ public static class ClassicLighting
     private static readonly Dictionary<string,Shader> Shaders = [];
     private static readonly (string Name,RenderingServer.GlobalShaderParameterType Type)[] Globals = [
         ("classic_ambient",RenderingServer.GlobalShaderParameterType.Vec3),("classic_sun",RenderingServer.GlobalShaderParameterType.Vec3),
-        ("classic_clouds",RenderingServer.GlobalShaderParameterType.Float),("classic_cloud_gain",RenderingServer.GlobalShaderParameterType.Float),
-        ("classic_cloud_velocity",RenderingServer.GlobalShaderParameterType.Vec2)];
+        ("classic_clouds",RenderingServer.GlobalShaderParameterType.Float),("classic_cloud_velocity",RenderingServer.GlobalShaderParameterType.Vec2)];
 
     /// <summary>Shader globals must exist before the first classic shader compiles.</summary>
     public static void EnsureGlobals()
@@ -89,21 +89,8 @@ public static class ClassicLighting
         RenderingServer.GlobalShaderParameterSet("classic_cloud_velocity",lighting.CloudVelocity);
     }
 
-    /// <summary>The map's cloud map for the terrain and decal materials (null when the map has none). Also sets the
-    /// gain that lets an average cloud texel leave the ground unchanged: a plain 2x of baseclouds.tga (mean 0.556)
-    /// left Bilbo's Bluffs about 14% brighter than the retail captures (LIGHTING.md).</summary>
-    public static Texture2D? CloudMap(MapLighting lighting)
-    {
-        if (lighting.CloudTexture == null) return null;
-        var image = Image.LoadFromFile(lighting.CloudTexture) ?? throw new InvalidOperationException("Cannot read "+lighting.CloudTexture);
-        double sum = 0;
-        for (int y = 0; y < image.GetHeight(); y++)
-            for (int x = 0; x < image.GetWidth(); x++) { var c = image.GetPixel(x,y); sum += (c.R+c.G+c.B)/3; }
-        float mean = (float)(sum/(image.GetWidth()*image.GetHeight()));
-        RenderingServer.GlobalShaderParameterSet("classic_cloud_gain",mean > 0 ? .5f/mean : 1f);
-        image.GenerateMipmaps();
-        return ImageTexture.CreateFromImage(image);
-    }
+    /// <summary>The map's cloud map for the terrain and decal materials (null when the map has none).</summary>
+    public static Texture2D? CloudMap(MapLighting lighting) => lighting.CloudTexture != null ? Texture(lighting.CloudTexture) : null;
 
     public static WorldEnvironment CreateEnvironment(MapLighting lighting)
     {
@@ -185,9 +172,6 @@ public static class ClassicLighting
         // A vertex colour is the source's diffuse (terrain paint and precomputed shadows): it scales the sun's light in
         // light(), not the texture, so its darkest shadows still get the ambient. Its alpha stays the surface's.
         var body = new List<string> { $"    vec4 color = albedo * texture(albedo_texture, UV){(vertexColor ? " * vec4(1.0, 1.0, 1.0, COLOR.a)" : "")};","    ALBEDO = color.rgb;" };
-        // Terrain stage MODULATE2X: twice the gamma-space cloud texel, so a 0.5 texel leaves the ground unchanged.
-        if (clouds) body.AddRange([$"    vec3 cloud = texture(cloud_map, world_position.xz / {tile} + TIME * classic_cloud_velocity).rgb;",
-            "    ALBEDO *= mix(vec3(1.0), to_linear(2.0 * classic_cloud_gain * cloud), classic_clouds);"]);
         if (blend != "opaque") body.Add("    ALPHA = color.a;");
         if (blend == "scissor") body.Add("    ALPHA_SCISSOR_THRESHOLD = alpha_scissor;");
         if (emission) body.Add(multiply ? "    EMISSION = emission * texture(emission_texture, UV).rgb * emission_energy;"
@@ -195,7 +179,10 @@ public static class ClassicLighting
         string mode = blend switch { "blend" => "blend_mix, depth_draw_opaque",
             "prepass" => "blend_mix, depth_prepass_alpha",_ => "depth_draw_opaque" }+", "+cull+", ambient_light_disabled, specular_disabled";
         string vertex = vertexColor ? "    diffuse = to_gamma(COLOR.rgb);" : "    diffuse = vec3(1.0);";
-        return string.Join('\n',["shader_type spatial;",$"render_mode {mode};",MaterialHeader,"void vertex() {",
+        // Terrain stage MODULATE2X: twice the gamma-space cloud texel, saturating at 1, so clouds only shade.
+        string cloud = clouds ? $"    return mix(vec3(1.0), min(2.0 * texture(cloud_map, world_position.xz / {tile} + TIME * classic_cloud_velocity).rgb, vec3(1.0)), classic_clouds);"
+            : "    return vec3(1.0);";
+        return string.Join('\n',["shader_type spatial;",$"render_mode {mode};",MaterialHeader,"vec3 cloud_shade() {",cloud,"}","void vertex() {",
             "    world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;",vertex,"}","void fragment() {",..body,"}",MaterialLight]);
     }
 
@@ -203,7 +190,6 @@ public static class ClassicLighting
         global uniform vec3 classic_ambient;
         global uniform vec3 classic_sun;
         global uniform float classic_clouds;
-        global uniform float classic_cloud_gain;
         global uniform vec2 classic_cloud_velocity;
         uniform sampler2D cloud_map : hint_default_white, filter_linear_mipmap, repeat_enable;
         uniform vec4 albedo : source_color = vec4(1.0);
@@ -215,7 +201,7 @@ public static class ClassicLighting
         varying vec3 world_position;
         varying vec3 diffuse;
 
-        // The sRGB curve, extended above 1 for the cloud map's doubled values.
+        // The sRGB curve.
         vec3 to_linear(vec3 c) {
             return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
         }
@@ -230,9 +216,11 @@ public static class ClassicLighting
 
         void light() {
             if (LIGHT_IS_DIRECTIONAL) {
-                // Gamma-space ambient + diffuse x sun x N.L, clamped like Direct3D 9's lit vertex colour, then to linear once.
+                // Gamma-space ambient + diffuse x sun x N.L, clamped like Direct3D 9's lit vertex colour, shaded by the
+                // ground's clouds, then to linear once.
                 float lambert = max(dot(NORMAL, LIGHT), 0.0);
-                DIFFUSE_LIGHT += to_linear(clamp(classic_ambient + diffuse * classic_sun * lambert * ATTENUATION, 0.0, 1.0));
+                vec3 lit = clamp(classic_ambient + diffuse * classic_sun * lambert * ATTENUATION, 0.0, 1.0);
+                DIFFUSE_LIGHT += to_linear(lit * cloud_shade());
             } else {
                 DIFFUSE_LIGHT += LIGHT_COLOR * ATTENUATION * max(dot(NORMAL, LIGHT), 0.0) / PI;
             }
