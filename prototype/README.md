@@ -1,5 +1,11 @@
 # Godot C# skirmish sandbox
 
+**build-151:** Observer mode shows fog of war: it starts on every player's sight together (all units and
+buildings shown, haze where no player sees, grey minimap there); the Sight list in the console's match panel (or V)
+picks each player's own sight or no fog. An observed match opens on player 1's base instead of the
+whole map from far above, and a player in another slot starts on their own base. The start camera is a little
+closer (40 m instead of 48). See [FOG.md](FOG.md).
+
 **build-150:** Fog of war, close to the original: what your side does not see sinks into a dim haze, enemy units
 there vanish, enemy buildings appear once found and stay as last seen, and the minimap is grey outside your sight
 (lobby: Game settings › Fog of war, on by default; observers press V to see one side's sight; F4 › Reveal map).

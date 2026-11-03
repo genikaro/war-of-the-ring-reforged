@@ -6,21 +6,28 @@ using Reforged.Simulation;
 /// unless its setup turned it off (or --no-fog; the smokes launch with it off unless -Fog); the Sandbox never has. What
 /// your side does not see sinks into the haze of FogOverlay; enemy units there vanish from the world, the minimap and
 /// picking; an enemy building appears once seen and stays as last seen, frozen, until its spot is seen again, even after
-/// it fell. The minimap is grey outside your sight and in colour inside, as the original's. Observers see everything,
-/// or with V one side's sight after another (the label at the top says whose); the debug menu's Reveal map shows a
-/// player everything without changing what the simulation knows.</summary>
+/// it fell. The minimap is grey outside your sight and in colour inside, as the original's. Observers (build-151, after
+/// the owner found no fog there) start on every player's sight together, as RTS observers do: every unit and building is
+/// shown (each side sees its own), and the haze lies wherever no player sees. V steps to one side's sight after another,
+/// with its fog, hidden enemies and remembered buildings, then to no fog at all, and back; so does the Sight list in the
+/// console's match panel, which shows the current choice. The debug menu's Reveal map shows a player everything without
+/// changing what the simulation knows.</summary>
 public partial class Main
 {
     private bool _fogOfWar = true;
-    /// <summary>The side whose sight an observer shows, or -1 for all.</summary>
-    private int _visionTeam = -1;
+    /// <summary>What an observer's view shows: every player's sight together (AllSides), one side's, or no fog (NoFog).</summary>
+    private const int AllSides = -1,NoFog = -2;
+    private int _visionTeam = AllSides;
     private bool _revealMap;
     private FogOverlay? _fogOverlay;
-    private Label? _sightLabel;
 
-    /// <summary>Whose sight the view shows: yours; an observer's chosen side; everyone's with the map revealed.</summary>
-    private int ViewTeam => _revealMap ? -1 : _observing ? _visionTeam : PlayerTeam;
+    /// <summary>Whose knowledge of units and buildings the view shows: yours, an observer's chosen side, or everything
+    /// (-1: every player together sees all units and buildings, each side its own).</summary>
+    private int ViewTeam => _revealMap ? -1 : _observing ? Math.Max(-1,_visionTeam) : PlayerTeam;
     private bool Fogged => _world?.FogOfWar == true && ViewTeam >= 0;
+    /// <summary>Whose sight the haze leaves clear: yours; for an observer every player's together, one side's, or none.</summary>
+    private int[] HazeTeams => _world?.FogOfWar != true || _revealMap ? [] : !_observing ? [PlayerTeam]
+        : _visionTeam >= 0 ? [_visionTeam] : _visionTeam == AllSides ? [.. _world.Contenders] : [];
 
     private void StartFogOfWar()
     {
@@ -32,34 +39,37 @@ public partial class Main
         if (!_fogOfWar || _sandboxMap || !_skirmish) return;
         _world!.EnableFogOfWar();
         _fogOverlay = new FogOverlay(_world); AddChild(_fogOverlay.Node);
-        if (!_observing) return;
-        _sightLabel = new Label { Visible = false,MouseFilter = Control.MouseFilterEnum.Ignore,HorizontalAlignment = HorizontalAlignment.Center,
-            AnchorLeft = .5f,AnchorRight = .5f,OffsetLeft = -200,OffsetRight = 200,OffsetTop = 8 };
-        _sightLabel.AddThemeColorOverride("font_outline_color",Colors.Black); _sightLabel.AddThemeConstantOverride("outline_size",4);
-        _hud.AddChild(_sightLabel);
+        if (_observing) _commands.SightChosen += index => _visionTeam = SightOrder()[index];
     }
 
     /// <summary>Every frame: the console's minimap follows the shown sight, and the haze eases toward it.</summary>
     private void PresentFog(float delta)
     {
         if (_world == null) return;
-        _commands.SightTeam = ViewTeam;
-        _fogOverlay?.Refresh(_world,ViewTeam,delta);
-        if (_sightLabel != null)
-        {
-            _sightLabel.Visible = _visionTeam >= 0;
-            if (_visionTeam >= 0) _sightLabel.Text = $"Sight of {(_world.AiPlayers.TryGetValue(_visionTeam,out var bot) ? bot.Personality.DisplayName : "Player")} (P{_visionTeam+1})";
-        }
+        _commands.SightTeam = ViewTeam; _commands.HazeTeams = HazeTeams;
+        _fogOverlay?.Refresh(_world,HazeTeams,delta);
+        RefreshSightList(_commands);
     }
 
-    /// <summary>V, while observing a match with fog: the next side's sight, then everyone's again.</summary>
+    /// <summary>The Sight list's choices, in the order V steps through them: all players, each side, no fog.</summary>
+    private int[] SightOrder() => [AllSides,.. _world!.Contenders,NoFog];
+
+    /// <summary>The observer's Sight list in a console: "All players", "Gimli (P1)", ..., "No fog"; empty (hidden) without fog.</summary>
+    private void RefreshSightList(CommandPanel panel)
+    {
+        if (!_observing || _world?.FogOfWar != true) { panel.RefreshSight([],-1); return; }
+        var order = SightOrder();
+        panel.RefreshSight([.. order.Select(team => team >= 0 ? $"{(_world.AiPlayers.TryGetValue(team,out var bot) ? bot.Personality.DisplayName : "Player")} (P{team+1})"
+            : team == AllSides ? "All players" : "No fog")],Math.Max(0,Array.IndexOf(order,_visionTeam)));
+    }
+
+    /// <summary>V, while observing a match with fog: all players, then each side, then no fog, then all players again.</summary>
     private bool FogHotkey(InputEventKey key)
     {
         if (_world?.FogOfWar != true || !_observing || key.CtrlPressed || key.AltPressed || key.MetaPressed) return false;
         if (key.Keycode != Key.V && key.PhysicalKeycode != Key.V) return false;
-        var sides = _world.Contenders.ToList();
-        int next = sides.IndexOf(_visionTeam)+1;
-        _visionTeam = next < sides.Count ? sides[next] : -1;
+        var order = SightOrder();
+        _visionTeam = order[(Array.IndexOf(order,_visionTeam)+1)%order.Length];
         return true;
     }
 

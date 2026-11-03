@@ -38,7 +38,8 @@ public sealed class FogOverlay
     private readonly byte[] _bytes;
     private readonly Image _image;
     private readonly ImageTexture _texture;
-    private int _team = int.MinValue,_updates = -1;
+    private string _teams = "";
+    private int _updates = -1;
     private bool _settled;
 
     public FogOverlay(SimWorld world)
@@ -55,16 +56,18 @@ public sealed class FogOverlay
             CustomAabb = new Aabb(new(-100000,-100000,-100000),new(200000,200000,200000)) };
     }
 
-    /// <summary>Shows the side's sight (hidden for an observer of every side), easing toward it since the last frame.</summary>
-    public void Refresh(SimWorld world,int team,float delta)
+    /// <summary>Shows the sight of these sides together (a player's own; every player's or one side's for an observer;
+    /// none hides the haze), easing toward it since the last frame.</summary>
+    public void Refresh(SimWorld world,IReadOnlyList<int> teams,float delta)
     {
-        Node.Visible = world.FogOfWar && team >= 0;
-        if (!Node.Visible) { _team = int.MinValue; return; }
-        bool jump = team != _team;
+        Node.Visible = world.FogOfWar && teams.Count > 0;
+        if (!Node.Visible) { _teams = ""; return; }
+        string key = string.Join(',',teams);
+        bool jump = key != _teams;
         if (jump || world.VisionUpdates != _updates)
         {
-            _team = team; _updates = world.VisionUpdates; _settled = false;
-            var visible = world.Vision(team).Visible;
+            _teams = key; _updates = world.VisionUpdates; _settled = false;
+            var visible = teams.Count == 1 ? world.Vision(teams[0]).Visible : Together(world,teams);
             // A 3 x 3 box blur: a cell at the edge of sight is part lit.
             for (int z = 0; z < _height; z++)
                 for (int x = 0; x < _width; x++)
@@ -96,6 +99,21 @@ public sealed class FogOverlay
         _settled = !moving;
         _image.SetData(_width,_height,false,Image.Format.L8,_bytes);
         _texture.Update(_image);
+    }
+
+    private byte[]? _together;
+
+    /// <summary>A cell is in sight if any of the sides sees it.</summary>
+    private byte[] Together(SimWorld world,IReadOnlyList<int> teams)
+    {
+        _together ??= new byte[_width*_height];
+        Array.Clear(_together);
+        foreach (int team in teams)
+        {
+            var visible = world.Vision(team).Visible;
+            for (int i = 0; i < _together.Length; i++) _together[i] |= visible[i];
+        }
+        return _together;
     }
 
     /// <summary>The share of sight shown for the cell at the map point, 0 (fog) to 1 (in sight); for smokes.</summary>

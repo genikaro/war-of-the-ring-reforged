@@ -73,7 +73,23 @@ public partial class Main
         await LoadingStep("Preparing the bots",.9f);
         LoadSkirmishAi(data);
         StartFogOfWar();
+        FrameStartBase();
         ApplySkirmishHud(_commands);
+    }
+
+    /// <summary>Build-151: whose base the camera starts on: yours, or player 1's when you watch.</summary>
+    private int StartViewTeam => _observing ? _world!.Contenders.DefaultIfEmpty(0).First() : PlayerTeam;
+
+    /// <summary>Build-151: the match starts on that base. The map's camera cell is its first base; an observer framed every
+    /// unit on the map from far above, and a player in another slot started looking at someone else's base.</summary>
+    private void FrameStartBase()
+    {
+        var world = _world!; int team = StartViewTeam;
+        var starts = world.ConstructionSites.Values.Where(s => s.Prebuilt && s.Team >= 0).OrderBy(s => s.Id).ToArray();
+        var own = starts.FirstOrDefault(s => s.Team == team);
+        // The first base keeps the map's own camera cell, so the smokes' framing stays as it was.
+        var first = starts.OrderBy(s => _squadFocus.DistanceSquaredTo(PositionOf(world.SitePosition(s).X,world.SitePosition(s).Z))).FirstOrDefault();
+        if (own != null && own != first) { var (x,z) = world.SitePosition(own); _squadFocus = PositionOf(x,z); }
     }
 
     private void ApplySkirmishHud(CommandPanel panel)

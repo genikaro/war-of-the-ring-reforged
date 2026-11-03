@@ -68,8 +68,16 @@ more, by the bot's Aggression.
   a fogged building's remembered health.
 - Minimap: grey outside your sight, colour inside; your buildings and the enemy
   buildings you remember; enemy unit dots only in sight.
-- Observers: V cycles through each side's sight and back to everyone's; a label at the
-  top says whose sight is shown. Debug menu (F4): Reveal map shows a player everything,
+- Observers (build-151; the owner found no fog in observer mode): the view starts on
+  every player's sight together, as RTS observers usually do. Every unit and building
+  shows (each side sees its own), the haze lies wherever no player sees, and the
+  minimap is grey there. V steps to player 1's sight (its fog, hidden enemies and
+  remembered buildings, as that bot knows them), then each further player, then no fog
+  at all, then all players again. The same choices sit in the Sight list of the
+  console's match panel (under the clock), which always shows the current one. The
+  match opens on player 1's base at a player's zoom
+  (it framed the whole map from far above before; a player in another slot now also
+  starts on their own base, not slot 1's). Debug menu (F4): Reveal map shows a player everything,
   without changing what the simulation knows.
 - Lobby: Game settings › Fog of war, on by default (`SkirmishSetup.FogOfWar`). Launches
   take `--fog` / `--no-fog` (`run.ps1 -Fog` / `-NoFog`); the smokes written before
@@ -140,6 +148,11 @@ squad or a raid instead of waiting at home.
   units, minimap, haze, grey minimap), a worker finds it, walks home, the units vanish
   while the Citadel stays as last seen, Reveal map, and the bot's scout finds your base
   (Default: scout at 2:18, found at 3:11). Writes `x-found.png` and `x-memory.png`.
+- `./prototype/run.ps1 -FogSmoke -Observe [-CapturePath x.png -Resolution 1600x900]` (12
+  checks, build-151): the start on player 1's base, all players' sight with haze between
+  the bases and every unit shown, then V through player 1, player 2, no fog and back,
+  the Sight list following, and player 2 chosen in the list. Writes `x-observer.png`,
+  `x-observer-p1.png` and `x-observer-p2.png`.
 - `./prototype/run.ps1 -ObserverSmoke -Fog` plays the observer match with fog.
 
 Open: line-of-sight blocking and the forest multiplier, the Lookout Tower technique,

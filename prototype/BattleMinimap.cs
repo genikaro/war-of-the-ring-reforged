@@ -12,7 +12,7 @@ public partial class BattleMinimap : Control
     private byte[] _colour = [],_grey = [],_mixed = [];
     private Image? _mixedImage;
     private ImageTexture? _fogged;
-    private (int Team,int Updates) _foggedFor = (int.MinValue,-1);
+    private (string Teams,int Updates) _foggedFor = ("",-1);
     private (Texture2D Icon,float X,float Z)[] _markers = [];
     /// <summary>Ground corners of the battlefield view in map millimetres.</summary>
     public Vector2[] View { get; set; } = [];
@@ -50,25 +50,36 @@ public partial class BattleMinimap : Control
             byte luma = (byte)Math.Min(255,(_colour[i]*30+_colour[i+1]*59+_colour[i+2]*11)*85/10000);
             _grey[i] = _grey[i+1] = _grey[i+2] = luma; _grey[i+3] = 255;
         }
-        _fogged = null; _foggedFor = (int.MinValue,-1);
+        _fogged = null; _foggedFor = ("",-1);
     }
 
-    private bool Fogged => _world!.FogOfWar && ViewerTeam >= 0;
+    /// <summary>Build-151: the sides whose sight together keeps the terrain in colour (an observer's every player); by
+    /// default the viewer's own.</summary>
+    public int[]? HazeTeams { get; set; }
+    private int[] Haze => HazeTeams ?? (ViewerTeam >= 0 ? [ViewerTeam] : []);
+    /// <summary>The terrain is grey outside the haze sides' sight.</summary>
+    private bool Fogged => _world!.FogOfWar && Haze.Length > 0;
+    /// <summary>Enemy buildings and units show only as the viewer knows them.</summary>
+    private bool Knows => _world!.FogOfWar && ViewerTeam >= 0;
 
-    /// <summary>The terrain in colour where the viewer sees and in grey elsewhere, remade when its sight changes.</summary>
+    /// <summary>The terrain in colour where the haze sides see and in grey elsewhere, remade when their sight changes.</summary>
     private Texture2D FoggedTerrain()
     {
-        var world = _world!; var nav = world.Navigation;
-        if (_fogged != null && _foggedFor == (ViewerTeam,world.VisionUpdates)) return _fogged;
-        _foggedFor = (ViewerTeam,world.VisionUpdates);
-        var visible = world.Vision(ViewerTeam).Visible;
+        var world = _world!; var nav = world.Navigation; var haze = Haze;
+        string key = string.Join(',',haze);
+        if (_fogged != null && _foggedFor == (key,world.VisionUpdates)) return _fogged;
+        _foggedFor = (key,world.VisionUpdates);
+        var sights = haze.Select(t => world.Vision(t).Visible).ToArray();
         for (int z = 0; z < nav.Height; z++)
         {
             int row = Math.Min(world.VisionHeight-1,z*nav.CellSize/SimWorld.VisionCellMm)*world.VisionWidth;
             int line = (nav.Height-1-z)*nav.Width*4;
             for (int x = 0; x < nav.Width; x++)
             {
-                var source = visible[row+Math.Min(world.VisionWidth-1,x*nav.CellSize/SimWorld.VisionCellMm)] != 0 ? _colour : _grey;
+                int cell = row+Math.Min(world.VisionWidth-1,x*nav.CellSize/SimWorld.VisionCellMm);
+                bool seen = false;
+                foreach (var visible in sights) if (visible[cell] != 0) { seen = true; break; }
+                var source = seen ? _colour : _grey;
                 Buffer.BlockCopy(source,line+x*4,_mixed,line+x*4,4);
             }
         }
@@ -109,7 +120,7 @@ public partial class BattleMinimap : Control
     public IEnumerable<(int Team,bool Complete,Vector2[] Outline)> Buildings()
     {
         var world = _world!;
-        var shown = !Fogged ? world.ConstructionSites.Values.Where(s => s.Team >= 0 && s.Health > 0).Select(s => (s.Team,s.Complete,s.Obstacle))
+        var shown = !Knows ? world.ConstructionSites.Values.Where(s => s.Team >= 0 && s.Health > 0).Select(s => (s.Team,s.Complete,s.Obstacle))
             : world.ConstructionSites.Values.Where(s => s.Team == ViewerTeam && s.Health > 0).Select(s => (s.Team,s.Complete,s.Obstacle))
                 .Concat(world.Vision(ViewerTeam).Sites.Values.Select(s => (s.Team,s.Complete,s.Obstacle)));
         foreach (var (team,complete,obstacle) in shown)

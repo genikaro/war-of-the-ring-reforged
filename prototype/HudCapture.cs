@@ -22,7 +22,7 @@ public partial class Main
         overlay.Waypoints.AddRange(_hud.Waypoints.Select(w => (w.From*stretch,w.To*stretch,w.Color)));
         overlay.WaypointMarks.AddRange(_hud.WaypointMarks.Select(m => m*stretch));
         root.AddChild(new DebugToggle { Visible = _hud.Visible }); root.AddChild(new BuildOverlay { Visible = _hud.Visible,Line = 1 });
-        var hud = new CommandPanel { ManageCursor = false,BuildMenuOpen = _buildMenu,PlayerTeam = PlayerTeam,SightTeam = ViewTeam }; root.AddChild(hud); hud.TeamColors = _teamColors; hud.LoadArtwork(_cacheFiles.Content,_world!,EvilTeam(PlayerTeam));
+        var hud = new CommandPanel { ManageCursor = false,BuildMenuOpen = _buildMenu,PlayerTeam = PlayerTeam,SightTeam = ViewTeam,HazeTeams = HazeTeams }; root.AddChild(hud); hud.TeamColors = _teamColors; hud.LoadArtwork(_cacheFiles.Content,_world!,EvilTeam(PlayerTeam));
         hud.Visible = _hud.Visible;
         var heroes = new HeroBar { Visible = _hud.Visible }; root.AddChild(heroes); heroes.LoadArtwork(hud);
         heroes.Refresh(FriendlyHeroes(),hud.Art,hud.EffectiveScale);
@@ -36,6 +36,7 @@ public partial class Main
         if (_observing)
         {
             hud.RefreshMatch(_mapName,_world.Tick,Speeds,_speed,_paused,MatchState(_world),_actualSpeed);
+            RefreshSightList(hud);
             var overview = new ObserverHud { Visible = _hud.Visible }; root.AddChild(overview); overview.Mirror(_observerHud);
             overview.Refresh(_world,TeamColor,hud.Art,hud.EffectiveScale,hud.Visible ? hud.GetGlobalRect().Position.Y : _captureResolution.Y);
         }

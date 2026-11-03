@@ -35,14 +35,16 @@ public partial class Main : Node3D
     private readonly ScenePresentation _presentation = new();
     private Color[] _teamColors = [new Color("025cd1"), new Color("b90000")];
     private string _view = "squad";
-    private float _squadDistance = 48;
+    /// <summary>The start camera's distance (build-151: 40 m, was 48), farther only to frame a wider start group.</summary>
+    private const float StartDistance = 40;
+    private float _squadDistance = StartDistance;
     private int _spawnCount;
     private readonly List<int[]> _friendlySquads = [];
     private readonly HashSet<int> _primarySquad = [];
     private bool _hideHud;
     // The original camera looks from south to north, toward source +y (Godot +Z); its buildings face it (build-75).
     private const float NorthYaw = Mathf.Pi;
-    private float _distance = 48, _yaw = NorthYaw;
+    private float _distance = StartDistance, _yaw = NorthYaw;
     private Vector2 _dragStart;
     private bool _dragging, _panning, _paused, _selectSameType;
     private string _cache = "", _capture = "";
@@ -326,10 +328,10 @@ public partial class Main : Node3D
         _commands.LoadArtwork(_cacheFiles.Content,_world,EvilTeam(PlayerTeam));
         _heroBar.LoadArtwork(_commands);
         if (_skirmish) await LoadSkirmishScene(manifest);
-        var framed = _skirmish && !_observing ? _world.Units.Where(u => u.Team == PlayerTeam).ToList() : _world.Units;
+        var framed = _skirmish && _world.Units.Any(u => u.Team == StartViewTeam) ? _world.Units.Where(u => u.Team == StartViewTeam).ToList() : _world.Units;
         float spanX = (framed.Max(u => u.X)-framed.Min(u => u.X))/1000f;
         float spanZ = (framed.Max(u => u.Z)-framed.Min(u => u.Z))/1000f;
-        _squadDistance = Math.Max(48,Math.Max(spanX,spanZ)*1.9f);
+        _squadDistance = Math.Max(StartDistance,Math.Max(spanX,spanZ)*1.9f);
         // Build each spawned body's region cache during loading, before a
         // mouse command can trigger a full-map connectivity pass mid-frame.
         await LoadingStep("Preparing paths",.93f);
