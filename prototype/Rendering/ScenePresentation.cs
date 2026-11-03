@@ -8,9 +8,12 @@ public sealed class ScenePresentation
 {
     public sealed record ImportAudit(string File, int Textures, int MissingMipmapsBefore,
         int MissingMipmapsAfter, int Materials, int TeamMaterials, int VertexColorSurfaces,
-        int DisabledVertexColorsBefore, int DisabledVertexColorsAfter);
+        int DisabledVertexColorsBefore, int DisabledVertexColorsAfter, int ClassicMaterials);
     public List<ImportAudit> Imports { get; } = [];
-    public PreviewLighting.TerrainAudit? TerrainShading { get; private set; }
+    /// <summary>Build-152: when set (the game, not the menu scene), lit imported materials become classic ones
+    /// (ClassicLighting.cs); the map's terrain and decals also get this cloud map.</summary>
+    public bool Classic { get; set; }
+    public Texture2D? CloudMap { get; set; }
 
     public Node3D Load(string path, string name, Color? teamColor = null)
     {
@@ -38,9 +41,6 @@ public sealed class ScenePresentation
         }
         var scene = document.GenerateScene(state) as Node3D
             ?? throw new InvalidOperationException("glTF scene has no 3D root");
-        if (name == "map/scene.glb")
-            foreach (var terrain in Descendants(scene).OfType<MeshInstance3D>().Where(m => m.Name == "Terrain"))
-                TerrainShading = PreviewLighting.SoftenTerrainShading(terrain);
         var materials = new HashSet<ulong>();
         int teamMaterials = 0, vertexColorSurfaces = 0, disabledBefore = 0, disabledAfter = 0;
         foreach (var mesh in Descendants(scene).OfType<MeshInstance3D>())
@@ -68,8 +68,30 @@ public sealed class ScenePresentation
                         teamMaterials++;
                     }
                 }
-        Imports.Add(new(name, textures, before, after, materials.Count, teamMaterials, vertexColorSurfaces, disabledBefore, disabledAfter));
+        int classic = Classic ? UseClassicMaterials(scene, name == "map/scene.glb") : 0;
+        Imports.Add(new(name, textures, before, after, materials.Count, teamMaterials, vertexColorSurfaces, disabledBefore, disabledAfter, classic));
         return scene;
+    }
+
+    /// <summary>Puts a classic copy of every lit material on its mesh surface, so per-instance overrides (ghosts) still
+    /// fall back to it. The ground of a map (its terrain and editor decals) also carries the cloud map.</summary>
+    private int UseClassicMaterials(Node3D scene, bool map)
+    {
+        var copies = new Dictionary<ulong, ShaderMaterial>();
+        var ground = map ? scene.GetChildren().OfType<Node3D>().Where(n => n.Name == "Terrain" || n.Name.ToString().StartsWith("DECAL_"))
+            .SelectMany(Descendants).OfType<MeshInstance3D>().ToHashSet() : [];
+        foreach (var mesh in Descendants(scene).OfType<MeshInstance3D>())
+            if (mesh.Mesh is ArrayMesh array)
+                for (int surface = 0; surface < array.GetSurfaceCount(); surface++)
+                    if (array.SurfaceGetMaterial(surface) is BaseMaterial3D { ShadingMode: not BaseMaterial3D.ShadingModeEnum.Unshaded } material)
+                    {
+                        bool clouds = ground.Contains(mesh) && CloudMap != null;
+                        ulong key = material.GetInstanceId() * 2 + (clouds ? 1UL : 0);
+                        if (!copies.TryGetValue(key, out var copy))
+                            copies[key] = copy = ClassicLighting.Convert(material, clouds ? CloudMap : null);
+                        array.SurfaceSetMaterial(surface, copy);
+                    }
+        return copies.Count;
     }
 
     public static IEnumerable<Node> Descendants(Node root)

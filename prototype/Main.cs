@@ -33,6 +33,8 @@ public partial class Main : Node3D
     private Vector3 _focus;
     private Vector3 _squadFocus, _fortressFocus;
     private readonly ScenePresentation _presentation = new();
+    /// <summary>Build-152: the map's own sun, ambient, clouds and sky.</summary>
+    private MapLighting _lighting = MapLighting.Default;
     private Color[] _teamColors = [new Color("025cd1"), new Color("b90000")];
     private string _view = "squad";
     /// <summary>The start camera's distance (build-151: 40 m, was 48), farther only to frame a wider start group.</summary>
@@ -241,6 +243,9 @@ public partial class Main : Node3D
         if (_loadingScreen != null) _loadingScreen.Title = _mapName;
         await LoadingStep("Checking the map files",.03f);
         await Task.Run(_cacheFiles.Verify);
+        _lighting = MapLighting.FromManifest(manifest,CachePath);
+        ClassicLighting.Apply(_lighting);
+        _presentation.Classic = true; _presentation.CloudMap = ClassicLighting.CloudMap(_lighting);
         if (manifest.TryGetProperty("team_colors", out var colors))
             _teamColors = colors.EnumerateArray().Select(c => new Color(c[0].GetSingle(), c[1].GetSingle(), c[2].GetSingle())).ToArray();
         string rulesPath = manifest.GetProperty("combat_rules").GetString()!;
@@ -286,9 +291,9 @@ public partial class Main : Node3D
                 if (view == null) throw new InvalidOperationException("Obstacle visual missing: " + obstacle.GetProperty("name").GetString());
                 _obstacleViews.Add(obstacle.GetProperty("id").GetInt32(), view);
             }
-        // Preview lighting, not a decoded original-game time-of-day model.
-        AddChild(PreviewLighting.CreateEnvironment());
-        AddChild(PreviewLighting.CreateSun());
+        // Build-152: the map's own classic lighting, decoded from its world file (Rendering/ClassicLighting.cs).
+        AddChild(ClassicLighting.CreateEnvironment(_lighting));
+        AddChild(ClassicLighting.CreateSun(_lighting));
         _camera = new Camera3D { Current = true, Fov = 48, Near = 0.1f, Far = 1200 };
         AddChild(_camera);
         var (cx, cz) = navigation.Center(manifest.GetProperty("camera_cell").GetInt32());
@@ -1351,7 +1356,7 @@ public partial class Main : Node3D
                     _commands.GetGlobalRect().Size.X,_commands.GetGlobalRect().Size.Y },
                 map_sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
                     System.IO.File.ReadAllBytes(System.IO.Path.Combine(_cache, "map/scene.glb")))).ToLowerInvariant(),
-                preview_lighting = PreviewLighting.Metadata,terrain_shading = _presentation.TerrainShading,
+                lighting = _lighting.Metadata,
                 imports = _presentation.Imports, original_game_fidelity_verified = false };
             System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(destination, ".json"),
                 JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));

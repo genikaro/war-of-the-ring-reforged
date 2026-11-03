@@ -1,5 +1,11 @@
 # Godot C# skirmish sandbox
 
+**build-152:** Classic lighting: every map is lit by its own original sun, time of day, ambient colour, drifting
+cloud shadows and skybox, with the 2003 game's lighting maths, so the ground keeps the original's bright greens, brown
+earth and deep shadows instead of the old flat, blue-grey preview light. Refresh the map caches once with
+`python tools/map_lighting.py` (and `python tools/map_lighting.py converted/prototype --source "extracted/Levels/Helms Deep.wor"`
+for Helm's Deep). See [LIGHTING.md](LIGHTING.md).
+
 **build-151:** Observer mode shows fog of war: it starts on every player's sight together (all units and
 buildings shown, haze where no player sees, grey minimap there); the Sight list in the console's match panel (or V)
 picks each player's own sight or no fog. An observed match opens on player 1's base instead of the

@@ -120,7 +120,9 @@ def terrain(r, world):
         bindings = array(r, r.take('I'), '2I')
         materials.append({'bindings': bindings, 'material': material(r)})
     texture_lookup = array(r, r.take('I'), '2I')
-    # Fixed environment payload in world version 125 (0x5691d7).
+    # Fixed environment payload in world version 125 (0x5691d7, named in map_lighting.py): words_a = two raw words,
+    # humidity min/max/initial, wind min/max/initial; vector_a wind direction; words_c fog-of-war ARGB and alpha;
+    # flag_b clouds enabled. The final tail record holds Use SkyBox, Sky Color, wrap U/V and the skybox index.
     environment = {'raw_words_a': array(r, 8), 'raw_vector_a': array(r, 4, 'f'),
                    'raw_word_b': r.take('I'), 'raw_vectors_b': array(r, 2, '4f'),
                    'byte_a': r.take('B'), 'raw_words_c': array(r, 2), 'flag_b': r.boolean()}
@@ -337,13 +339,16 @@ def world_tail(r, world):
         lights.append(item)
     gx, gy = world.metadata['terrain']['grid']
     grid = array(r, ((gx >> 1) + 1) * ((gy >> 1) + 1))
-    properties = list(r.take('B8I'))
-    regions = array(r, properties[-1], '4IB3I')
+    # Global illumination (Rings.exe 0x56d412, build-152): flag, ambient ARGB, ambient intensity, sunrise, day
+    # seconds, sunset, initial time, shadow length, then the Sun/Moon keyframes (time, ARGB, ?, intensity, ...).
+    time_of_day = list(r.take('B8I'))
+    sun_keyframes = array(r, time_of_day[-1], '4IB3I')
     paths = []
     for _ in range(r.take('I') if r.boolean() else 0):
         head = list(r.take('4f3I'))
         paths.append({'header': head, 'keys': array(r, head[-1], '4IB3IB')})
-    camera = list(r.take('8IB'))
+    # Grass settings (editor Grass Properties): raw words, height in metres, tint ARGB, then Use Grass.
+    grass = list(r.take('8IB'))
     markers = array(r, r.take('I'), '5I') if r.boolean() else []
     decals = []
     for _ in range(r.take('I') if r.boolean() else 0):
@@ -365,8 +370,8 @@ def world_tail(r, world):
     if r.pos != len(r.data):
         raise ValueError('trailing world records at 0x%x' % r.pos)
     return {'camera_waypoints': waypoints, 'lights': lights, 'grid': grid,
-            'properties': properties, 'regions': regions, 'camera_paths': paths,
-            'camera': camera, 'markers': markers, 'decals': decals, 'fog': fog, 'final': final}
+            'time_of_day': time_of_day, 'sun_keyframes': sun_keyframes, 'camera_paths': paths,
+            'grass': grass, 'markers': markers, 'decals': decals, 'fog': fog, 'final': final}
 
 
 def parse(data):

@@ -404,7 +404,8 @@ terrain stays unchanged. Only the terrain mesh receives this adjustment. Water,
 object textures, team colors, geometry and source/cache files retain their data.
 Cast shadows remain enabled, with more ambient fill in shaded areas.
 
-`Rendering/PreviewLighting.cs` owns the preview settings. Capture metadata reads
+Build-152 replaced this preview with each map's own classic lighting ([LIGHTING.md](LIGHTING.md)); until then,
+`Rendering/PreviewLighting.cs` owned the preview settings. Capture metadata reads
 them directly and records the number of terrain surfaces/vertices and the
 darkest intensity before/after the adjustment. This is a readability preference;
 original-game lighting/weather fidelity remains unverified. No cache refresh is

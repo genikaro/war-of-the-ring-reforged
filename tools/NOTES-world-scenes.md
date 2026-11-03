@@ -39,7 +39,9 @@ model-event variants. Another 1,022 placed effects resolve to Effects records.
 All three terrain palettes and 17 mesh path lookup files parse to EOF.
 The tail now decodes structurally, including spline keys, half-resolution grid,
 camera/marker records, placed decals and fog payloads. Unnamed properties remain
-numerical; their runtime behavior is not claimed to be implemented.
+numerical; their runtime behavior is not claimed to be implemented. Build-152 names the lighting, environment,
+sky and grass fields (`map_lighting.py`; the tail's former `properties`, `regions` and `camera` are `time_of_day`,
+`sun_keyframes` and `grass`) and the prototype uses them ([LIGHTING.md](../prototype/LIGHTING.md)).
 
 Helm's Deep exports 92,133 height samples, 5,720 primary tiles/105 textures,
 767 placement nodes/93 models, two lakes and both pathing categories. Four
@@ -266,4 +268,6 @@ Addresses apply to the read-only `Rings.exe` hash documented in `NOTES-levels.md
 | `0x41f507`, `0x41f52b`, `0x41eb33` | Destination-major code, unreachable test and edge following |
 | `0x5c769e`, `0x5ebb52`, `0x5c7718` | LMS groups and optional triangle flags |
 | `0x56ce49` through `0x56df83` | Sequential world tail |
+| `0x56d412`, `0x565c2d` | Time-of-day block and Sun/Moon keyframes (tail `time_of_day`, `sun_keyframes`), defaults |
+| `0x53c80a`, `0x53cef7` | Sun position from time of day; light colour x intensity (`map_lighting.py`, build-152) |
 | `0x56a77b` | Placed decal records |

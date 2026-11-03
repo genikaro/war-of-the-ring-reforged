@@ -22,8 +22,9 @@ next tasks below without closing the original-game fidelity gates.
 The [prototype reference review](../references/original-game/PROTOTYPE-REVIEW.md)
 corrects missing runtime mipmaps, ignored lake vertex colours, spawned team
 colours and selection disks. Menu/launch-time views and capture metadata make further
-comparisons repeatable. Lighting, weather, water animation, original UI and
-the complete animation-event/appearance adaptation remain open. The three demo
+comparisons repeatable. Build-152 lights every map with its own decoded sun, ambient, clouds and
+skybox in the original's gamma-space model ([LIGHTING.md](../prototype/LIGHTING.md)); weather, placed lights,
+water animation, original UI and the complete animation-event/appearance adaptation remain open. The three demo
 types now have the melee-event and equipment-visibility subset described below.
 
 ## Current checkpoint

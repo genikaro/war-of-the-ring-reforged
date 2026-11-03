@@ -61,7 +61,7 @@ public partial class Main
             width = image.GetWidth(),height = image.GetHeight(),offscreen = true,hud_scale_percent = hud.ScalePercent,
             hud_effective_scale = hud.EffectiveScale,hud_bounds = new[] { bounds.Position.X,bounds.Position.Y,bounds.Size.X,bounds.Size.Y },
             selection_scroll_offset = hud.SelectionScrollOffset,
-            preview_lighting = PreviewLighting.Metadata,terrain_shading = _presentation.TerrainShading,
+            lighting = _lighting.Metadata,
             original_game_fidelity_verified = false },new JsonSerializerOptions { WriteIndented = true }));
         GD.Print("CAPTURE "+destination+" "+error); viewport.QueueFree();
         if (quit) _ = FinishCombatAudio(error == Error.Ok ? 0 : 1);

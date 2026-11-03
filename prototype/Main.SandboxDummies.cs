@@ -47,7 +47,7 @@ public partial class Main
     {
         foreach (var mesh in Descendants(visual).OfType<MeshInstance3D>().Where(m => m.Mesh != null))
             for (int surface = 0; surface < mesh.Mesh!.GetSurfaceCount(); surface++)
-                if (mesh.GetActiveMaterial(surface) is BaseMaterial3D material)
+                if (Reforged.Rendering.ClassicLighting.Source(mesh.GetActiveMaterial(surface)) is BaseMaterial3D material)
                 {
                     var gilded = (BaseMaterial3D)material.Duplicate();
                     gilded.AlbedoColor *= SandboxDummyTint;

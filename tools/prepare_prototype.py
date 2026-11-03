@@ -26,6 +26,7 @@ import prototype_obstacles
 import prototype_interface
 import combat_rules
 import game_audio
+import map_lighting
 import sandbox_map
 from lms2gltf import convert_model
 from resolve_model import Resolver
@@ -310,8 +311,10 @@ def prepare(output, install=None):
                 'team_colors': team_colors(resolver),
                 'models': models, 'spawns': spawns, 'groups': groups, 'camera_cell': camera_cell,
                 'rules': 'Imported combat stats, fixed-tick melee hits and Elven Archer projectiles; see combat/rules.json Policy for approximations.',
+                'lighting': map_lighting.lighting(scene),
                 'source_sha256': scene['world'].metadata['sha256']}
-    finish_cache(output, resolver, manifest, models)
+    lighting_files = map_lighting.write_images(manifest['lighting'], output, resolver)
+    finish_cache(output, resolver, manifest, models, [p.relative_to(output) for p in lighting_files])
     return manifest
 
 
@@ -393,12 +396,14 @@ def prepare_skirmish(output, install=None, map_name=None, content=None, sandbox=
         node['start_team'] = next((team for team, ids in enumerate(near) if node['id'] in ids.values()), None)
     x, y, _ = bases[0]['position']
     camera_cell = int(y / spacing) * width + int(x / spacing)
-    files = [output / 'map/scene.glb', output / 'navigation.json', output / 'heights.bin']
+    # Build-152: the map's own sun, ambient, clouds and sky (classic lighting).
+    lighting = map_lighting.lighting(scene)
+    files = [output / 'map/scene.glb', output / 'navigation.json', output / 'heights.bin'] + map_lighting.write_images(lighting, output, resolver)
     title = sandbox_map.TITLE if sandbox else skirmish_map.map_title(map_file)
     manifest = {'format_version': 1, 'mode': 'skirmish', 'name': title + ' — Good Skirmish', 'map': 'map/scene.glb',
                 'map_file': map_file, 'players': len(bases),
                 'content': Path(os.path.relpath(content, output)).as_posix(),
-                'spawns': spawns, 'groups': groups, 'camera_cell': camera_cell,
+                'spawns': spawns, 'groups': groups, 'camera_cell': camera_cell, 'lighting': lighting,
                 'skirmish': {'resources': nodes, 'construction': {'sites': construction['sites']},
                              'selectable_objects': skirmish_map.selectable_objects(scene, resolver),
                              'bases': [{'team': b['team'], 'start_point': b['start_point'], 'position': b['position'],

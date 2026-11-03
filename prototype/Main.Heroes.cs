@@ -71,7 +71,8 @@ public partial class Main
 
     private static Material? Ghost(Material? source,float alpha)
     {
-        if (source is not BaseMaterial3D material) return source;
+        // Build-152: faded copies start from the imported material, not its classic-lit copy.
+        if (Reforged.Rendering.ClassicLighting.Source(source) is not BaseMaterial3D material) return source;
         var copy = (BaseMaterial3D)material.Duplicate();
         copy.Transparency = BaseMaterial3D.TransparencyEnum.Alpha; copy.AlbedoColor = copy.AlbedoColor with { A = copy.AlbedoColor.A*alpha };
         return copy;
