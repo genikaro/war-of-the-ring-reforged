@@ -39,6 +39,12 @@ public partial class Main
         if (!_fogOfWar || _sandboxMap || !_skirmish) return;
         _world!.EnableFogOfWar();
         _fogOverlay = new FogOverlay(_world); AddChild(_fogOverlay.Node);
+        // Build-153: the map's own fog-of-war colour and Fog of War Alpha, exported into its cache by tools/map_lighting.py.
+        if (_cacheFiles.Root.TryGetProperty("lighting",out var lighting) && lighting.TryGetProperty("fog_of_war",out var fog))
+        {
+            var color = fog.GetProperty("color");
+            _fogOverlay.SetHaze(new Color(color[0].GetSingle(),color[1].GetSingle(),color[2].GetSingle()),FogOverlay.StrengthFor(fog.GetProperty("alpha").GetSingle()));
+        }
         if (_observing) _commands.SightChosen += index => _visionTeam = SightOrder()[index];
     }
 

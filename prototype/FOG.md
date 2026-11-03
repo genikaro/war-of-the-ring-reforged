@@ -58,10 +58,17 @@ more, by the bot's Aggression.
 ## On screen (`Main.Fog.cs`, `Rendering/FogOverlay.cs`)
 
 - One full-screen pass reads each pixel's depth, finds its ground point and looks it
-  up in the side's sight. Fog mixes 55% of a dim blue-grey haze over terrain,
-  buildings and trees alike. The sight texture blurs the 2 m cells over 3 × 3 and fades
-  each cell in or out over a third of a second. Colour and strength are matched by
-  eye to the captures (lit grass about (31,39,8), fogged about (42,50,27)): an adapter.
+  up in the side's sight. Fog mixes a haze over terrain, buildings and trees alike. The
+  sight texture blurs the 2 m cells over 3 × 3 and fades each cell in or out over a
+  third of a second.
+- Build-153: the haze is the map's own fog-of-war colour, which each map's world file
+  stores (Rings.exe world +0x8088; `manifest.lighting.fog_of_war.color`, exported by
+  `tools/map_lighting.py`): a dark green-grey on Bilbo's Bluffs, reddish brown on Dust and
+  Blood, dark green on Jungle Fever, light tan on Freedom! (where fog lightens). How the
+  original applies the map's Fog of War Alpha (0.25-0.5, world +0x808c) is not decoded.
+  The strength is the build-150 match to the Bilbo's Bluffs captures (55%; lit grass about
+  (31,39,8), fogged about (42,50,27)) times the map's alpha over Bilbo's 0.38, kept
+  within 30-75%: an adapter. Caches without the colour keep the build-150 blue-grey.
 - Enemy units out of sight are not drawn, picked, heard or listed. An enemy building
   is hidden until found, then shown as last seen and frozen out of sight (no health
   bar, fire or new stage). A fallen one stays until its spot is seen. The console shows

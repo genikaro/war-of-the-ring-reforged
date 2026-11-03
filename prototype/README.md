@@ -1,5 +1,9 @@
 # Godot C# skirmish sandbox
 
+**build-153:** The fog of war's haze takes each map's own fog colour from the original map files (dark green-grey on
+Bilbo's Bluffs, reddish brown on Dust and Blood, light tan on Freedom!), its strength scaled by the map's stored fog
+alpha. Needs the map caches refreshed by `python tools/map_lighting.py` (build-152). See [FOG.md](FOG.md).
+
 **build-152:** Classic lighting: every map is lit by its own original sun, time of day, ambient colour, drifting
 cloud shadows and skybox, with the 2003 game's lighting maths, so the ground keeps the original's bright greens, brown
 earth and deep shadows instead of the old flat, blue-grey preview light. Refresh the map caches once with

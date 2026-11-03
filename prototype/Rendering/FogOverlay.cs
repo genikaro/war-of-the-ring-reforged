@@ -7,8 +7,11 @@ namespace Reforged.Rendering;
 /// side does not see is not blacked out but sunk into a dim blue-grey haze (the terrain, buildings and trees alike),
 /// with soft edges ("fog smoothing" in the original's options). One full-screen pass reads the depth of each pixel,
 /// finds its ground point and looks it up in a texture of the side's sight; the texture blurs the 2 m sight cells over
-/// 3 x 3 and fades each cell in or out over a third of a second. The haze colour and strength are matched by eye to the
-/// captures (lit grass about (31,39,8), fogged about (42,50,27)): an adapter, not a decoded value.</summary>
+/// 3 x 3 and fades each cell in or out over a third of a second. Build-153: the haze takes the map's own fog-of-war
+/// colour (its world file, Rings.exe world +0x8088). How the original applies the map's Fog of War Alpha (0.25-0.5,
+/// world +0x808c) is not decoded: the strength is the build-150 match to Bilbo's Bluffs captures (0.55, lit grass about
+/// (31,39,8), fogged about (42,50,27)) scaled by the map's alpha against Bilbo's 0.38, an adapter. Caches without the
+/// colour keep the build-150 blue-grey.</summary>
 public sealed class FogOverlay
 {
     private const string ShaderCode = """
@@ -38,6 +41,7 @@ public sealed class FogOverlay
     private readonly byte[] _bytes;
     private readonly Image _image;
     private readonly ImageTexture _texture;
+    private readonly ShaderMaterial _material;
     private string _teams = "";
     private int _updates = -1;
     private bool _settled;
@@ -48,12 +52,28 @@ public sealed class FogOverlay
         _target = new float[_width*_height]; _shown = new float[_width*_height]; _bytes = new byte[_width*_height];
         _image = Image.CreateFromData(_width,_height,false,Image.Format.L8,_bytes);
         _texture = ImageTexture.CreateFromImage(_image);
-        var material = new ShaderMaterial { Shader = new Shader { Code = ShaderCode },RenderPriority = 100 };
+        var material = _material = new ShaderMaterial { Shader = new Shader { Code = ShaderCode },RenderPriority = 100 };
         material.SetShaderParameter("sight",_texture);
         material.SetShaderParameter("map_size",new Vector2(_width*SimWorld.VisionCellMm/1000f,_height*SimWorld.VisionCellMm/1000f));
+        SetHaze(DefaultHaze,DefaultStrength);
         Node = new MeshInstance3D { Name = "FogOfWar",Mesh = new QuadMesh { Size = new(2,2) },MaterialOverride = material,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,ExtraCullMargin = 16384,
             CustomAabb = new Aabb(new(-100000,-100000,-100000),new(200000,200000,200000)) };
+    }
+
+    /// <summary>The build-150 haze, matched by eye to Bilbo's Bluffs captures, whose map stores Fog of War Alpha 0.38.</summary>
+    public static readonly Color DefaultHaze = new(.16f,.2f,.2f);
+    public const float DefaultStrength = .55f,MatchedAlpha = .38f;
+    public Color Haze { get; private set; }
+    public float Strength { get; private set; }
+
+    /// <summary>The haze's strength for a map's Fog of War Alpha: Bilbo's 0.38 gives the matched 0.55, others in proportion.</summary>
+    public static float StrengthFor(float alpha) => Math.Clamp(DefaultStrength*alpha/MatchedAlpha,.3f,.75f);
+
+    public void SetHaze(Color color,float strength)
+    {
+        Haze = color; Strength = strength;
+        _material.SetShaderParameter("haze",color); _material.SetShaderParameter("strength",strength);
     }
 
     /// <summary>Shows the sight of these sides together (a player's own; every player's or one side's for an observer;

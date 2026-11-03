@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Rendering;
 using Reforged.Simulation;
 using System.Text.Json;
 
@@ -34,6 +35,12 @@ public partial class Main
         {
             case 0 when _fogTicks >= 20:
                 _fogChecks["fog_on_for_the_match"] = world.FogOfWar && ViewTeam == team && _fogOverlay?.Node.Visible == true;
+                // Build-153: Bilbo's Bluffs' own fog colour, at the strength matched to its captures.
+                var mapFog = _cacheFiles.Root.GetProperty("lighting").GetProperty("fog_of_war");
+                var mapColor = mapFog.GetProperty("color");
+                _fogChecks["haze_takes_the_maps_fog_colour"] = _fogOverlay!.Haze.IsEqualApprox(new Color(mapColor[0].GetSingle(),mapColor[1].GetSingle(),mapColor[2].GetSingle()))
+                    && Math.Abs(_fogOverlay.Strength-FogOverlay.StrengthFor(mapFog.GetProperty("alpha").GetSingle())) < .001f
+                    && Math.Abs(FogOverlay.StrengthFor(FogOverlay.MatchedAlpha)-FogOverlay.DefaultStrength) < .001f;
                 _fogChecks["enemy_base_unknown_at_start"] = world.RememberedSite(team,enemy.Id) == null && !_constructionViews[enemy.Id].Root.Visible;
                 _fogChecks["enemy_units_hidden_at_start"] = enemies.Length > 0 && enemies.All(u => !world.CanSeeUnit(team,u) && !_views[u.Id].Root.Visible);
                 _fogChecks["own_units_shown"] = world.Units.Where(u => u.Team == team && u.Present).All(u => _views[u.Id].Root.Visible);
@@ -171,7 +178,7 @@ public partial class Main
 
     private void FinishFogSmoke()
     {
-        bool passed = _fogChecks.Count >= (_observing ? 12 : 18) && _fogChecks.Values.All(v => v);
+        bool passed = _fogChecks.Count >= (_observing ? 12 : 19) && _fogChecks.Values.All(v => v);
         GD.Print("FOG_SMOKE "+JsonSerializer.Serialize(new { passed,tick = _world!.Tick,checks = _fogChecks,
             bot = _world.AiPlayers.Values.Select(a => a.Status).ToArray(),
             journal = _world.AiPlayers.Values.SelectMany(a => a.Journal.Entries.Where(e => e.Kind is AiJournalKind.Scout or AiJournalKind.Attack).Select(e => $"{e.Tick/20/60}:{e.Tick/20%60:00} {e.Text}")).ToArray() }));
