@@ -19,6 +19,18 @@ public partial class Main
     /// <summary>A report key per bot: the player as well as the bot, so a mirror match (Gimli against Gimli) keeps both.</summary>
     private static string BotKey(AiPlayer bot) => $"Player {bot.Team+1} {bot.Personality.Id}";
 
+    /// <summary>Build-163: " · heroes at home 2/3", the bot's living heroes within 40 m of its start and no enemy within 30 m of them,
+    /// for judging whether heroes take part in the match.</summary>
+    private static string HeroesAtHome(SimWorld world,AiPlayer bot)
+    {
+        var heroes = world.ActiveUnits.Where(u => u.Team == bot.Team && u.Present && u.Definition.Hero).ToArray();
+        var start = world.StartStructures.FirstOrDefault(s => s.Team == bot.Team);
+        if (heroes.Length == 0 || start == null) return "";
+        int idle = heroes.Count(h => SimWorld.DistanceSquared(h.X,h.Z,start.X,start.Z) <= 40000L*40000
+            && !world.ActiveUnits.Any(e => e.Team >= 0 && e.Team != bot.Team && e.Present && SimWorld.DistanceSquared(e.X,e.Z,h.X,h.Z) <= 30000L*30000));
+        return $" · heroes at home {idle}/{heroes.Length}";
+    }
+
     private void ObserverSmokeInput()
     {
         var world = _world!;
@@ -28,7 +40,7 @@ public partial class Main
         {
             _observerSnapshotTick += 2400;
             _observerTimeline.Add($"{TimeSpan.FromSeconds(world.Tick/SimWorld.TicksPerSecond):mm\\:ss} "+string.Join(" | ",world.AiPlayers.Values.Select(a =>
-                $"{a.Personality.Id} {a.Status} · food {world.Economies[a.Team].Food} ore {world.Economies[a.Team].Ore} · "
+                $"{a.Personality.Id} {a.Status} · food {world.Economies[a.Team].Food} ore {world.Economies[a.Team].Ore}{HeroesAtHome(world,a)} · "
                 +string.Join(",",world.ConstructionSites.Values.Where(s => s.Team == a.Team && s.Health > 0).GroupBy(s => world.SiteRules(s).DisplayName).Select(g => g.Key+(g.Count() > 1 ? "x"+g.Count() : ""))))));
         }
         switch (_observerPhase)
@@ -50,7 +62,9 @@ public partial class Main
                     && !_mapName.Contains("Skirmish") && _commands.DisplayedClock == $"{seconds/60}:{seconds%60:00}" && _commands.CommandPaletteEmpty
                     && !_commands.GroupButton(0).IsVisibleInTree() && !_commands.WalkRunButton.IsVisibleInTree()
                     && _commands.DisplayedMatchState == (world.Contenders.Count == 2 ? "Duel" : $"Free-for-all · {world.Contenders.Count} players");
-                FocusStructure(SmokeEnemyCitadel);
+                // Build-163: maps other than Bilbo's Bluffs number their bases differently; player 2's first base stands in.
+                FocusStructure(_structureViews.ContainsKey(SmokeEnemyCitadel) ? SmokeEnemyCitadel
+                    : world.ConstructionSites.Values.Where(s => s.Team == world.Contenders.Skip(1).First() && s.Prebuilt && _structureViews.ContainsKey(s.Id)).Min(s => s.Id));
                 _observerPhase = 1; _observerStep = 0; break;
             case 1:
                 // Inspect an Aragorn unit, then try to command it with a right-click on open ground.

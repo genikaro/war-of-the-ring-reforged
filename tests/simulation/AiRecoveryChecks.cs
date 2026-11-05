@@ -75,14 +75,20 @@ static class AiRecoveryChecks
         var rescue=Fixture(expansion:false,hero:false);rescue.Economies[0].Fate=3;
         rescue.ProductionRules.Add("hero",new("hero","Hero",0,0,2,30,Unique:true,FateCost:3));
         rescue.Producers[Keep].Units=["soldier","hero"];Step(rescue,SimWorld.AiStagnationTicks+80);
-        check(rescue.ActiveUnits.Any(u=>u.Team==0 && u.Definition.Hero && u.Order==OrderKind.AttackStructure),
+        // Build-163: the hero then leads the last stand, its workers marching with it.
+        check(rescue.ActiveUnits.Any(u=>u.Team==0 && u.Definition.Hero && u.Order is OrderKind.AttackStructure or OrderKind.Guard && u.OrderTarget>=0)
+            && rescue.AiPlayers[0].LastStand,
             "an irrecoverable worker economy spends available Fate on a hero that can continue the fight");
 
         var stranded=Fixture(expansion:false);Step(stranded,SimWorld.AiStagnationTicks-20);
         var hero=stranded.Units.First(u=>u.Definition.Hero);
         check(hero.Order==OrderKind.Guard,"heroes keep their normal defense role during the recovery grace period");
         Step(stranded,60);
-        check(hero.Order==OrderKind.AttackStructure && hero.OrderTarget==EnemyKeep,
+        // Build-163: the miners join the last stand and the hero goes with them.
+        var standing=stranded.AiPlayers[0];
+        check(standing.LastStand && standing.AllIn && standing.PartyTarget==EnemyKeep
+            && stranded.ActiveUnits.Where(u=>u.Team==0 && u.Definition.Name==Worker.Name).All(u=>standing.Party.Contains(u.Id))
+            && (hero.Order==OrderKind.AttackStructure && hero.OrderTarget==EnemyKeep || hero.Order==OrderKind.Guard && standing.Party.Contains(hero.OrderTarget)),
             "surviving ore miners cannot keep otherwise stranded heroes guarding home forever");
 
         var inside=Fixture(expansion:false);
@@ -97,7 +103,7 @@ static class AiRecoveryChecks
         contested.ConstructionSites[ExpansionFood].Team=1;contested.ConstructionSites[ExpansionFood].Complete=true;
         contested.ConstructionSites[ExpansionFood].Health=500;contested.Navigation.SetObstacle(20008,true);
         Step(contested,SimWorld.AiStagnationTicks+40);
-        check(contested.Units.First(u=>u.Definition.Hero).OrderTarget==ExpansionFood,
+        check(contested.AiPlayers[0].LastStand && contested.AiPlayers[0].PartyTarget==ExpansionFood,
             "food-starved heroes contest the enemy's working Mill before a nearer Citadel");
 
         var blocked=Fixture(reachable:false);Step(blocked,40);

@@ -130,6 +130,11 @@ if (args.Contains("--ai-worker-checks"))
     AiWorkerChecks.Run(Check);
     Console.WriteLine($"{passed} bot worker staffing checks passed"); return;
 }
+if (args.Contains("--ai-late-game-checks"))
+{
+    AiLateGameChecks.Run(Check);
+    Console.WriteLine($"{passed} bot late-game checks passed"); return;
+}
 if (args.Contains("--ai-recovery-checks"))
 {
     AiRecoveryChecks.Run(Check);
@@ -387,6 +392,7 @@ OutcomeChecks.Run(Check);
 AiChecks.Run(Check);
 AiWorkerChecks.Run(Check);
 AiRecoveryChecks.Run(Check);
+AiLateGameChecks.Run(Check);
 AiDefenseChecks.Run(Check);
 AiExpansionChecks.Run(Check);
 AiHeroChecks.Run(Check);

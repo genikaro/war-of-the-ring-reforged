@@ -28,7 +28,7 @@ public sealed partial class SimWorld
             DistanceSquared(b.X,b.Z,start.X,start.Z)>(long)AiDefenseRadiusMm*AiDefenseRadiusMm)) return -1;
         return Resources.Values.Where(r => r.Kind == kind && AiProductiveResource(ai,r)
                 && r.ImprovedRateMilliPerTick > 0 && r.RemainingMilli > r.ImprovedFloorMilli
-                && ConstructionSites.TryGetValue(r.Id,out var site) && site.Team < 0
+                && ConstructionSites.TryGetValue(r.Id,out var site) && site.Team < 0 && !AiResourceRefused(ai,r)
                 && (CanStartConstruction(ai.Team,r.Id,out var reason) || reason is "Insufficient resources" or UnitBlocksFoundation))
             .Where(r => bases.OrderBy(b => DistanceSquared(b.X,b.Z,r.X,r.Z)).ThenBy(b => b.Id).FirstOrDefault() is { } home
                 && DistanceSquared(home.X,home.Z,start.X,start.Z) > (long)AiDefenseRadiusMm*AiDefenseRadiusMm

@@ -39,6 +39,9 @@ public sealed partial class SimWorld
             {
                 if (unit.Id==source.Id || unit.Team!=source.Team) continue;
                 unit.HealthMilli=Math.Max(0,unit.HealthMilli-ability.HealMilli);
+                // Build-163: an ally the price kills is its side's loss, like any fallen unit (the observer's Stats check counted one
+                // death more than losses once bots' last stands put wounded slaves beside the casters).
+                if (unit.Health<=0) { CancelAbility(unit); RecordDeath(source.Team,unit); CancelStrike(unit); continue; }
                 if (unit.Present) unit.SavageInfluence=new(source.Id,ability,Tick+ability.DurationTicks);
                 continue;
             }

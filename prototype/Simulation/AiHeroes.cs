@@ -7,8 +7,10 @@ namespace Reforged.Simulation;
 /// and comes back from 80 - 0.35 A %. It takes on enemies it sees within 20 + 0.3 A m of itself while the odds at the
 /// enemy, as power (AiPower) within 15 m, are no worse than (50 + 2 A)% can take: a careful hero wants two to one, a
 /// balanced one fights at two to three and the boldest at two to five, enemy heroes first. It breaks off a fight whose
-/// odds turned worse than that, toward its army or home. With no assault out, a hero of Aggression 40 or more goes along
-/// with a place-of-power squad or a raid instead of waiting at home.</summary>
+/// odds turned worse than that, toward its army or home. With no assault out, a hero goes along with a place-of-power squad
+/// or a raid instead of waiting at home (Aggression 40 or more until build-163, every hero since), and with neither out it
+/// stands with the guards of a place of power (build-163). In a last stand (build-163, AiLateGame.cs) heroes take any odds
+/// and never go home to heal.</summary>
 public sealed partial class AiPlayer
 {
     /// <summary>Heroes walking out of a fight whose odds turned (build-150), and until when they walk on.</summary>
@@ -94,7 +96,8 @@ public sealed partial class SimWorld
         ai.RecoveringHeroes.RemoveWhere(id => !Units[id].Present || Units[id].HealthMilli*100 >= (long)Units[id].MaxHealth*1000*AiHeroReturnPercent(ai));
         foreach (var hero in heroes)
         {
-            if (hero.HealthMilli*100 <= (long)hero.MaxHealth*1000*AiHeroRetreatPercent(ai)) ai.RecoveringHeroes.Add(hero.Id);
+            // Build-163: a last stand's heroes fight on to the end; healing at home only fed the stalemate.
+            if (!ai.LastStand && hero.HealthMilli*100 <= (long)hero.MaxHealth*1000*AiHeroRetreatPercent(ai)) ai.RecoveringHeroes.Add(hero.Id);
             if (strategic && ai.Personality.UsesSpecialAbilities)
                 foreach (var ability in (hero.Definition.Abilities ?? []).OrderBy(a => a.Slot))
                     if (ability.Kind is not (AbilityKind.Sneak or AbilityKind.SurpriseAttack or AbilityKind.ShadowWalk) && CanPurchaseAbility(ai.Team,hero.Id,ability.Slot,out _))
@@ -116,8 +119,10 @@ public sealed partial class SimWorld
                 AiOrder(ai,[hero.Id],OrderKind.Attack,intruder.Node,intruder.Id);
                 continue;
             }
-            // The army out, or with none out a bold hero goes with a place squad or a raid (build-150).
-            var escorted = ai.Party.Count > 0 || ai.Profile.Style.Aggression < 40 ? ai.Party : ai.PlaceSquad.Count > 0 ? ai.PlaceSquad : ai.Raid;
+            // The army out, or with none out a place squad or a raid (build-150 for Aggression 40 and up; every hero since
+            // build-163, as careful bots' heroes otherwise waited at home most of the match).
+            // With none of those, it stands with the guards of a place of power, one under attack first (build-163).
+            var escorted = ai.Party.Count > 0 ? ai.Party : ai.PlaceSquad.Count > 0 ? ai.PlaceSquad : ai.Raid.Count > 0 ? ai.Raid : AiHeroPost(ai,bx,bz);
             var party = escorted.Select(id => Units[id]).Where(u => u.Present && Nav(hero).IsConnected(hero.Node,u.Node)).ToArray();
             if (AiHeroFight(ai,hero,party,bx,bz)) continue;
             if (party.Length > 0)
@@ -130,18 +135,30 @@ public sealed partial class SimWorld
                     AiOrder(ai,[hero.Id],OrderKind.AttackStructure,target:target.Id);
                 else AiHeroGuard(ai,hero,anchor.Node,anchor.Id);
             }
-            else if ((!ActiveUnits.Any(u => u.Team == ai.Team && u.Health > 0 && (IsAiWorker(u) || IsAiSoldier(u)))
-                    || stranded && !ActiveUnits.Any(u => u.Team == ai.Team && u.Present && IsAiSoldier(u)))
-                && AiKnownSites(ai)
-                    .OrderBy(s => stranded && s.Building == null && Resources.TryGetValue(s.Resource,out var food)
-                        && food.Kind == ResourceKind.Food && CanGather(s.Team,food.Id) ? 0 : 1)
-                    .ThenBy(s => DistanceSquared(hero.X,hero.Z,s.X,s.Z)).ThenBy(s => s.Id).FirstOrDefault(s => AiReaches(hero,s)) is { } lastTarget)
-                AiOrder(ai,[hero.Id],OrderKind.AttackStructure,target:lastTarget.Id);
+            else if (ai.LastStand || !ActiveUnits.Any(u => u.Team == ai.Team && u.Health > 0 && (IsAiWorker(u) || IsAiSoldier(u)))
+                || stranded && !ActiveUnits.Any(u => u.Team == ai.Team && u.Present && IsAiSoldier(u)))
+            {
+                // Alone: on the nearest enemy building known, an enemy Mill still earning food first; a last stand that
+                // knows none walks on the nearest enemy start (build-163).
+                if (AiKnownSites(ai).OrderBy(s => (stranded || ai.LastStand) && AiWorkingFood(s) ? 0 : 1)
+                        .ThenBy(s => DistanceSquared(hero.X,hero.Z,s.X,s.Z)).ThenBy(s => s.Id).FirstOrDefault(s => AiReaches(hero,s)) is { } lastTarget)
+                    AiOrder(ai,[hero.Id],OrderKind.AttackStructure,target:lastTarget.Id);
+                else if (ai.LastStand && AiEnemyPoint(ai,hero.X,hero.Z) is { } enemy && Nav(hero).Nearest(Navigation.Cell(enemy.X,enemy.Z),connectedTo:hero.Node) is int cell && cell >= 0)
+                    AiOrder(ai,[hero.Id],OrderKind.AttackMove,cell);
+                else AiHeroGuard(ai,hero,AiHeroHomeCell(hero,bx,bz));
+            }
             else AiHeroGuard(ai,hero,AiHeroHomeCell(hero,bx,bz));
         }
     }
 
     private int AiHeroHomeCell(SimUnit hero,int bx,int bz) => Nav(hero).Nearest(Navigation.Cell(bx,bz),connectedTo:hero.Node);
+
+    /// <summary>Build-163: the guards of the place of power a hero with nothing else to do joins: a post whose guards are
+    /// fighting first, then the place nearest home.</summary>
+    private List<int> AiHeroPost(AiPlayer ai,int bx,int bz) => ai.PlaceGuards.Where(p => p.Value.Units.Count > 0)
+        .Select(p => (Post: p.Value,Place: PlacesOfPower.First(q => q.Id == p.Key)))
+        .OrderBy(p => p.Post.Units.Any(id => Units[id].Target >= 0) ? 0 : 1).ThenBy(p => DistanceSquared(p.Place.X,p.Place.Z,bx,bz)).ThenBy(p => p.Place.Id)
+        .Select(p => p.Post.Units).FirstOrDefault() ?? [];
 
     /// <summary>The hero's own fights (build-150): it stays in one while the odds hold and breaks off when they turn,
     /// toward the units it goes with or home; otherwise it attacks the best enemy in its hunting range whose odds it can
@@ -150,6 +167,8 @@ public sealed partial class SimWorld
     {
         bool Holds(int x,int z,bool join)
         {
+            // Build-163: a last stand takes any odds.
+            if (ai.LastStand) return true;
             var (ours,theirs) = AiLocalBalance(ai,x,z,AiHeroOddsMm);
             if (join && DistanceSquared(hero.X,hero.Z,x,z) > (long)AiHeroOddsMm*AiHeroOddsMm) ours += AiPower(hero);
             return (long)ours*AiHeroCourage(ai) >= (long)theirs*100;

@@ -115,7 +115,8 @@ public sealed partial class SimWorld
         int towers = target == null ? 0 : known.Where(s => s.Team == target.Team && s.Complete && SiteDefense(s) != null
                 && DistanceSquared(SitePosition(s).X,SitePosition(s).Z,SitePosition(target).X,SitePosition(target).Z) <= (long)AiTowerReachMm*AiTowerReachMm)
             .Sum(AiTowerPower);
-        int ours = ready.Sum(AiPower);
+        // Build-163: with its fit heroes, who march along.
+        int ours = ready.Sum(AiPower)+AiFitHeroes(ai).Sum(AiPower);
         if ((long)ours*(60+ai.Profile.Style.Aggression) >= ((long)army+towers)*100) return false;
         ai.Holding = (army,towers,ours);
         return true;
@@ -158,7 +159,8 @@ public sealed partial class SimWorld
     /// <summary>Sends and steers the scout; returns the home soldiers left for everything else.</summary>
     private SimUnit[] AiScout(AiPlayer ai,SimUnit[] home,SimUnit[] workers,int bx,int bz,bool threatened)
     {
-        if (!FogOfWar) return home;
+        // Build-163: a last stand's party searches for itself.
+        if (!FogOfWar || ai.LastStand) return home;
         if (ai.NextScoutTick < 0) ai.NextScoutTick = AiScoutFromTicks(ai);
         if (ai.Scout >= 0)
         {

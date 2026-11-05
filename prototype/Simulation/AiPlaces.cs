@@ -7,7 +7,9 @@ namespace Reforged.Simulation;
 /// walk into, out of every enemy tower's reach and with fewer enemy soldiers within 30 m than the squad (each one counting as
 /// 15 m farther). It fights whatever enemy stands in the zone, and once the place is the bot's it moves on to the next such
 /// place from there, or walks home. It runs home (urgent) when more enemy soldiers than members are within 12 m, half of it is
-/// lost, or it has been out 2 minutes; then the next squad waits a minute. Not simulated: the defence parties that hold a place.</summary>
+/// lost, or it has been out 2 minutes; then the next squad waits a minute. Build-163 (owner request): a squad leaves guards at
+/// each place it takes and home soldiers top them up (AiPlaceGuards in AiLateGame.cs), a small adapter for the source's
+/// AIWARPARTY_PLACEOFPOWERDEFENSE (5 to 12 units, not read).</summary>
 public sealed partial class SimWorld
 {
     public const int AiPlaceOutTicks = 120*TicksPerSecond;
@@ -44,7 +46,9 @@ public sealed partial class SimWorld
         var place = PlacesOfPower.First(p => p.Id == ai.PlaceTarget);
         if (place.Owner == ai.Team)
         {
-            // Taken: on to the next place from here, or home.
+            // Taken: guards stay (build-163), the rest go on to the next place from here, or home.
+            squad = AiLeavePlaceGuards(ai,place,squad);
+            if (squad.Length == 0) { ai.PlaceTarget = ai.PlaceCell = -1; return home; }
             var lead = squad.OrderBy(u => u.Id).First();
             if (AiPickPlace(ai,squad,lead.X,lead.Z)) { ai.PlaceSince = Tick; AiOrder(ai,ai.PlaceSquad,OrderKind.AttackMove,ai.PlaceCell); }
             else AiEndPlaceSquad(ai,bx,bz,urgent: false);

@@ -1,5 +1,12 @@
 # Godot C# skirmish sandbox
 
+**build-163:** Bots finish their matches. A bot that can never earn food again and has nothing left to train makes a
+**last stand**: every soldier, guard, hero and worker charges at once, heroes no longer run home to heal, and losing it
+loses the match. Until then its last food buys soldiers instead of waiting for a building, and its heroes count toward an
+attack, so strong heroes no longer wait at home for a full party. Bots leave three guards at each place of power they
+take, mine ore only near their own depots, and an Evil side whose last Slavemaster fell can train one again. Six-bot
+matches that stood still from 20:00 to the 120-minute limit now end. See [SKIRMISH.md](SKIRMISH.md#build-163-the-bots-late-game).
+
 **build-162:** Big melees cost less, with the same results: the attack-position search around wide units (riders,
 Uruk-Hai and the like) works out each nearby body once per search instead of once per ring point, runs its cheapest
 tests first and asks the attack-move lane once per cell. In a 300-unit fight a tick takes 16 ms instead of 20, and

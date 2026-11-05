@@ -82,7 +82,9 @@ public sealed partial class SimWorld
         var cost = TrainingCost(team,rules);
         if (bank.FoodMilli < cost.FoodCost*1000L || bank.OreMilli < cost.OreCost*1000L) { reason = "Insufficient resources"; return false; }
         if (bank.Fate < cost.FateCost) { reason = $"Requires {cost.FateCost} Fate"; return false; }
-        if (PopulationUsed(team)+rules.Population > PopulationCapacity(team)) { reason = "Population limit reached"; return false; }
+        // Build-163: a unit taking no population (a hero, the Slavemaster who supplies it) is never held back by the limit. An Evil
+        // side whose last Slavemaster fell stood above a capacity of 0 and could never train the one unit that restores it.
+        if (rules.Population > 0 && PopulationUsed(team)+rules.Population > PopulationCapacity(team)) { reason = "Population limit reached"; return false; }
         reason = "Ready to train"; return true;
     }
 

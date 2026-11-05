@@ -227,12 +227,15 @@ public sealed partial class SimWorld
         }
         ai.Party.RemoveAll(id => !Units[id].Present || AiTrapped(Units[id]));
         if (ai.Party.Count == 0) ai.AllIn = false;
+        // Build-163: the last stand, once due, lasts for good; whatever the bot has joins it on every think.
+        if (strategic && !ai.LastStand && AiLastStandDue(ai)) AiBeginLastStand(ai);
+        if (ai.LastStand) AiMusterLastStand(ai,mine);
         ai.Recovering.RemoveWhere(id => Units[id].Health <= 0 || Units[id].HealthMilli*2 > (long)Units[id].MaxHealth*1000);
         // An enemy given up on that has lost health since was reachable after all.
         foreach (int id in ai.Unreachable.Where(p => Units[p.Key].HealthMilli < p.Value).Select(p => p.Key).ToArray()) ai.Unreachable.Remove(id);
         var expansions = AiExpansions(ai);
         var home = mine.Where(u => IsAiSoldier(u) && !ai.Party.Contains(u.Id) && !ai.Raid.Contains(u.Id) && !ai.PlaceSquad.Contains(u.Id)
-            && !ai.Guards.Values.Any(g => g.Units.Contains(u.Id)) && u.Id != ai.Scout).ToArray();
+            && !ai.Guards.Values.Any(g => g.Units.Contains(u.Id)) && !AiPlaceGuard(ai,u.Id) && u.Id != ai.Scout).ToArray();
         var (bx,bz) = AiBase(ai);
         bool threatened = AiDefend(ai,ref home);
         home = AiScout(ai,home,workers,bx,bz,threatened);
@@ -240,19 +243,31 @@ public sealed partial class SimWorld
         if (strategic)
         {
             AiChooseComposition(ai);
-            if (!threatened) AiRepair(ai,workers);
-            (string plan,int reserveFood,int reserveOre) = AiConstruction(ai,workers,bx,bz);
-            AiAssignWorkers(ai,workers);
-            bool armyReady = home.Length+ai.Party.Count >= AiPartySize(ai);
-            bool finiteFood = AiNeedsLastArmy(ai) && AiFoodUnrenewable(ai);
-            var (tech,techFood,techOre) = finiteFood ? ("",0,0) : AiTech(ai,reserveFood,reserveOre,armyReady);
-            AiTrain(ai,living,finiteFood ? 0 : reserveFood+techFood,finiteFood ? 0 : reserveOre+techOre,armyReady);
-            ai.Plan = plan; ai.TechPlan = tech;
+            if (ai.LastStand)
+            {
+                // Build-163: nothing is built, repaired or researched any more; whatever the bank still buys joins the charge.
+                AiTrain(ai,living,0,0);
+                ai.Plan = "last stand"; ai.TechPlan = "";
+            }
+            else
+            {
+                if (!threatened) AiRepair(ai,workers);
+                (string plan,int reserveFood,int reserveOre) = AiConstruction(ai,workers,bx,bz);
+                AiAssignWorkers(ai,workers);
+                bool armyReady = home.Length+ai.Party.Count >= AiPartySize(ai);
+                // Build-163: food that can never be renewed buys soldiers, whatever army is left; before, a bot with a soldier
+                // or two kept it reserved for a building or research it could never pay, and trained nothing for twenty minutes.
+                bool finiteFood = AiFoodUnrenewable(ai);
+                var (tech,techFood,techOre) = finiteFood ? ("",0,0) : AiTech(ai,reserveFood,reserveOre,armyReady);
+                AiTrain(ai,living,finiteFood ? 0 : reserveFood+techFood,finiteFood ? 0 : reserveOre+techOre,armyReady);
+                ai.Plan = plan; ai.TechPlan = tech;
+            }
         }
         home = AiGuard(ai,expansions,home,threatened);
         AiAssault(ai,home,bx,bz,threatened);
         home = AiRaid(ai,[.. home.Where(u => !ai.Party.Contains(u.Id))],bx,bz,threatened);
         home = AiCapturePlaces(ai,home,bx,bz,threatened);
+        home = AiPlaceGuards(ai,home,bx,bz,threatened);
         AiRally(ai,home,bx,bz);
         AiHeroes(ai,mine.Where(u => u.Definition.Hero).ToArray(),bx,bz,strategic);
         AiEvilUnitAbilities(ai,mine);
@@ -266,8 +281,9 @@ public sealed partial class SimWorld
         string march = ai.Party.Count > 0 && ai.Leg < ai.Legs.Count ? $" · regrouping {ai.Leg+1}/{ai.Legs.Count}" : "";
         string waits = ai.PartiesSent == 0 && Tick < ai.Profile.AssaultFromTicks ? $" · attacks from {gate/60}:{gate%60:00}" : "";
         string raid = ai.Raid.Count > 0 ? $" · raid {ai.Raid.Count}/{ai.RaidStart}" : "";
-        int held = PlacesOfPower.Count(p => p.Owner == ai.Team);
-        string places = (ai.PlaceSquad.Count > 0 ? $" · to a place {ai.PlaceSquad.Count}/{ai.PlaceSquadStart}" : "")+(held > 0 ? $" · places {held}" : "");
+        int held = PlacesOfPower.Count(p => p.Owner == ai.Team),placeGuards = ai.PlaceGuards.Values.Sum(p => p.Units.Count);
+        string places = (ai.PlaceSquad.Count > 0 ? $" · to a place {ai.PlaceSquad.Count}/{ai.PlaceSquadStart}" : "")+(held > 0 ? $" · places {held}" : "")
+            +(placeGuards > 0 ? $" · place guards {placeGuards}" : "")+(ai.LastStand ? " · last stand" : "");
         int heroes = mine.Count(u => u.Definition.Hero);
         // Build-150: what fog leaves the bot knowing, while there is fog.
         string intel = !FogOfWar ? "" : $" · knows {AiKnownSites(ai).Length} enemy buildings, {ai.Contacts.Count} soldiers"
@@ -277,13 +293,16 @@ public sealed partial class SimWorld
         ai.Status = (ai.Composition is { } composition ? composition.Name+" · " : "")+$"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)}{march}{waits}{raid}{places}{defense}{(guards > 0 ? $" · guards {guards}" : "")}{(heroes > 0 ? $" · heroes {heroes} ({ai.RecoveringHeroes.Count} recovering)" : "")}{intel} · {ai.Plan}{(ai.TechPlan != "" ? " · "+ai.TechPlan : "")} · parties {ai.PartiesSent}{(ai.RaidsSent > 0 ? $" · raids {ai.RaidsSent}" : "")}";
     }
 
-    /// <summary>The bot's Citadels away from its start (foundations too), with the guards of fallen ones released and
-    /// fallen guards struck off.</summary>
+    /// <summary>The bot's Citadels away from its start (foundations too) with resources left to gather, with the guards of
+    /// fallen or spent ones released and fallen guards struck off.</summary>
     private ConstructionSite[] AiExpansions(AiPlayer ai)
     {
         var start = StartStructures.FirstOrDefault(s => s.Team == ai.Team);
+        // Build-163: only those with something left to gather within the defence radius; a spent expansion's guard rejoins
+        // the army (Aragorn kept eight guards at two emptied expansions on Valley of Death while its home army stood at 0-1).
         var expansions = start == null ? [] : ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Health > 0 && s.Building != null && Satisfies(s.Building,start.Building)
-            && DistanceSquared(s.X,s.Z,start.X,start.Z) > (long)AiDefenseRadiusMm*AiDefenseRadiusMm).ToArray();
+            && DistanceSquared(s.X,s.Z,start.X,start.Z) > (long)AiDefenseRadiusMm*AiDefenseRadiusMm
+            && Resources.Values.Any(r => AiProductiveResource(ai,r) && DistanceSquared(r.X,r.Z,s.X,s.Z) <= (long)AiDefenseRadiusMm*AiDefenseRadiusMm)).ToArray();
         foreach (int id in ai.Guards.Keys.Where(id => !expansions.Any(s => s.Id == id)).ToArray()) ai.Guards.Remove(id);
         foreach (var post in ai.Guards.Values) post.Units.RemoveAll(id => !Units[id].Present);
         return expansions;
@@ -356,6 +375,8 @@ public sealed partial class SimWorld
     /// field soldiers; visibility alone does not. Unreachable enemies are given up on after 30 s without damage.</summary>
     private bool AiDefend(AiPlayer ai,ref SimUnit[] home)
     {
+        // Build-163: a last stand leaves the base to its towers and recalls nobody.
+        if (ai.LastStand) { ai.Intruder = -1; return false; }
         var buildings = ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Health > 0).Select(SitePosition).ToArray();
         bool alarm = AiRecallDefenders(ai,buildings,ref home);
         // Soldiers still locked on an intruder given up as unreachable stand down, and so do those chasing an enemy out
@@ -448,11 +469,14 @@ public sealed partial class SimWorld
 
     /// <summary>A bot surrenders once it can never field an army again: no soldier, hero or unit in training left, no
     /// worker able to restore useful income (ore alone gets a recovery grace period), and a bank that pays for no
-    /// unit its buildings offer, nor for a new Citadel while workers remain without one.</summary>
+    /// soldier its buildings offer (any unit before build-163), nor for a new Citadel while workers remain without one.</summary>
     private bool AiSurrenders(AiPlayer ai)
     {
+        // Build-163: a last stand that makes no headway is lost.
+        if (AiLastStandSpent(ai)) return true;
         var living = ActiveUnits.Where(u => u.Team == ai.Team && u.Health > 0).ToArray();
-        if (living.Any(u => !IsAiWorker(u))) return false;
+        // Build-163: only soldiers and heroes are an army; support units (the Slavemaster) are not.
+        if (living.Any(u => IsAiSoldier(u) || u.Definition.Hero)) return false;
         var producers = Producers.Values.Where(p => p.Team == ai.Team).ToArray();
         if (producers.Any(p => p.Queue.Count > 0)) return false;
         if (ai.Personality.UsesHeroes && producers.Any(p => Enumerable.Range(0,p.Units.Length)
@@ -460,7 +484,9 @@ public sealed partial class SimWorld
         if (living.Length > 0 && DropOffs.Any(d => d.Team == ai.Team) && !AiFoodStranded(ai)) return false;
         var bank = Economies[ai.Team];
         bool Affords(int food,int ore) => bank.FoodMilli >= food*1000L && bank.OreMilli >= ore*1000L;
-        if (producers.SelectMany(p => p.Units).Any(u => Rules.Units.TryGetValue(u,out var d) && !d.Hero
+        // Build-163: a soldier or worker it can still buy; before, any unit, so an Evil bot that could pay a Slavemaster's 95 ore
+        // never surrendered.
+        if (AiAffordsSoldier(ai) || producers.SelectMany(p => p.Units).Any(u => Workers.ContainsKey(u)
             && ProductionRules.TryGetValue(u,out var r) && Affords(r.FoodCost,r.OreCost))) return false;
         string? citadel = StartStructures.FirstOrDefault(s => s.Team == ai.Team)?.Building;
         return !(living.Length > 0 && citadel != null && BuildingRules.TryGetValue(citadel,out var c) && Affords(c.FoodCost,c.OreCost));
@@ -478,8 +504,18 @@ public sealed partial class SimWorld
     private GatherSource[] AiGatherSources(AiPlayer ai)
     {
         var usable = Resources.Values.Where(r => CanGather(ai.Team,r.Id)).ToArray();
-        var safe = usable.Where(r => !AiUnsafe(ai,r.X,r.Z)).ToArray();
-        return safe.Length > 0 ? safe : usable;
+        // Build-163: safe sources of each kind while there are any, else that kind's unsafe ones. Before, a safe ore pile kept
+        // workers off the only food left, a Mill near an enemy building, while that Mill kept the bot from counting as
+        // starving: Legolas stood on 25 food for 90 minutes on Wheel of Fate.
+        var unsafeSources = usable.Where(r => AiUnsafe(ai,r.X,r.Z)).Select(r => r.Id).ToHashSet();
+        var safeKinds = usable.Where(r => !unsafeSources.Contains(r.Id)).Select(r => r.Kind).ToHashSet();
+        var sources = usable.Where(r => !unsafeSources.Contains(r.Id) || !safeKinds.Contains(r.Kind)).ToArray();
+        // Build-163 (owner request): ore within reach of a depot only, unless none is and the bank runs low (AiLateGame.cs).
+        var depots = DropOffs.Where(d => d.Team == ai.Team).ToArray();
+        bool Near(GatherSource r) => depots.Any(d => DistanceSquared(d.X,d.Z,r.X,r.Z) <= (long)AiOreReachMm*AiOreReachMm);
+        bool farOre = Economies.TryGetValue(ai.Team,out var bank) && bank.OreMilli < AiFarOreBelow*1000L
+            && !sources.Any(r => r.Kind == ResourceKind.Ore && Near(r));
+        return farOre ? sources : [.. sources.Where(r => r.Kind != ResourceKind.Ore || Near(r))];
     }
 
     private int AiWorkerTarget(AiPlayer ai)
@@ -507,6 +543,7 @@ public sealed partial class SimWorld
             {
                 // Nobody could reach it: take the source refund and never try that spot again.
                 if (project.Building != null) ai.RefusedCells.Add(Navigation.Cell(project.X,project.Z));
+                else AiResourceClaimFailed(ai,project.Id);
                 Apply(new(Tick,_sequence++,ai.Team,[],-1,project.Id,OrderKind.CancelConstruction));
                 ai.Project = -1;
                 return ("abandoned "+SiteRules(project).DisplayName,0,0);
@@ -536,6 +573,7 @@ public sealed partial class SimWorld
             else if (Tick-ai.ProjectMovedTick >= AiStallTicks)
             {
                 if (lead.Order == OrderKind.PlaceBuilding) ai.RefusedCells.Add(lead.PlacementCell);
+                else AiResourceClaimFailed(ai,lead.OrderTarget);
                 AiOrder(ai,walking.Select(w => w.Id),OrderKind.Stop);
                 ai.Project = -1;
                 return ("gave up laying "+pending.DisplayName,0,0);
@@ -551,7 +589,8 @@ public sealed partial class SimWorld
         if (next == null) return ("plan complete",0,0);
         var rules = BuildingRules.GetValueOrDefault(next) ?? ResourceRulesNamed(next)!;
         var bank = Economies[ai.Team];
-        if (rules.FoodCost > 0 && AiNeedsLastArmy(ai) && AiAffordsSoldier(ai) && AiFoodUnrenewable(ai))
+        // Build-163: whatever army is left; this held for a bot with no soldier at all before.
+        if (rules.FoodCost > 0 && AiAffordsSoldier(ai) && AiFoodUnrenewable(ai))
             return ("preserving remaining food for troops",0,0);
         if (bank.FoodMilli < rules.FoodCost*1000L || bank.OreMilli < rules.OreCost*1000L || workers.Length == 0)
             return ("saving for "+rules.DisplayName,rules.FoodCost,rules.OreCost);
@@ -665,7 +704,7 @@ public sealed partial class SimWorld
             .OrderByDescending(u => Nav(u).CanStand(u.Node)).ThenBy(u => u.Id).FirstOrDefault() : null;
         // Build-155: an emptied well never gets another Mill, now that further Mills come early in the plan.
         return Resources.Values.Where(r => r.Kind == kind && ConstructionSites.TryGetValue(r.Id,out var site) && site.Team < 0 && Open(r)
-                && r.RemainingMilli > r.ImprovedFloorMilli
+                && r.RemainingMilli > r.ImprovedFloorMilli && !AiResourceRefused(ai,r)
                 && (!reachable || r.ImprovedRateMilliPerTick > 0 && worker != null
                     && EconomyRouteCandidates(worker,SiteArea(site),n => ClaimSpot(worker,site,n),ignoreUnits:true).Any())
                 && (anyDistance || homes.Any(h => DistanceSquared(r.X,r.Z,h.X,h.Z) <= 80000L*80000)) && !AiUnsafe(ai,r.X,r.Z))
@@ -715,6 +754,10 @@ public sealed partial class SimWorld
         AiOrder(ai,workers.Where(w => w.Order == OrderKind.Gather && w.CargoMilli == 0 && claiming.Contains(w.OrderTarget)).Select(w => w.Id),OrderKind.Stop);
         bool Waiting(SimUnit w) => claiming.Any(id => SitePosition(ConstructionSites[id]) is var (x,z)
             && DistanceSquared(w.X,w.Z,x,z) <= (long)AiClaimWaitMm*AiClaimWaitMm);
+        // Build-163: miners walking to ore out of reach of every depot (AiGatherSources) come back once their load is delivered.
+        var allowed = AiGatherSources(ai).Select(r => r.Id).ToHashSet();
+        AiOrder(ai,workers.Where(w => w.Order == OrderKind.Gather && w.CargoMilli == 0 && !claiming.Contains(w.OrderTarget)
+            && Resources.TryGetValue(w.OrderTarget,out var r) && r.Kind == ResourceKind.Ore && !allowed.Contains(r.Id)).Select(w => w.Id),OrderKind.Stop);
         // Count everyone assigned, including workers delivering cargo or temporarily inside a Mill/Foundry.
         // Free surplus empty-handed workers first, so an old crowded assignment can spread to another source.
         var living = ActiveUnits.Where(w => w.Team == ai.Team && w.Health > 0 && IsAiWorker(w)).ToArray();
@@ -735,7 +778,7 @@ public sealed partial class SimWorld
             gatherers = living.Count(w => w.Order == OrderKind.Gather);
         }
         var idle = workers.Where(w => w.Order is OrderKind.Idle or OrderKind.Stop && w.OrderQueue.Count == 0 && !Waiting(w)).ToList();
-        var sources = AiGatherSources(ai).Where(r => !claiming.Contains(r.Id)).ToArray();
+        var sources = Resources.Values.Where(r => allowed.Contains(r.Id) && !claiming.Contains(r.Id)).ToArray();
         var loads = living.Where(w => w.Order == OrderKind.Gather).GroupBy(w => w.OrderTarget).ToDictionary(g => g.Key,g => g.Count());
         int Load(GatherSource r) => loads.GetValueOrDefault(r.Id);
         bool HasRoom(GatherSource r) => Load(r) < AiWorkersPerResource;
@@ -793,7 +836,8 @@ public sealed partial class SimWorld
                 .Select(q => Rules.Units[q.Unit])).ToArray();
         long melee = army.Count(d => !d.IsRanged),total = army.Length;
         heroSavings = AiFirstHeroSavings(ai,(int)total);
-        bool finiteFood = total == 0 && AiFoodUnrenewable(ai);
+        // Build-163: with the food gone for good, no further workers (they would only mine ore), whatever army is left.
+        bool finiteFood = AiFoodUnrenewable(ai);
         IEnumerable<string> Soldiers(ProductionBuilding p) => p.Units.Where(u => AiUnits.TryGetValue(u,out var rule) && !rule.NeverAdd
             && Rules.Units.TryGetValue(u,out var d) && !d.Hero && MissingPrerequisite(ai.Team,ProductionRules[u].Prerequisites ?? []) == null);
         var offered = Producers.Values.Where(p => p.Team == ai.Team).SelectMany(Soldiers).Select(u => Rules.Units[u].IsRanged).ToHashSet();
@@ -804,19 +848,25 @@ public sealed partial class SimWorld
         {
             int slot = -1;
             int worker = Array.FindIndex(producer.Units,Workers.ContainsKey);
-            if (worker >= 0 && (!finiteFood || workers == 0) && workers+queuedWorkers < Math.Min(6,workerTarget) && Affordable(ProductionRules[producer.Units[worker]],true)) slot = worker;
-            else if (AiSupportSlot(ai,producer) is int support && support >= 0 && Affordable(ProductionRules[producer.Units[support]],true)) slot = support;
+            // Build-163: a worker the producer cannot train (no population room) leaves it to the support unit or a hero.
+            // A last stand trains neither workers nor support units (an Evil bot's ore-bought Slavemasters trickled into the
+            // enemy one at a time for 24 minutes on Valley of Death).
+            bool workerOpen = worker >= 0 && !ai.LastStand && CanTrain(ai.Team,producer.Id,worker,out _);
+            if (workerOpen && (!finiteFood || workers == 0) && workers+queuedWorkers < Math.Min(6,workerTarget) && Affordable(ProductionRules[producer.Units[worker]],true)) slot = worker;
+            else if (!ai.LastStand && AiSupportSlot(ai,producer) is int support && support >= 0 && Affordable(ProductionRules[producer.Units[support]],true)) slot = support;
             else if (ai.Personality.UsesHeroes && (total >= AiAssaultParty.MinSize || workers == 0 && total == 0
-                    || finiteFood && total == 0 && Tick-ai.LastArmyTick >= AiStagnationTicks)
+                    || finiteFood && Tick-ai.LastArmyTick >= AiStagnationTicks)
                 && AiHeroRecruit(ai,producer,reserveFood,reserveOre) is int heroSlot && heroSlot >= 0) slot = heroSlot;
-            else if (worker >= 0 && (!finiteFood || workers == 0) && workers+queuedWorkers < workerTarget && Affordable(ProductionRules[producer.Units[worker]],false)) slot = worker;
+            else if (workerOpen && (!finiteFood || workers == 0) && workers+queuedWorkers < workerTarget && Affordable(ProductionRules[producer.Units[worker]],false)) slot = worker;
             else
             {
                 int room = PopulationCapacity(ai.Team)-PopulationUsed(ai.Team);
                 var focusOffered = focusOptions.Where(o => ProductionRules[o.Unit].Population <= room
                     && (CanTrain(ai.Team,o.Producer.Id,o.Slot,out string reason) || reason == "Insufficient resources"))
                     .Select(o => o.Unit).Distinct().ToArray();
-                int? focused = AiCompositionRecruit(ai,producer,counts,focusOffered,r => Affordable(r,false),armyReady);
+                // Build-163: food that can never be renewed buys whatever soldier it can, outside the army plan too; an Evil bot
+                // focused on Warg Riders kept 35 food, a Goblin Spearman's price, for fourteen minutes and so never ran out.
+                int? focused = finiteFood ? null : AiCompositionRecruit(ai,producer,counts,focusOffered,r => Affordable(r,false),armyReady);
                 if (focused != null) slot = focused.Value;
                 else
                 {
@@ -829,12 +879,12 @@ public sealed partial class SimWorld
                     // While the army is short of a party the best affordable one is trained; once it has one, the producer
                     // saves for its best unit rather than spending the food on a weaker one.
                     var ranked = Enumerable.Range(0,producer.Units.Length)
-                        .Where(i => soldiers.Contains(producer.Units[i]) && (Rules.Units[producer.Units[i]].IsRanged != wantMelee || !offered.Contains(!wantMelee)))
+                        .Where(i => soldiers.Contains(producer.Units[i]) && (finiteFood || Rules.Units[producer.Units[i]].IsRanged != wantMelee || !offered.Contains(!wantMelee)))
                         .OrderBy(i => Rules.Units[producer.Units[i]].IsRanged == wantMelee ? 1 : 0)
                         .ThenByDescending(i => ai.Profile.CheapSoldiers ? 0 : AiUnits[producer.Units[i]].Assault)
                         .ThenBy(i => (ai.Profile.CheapSoldiers ? 1 : -1)*(ProductionRules[producer.Units[i]].FoodCost+ProductionRules[producer.Units[i]].OreCost)).ThenBy(i => i).ToArray();
                     // A Rusher (build-51) never saves for a better soldier.
-                    slot = (armyReady && !ai.Profile.CheapSoldiers ? ranked.Take(1) : ranked).Where(i => Affordable(ProductionRules[producer.Units[i]],false)).DefaultIfEmpty(-1).First();
+                    slot = (armyReady && !ai.Profile.CheapSoldiers && !finiteFood ? ranked.Take(1) : ranked).Where(i => Affordable(ProductionRules[producer.Units[i]],false)).DefaultIfEmpty(-1).First();
                 }
             }
             if (slot < 0 || !CanTrain(ai.Team,producer.Id,slot,out _)) continue;
@@ -902,7 +952,8 @@ public sealed partial class SimWorld
         }
         // A broken assault (below the skill's share of the party size) falls back home, freeing the army for the next one;
         // an all-in does not.
-        if (ai.Party.Count > 0 && !ai.AllIn && ai.Party.Count*100 < AiPartySize(ai)*ai.Profile.Skill.FallBackPercent)
+        // Build-163: its heroes count as AiHeroWorth soldiers, as when it formed.
+        if (ai.Party.Count > 0 && !ai.AllIn && (ai.Party.Count+AiHeroWorth(ai,[.. ai.Party.Select(id => Units[id])]))*100 < AiPartySize(ai)*ai.Profile.Skill.FallBackPercent)
         {
             AiOrder(ai,ai.Party,OrderKind.Move,Navigation.Cell(bx,bz),urgent: true);
             ai.Party.Clear(); ai.PartyTarget = -1; ai.Chase = -1;
@@ -920,9 +971,11 @@ public sealed partial class SimWorld
                 bool spent = ready.Length > 0 && Tick-ai.LastArmyTick >= AiStagnationTicks && !AiAffordsSoldier(ai);
                 // Under fog a bot that has found no enemy building still sets out, to search (build-150), unless the army it has
                 // seen is too strong for it.
-                if (ready.Length < AiPartySize(ai) && !spent || enemyBuildings.Length == 0 && !(FogOfWar && AiOpponentsLeft(ai))) return;
+                // Build-163: fit heroes fill party places by their fighting power (AiHeroWorth); they march as its escort.
+                int heroes = AiHeroWorth(ai,ready);
+                if (ready.Length+heroes < AiPartySize(ai) && !spent || enemyBuildings.Length == 0 && !(FogOfWar && AiOpponentsLeft(ai))) return;
                 if (!spent && AiHoldsAttack(ai,ready,bx,bz)) return;
-                ai.Party.AddRange(ready.Select(u => u.Id)); ai.PartyTarget = ai.SearchCell = -1; ai.AllIn = ready.Length < AiPartySize(ai);
+                ai.Party.AddRange(ready.Select(u => u.Id)); ai.PartyTarget = ai.SearchCell = -1; ai.AllIn = ready.Length+heroes < AiPartySize(ai);
             }
             // Reinforcements (build-40): a full party's worth idle at home while one is out joins it and marches on its
             // target, so a remnant held up for good (two units for 36 minutes on Wasteland) no longer keeps every later
@@ -942,7 +995,9 @@ public sealed partial class SimWorld
             // those the party can walk to: across a river without a crossing, another waits.
             bool fresh = ai.PartyTarget < 0 && ai.SearchCell < 0;
             var (rx,rz) = fresh ? (bx,bz) : (cx,cz);
-            target = enemyBuildings.OrderBy(s => (long)Math.Sqrt(DistanceSquared(SitePosition(s).X,SitePosition(s).Z,rx,rz))+AiRank(ai,AiClassOf(s))*AiTargetRankMm)
+            // Build-163: a last stand goes for a Mill still earning its owner food first.
+            target = enemyBuildings.OrderBy(s => ai.LastStand && AiWorkingFood(s) ? 0 : 1)
+                .ThenBy(s => (long)Math.Sqrt(DistanceSquared(SitePosition(s).X,SitePosition(s).Z,rx,rz))+AiRank(ai,AiClassOf(s))*AiTargetRankMm)
                 .ThenBy(s => s.Id).FirstOrDefault(s => AiReaches(widest,s));
             if (target == null)
             {
@@ -1146,10 +1201,10 @@ public sealed partial class SimWorld
 
     private string AiDigest() => ":ai-seed:"+MatchSeed+":ai:"+string.Join(';',AiPlayers.Values.Select(a =>
         $"{a.Team},{a.Personality.Id}+{string.Join('+',a.Traits)},{a.Profile.Style.Aggression}/{a.Profile.Style.Expansion}/{a.Profile.Style.Tech},{a.Thinks},{a.PartyTarget},{a.PartiesSent},{a.Project},{a.ProjectProgress},{a.ProjectMovedTick},{a.Chase},{a.ChaseSince},{a.Intruder},{a.IntruderSince},"
-        +$"{a.LastArmyTick},{a.AllIn},{a.CitadelSite.X},{a.CitadelSite.Z},{a.CrewDistance},{string.Join('/',a.IntruderSeen)},{string.Join('/',a.ChaseSeen)}:{string.Join(',',a.Unreachable)}:{string.Join(',',a.Party)}:{string.Join(',',a.RefusedCells.Order())}"
+        +$"{a.LastArmyTick},{a.AllIn},{string.Join('/',a.ClaimFailures)},{a.CitadelSite.X},{a.CitadelSite.Z},{a.CrewDistance},{string.Join('/',a.IntruderSeen)},{string.Join('/',a.ChaseSeen)}:{string.Join(',',a.Unreachable)}:{string.Join(',',a.Party)}:{string.Join(',',a.RefusedCells.Order())}"
         +":guards:"+string.Join('|',a.Guards.Select(g => $"{g.Key}@{g.Value.Cell}={string.Join(',',g.Value.Units)}/{string.Join('/',g.Value.Seen)}"))
         +$":home-defense:{a.HomeDefenseUntil}:{string.Join(',',a.HomeDefenders)}"
         +$":legs:{a.Leg},{a.LegMovedTick},{a.LegGap}:{string.Join(',',a.Legs)}:wounded:{string.Join('/',a.WoundedRolls)}:recovering:{string.Join(',',a.Recovering)}:raid:{a.RaidStart},{a.RaidCell},{a.RaidSite},{a.RaidsSent},{a.NextRaidTick}:{string.Join(',',a.Raid)}:stray:{string.Join('/',a.StraySince)}"
         +$":place:{a.PlaceSquadStart},{a.PlaceTarget},{a.PlaceCell},{a.PlaceSince},{a.PlaceSquadsSent},{a.NextPlaceTick}:{string.Join(',',a.PlaceSquad)}"
-        +$":hero-recovery:{string.Join(',',a.RecoveringHeroes)}:hero-retreats:{string.Join(';',a.HeroRetreats)}:composition:{a.Composition?.Id}"+(FogOfWar ? AiScoutingDigest(a) : "")));
+        +$":hero-recovery:{string.Join(',',a.RecoveringHeroes)}:hero-retreats:{string.Join(';',a.HeroRetreats)}:composition:{a.Composition?.Id}"+AiLateGameDigest(a)+(FogOfWar ? AiScoutingDigest(a) : "")));
 }

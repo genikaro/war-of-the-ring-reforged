@@ -3680,3 +3680,101 @@ matches play out as before. `AiChecks` has a fixture for this case: its check fa
 ```powershell
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --target-priority-checks
 ```
+
+## Build-163: the bots' late game
+
+Owner report: a six-bot match had three bots alive at 40:00 with strong heroes and no other army, attacking each other now
+and then and retreating without doing damage, forever; heroes often waited at home; places of power were easy to take away
+from bots; and bots mined ore far from home without a proper expansion. Two six-bot free-for-alls on build-161 (headless
+observer smoke, fog on, 16x) showed it. On MP06_Wheel of Fate (seed 1) five of six bots gathered exactly their one home well
+(4500 food) and from 18:00 sat on 10-115 food and 1100-2100 ore beside two heroes and 0-2 soldiers. On MP06_Valley_of_Death
+(seed 2) all six bots were alive at the 120-minute limit, frozen from about 30:00. The causes:
+
+- **Food reserved for nothing.** With no food left to earn, a bot that still had a soldier kept its last food reserved for
+  its next building or research (only a bot with no soldier at all stopped doing so), and a bot with a focused army plan
+  never bought the cheap soldier its food could still pay for (an Evil bot kept 35 food, a Goblin Spearman's price, for
+  fourteen minutes). Either way it never counted as stranded.
+- **Heroes healing in a loop.** A stranded bot's heroes attacked alone, ran home below their retreat threshold, healed and
+  went again.
+- **A locked Evil population.** An Evil side whose last Slavemaster fell had a capacity of 0 below its slaves' population,
+  and `CanTrain` refused every unit then, the Slavemaster (who takes no population and supplies twelve) and heroes too. The
+  bot (or a player) could never train again. Gollum stood on 1000 food with no army from 12:00 to the end.
+- **Unsafe food ignored.** Workers skipped resources within 30 m of a known enemy building while any safe resource of any
+  kind existed, so a safe ore pile kept them off the only food left, and that Mill kept the bot from counting as starving
+  (Legolas stood on 25 food for 90 minutes).
+- **Guards at spent expansions.** Expansion guards stayed at expansions with nothing left to gather (eight of Aragorn's
+  soldiers while its home army stood at 0-1).
+- **A trickle that never ended.** An Evil bot with ore and no food kept buying one Slavemaster (95 ore) at a time, which
+  walked into the enemy and died; any affordable unit kept a bot from surrendering.
+- **A Mill claimed forever.** A crew that gave up on laying a Mill (no progress for 30 s) was sent again at once: building
+  spots were refused after one failure, resource sites never. Frodo sent a crew to the same unreachable well every 32 s for
+  seventy minutes on Lorien, and that well kept it from counting as starving.
+
+The answers (`Simulation/AiLateGame.cs` and the places named):
+
+- **Last stand.** Once the food can never be renewed, no soldier is affordable, nothing but workers is in training and
+  nothing has been trained or sent for three minutes (the existing stranded rule), a bot with a soldier or hero left throws
+  in everything: every soldier, guard, scout, support unit and worker joins one all-in party that never falls back. Its
+  heroes go with it, take any odds and never go home to heal; the base is not defended and nothing is built; only soldiers
+  and heroes the bank still pays for are trained. It goes for an enemy Mill still earning food first, then its usual
+  targets. A bot with no soldier or hero left and none to buy surrenders, so losing the last stand loses the match, and so
+  does one whose last stand has killed or razed nothing for five minutes (a lone Frodo stood by an enemy Mill for seventy
+  minutes on Lorien). The journal writes `Last stand: ...` with what charges.
+- **Food that can never be renewed buys soldiers** whatever army is left: no reserve for buildings or research, any
+  affordable soldier outside the army plan too, and no further workers.
+- **Heroes count toward a party** (`AiHeroWorth`): each fit hero as many soldiers as its fighting power (square root of health
+  times DPS) is worth against the party's average soldier, at least one and at most half a party. The fog attack hold counts
+  their power too. Heroes of every Aggression now go with a place-of-power squad or a raid when no assault is out (build-150
+  kept heroes below Aggression 40 at home then), and with none of those out stand with the guards of a place of power, one
+  whose guards are fighting first.
+- **Place guards.** A squad that takes a place leaves three soldiers there (half the source place squad's MinSize of 5,
+  rounded up), and idle home soldiers top up the posts of held places, nearest home first, at most half a party in all.
+  Guards stand in the zone, so the place cannot change hands while they live, attack enemies within 8 m of it and walk back
+  once a chase leads them 18 m past it. The source's AIWARPARTY_PLACEOFPOWERDEFENSE (5 to 12 units) is not read: half a
+  party per place would leave nothing to attack with. Journal: `Guards the <place> with N soldiers`.
+- **Ore near home.** Workers mine only ore within 32 m of one of their depots (the home pile lies 10-26 m from the start on
+  every imported map; the next is 31-170 m away), unless none is near and the bank holds under 300 ore. Before, every worker
+  beyond five per source walked to raw piles at unclaimed expansion spots.
+- **Safe sources by kind** (`AiGatherSources`): a kind's unsafe sources are used once it has no safe one.
+- **Refused resource sites** (`AiResourceClaimFailed`): a site three crews gave up on is refused like a building spot.
+- **Spent expansions** (`AiExpansions`): only expansions with something left to gather within 30 m keep a guard.
+- **Population** (`CanTrain`): a unit taking no population trains whatever the limit. `AiTrain` also leaves a producer to its
+  support unit or a hero when its worker cannot be trained, so an Evil bot over the limit trains its Slavemaster.
+- **Surrender** (`AiSurrenders`): support units are no army and a bank that pays only for one keeps no bot in the match.
+- **Savage Influence** (`EvilUpgrades.cs`): an ally its price kills is recorded as its side's loss. It was the one death the
+  match records missed, which failed the observer smoke's Stats check once last stands put wounded slaves beside the casters.
+
+Validation: default simulation suite 2651 checks (on build-162); `--ai-late-game-checks` 22 (new: food spent beside a
+surviving soldier, the last stand and its grace period, a wounded hero staying in it, no support-unit trickle, surrender with
+only a support unit, a last stand that reaches nothing surrendering after five minutes, a hero's party worth, place guards
+posted, attacking and kept, an idle hero joining them, a squad leaving guards, ore near home and the far pile when none is,
+a well refused after three failed claims, a unit without population above the limit); `--ai-recovery-checks` 11 (three
+updated: the stranded hero now goes with its workers' last stand, and the starving party goes for the enemy's working Mill);
+`--evil-upgrade-checks` 38 (one new). Godot smokes on build-163: `-AiSmoke`, `-EvilSmoke`, `-ExpansionSmoke` and
+`-EconomyRecoverySmoke` pass, and `-ObserverSmoke` (Gimli against Aragorn on Bilbo's Bluffs) now passes all 23 checks: its
+match reaches a winner, so the three checks that failed since build-147 pass.
+
+Six-bot free-for-alls (headless observer smoke, fog on, 16x, the same seeds on both builds; the smoke now frames player 2's
+first base on maps other than Bilbo's Bluffs, where it crashed before). Its `observer_inspects_either_side_read_only` check
+fails on these maps on both builds (it clicks a unit under a camera framed for Bilbo's Bluffs).
+
+| Match | build-161 | build-163 |
+| --- | --- | --- |
+| MP06_Wheel of Fate, seed 1: Aragorn, Gimli, Legolas, Gandalf, Saruman, Gollum (Good/Evil alternating) | Aragorn wins 42:13; five bots frozen from 18:00 | Aragorn wins 25:40; last stands 18:34-20:18 |
+| MP06_Valley_of_Death, seed 2: Default, Shelob, Aragorn, Saruman, Gimli, Farmer Maggot (Evil/Good alternating) | no winner at 120:00, all six frozen from about 30:00 | Default wins 34:22; last stands 18:34-27:57, three lost by the five-minute rule |
+| MP06_Lorien, seed 3: Gandalf, Saleme, Frodo, Grishnakh, Legolas, Smaug | Frodo wins 37:44; Gandalf stood on two heroes with no workers or army from 20:00 to 36:40 | Frodo wins 29:11; last stands 18:49-27:23 |
+
+Heroes standing within 40 m of their start with no enemy within 30 m, in the two-minute snapshots up to 18:00 (the
+observer timeline's new `heroes at home` field): Wheel of Fate 60% on build-161, 42% on build-163; Lorien 53%, 31%.
+
+Bilbo's Bluffs, Easy Farmer Maggot against Hard Aragorn, seeds 0-6 in both seat orders (the build-155 sweep): build-161
+Aragorn 11, Maggot 1, no winner 2 (the build-155 table exactly); build-163 Aragorn 13, Maggot 1, no winner 0. Most matches
+end 1-4 minutes sooner, both former 40:00 draws end (14:48 and 15:30), and Maggot's one win moves from seed 6 to seed 5.
+
+One six-bot run (an earlier build-163 candidate) logged four Godot `instance_set_transform: !v.is_finite()` errors; no other
+run of either build did, the simulation is integer-only, and the source in the view was not found.
+
+```powershell
+# One six-bot match: copy the map cache two folders below a `content` junction to converted/content, then
+converted/tooling/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64_console.exe --path prototype --headless --fixed-fps 20 -- --view=squad --observer-smoke --observe --bots=Aragorn,Gimli,Legolas,Gandalf,Saruman,Gollum --factions=good,evil,good,evil,good,evil --fog --seed=1 --cache=<copy of converted/skirmish-maps/MP06_Wheel of Fate>
+```

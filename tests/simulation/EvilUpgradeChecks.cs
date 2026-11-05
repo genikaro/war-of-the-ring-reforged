@@ -92,6 +92,10 @@ static class EvilUpgradeChecks
         var whip=World();var master=Spawn(whip,"master",abilities:[Whip]);var ally=Spawn(whip,"ally",x:24);var foe=Spawn(whip,"foe",1,24,23);Learn(whip,"whip","master");Cast(whip,master,1);
         check(ally.HealthMilli==970000 && ally.MeleeDamageRate==15000 && master.HealthMilli==1000000 && foe.HealthMilli==1000000,"Savage Influence hurts and buffs allies only, excluding its caster");
         Step(whip,205);check(ally.MeleeDamageRate==12000,"Savage Influence's damage bonus expires");
+        // Build-163: an ally the whip kills is a recorded loss of its side, with nobody credited.
+        var price=World();var slaver=Spawn(price,"master",abilities:[Whip]);var weak=Spawn(price,"ally",x:24);weak.HealthMilli=20000;Learn(price,"whip","master");Cast(price,slaver,1);
+        check(weak.Health<=0 && price.Records.TryGetValue(0,out var lost) && lost.UnitLosses.Values.Sum()==1 && price.Records.Values.Sum(r=>r.UnitKills.Values.Sum())==0,
+            "an ally Savage Influence kills is recorded as its side's loss");
 
         var frenzy=World();var goblin=Spawn(frenzy,"goblin");var old=Spawn(frenzy,"unaffected",x:24);
         frenzy.Techniques.Add(new("frenzy","Frenzy","arsenal",0,0,0,1,null,null,new Dictionary<string,(int,int)>{{"goblin",(6000,0)}},TimeScalePpm:new Dictionary<string,int>{{"goblin",1300000}}));

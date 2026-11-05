@@ -8,7 +8,7 @@ public readonly record struct AiJournalEntry(int Tick,AiJournalKind Kind,string 
 /// <summary>A bot's macro decisions, for the observer's journal view (owner request, build-148): buildings and expansions
 /// it lays, tech, its army plan and each soldier type it adds, attacks with their size, mix and target, retargets and
 /// fall-backs, raids, place-of-power squads, expansion guards, base defence, heroes, Fate powers and surrender; under fog
-/// (build-150) also scouts, the enemy buildings found and attacks held back. Unit orders, gathering and training of units
+/// (build-150) also scouts, the enemy buildings found and attacks held back; since build-163 the last stand and place guards. Unit orders, gathering and training of units
 /// already in the army stay out. Kept outside the digest.</summary>
 public sealed class AiJournal
 {
@@ -38,6 +38,9 @@ public sealed class AiJournal
     /// <summary>Enemy buildings found and not written yet, by site id.</summary>
     internal readonly SortedSet<int> Finds = [];
     internal bool Searching;
+    /// <summary>Build-163: the last stand written, and the places of power guarded at the last think.</summary>
+    internal bool LastStand;
+    internal readonly HashSet<int> PlacesGuarded = [];
 
     internal void Add(int tick,AiJournalKind kind,string text)
     {
@@ -139,6 +142,19 @@ public sealed partial class SimWorld
             Write(AiJournalKind.Defend,$"Posts {post.Units.Count} guards at the expansion, {AiJournalWhere(bx,bz,x,z)}");
         }
         journal.Guarded.Clear(); journal.Guarded.UnionWith(ai.Guards.Where(g => g.Value.Units.Count > 0).Select(g => g.Key));
+        // Build-163: guards left at a place of power.
+        foreach (var (placeId,post) in ai.PlaceGuards.Where(g => g.Value.Units.Count > 0 && !journal.PlacesGuarded.Contains(g.Key)))
+            if (PlacesOfPower.FirstOrDefault(p => p.Id == placeId) is { } guarded)
+                Write(AiJournalKind.Place,$"Guards the {guarded.Name} with {post.Units.Count} {(post.Units.Count == 1 ? "soldier" : "soldiers")}, {AiJournalWhere(bx,bz,guarded.X,guarded.Z)}");
+        journal.PlacesGuarded.Clear(); journal.PlacesGuarded.UnionWith(ai.PlaceGuards.Where(g => g.Value.Units.Count > 0).Select(g => g.Key));
+        if (ai.LastStand && !journal.LastStand)
+        {
+            journal.LastStand = true;
+            int fighters = ai.Party.Count(id => IsAiSoldier(Units[id])),workers = ai.Party.Count(id => IsAiWorker(Units[id]));
+            int support = ai.Party.Count-fighters-workers,champions = ActiveUnits.Count(u => u.Team == ai.Team && u.Present && u.Definition.Hero);
+            Write(AiJournalKind.Attack,$"Last stand: no food left to earn and nothing to train · {fighters} soldiers, {champions} heroes"
+                +(support > 0 ? $", {support} support units" : "")+$" and {workers} workers charge, all in");
+        }
 
         // Attacks: sent, reinforced, turned on another building, and over.
         if (ai.PartiesSent > journal.Parties)
@@ -191,7 +207,12 @@ public sealed partial class SimWorld
         else if (ai.PlaceSquad.Count > 0 && journal.PlaceSquad.Count > 0 && place != null && ai.PlaceTarget != journal.PlaceTarget)
             Write(AiJournalKind.Place,$"Squad #{ai.PlaceSquadsSent} took the {journal.PlaceTargetName}, moves on → the {place.Name}, {AiJournalWhere(bx,bz,place.X,place.Z)}");
         if (journal.PlaceSquad.Count > 0 && ai.PlaceSquad.Count == 0)
-            Write(AiJournalKind.Place,$"Squad #{journal.PlaceSquads} heads home: {journal.PlaceSquad.Count(id => Units[id].Health > 0)} units left");
+        {
+            int[] alive = [.. journal.PlaceSquad.Where(id => Units[id].Health > 0)];
+            int guarding = alive.Count(id => AiPlaceGuard(ai,id));
+            Write(AiJournalKind.Place,alive.Length > 0 && guarding == alive.Length ? $"Squad #{journal.PlaceSquads} stays to guard the {journal.PlaceTargetName}"
+                : $"Squad #{journal.PlaceSquads} heads home: {alive.Length-guarding} units left"+(guarding > 0 ? $", {guarding} stay on guard" : ""));
+        }
         journal.PlaceSquads = ai.PlaceSquadsSent; journal.PlaceSquad.Clear(); journal.PlaceSquad.AddRange(ai.PlaceSquad);
         journal.PlaceTarget = ai.PlaceTarget; journal.PlaceTargetName = place?.Name ?? "";
 
@@ -213,7 +234,8 @@ public sealed partial class SimWorld
         if (ai.Status == "surrendered" && !journal.Surrendered)
         {
             journal.Surrendered = true;
-            Write(AiJournalKind.Surrender,"Surrenders: no army, no income and nothing affordable left");
+            Write(AiJournalKind.Surrender,ai.LastStand && Tick-ai.LastStandProgressTick >= AiLastStandPatienceTicks
+                ? "Surrenders: its last stand killed or razed nothing for five minutes" : "Surrenders: no army, no income and nothing affordable left");
         }
     }
 
