@@ -1,5 +1,11 @@
 # Godot C# skirmish sandbox
 
+**build-162:** Big melees cost less, with the same results: the attack-position search around wide units (riders,
+Uruk-Hai and the like) works out each nearby body once per search instead of once per ring point, runs its cheapest
+tests first and asks the attack-move lane once per cell. In a 300-unit fight a tick takes 16 ms instead of 20, and
+the stress benchmark shows 39 FPS instead of 35 with the fight on screen. Digests and pictures are unchanged. See
+[PERFORMANCE.md](PERFORMANCE.md#build-162-cheaper-combat-position-searches).
+
 **build-161:** The setup screen's Side box offers **Random** beside Good and Evil: the slot plays a side drawn from the
 match seed when the match loads, so Restart keeps it and a new Start draws again (`--factions=random,good` works from
 the command line too). No place of power stands twice on a map any more: random markers and the stand-ins for the

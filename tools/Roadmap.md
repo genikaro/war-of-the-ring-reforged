@@ -1018,9 +1018,12 @@ window 4.2 ms per tick, 16x at 17-26 fps.
   layer per body graph); spreading one bot's think over several ticks; throttling idle
   guard acquisition and blocked-producer retries; caching building-placement refusals;
   the simulation on a worker thread with snapshot interpolation; MultiMesh with
-  vertex-animation textures for distant units. Exact work still open: wide-body combat
-  position searches (about 1 ms each, six a tick in a 300-unit melee) and their flank
-  candidate scans.
+  vertex-animation textures for distant units.
+- [x] Wide-body combat position searches (build-162): blocker data once per candidate
+  search, cheapest point tests first, the lane filter once per node in `FindPathToAny`;
+  `CombatPosition` cost a third less and a 300-unit melee tick 19.6 → 16.2 ms, digests
+  unchanged. Exact work left: movement steering and route smoothing, and the occupancy set
+  each position search builds.
 - [ ] Measure the GPU side on a real display at 16x with large armies (the profile
   above is headless), including skinned-mesh and shadow cost.
 - [ ] Allocation pressure: many per-tick LINQ queries and fresh `HashSet`s in the

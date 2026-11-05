@@ -267,6 +267,44 @@ fail, and each fails the same way on an untouched build-156 checkout:
 
 ResearchSmoke hangs on both. On build-160 it first logged "Invalid unit definition".
 
+### Build-162: cheaper combat position searches
+
+In a big melee each tick spent most of its simulation time on wide-body combat position
+searches (`CombatPosition`), above all on the flank step. That step builds attack
+candidates around up to eight other enemies, testing a ring of standable points around
+each one against every nearby body and held attack position. All changes are exact:
+
+- Each candidate search works out every blocker's position, height, spacing and held
+  attack position once (`CombatBlocker`), instead of again for every ring point. It
+  gathers them straight from the grid, without copied and de-duplicated lists (same
+  units, same order).
+- A ring point's tests run cheapest first: standing, blockers, then the attack-move lane,
+  then the terrain sweep. All must pass and each is pure, so the answer is the same.
+- `FindPathToAny` asks the caller's lane filter once per node and search, not once per
+  neighbour that reaches it. It reuses its queue and goal sets; priorities are
+  (cost, node) and a node is queued again only at a lower cost, so the search order
+  cannot change.
+- The footprint test reuses its seen set, and body rasterization skips the surface-layer
+  lookup on cells that have no layers.
+- New profiler sections: `CombatPosition blocked`, `CombatPosition flank`,
+  `flank opponents`, `flank candidates`, `candidates blockers`, `candidates geometry`
+  and `candidates points`.
+
+All 2,698 simulation checks and the appearance checks pass. The nine army-benchmark
+digests, the three late-match digests, the seven 100-per-side soak scenarios (with
+`--verify-fast-paths`) and the 8-bot Rift digest at 14:00 are unchanged. Army scenarios
+ran 5-26% faster: 36-per-side melee 1,755 → 1,311 ms, 100-per-side melee 1,909 →
+1,514 ms, choke 1,695 → 1,324 ms. These are single runs, and the PC varied by up to 30%
+between runs during the day.
+
+In the 300-unit stress fight, a tick fell from about 19.6 to 16.2 ms (5.4 ms per frame),
+and `CombatPosition` from 2.9 to 1.9 ms per frame (1.45 to 1.0 ms per search). Phase A went from 34.9 to 38.8-39.0 FPS,
+phase B from 86.8 to 100-105 FPS and phase C from 29.2 to 32.9 FPS. Captures are
+pixel-identical to build-157. In the Rift match the search is only about 1 ms of a 13 ms
+tick, so ticks there barely moved (12:00: 13.7 → 13.1 ms; 14:00: 11.8 → 11.1 ms). A
+profiled run's phase C froze at 2,111 draw calls for every frame because the window
+stopped being drawn (covered or minimized), so its timings were discarded.
+
 ## Repeating the checks
 
 ```powershell
@@ -307,8 +345,10 @@ remain candidates for further work.
 After builds 157-160, with 300 units all on screen the frame is still bound by Godot's
 skeletal animation and render CPU (about 7,100 draw calls in gl_compatibility, with
 shadows) and by the simulation tick (about 13-19 ms in a 300-unit melee, in one frame
-out of three). The exact work left is the wide-body combat position search (about 1 ms
-each, six a tick in that melee) and its flank candidate scans. Everything else that would
+out of three; 16 ms after build-162). The exact work left is smaller: movement
+(steering, ground steps, route smoothing), the occupancy set each position search
+builds, and the position search itself (about 1.0 ms each in the 300-unit stress fight, from
+1.45 ms). Everything else that would
 reach 60 FPS with 300 units in view changes play or pictures, so it waits for the
 owner's choice: shared group routes (flow fields or a sector/portal layer); spreading
 bot thinks over ticks; throttling idle-guard acquisition and blocked-producer retries;

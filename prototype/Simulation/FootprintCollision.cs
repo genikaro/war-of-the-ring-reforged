@@ -9,6 +9,7 @@ public sealed partial class GridNavigation
     private readonly Dictionary<(int,int),int> _legacyBlockedEdges = [];
     private readonly List<(int Obstacle,NavigationFootprint Footprint)> _geometry = [];
     private readonly Dictionary<int,List<int>> _geometryCells = [];
+    private readonly HashSet<int> _footprintsSeen = [];
     public bool UsesPreciseFootprints => _geometry.Count > 0;
 
     private void IndexFootprints(NavigationObstacle obstacle)
@@ -37,7 +38,8 @@ public sealed partial class GridNavigation
 
     private bool FootprintsBlock(int ax,int ay,int az,int bx,int by,int bz,int? obstacle = null,IReadOnlyList<int>? swept = null)
     {
-        var seen = new HashSet<int>();
+        // Build-162: one reused set (this never calls itself); a ground sweep runs this for every probe.
+        var seen = _footprintsSeen; seen.Clear();
         foreach (int cell in swept ?? SweptColumns(ax,az,bx,bz))
         {
             if (!_geometryCells.TryGetValue(cell,out var candidates)) continue;

@@ -79,53 +79,71 @@ public sealed partial class SimWorld
 
     // The units that can make a position within outer of the target unavailable:
     // a body or a claimed attack node closer than its spacing to such a position.
-    private List<SimUnit> CombatBlockers(SimUnit unit,SimUnit target,int outer)
+    private List<CombatBlocker> CombatBlockers(SimUnit unit,SimUnit target,int outer)
     {
         bool Near(int x,int z,int spacing) => DistanceSquared(target.X,target.Z,x,z) < (long)(outer+spacing)*(outer+spacing);
-        var blockers = new List<SimUnit>();
+        // Build-162: bodies near the target, then held attack positions near it, each unit once in that order (as
+        // the copied, de-duplicated list gave them), straight into the reused blocker list.
+        _combatBlockers.Clear(); _blockerSeen.Clear();
         int bound=outer+unit.Definition.BodyRadiusMm+Grid.MaxBodyRadiusMm+400;
-        var nearby=NearUnits(target.X,target.Z,bound).ToList();
-        nearby.AddRange(Grid.NearAttackPositions(target.X,target.Z,bound,[]));
-        foreach (var other in nearby.DistinctBy(u=>u.Id))
+        void Consider(SimUnit other)
         {
-            if (other.Id == unit.Id || !other.Present) continue;
+            if (!_blockerSeen.Add(other.Id) || other.Id == unit.Id || !other.Present) return;
             int spacing = PositionSpacing(unit,other);
-            if (Near(other.X,other.Z,spacing)) blockers.Add(other);
-            else if (other.Team == unit.Team && HasAttackReservation(other))
-            {
-                var (ox,oz) = Navigation.Center(other.AttackNode);
-                if (Near(ox,oz,spacing)) blockers.Add(other);
-            }
+            bool reserves = other.Team == unit.Team && HasAttackReservation(other);
+            var (ox,oz) = reserves ? Navigation.Center(other.AttackNode) : (0,0);
+            if (!Near(other.X,other.Z,spacing) && !(reserves && Near(ox,oz,spacing))) return;
+            _combatBlockers.Add(new(other.X,other.Y,other.Z,other.Definition.BodyHeightMm,(long)spacing*spacing,reserves,
+                ox,reserves ? Navigation.NodeHeight(other.AttackNode) : 0,oz));
         }
-        return blockers;
+        foreach (var other in Grid.Nearby(target.X,target.Z,bound)) Consider(other);
+        foreach (var other in Grid.NearAttackPositions(target.X,target.Z,bound,_blockerAttackScan)) Consider(other);
+        return _combatBlockers;
     }
 
-    private bool CombatPositionFree(SimUnit unit, SimUnit target,int node,List<SimUnit> blockers,bool flank=false)
+    private readonly HashSet<int> _blockerSeen = [];
+    private readonly List<SimUnit> _blockerAttackScan = [];
+
+    /// <summary>Build-162: what a position test needs from each blocker, worked out once per candidate search rather
+    /// than once per ring point: its body (position, height, spacing to this unit) and, for an ally holding an attack
+    /// position, that position.</summary>
+    private readonly record struct CombatBlocker(int X,int Y,int Z,int Height,long Spacing,bool Reserves,int AttackX,int AttackY,int AttackZ);
+    private readonly List<CombatBlocker> _combatBlockers = [];
+
+    /// <summary>Whether the unit may take this ring point: in its attack-move lane, clear of every blocker's body and
+    /// held attack position, and standable. The tests are the same as before build-162 and all must pass; they now run
+    /// cheapest first (each is pure, so the order cannot change the answer).</summary>
+    private bool CombatPositionFree(SimUnit unit,GridNavigation nav,int node,List<CombatBlocker> blockers,int laneMargin,int laneTarget)
     {
+        if (!nav.CanStand(node)) return false;
         var (x,z) = Navigation.Center(node); int y = Navigation.NodeHeight(node);
-        if (unit.Order==OrderKind.AttackMove && unit.Definition.BodyRadiusMm>350 && unit.AttackMoveOrigin>=0
-            && !InAttackMoveArea(unit,x,z,AttackRange(unit,target)+(flank ? FlankDetourMm : 0),target.Id)) return false;
+        int height = unit.Definition.BodyHeightMm;
         foreach (var other in blockers)
         {
-            int spacing = PositionSpacing(unit,other);
-            if (VerticalOverlap(y,unit.Definition.BodyHeightMm,other.Y,other.Definition.BodyHeightMm)
-                && DistanceSquared(x,z,other.X,other.Z) < (long)spacing*spacing) return false;
-            if (other.Team != unit.Team || !HasAttackReservation(other)) continue;
-            var (ox,oz) = Navigation.Center(other.AttackNode); int oy = Navigation.NodeHeight(other.AttackNode);
-            if (VerticalOverlap(y,unit.Definition.BodyHeightMm,oy,other.Definition.BodyHeightMm)
-                && DistanceSquared(x,z,ox,oz) < (long)spacing*spacing) return false;
+            if (VerticalOverlap(y,height,other.Y,other.Height) && DistanceSquared(x,z,other.X,other.Z) < other.Spacing) return false;
+            if (other.Reserves && VerticalOverlap(y,height,other.AttackY,other.Height)
+                && DistanceSquared(x,z,other.AttackX,other.AttackZ) < other.Spacing) return false;
         }
-        return Nav(unit).CanStand(node) && (node >= Navigation.GroundCount || Nav(unit).CanTraverseGroundPoints(x,z,x,z));
+        if (laneTarget >= 0 && !InAttackMoveArea(unit,x,z,laneMargin,laneTarget)) return false;
+        return node >= Navigation.GroundCount || nav.CanTraverseGroundPoints(x,z,x,z);
     }
 
     private List<(int Node,bool Waiting,long Cost)> CombatCandidates(SimUnit unit,SimUnit target,bool flank=false)
     {
         var candidates = new List<(int Node,bool Waiting,long Cost)>();
         int outer = Math.Max(4500,AttackRange(unit,target)+2000);
-        var blockers = CombatBlockers(unit,target,outer);
+        List<CombatBlocker> blockers;
+        using (SimProfiler.Time("candidates blockers")) blockers = CombatBlockers(unit,target,outer);
         int from = PlanningNode(unit);
-        foreach (var (node,x,y,z) in CombatGeometry(unit,target))
-            if (Nav(unit).IsConnected(from,node) && CombatPositionFree(unit,target,node,blockers,flank))
+        List<(int Node,int X,int Y,int Z)> ring;
+        using (SimProfiler.Time("candidates geometry")) ring = CombatGeometry(unit,target);
+        var nav = Nav(unit);
+        // A wide body on attack-move keeps to its march lane (InAttackMoveArea), with room for a flank detour.
+        bool lane = unit.Order==OrderKind.AttackMove && unit.Definition.BodyRadiusMm>350 && unit.AttackMoveOrigin>=0;
+        int laneMargin = lane ? AttackRange(unit,target)+(flank ? FlankDetourMm : 0) : 0,laneTarget = lane ? target.Id : -1;
+        using var points = SimProfiler.Time("candidates points");
+        foreach (var (node,x,y,z) in ring)
+            if (nav.IsConnected(from,node) && CombatPositionFree(unit,nav,node,blockers,laneMargin,laneTarget))
                 candidates.Add((node,!AttackReach(unit,node,x,y,z,target),DistanceSquared(x,z,unit.X,unit.Z)+(long)(y-unit.Y)*(y-unit.Y)));
         return candidates;
     }
@@ -171,7 +189,9 @@ public sealed partial class SimWorld
         int start = unit.TransitNode >= 0 && !unit.GroundSegment ? unit.TransitNode : PlanningNode(unit);
         // Missile units may pass between allies to reach their firing area;
         // the firing endpoint still reserves the full combat comfort distance.
-        var blocked = OccupiedNodes(unit.Id,combatSpacing:!UsesMissile(unit,target)); blocked.Remove(unit.Node); blocked.Remove(start);
+        HashSet<int> blocked;
+        using (SimProfiler.Time("CombatPosition blocked")) blocked = OccupiedNodes(unit.Id,combatSpacing:!UsesMissile(unit,target));
+        blocked.Remove(unit.Node); blocked.Remove(start);
         if (unit.Definition.BodyRadiusMm > 350)
         {
             using var wide = SimProfiler.Time("CombatPosition wide");
@@ -185,8 +205,14 @@ public sealed partial class SimWorld
             // all those endpoints in one bounded pass, rather than trying a full path search for each enemy.
             var owners=candidates.Where(c=>!c.Waiting).ToDictionary(c=>c.Node,_=>target.Id);
             if(flank)
-                foreach(var other in FlankOpponents(unit,target).Take(8))
-                    foreach(var point in CombatCandidates(unit,other,flank:true).Where(c=>!c.Waiting)) owners.TryAdd(point.Node,other.Id);
+                using (SimProfiler.Time("CombatPosition flank"))
+                {
+                    SimUnit[] flankers;
+                    using (SimProfiler.Time("flank opponents")) flankers = FlankOpponents(unit,target).Take(8).ToArray();
+                    using (SimProfiler.Time("flank candidates"))
+                    foreach(var other in flankers)
+                        foreach(var point in CombatCandidates(unit,other,flank:true).Where(c=>!c.Waiting)) owners.TryAdd(point.Node,other.Id);
+                }
             // Positions in reach first, else wait near the original target. No target changes without a route.
             var (path,waiting)=Nav(unit).FindPathToAny(start,owners.Keys,
                 candidates.Where(c => c.Waiting).Select(c => c.Node),blocked,flank ? 2*PositionSearchBudget : PositionSearchBudget,Allowed);

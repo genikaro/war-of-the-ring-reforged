@@ -32,6 +32,9 @@ public sealed partial class GridNavigation
     private readonly SurfaceCell[] _surfaces;
     private readonly Dictionary<int, List<int>> _groundLinks = [];
     private readonly Dictionary<int, List<int>> _surfaceColumns = [];
+    /// <summary>Build-162: ground cells with surface layers above them (fixed once the graph is built), so a body's
+    /// rasterization skips the dictionary lookup on the cells that have none.</summary>
+    private bool[] _hasSurfaceColumn = [];
     private readonly Dictionary<int, NavigationObstacle> _obstacles = [];
     private readonly HashSet<int> _activeObstacles = [];
     private readonly Dictionary<int, int> _blockedNodes = [];
@@ -101,6 +104,8 @@ public sealed partial class GridNavigation
         foreach (int link in _surfaces[i].Links.Where(n => n >= GroundCount))
             if (!_surfaces[link-GroundCount].Links.Contains(GroundCount+i))
                 throw new ArgumentException("Surface edges must be bidirectional");
+        _hasSurfaceColumn = new bool[GroundCount];
+        foreach (int cell in _surfaceColumns.Keys) _hasSurfaceColumn[cell] = true;
         foreach (var obstacle in obstacles ?? [])
         {
             RegisterObstacle(obstacle);
@@ -209,7 +214,7 @@ public sealed partial class GridNavigation
         for (int col = Math.Max(0,(x-separation)/CellSize); col <= Math.Min(Width-1,(x+separation)/CellSize); col++)
         {
             int cell = row*Width+col; Consider(cell);
-            if (_surfaceColumns.TryGetValue(cell,out var layers)) foreach (int n in layers) Consider(n);
+            if (_hasSurfaceColumn[cell] && _surfaceColumns.TryGetValue(cell,out var layers)) foreach (int n in layers) Consider(n);
         }
     }
 
@@ -591,6 +596,12 @@ public sealed partial class GridNavigation
         return x0 > x1 ? null : (x0,z0,x1,z1);
     }
 
+    private readonly HashSet<int> _anyGoals = [],_anyOthers = [];
+    private readonly List<int> _anyNeighbors = new(8);
+    private readonly PriorityQueue<int,(int Cost,int Id)> _anyOpen = new();
+    private int[] _allowedStamp = [];
+    private bool[] _allowedValue = [];
+
     private void BeginSearch()
     {
         if (_searchSeen.Length != NodeCount)
@@ -882,8 +893,9 @@ public sealed partial class GridNavigation
     {
         using var time = SimProfiler.Time("FindPathToAny");
         bool Usable(int n) => CanStand(n) && blocked?.Contains(n) != true && IsConnected(start,n);
-        var goals=preferred.Where(Usable).ToHashSet();
-        var others=fallback.Where(Usable).ToHashSet();
+        // Build-162: the goal sets and the queue are reused between searches (same contents, same order of work).
+        var goals=_anyGoals; goals.Clear(); foreach (int n in preferred) if (Usable(n)) goals.Add(n);
+        var others=_anyOthers; others.Clear(); foreach (int n in fallback) if (Usable(n)) others.Add(n);
         if (goals.Count == 0 && others.Count == 0) return ([],false);
         // Keep the original goal-independent ordering whenever a fallback is requested.
         directed &= goals.Count>0 && others.Count==0;
@@ -903,8 +915,16 @@ public sealed partial class GridNavigation
         int reserve = -1;
         long began = SimProfiler.Start();
         BeginSearch();
-        int stamp=_searchStamp,closedCount=0; var neighbors=new List<int>(8);
-        var open=new PriorityQueue<int,(int Cost,int Id)>(); open.Enqueue(start,(Heuristic(start),start));
+        int stamp=_searchStamp,closedCount=0; var neighbors=_anyNeighbors;
+        var open=_anyOpen; open.Clear(); open.Enqueue(start,(Heuristic(start),start));
+        if (_allowedStamp.Length != NodeCount) { _allowedStamp = new int[NodeCount]; _allowedValue = new bool[NodeCount]; }
+        // The caller's filter (an attack-move lane) is asked once per node and search, however many neighbours reach it.
+        bool Allowed(int n)
+        {
+            if (allowed == null) return true;
+            if (_allowedStamp[n] != stamp) { _allowedValue[n] = allowed(n); _allowedStamp[n] = stamp; }
+            return _allowedValue[n];
+        }
         _searchSeen[start]=stamp; _searchCost[start]=0; _searchPrevious[start]=-1;
         while (open.TryDequeue(out int node,out _) && closedCount < maxVisited)
         {
@@ -920,7 +940,7 @@ public sealed partial class GridNavigation
             OpenNeighbors(node,neighbors);
             foreach (int next in neighbors)
             {
-                if (!StandCached(next) || blocked?.Contains(next) == true || _searchClosed[next] == stamp || allowed?.Invoke(next) == false) continue;
+                if (!StandCached(next) || blocked?.Contains(next) == true || _searchClosed[next] == stamp || !Allowed(next)) continue;
                 int score=_searchCost[node]+EdgeCost(node,next);
                 if (_searchSeen[next] == stamp && _searchCost[next] <= score) continue;
                 _searchSeen[next]=stamp; _searchCost[next]=score; _searchPrevious[next]=node; open.Enqueue(next,(score+Heuristic(next),next));
