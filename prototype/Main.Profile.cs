@@ -18,6 +18,14 @@ public partial class Main
     private string? _profileLogPath;
     /// <summary>--profile-until=M: quit after the profile line at game minute M (unattended measurements).</summary>
     private int _profileUntilTick;
+    /// <summary>The state digest taken right after the stop tick's step, whatever the speed burst did after it.</summary>
+    private string? _profileDigest;
+
+    /// <summary>Called after every simulation step: takes the digest at exactly the stop tick.</summary>
+    private void RecordProfileDigest()
+    {
+        if (_profileUntilTick > 0 && _profileDigest == null && _world!.Tick == _profileUntilTick) _profileDigest = _world.StateDigest();
+    }
 
     private void ReportProfile()
     {
@@ -57,6 +65,14 @@ public partial class Main
             System.IO.File.AppendAllText(_profileLogPath,line+"\n");
         }
         catch (Exception error) when (error is System.IO.IOException or UnauthorizedAccessException) { GD.PushWarning("Profile log not written: "+error.Message); }
-        if (_profileUntilTick > 0 && _world.Tick >= _profileUntilTick) GetTree().Quit(0);
+        if (_profileUntilTick > 0 && _world.Tick >= _profileUntilTick)
+        {
+            // Build-160: the state at the stop tick, so two builds can be shown to play a whole match the same way.
+            string digest = $"PROFILE_DIGEST tick {_profileUntilTick} {_profileDigest}";
+            GD.Print(digest);
+            try { if (_profileLogPath != null) System.IO.File.AppendAllText(_profileLogPath,digest+"\n"); }
+            catch (Exception error) when (error is System.IO.IOException or UnauthorizedAccessException) { }
+            GetTree().Quit(0);
+        }
     }
 }

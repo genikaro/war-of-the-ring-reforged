@@ -1,5 +1,12 @@
 # Godot C# skirmish sandbox
 
+**build-160:** Faster big battles, with the same matches: formation slot searches looked at every occupied cell for
+each cell they tested, so idle guards and guard orders cost 19 ms a tick at 10:00 in an 8-bot MP08_Rift match. That
+falls to 0.4 ms, and the whole tick from 33 to 13 ms. Graph-link movement checks, idle-guard ally checks and the
+tick's commands now look only at nearby units or this tick's entries. Every new check is compared with the old full
+scan in the simulation checks, and the Rift match has the same state digest at 14:00. See
+[PERFORMANCE.md](PERFORMANCE.md#builds-157-160-rendered-frames-unseen-units-and-local-scans-november-5).
+
 **build-159:** The console's unit text, the minimap and several per-tick HUD scans are redone only when something
 they show can have changed, and they no longer walk the whole casualty history. Fogged minimap terrain is rebuilt
 whole pixels at a time. At 300 units in view the stress benchmark goes from 31 to 34-38 FPS (runs vary) and

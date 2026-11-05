@@ -843,6 +843,7 @@ public partial class Main : Node3D
         {
             long stepStart=_engagementSmoke?System.Diagnostics.Stopwatch.GetTimestamp():0;
             _world.Step();
+            RecordProfileDigest();
             if (_sandboxMap) RefillSandboxMapBanks();
             while (_views.Count < _world.Units.Count) AddUnitView(_world.Units[_views.Count]);
             if (_engagementSmoke) RecordEngagementStep(System.Diagnostics.Stopwatch.GetElapsedTime(stepStart).TotalMilliseconds);

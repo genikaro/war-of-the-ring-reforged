@@ -682,15 +682,20 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         using var time = SimProfiler.Time("CanReserveMovement");
         var (ax,az) = Navigation.Center(unit.Node); var (bx,bz) = Navigation.Center(to);
         var heights = Navigation.MovementHeights(unit.Node,to);
-        foreach (var other in ActiveUnits.Where(u => u.Id != unit.Id && u.Present))
+        bool Conflicts(SimUnit other)
         {
+            if (other.Id == unit.Id || !other.Present) return false;
             var (cx,cz) = other.TransitNode >= 0 && !other.GroundSegment ? Navigation.Center(other.Node) : (other.X,other.Z);
             var (dx,dz) = other.TransitNode >= 0 && !other.GroundSegment ? Navigation.Center(other.TransitNode) : (other.X,other.Z);
             var otherHeights = other.TransitNode >= 0 && !other.GroundSegment ? Navigation.MovementHeights(other.Node,other.TransitNode) : (other.Y,other.Y);
-            if (heights.Low >= otherHeights.Item2+other.Definition.BodyHeightMm || otherHeights.Item1 >= heights.High+unit.Definition.BodyHeightMm) continue;
-            if (IntegerMotion.SegmentsNear(ax,az,bx,bz,cx,cz,dx,dz,BodySeparation(unit,other))) return false;
+            if (heights.Low >= otherHeights.Item2+other.Definition.BodyHeightMm || otherHeights.Item1 >= heights.High+unit.Definition.BodyHeightMm) return false;
+            return IntegerMotion.SegmentsNear(ax,az,bx,bz,cx,cz,dx,dz,BodySeparation(unit,other));
         }
-        return true;
+        // Build-160: a point body near the move, or any unit on a graph link (the grid adds them all), can conflict.
+        bool free = true;
+        foreach (var other in Grid.AlongMovement(ax,az,bx,bz,SeparationBound(unit),_localScan)) if (Conflicts(other)) { free = false; break; }
+        if (VerifyFastPaths) Verified(free,!ActiveUnits.Any(Conflicts),$"movement reservation for unit {unit.Id}");
+        return free;
     }
 
     private void SmoothWaypoint(SimUnit unit)
@@ -727,8 +732,8 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         PlaceCaptures.Clear();
         PlacePowerEvents.Clear();
         ExpireHeroEffects();
-        var actions = Commands.Where(c => c.Tick == Tick).Select(c => (c.Sequence, Action: (Action)(() => Dispatch(c))))
-            .Concat(ObstacleCommands.Where(c => c.Tick == Tick)
+        var actions = CommandsAt(Commands,c => c.Tick,ref _commandIndex).Select(c => (c.Sequence, Action: (Action)(() => Dispatch(c))))
+            .Concat(CommandsAt(ObstacleCommands,c => c.Tick,ref _obstacleCommandIndex)
                 .Select(c => (c.Sequence, Action: (Action)(() => ApplyObstacle(c)))));
         foreach (var action in actions.OrderBy(a => a.Sequence))
         {
@@ -900,7 +905,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 int transit = unit.TransitNode >= 0 ? unit.TransitNode : nextNode;
                 if (!returning && unit.TransitNode >= 0 && nextNode != transit)
                     throw new InvalidOperationException("A changed route must first return to its reserved source");
-                if (unit.TransitNode < 0 && (OccupiedNodes(unit.Id).Contains(transit) || !CanReserveMovement(unit,transit))) break;
+                if (unit.TransitNode < 0 && (NodeOccupied(unit,transit) || !CanReserveMovement(unit,transit))) break;
                 var (ax,az) = Navigation.Center(unit.Node); var (bx,bz) = Navigation.Center(transit);
                 int ay = Navigation.NodeHeight(unit.Node), by = Navigation.NodeHeight(transit);
                 long length = IntegerMotion.Length(bx-ax,by-ay,bz-az);
@@ -917,8 +922,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 if (unit.Node < Navigation.GroundCount && transit < Navigation.GroundCount)
                     ny = Navigation.GroundHeight(nx, nz);
                 if (!ClearCombatStep(unit,nx,ny,nz)) break;
-                using (SimProfiler.Time("body overlap")) if (ActiveUnits.Any(other => other.Id != unit.Id && other.Present
-                    && BodyOverlapAt(unit,nx,ny,nz,other))) break;
+                using (SimProfiler.Time("body overlap")) if (BodyBlockedAt(unit,nx,ny,nz)) break;
                 unit.TransitNode = transit; unit.TravelProgress = progress;
                 unit.X = nx; unit.Z = nz; unit.Y = ny; unit.Moving = true; budget -= movement;
                 unit.Movement.Add(new(MovementElapsed(unit,budget),nx,ny,nz,unit.Node < Navigation.GroundCount && transit < Navigation.GroundCount));

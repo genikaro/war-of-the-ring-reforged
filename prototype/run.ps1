@@ -57,6 +57,7 @@ param(
     [ValidateRange(0,600)]
     [int]$ProfileUntil,
     [switch]$PerformanceSmoke,
+    [switch]$Headless,
     [switch]$StressBenchmark,
     [ValidateRange(2,4000)]
     [int]$Units = 300,
@@ -126,6 +127,8 @@ if ($AudioSmoke) {
     $arguments += @('--fixed-fps','20')
 }
 if ($StressBenchmark) { $arguments += @('--fixed-fps','60') }
+# Build-160: a match without a window (e.g. -Observe -Speed 16 -Profile -ProfileUntil 14 -Headless), for simulation timing.
+if ($Headless -and -not ($arguments -contains '--headless')) { $arguments += '--headless' }
 $arguments += '--'
 if ($AudioSmoke) { $arguments += '--audio-smoke' }
 $arguments += "--view=$View"

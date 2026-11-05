@@ -964,9 +964,11 @@ window 4.2 ms per tick, 16x at 17-26 fps.
   in, about 1 ms per tick there; a memory of the failure for a few ticks would end it.
 - [x] Route smoothing (build-32): the swept-body test scanned a long path's whole
   bounding box (0.9 ms per tick at 12:00); rows are now solved as intervals.
-- [ ] Unit movement step (0.5-0.65 ms per tick mid-game after build-32): each
+- [x] Unit movement step (0.5-0.65 ms per tick mid-game after build-32): each
   moving unit checks body overlap against every unit per step and reserves cells
-  against every unit; a per-tick spatial grid would make both local.
+  against every unit; a per-tick spatial grid would make both local. (Build-64 put
+  ground and combat steps on `UnitGrid`; build-160 the graph-link overlap, node and
+  reservation checks, cross-checked against the full scans.)
 - [x] Combat targeting (build-33): `UnitGrid` serves the distance-bounded threat
   scans, and the in-reach and waiting position searches share one pass. Combat fell
   from 0.8-1.3 to 0.5-0.7 ms per tick in big fights.
@@ -975,13 +977,16 @@ window 4.2 ms per tick, 16x at 17-26 fps.
   dropped (it skipped 681 of 7,924 failures and lengthened the late fights). About
   three in four position searches still fail in crowded fights; a cheaper way to
   tell early that no position is reachable would help more than any budget.
-- [ ] Use `UnitGrid` for the movement scans too (`ClearGroundStep`,
+- [x] Use `UnitGrid` for the movement scans too (`ClearGroundStep`,
   `ClearCombatStep`, body overlap, `CanReserveMovement`); they matter more as unit
-  counts grow beyond the current 70.
+  counts grow beyond the current 70. (Builds 64 and 160.)
 - [ ] Occupancy: `OccupiedNodes` and `CanReserveMovement` scan every unit, several
   times per unit per tick (0.2-0.27 ms per tick after build-32's LINQ-free rewrite,
   quadratic in unit count). Keep
   an occupancy count per node updated as units move, or a per-tick spatial grid.
+  Build-160: `CanReserveMovement` and the membership test on graph links are local, and
+  formation slots no longer walk the set per cell; callers that need the whole set still
+  build it (1.5-1.8 ms per tick in Rift fights).
 - [x] Route rebase after a map change (build-37): only units whose remaining route
   passes near a toggled obstacle, or never reached its goal, re-plan. On MP08_Rift
   with 8 bots a change cost about 0.5 s and now about 90 ms. Play change: other
@@ -1000,8 +1005,22 @@ window 4.2 ms per tick, 16x at 17-26 fps.
   176 times in one think, and repeats it each second while nothing fits; cache
   refusals per building until the map changes, and stagger heavy bot work.
 - [ ] Presentation at high speed: impact and launch sounds and per-event work run
-  for every fast-forwarded tick; thin them above 4x. Animation and health-bar
-  updates for off-screen units could be skipped or rate-limited.
+  for every fast-forwarded tick; thin them above 4x (audible: needs the owner's OK).
+  Animation and health-bar updates for off-screen units could be skipped or
+  rate-limited. (Build-158: units off screen or in fog no longer animate or update;
+  rate-limiting visible ones is a visual trade-off the owner declined, 2026-11-05.)
+- [x] Rendered measurement (build-157): `-StressBenchmark -Units N`, frame-time
+  percentiles, draw calls and reproducible captures; `tools/compare_captures.py`.
+- [x] Formation slot searches (build-160): `CanReserve` walked the whole reserved set for
+  every window cell; `unit orders` cost 19 ms per tick at Rift 10:00, now 0.4 ms.
+- [ ] Proposals that change play or visuals, each to be approved first (owner,
+  2026-11-05): shared group routes (flow field per order destination, or a sector/portal
+  layer per body graph); spreading one bot's think over several ticks; throttling idle
+  guard acquisition and blocked-producer retries; caching building-placement refusals;
+  the simulation on a worker thread with snapshot interpolation; MultiMesh with
+  vertex-animation textures for distant units. Exact work still open: wide-body combat
+  position searches (about 1 ms each, six a tick in a 300-unit melee) and their flank
+  candidate scans.
 - [ ] Measure the GPU side on a real display at 16x with large armies (the profile
   above is headless), including skinned-mesh and shadow cost.
 - [ ] Allocation pressure: many per-tick LINQ queries and fresh `HashSet`s in the

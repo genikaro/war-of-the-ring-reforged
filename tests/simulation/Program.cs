@@ -2,6 +2,9 @@ using Reforged.Simulation;
 using System.Text.Json;
 
 using var allocations = args.Contains("--allocation-profile") ? new AllocationProbe() : null;
+// Build-160: local scans are checked against the full scans they replaced, in the checks and on request (soaks);
+// timing benchmarks run without the cross-check.
+SimWorld.VerifyFastPaths = args.Contains("--verify-fast-paths") || !args.Any(a => a.EndsWith("-benchmark") || a == "--army-soak");
 if (Array.IndexOf(args,"--late-match-benchmark") is int lateMatch && lateMatch >= 0)
 {
     LateMatchChecks.Benchmark(args[lateMatch+1],args[lateMatch+2]); return;

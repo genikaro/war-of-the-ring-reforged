@@ -78,6 +78,195 @@ matches the original final digest, with 61 replay checkpoints.
 Evidence is in `converted/prototype/performance-121-*`. `-Profile` now reports
 the active roster size alongside living and historical counts.
 
+## Builds 157-160: rendered frames, unseen units and local scans (November 5)
+
+The owner asked for a check against modern RTS practice. The rules for this pass were:
+rendering first, then the simulation; no visual trade-off of any kind (skipping work
+for what cannot be seen is fine); every simulation change keeps replay digests
+identical, and anything that would change play is proposed separately. The target is
+about 300 units (an 8-bot MP08_Rift late game) at 60 FPS at 1x.
+
+| Modern practice | Before this pass | Now |
+| --- | --- | --- |
+| Fixed-tick deterministic simulation, interpolated views (Supreme Commander, SC2, Recoil/BAR lockstep) | Done: 20 Hz integer ticks, state digests | Unchanged |
+| Measure rendered frame-time percentiles in a fixed stress scene | Missing: only an FPS sample every 2 game minutes | Build-157 |
+| Only present what can be seen (pause off-screen and fogged units, update on change) | Every unit animated and re-read its appearance every frame | Build-158 |
+| Data tables instead of runtime parsing; no redundant engine calls | Appearance JSON walked twice per unit per frame | Build-158 |
+| HUD and minimap redraw on change | Rebuilt every frame | Build-159 |
+| Spatial partitioning for every neighbour query | Combat used `UnitGrid`; movement checks, slot searches and idle guards scanned everything | Build-160 |
+| Budget path and AI work in nodes, spread over ticks | Partly (combat search tokens, replan caps) | Proposal (changes timing) |
+| Shared group routes: flow fields or sector/portal graphs (SupCom2, Planetary Annihilation, openage after Emerson) | Per-unit A* | Proposal (changes routes) |
+| Simulation on its own thread with snapshots | No | Proposal, if ticks still stall frames |
+| GPU crowds: MultiMesh with vertex-animation textures | No | Only if rendering becomes the limit; changes visuals |
+
+### Build-157: the rendered stress benchmark
+
+`./prototype/run.ps1 -StressBenchmark -Units 300` (`StressBenchmark.cs`) opens a window
+(never headless) at 1600x900 with vsync off and `--fixed-fps 60`. On the Sandbox, two
+mixed armies of N/2 (Gondor Swordsmen, Dwarven Shieldbreakers, Rohan Riders and Elven
+Archers against Orc Slashers, Uruk-Hai, Warg Riders and Orc Bowmen, 10,000 health each)
+attack-move into each other in the empty strip south of both bases, with 40 of them
+selected. After 5 s, phase A frames the fight for 20 s, phase B looks north, away from
+it, for 20 s, and phase C runs it at 4x for 20 s. Each frame records wall time, the
+time in `_Process` and `_PhysicsProcess`, draw calls, objects, primitives, render CPU and
+GPU time and managed allocation. `stress-benchmark-<N>.json` in the cache holds the
+p50/p95/p99/max per phase; `-Profile` adds the `SimProfiler` sections
+(`stress-benchmark-<N>-profiled.json`).
+
+The armies appear on the first frame of world tick 10, and desktop input is blocked.
+Cloud shadows hold still, since the shader's `TIME` also counts loading frames; they
+are still drawn, so they cost the same. Godot's random seed is fixed. Every run of the
+same build therefore draws the same frames, and the captures at the middle of each
+phase (`stress-<N>-build-<B>-<phase>.png`) prove that a presentation change altered
+nothing: `python tools/compare_captures.py before.png after.png --ignore 1000,30,1600,95`
+reports the differing pixels outside the build/date/FPS line. Two runs of build-157 gave
+identical captures.
+
+`-Profile` now also gives frame-time percentiles for each window, writes its lines to
+`profile-<time>.log` in the cache, and formats numbers in the invariant culture.
+`-ProfileUntil <minute>` stops the match there and prints the state digest at exactly
+that tick (build-160). `-Headless` runs any match without a window.
+
+Build-157 baseline (this PC, gl_compatibility):
+
+| Units | A: fight on screen | B: fight off screen | C: fight at 4x | Draw calls A / B | Allocated per frame |
+| ---: | --- | --- | --- | --- | ---: |
+| 100 | 76.6 FPS, p50 11.5, p95 19.2 ms | 82.3 FPS, p50 10.9 ms | 54.9 FPS, p95 33.3 ms | 2,861 / 1,025 | 1.5 MB |
+| 200 | 45.4 FPS, p50 18.5, p95 34.2 ms | 49.4 FPS, p50 17.1 ms | 34.6 FPS, p95 54.5 ms | 4,996 / 1,553 | 2.4 MB |
+| 300 | 29.9 FPS, p50 28.5, p95 49.7 ms | 33.3 FPS, p50 25.6 ms | 26.1 FPS, p95 64.9 ms | 7,114 / 2,079 | 3.4 MB |
+| 500 | 18.0 FPS, p50 46.7, p95 84.5 ms | 19.8 FPS, p50 41.7 ms | 18.4 FPS, p95 82.3 ms | 11,542 / 3,182 | 5.4 MB |
+
+Looking away from the fight saved almost nothing, although draw calls fell by more than
+two thirds: the frame was CPU-bound, not GPU-bound. At 300 units the profiled run spent,
+per frame, 7.3 ms in `godot units` (the presentation loops), about 7-8 ms in Godot's own
+animation processing and 7-10 ms of render CPU (GPU about 7.8 ms). On top of that, each
+simulation tick took about 19 ms, landing in one frame out of three; most of it went to
+wide-body combat position searches.
+
+The 8-bot MP08_Rift observer match (Gimli, Aragorn, Legolas, Saruman and four defaults,
+4x, windowed) ran at 52-76 ms per frame (13-19 FPS) from 6:00. At 10:00 a tick cost
+31 ms, 18 ms of it in `unit orders`.
+
+### Build-158: unseen units and compiled appearances
+
+- **Appearance tables** (`Presentation/AppearanceTable.cs`). Each model's `wotrAppearance`
+  JSON is compiled once into arrays. `UnitAppearance.Apply` walks those arrays, and returns
+  at once while the clip, state and weapon blood are unchanged and the clip time has not
+  crossed the next key. It also remembers what each mesh shows, so Godot only hears about
+  changes. `tests/simulation/AppearanceTableChecks.cs` keeps the old JSON walk and
+  compares the two on every unit and building model in the pack (73 models, 251,198
+  cases, 18,702 span probes). Run it with `--appearance-checks converted/skirmish`.
+- **Unseen units** (`Main.UnitPresentation.cs`). A unit is drawn when the viewer can see
+  it and it lies inside the camera's view. The view is widened by 30% of the camera
+  distance plus 2 m, to cover this frame's pan or zoom step. The unit's shadow tip, along
+  the map's sun direction, counts too. An unseen unit's AnimationPlayer switches to
+  manual mode and banks the time it misses. The banked time is applied before any Play,
+  Seek or speed change, and when the unit comes back into view, so it reappears in the
+  pose it would have had. Appearance, seeks, health bars and ring rebuilds wait while a
+  unit is unseen. Godot animates drawn units exactly as before. Main stepping them itself
+  with `Advance` was tried, and it shifted bone-attached pieces (riders, weapons) by a
+  frame against the captures.
+- **No redundant engine calls.** Yaw, visibility, ring visibility and animation speed are
+  mirrored in `UnitView` and written only on change. Each model's clip-to-animation and
+  state-to-clip lookups are cached. Health bars share their quads (one per width and fill
+  step) and materials (one per colour), instead of allocating a `QuadMesh` on every
+  health change.
+- **Presented units only.** The three presentation loops visit living units and unburied
+  corpses (`_presented`), not the whole casualty history.
+
+Captures of phases A and B at 100 and 300 units are pixel-identical to build-157, and
+draw calls match. At 300 units, phase A went from 29.9 to 31.0 FPS and phase B from
+33.3 to 74.6 FPS (p50 25.6 → 8.4 ms). At 100 units, phase B went from 82 to 182 FPS. When
+the whole army is on screen, Godot's skeletal animation and rendering dominate the frame,
+and invisible savings cannot remove them. In play, most of a large army is usually off
+screen or in fog, and those units now cost almost nothing.
+
+### Build-159: console, minimap and per-tick scans
+
+- The console's per-unit text (order readouts, stats, tooltips) is rebuilt only when the
+  tick, the selection or the side changes while the game runs. While paused it is
+  rebuilt every frame, because the console can change the world without a tick.
+- The minimap redraws only when a tick, sight, the camera footprint, markers, colours or
+  its size change, or every frame while paused. Fogged minimap terrain is rebuilt as
+  whole RGBA pixels instead of a 4-byte block copy per pixel. The bytes are the same; on
+  a 512x512 map this was the observer HUD's main cost at 4x.
+- Selected units, the allies and enemies counts, friendly heroes, minimap dots and the
+  per-tick death scans for blood and speech now read the active roster (same id order)
+  instead of the whole casualty history.
+- The console's bank and population are set once per physics frame, after the speed
+  burst, not after every tick in it.
+- New profiler sections: `hud console`, `hud structures` and `hud observer`.
+
+At 300 units, phase A went from 31.0 (build-158) to 38.4 FPS (p50 22.3 ms), phase B to
+92.0 FPS and phase C to 30.6 FPS. Allocation fell to 1.4 MB per frame (from 3.4 MB), and
+Gen0/Gen1 collections from 81/26 to 34/8 in 20 s. Captures are pixel-identical to
+build-157.
+
+### Build-160: local scans in the simulation
+
+Each change gives the same answer as the full scan it replaces, a yes/no (so bucket order
+cannot matter) or the same id-ordered list. `SimWorld.VerifyFastPaths` runs both versions
+and throws on any disagreement. It is on in the default simulation checks and with
+`--verify-fast-paths` on any run; timing benchmarks run without it.
+
+- **Formation slots** (`GridNavigation.CanReserve`). `Nearest`, `NearestSequence` and
+  `FormationSlot` tested up to a 49x49 window of cells, each against every node of the
+  reserved set: thousands of occupied nodes in a big fight, so millions of distance checks
+  per slot search. A set of 32 or more nodes is now bucketed by cell, and a cell only looks
+  at reserved nodes within reach (2 body radii, or 700 mm). This was the `unit orders`
+  spike: idle guards walking back to their post and guard orders.
+- **Constrained movement.** `OccupiedNodes(id).Contains(transit)` became
+  `NodeOccupied`, the body-overlap scan became `BodyBlockedAt`, and `CanReserveMovement`
+  now uses `UnitGrid` candidates (with every unit on a graph link). The single-node test
+  `GridNavigation.BodyCovers` matches `AddBodyNodes` exactly.
+- **Idle guards** ask the grid for allies fighting within 10 m (`AllyFightingNear`).
+- **Commands for the tick** are found by a binary search over the tick-ordered command
+  lists instead of filtering the whole match's history every tick. A list out of tick
+  order is still scanned whole.
+
+All 2,698 simulation checks pass with the cross-check on. All nine army-benchmark digests
+and the three late-match digests are unchanged. The 36-per-side choke scenario fell from
+2,737 to 1,695 ms (p95 5.3 → 2.9 ms); the open-field ones changed little.
+
+The 8-bot MP08_Rift match, headless at 16x, has the same state digest at tick 16,800
+(14:00) on both builds: `D19E6B0A…A00B6`.
+
+| Game time (units) | Tick before | After | `unit orders` before | After |
+| --- | ---: | ---: | ---: | ---: |
+| 06:00 (214) | 7.4 ms | 6.3 ms | 0.93 ms | 0.19 ms |
+| 08:00 (257) | 15.1 ms | 11.4 ms | 3.26 ms | 0.51 ms |
+| 10:00 (236) | 32.6 ms | 13.0 ms | 19.02 ms | 0.43 ms |
+| 12:00 (219) | 28.4 ms | 13.7 ms | 13.93 ms | 0.40 ms |
+| 14:00 (218) | 14.7 ms | 11.8 ms | 2.17 ms | 0.35 ms |
+
+The headless run to 14:00 took 3:55 instead of 5:45.
+
+### Where the stress benchmark stands after build-160
+
+| Units | A: fight on screen | B: fight off screen | C: fight at 4x |
+| ---: | --- | --- | --- |
+| 100 | 89.8 FPS, p50 9.8 ms (76.6, 11.5) | 200.4 FPS, p50 3.7 ms (82.3, 10.9) | 61.0 FPS, p95 31.3 ms (54.9, 33.3) |
+| 200 | 50.8 FPS, p50 17.0 ms (45.4, 18.5) | 124.6 FPS, p50 4.7 ms (49.4, 17.1) | 38.7 FPS, p95 50.4 ms (34.6, 54.5) |
+| 300 | 34.9 FPS, p50 24.7 ms (29.9, 28.5) | 86.8 FPS, p50 6.4 ms (33.3, 25.6) | 29.2 FPS, p95 59.9 ms (26.1, 64.9) |
+| 500 | 20.0 FPS, p50 42.7 ms (18.0, 46.7) | 49.9 FPS, p50 10.6 ms (19.8, 41.7) | 20.3 FPS, p95 75.6 ms (18.4, 82.3) |
+
+Build-157 values are in brackets. Build-159's single 300-unit run measured 38.4 FPS in
+phase A, and build-160's two runs measured 34.9 and 34.0 FPS. Build-160 changes nothing in
+that scene's presentation, so the gap is run-to-run spread. In the profiled 300-unit run,
+`godot units` fell from 7.3 to 3.4 ms per frame and all of `_Process` from 8.4 to 4.4 ms.
+Allocation fell from 3.4 to 1.4 MB per frame. The simulation tick in this open-field
+melee is unchanged, at about 19.6 ms (6.5 ms per frame on average), and the wide-body
+combat position searches dominate it. Captures of phases A and B at 100, 200, 300 and 500
+units are pixel-identical to build-157.
+
+All 43 Godot smokes were run on build-160. Thirty-nine pass, ObserverSmoke included. Three
+fail, and each fails the same way on an untouched build-156 checkout:
+- StructureSmoke: `random_place_of_power_drawn`.
+- PlacementSmoke: `swordsman_selectable_with_source_stats`.
+- FormationSmoke: `attack_move_dispatch`.
+
+ResearchSmoke hangs on both. On build-160 it first logged "Invalid unit definition".
+
 ## Repeating the checks
 
 ```powershell
@@ -85,7 +274,17 @@ the active roster size alongside living and historical counts.
 ./prototype/run.ps1 -Map MP08_Rift -Observe -Bots Gimli,Aragorn,Legolas,Saruman -Speed 8 -Profile
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -c Release -- --retention-checks
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -c Release -- --army-benchmark converted/prototype/army-profile.json converted/skirmish-maps/Sandbox
+./prototype/run.ps1 -StressBenchmark -Units 300            # add -Profile for the section split
+python tools/compare_captures.py converted/skirmish-maps/Sandbox/stress-300-build-157-A.png converted/skirmish-maps/Sandbox/stress-300-build-160-A.png --ignore 1000,30,1600,95
+./prototype/run.ps1 -Map MP08_Rift -Observe -Bots Gimli,Aragorn,Legolas,Saruman -Speed 16 -Profile -ProfileUntil 14 -Headless
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation -c Release -- --appearance-checks converted/skirmish
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation -c Release -- --army-soak converted/skirmish-maps/Sandbox soak.json --verify-fast-paths
 ```
+
+Two builds play a match the same way when the `PROFILE_DIGEST` lines of their
+`-ProfileUntil` runs match. Stress-benchmark timings vary by a few percent between
+runs on the same build; compare medians of the same phase, and repeat a run before
+trusting a small difference.
 
 Add `--allocation-profile` to the simulation benchmark to enable runtime allocation
 sampling by type. It requires no external profiler installation. Sampled bytes are
@@ -100,12 +299,21 @@ memory alone do not prove a leak: GC and native allocators can retain capacity.
 ## Remaining costs
 
 Historical simulation records and the two lookup nodes still grow with casualties.
-Simulation tick work now excludes settled corpses; presentation and some HUD
-queries still traverse historical records and should be measured in rendered play.
-Occupancy rasterization and combat planning still allocate, particularly during
-congestion. Expensive movement retries and bot placement searches remain candidates
-for further work. GPU skinning, shadows and off-screen animation need a rendered
-large-map measurement; headless CPU timings do not cover them.
+Simulation tick work excludes settled corpses, and since build-159 the presentation
+and HUD loops do too. Occupancy rasterization and combat planning still allocate,
+particularly during congestion. Expensive movement retries and bot placement searches
+remain candidates for further work.
+
+After builds 157-160, with 300 units all on screen the frame is still bound by Godot's
+skeletal animation and render CPU (about 7,100 draw calls in gl_compatibility, with
+shadows) and by the simulation tick (about 13-19 ms in a 300-unit melee, in one frame
+out of three). The exact work left is the wide-body combat position search (about 1 ms
+each, six a tick in that melee) and its flank candidate scans. Everything else that would
+reach 60 FPS with 300 units in view changes play or pictures, so it waits for the
+owner's choice: shared group routes (flow fields or a sector/portal layer); spreading
+bot thinks over ticks; throttling idle-guard acquisition and blocked-producer retries;
+a simulation thread with snapshot interpolation; and instanced vertex-animation crowds
+or cheaper shadows for distant units.
 
 The standard observer smoke's Fate assertion fails in the original baseline and
 the updated run. Both reach tick 22,621 with the same final digest; corpse-release

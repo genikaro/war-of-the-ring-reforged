@@ -213,6 +213,17 @@ public sealed partial class GridNavigation
         }
     }
 
+    /// <summary>Build-160: whether AddBodyNodes with these arguments would add this one node (same cell rectangle,
+    /// same test), without filling a set.</summary>
+    public bool BodyCovers(int node,int x,int y,int z,int bodyHeight,int separation,int height)
+    {
+        int cell = Column(node),row = cell/Width,col = cell%Width;
+        if (row < Math.Max(0,(z-separation)/CellSize) || row > Math.Min(Height-1,(z+separation)/CellSize)) return false;
+        if (col < Math.Max(0,(x-separation)/CellSize) || col > Math.Min(Width-1,(x+separation)/CellSize)) return false;
+        var (cx,cz) = Center(node); int cy = NodeHeight(node);
+        return cy+height > y && y+bodyHeight > cy && (long)(cx-x)*(cx-x)+(long)(cz-z)*(cz-z) < (long)separation*separation;
+    }
+
     public bool IsObstacleActive(int id) => _activeObstacles.Contains(id);
     public bool ObstacleCovers(int id, int node) => _obstacles[id].Nodes.Contains(node);
     public bool ObstacleCoversEdge(int id, int a, int b)
@@ -283,6 +294,10 @@ public sealed partial class GridNavigation
     }
     public int Nearest(int cell, IReadOnlySet<int>? excluded = null, int radius = 24, int connectedTo = -1,
         bool avoidBottlenecks = false)
+        => Nearest(cell,excluded,Index(excluded),radius,connectedTo,avoidBottlenecks);
+
+    private int Nearest(int cell, IReadOnlySet<int>? excluded, ReservationIndex? index, int radius = 24, int connectedTo = -1,
+        bool avoidBottlenecks = false)
     {
         if (cell < 0 || cell >= NodeCount) return -1;
         if (cell >= GroundCount)
@@ -291,7 +306,7 @@ public sealed partial class GridNavigation
             var seen = new HashSet<int> { cell };
             while (queue.TryDequeue(out var item))
             {
-                if (CanStand(item.Node) && CanReserve(item.Node, excluded)
+                if (CanStand(item.Node) && CanReserve(item.Node, excluded, index)
                     && (connectedTo < 0 || IsConnected(item.Node,connectedTo))
                     && (!avoidBottlenecks || !IsBottleneck(item.Node))) return item.Node;
                 if (item.Depth >= radius) continue;
@@ -305,7 +320,7 @@ public sealed partial class GridNavigation
         for (int x = Math.Max(0, cx - radius); x <= Math.Min(Width - 1, cx + radius); x++)
         {
             int id = z * Width + x, d = (x-cx)*(x-cx) + (z-cz)*(z-cz);
-            if (d < distance && CanStand(id) && CanReserve(id, excluded)
+            if (d < distance && CanStand(id) && CanReserve(id, excluded, index)
                 && (connectedTo < 0 || IsConnected(id,connectedTo))
                 && (!avoidBottlenecks || !IsBottleneck(id))) { best = id; distance = d; }
         }
@@ -343,13 +358,16 @@ public sealed partial class GridNavigation
             yield break;
         }
         int cx = cell % Width, cz = cell / Width;
+        ReservationIndex? index = null;
         foreach (var (dx, dz) in WindowByDistance(radius))
         {
             int x = cx + dx, z = cz + dz;
             if (x < 0 || z < 0 || x >= Width || z >= Height) continue;
             int id = z * Width + x;
+            // The caller adds each rejected cell to the set between steps: the index follows it.
+            if (index == null ? excluded.Count >= ReservationIndexMinimum : index.Count != excluded.Count) index = Index(excluded);
             // Region before reservation: the reserved set is checked cell by cell against every unit's node.
-            if (CanStand(id) && (connectedTo < 0 || IsConnected(id, connectedTo)) && CanReserve(id, excluded)) yield return id;
+            if (CanStand(id) && (connectedTo < 0 || IsConnected(id, connectedTo)) && CanReserve(id, excluded, index)) yield return id;
         }
     }
 
@@ -371,7 +389,8 @@ public sealed partial class GridNavigation
     {
         // Extra formation slots should leave passage entrances open when a
         // non-cutting alternative is no more than one additional cell away.
-        int nearest = Nearest(anchor,reserved,connectedTo: anchor);
+        var index = Index(reserved);
+        int nearest = Nearest(anchor,reserved,index,connectedTo: anchor);
         if (nearest < 0 || !IsBottleneck(nearest)) return nearest;
         long DistanceSquared(int id)
         {
@@ -381,7 +400,7 @@ public sealed partial class GridNavigation
         long closest = DistanceSquared(nearest);
         int radius = 0;
         while ((long)radius*radius < closest) radius++;
-        int alternative = Nearest(anchor,reserved,radius+1,anchor,true);
+        int alternative = Nearest(anchor,reserved,index,radius+1,anchor,true);
         if (alternative < 0) return nearest;
         // sqrt(candidate) <= sqrt(closest)+1, using integer arithmetic only.
         long excess = DistanceSquared(alternative)-closest-1;
@@ -409,19 +428,59 @@ public sealed partial class GridNavigation
         return _bottlenecks[node] = true;
     }
 
-    private bool CanReserve(int node, IReadOnlySet<int>? reserved)
+    private bool CanReserve(int node, IReadOnlySet<int>? reserved, ReservationIndex? index = null)
     {
         if (reserved == null || reserved.Count == 0) return true;
         var (x, z) = Center(node); int y = NodeHeight(node);
-        foreach (int other in reserved)
+        bool Blocks(int other)
         {
             var (ox, oz) = Center(other); int oy = NodeHeight(other);
             long horizontal = (long)(x-ox)*(x-ox)+(long)(z-oz)*(z-oz);
-            if (TypedBody ? Math.Abs(y-oy) < BodyHeightMm && horizontal < 4L*BodyRadiusMm*BodyRadiusMm
-                : horizontal+(long)(y-oy)*(y-oy) < 700L*700) return false;
+            return TypedBody ? Math.Abs(y-oy) < BodyHeightMm && horizontal < 4L*BodyRadiusMm*BodyRadiusMm
+                : horizontal+(long)(y-oy)*(y-oy) < 700L*700;
         }
-        return true;
+        if (index == null)
+        {
+            foreach (int other in reserved) if (Blocks(other)) return false;
+            return true;
+        }
+        // Build-160: only reserved nodes within reach can block, so only their cells are looked at (same answer).
+        int reach = TypedBody ? 2*BodyRadiusMm : 700;
+        bool free = true;
+        for (int bz = FloorDiv(z-reach,CellSize); free && bz <= FloorDiv(z+reach,CellSize); bz++)
+        for (int bx = FloorDiv(x-reach,CellSize); free && bx <= FloorDiv(x+reach,CellSize); bx++)
+            if (index.Buckets.TryGetValue(((long)bx << 32) | (uint)bz,out var bucket))
+                foreach (int other in bucket) if (Blocks(other)) { free = false; break; }
+        if (SimWorld.VerifyFastPaths && free != !reserved.Any(Blocks))
+            throw new InvalidOperationException("Local scan disagrees with the full scan: reservation of node "+node);
+        return free;
     }
+
+    /// <summary>Build-160: a reserved set this large is looked up by cell rather than walked whole for every cell a
+    /// slot search tests (about 2,400 cells against thousands of occupied nodes in a big fight).</summary>
+    private const int ReservationIndexMinimum = 32;
+
+    private sealed class ReservationIndex(int count)
+    {
+        public readonly int Count = count;
+        public readonly Dictionary<long,List<int>> Buckets = [];
+    }
+
+    private ReservationIndex? Index(IReadOnlySet<int>? reserved)
+    {
+        if (reserved == null || reserved.Count < ReservationIndexMinimum) return null;
+        var index = new ReservationIndex(reserved.Count);
+        foreach (int other in reserved)
+        {
+            var (ox, oz) = Center(other);
+            long key = ((long)FloorDiv(ox,CellSize) << 32) | (uint)FloorDiv(oz,CellSize);
+            if (!index.Buckets.TryGetValue(key,out var bucket)) index.Buckets[key] = bucket = [];
+            bucket.Add(other);
+        }
+        return index;
+    }
+
+    private static int FloorDiv(int value,int divisor) => value >= 0 ? value/divisor : -((-value+divisor-1)/divisor);
 
     public bool IsConnected(int a, int b)
     {
