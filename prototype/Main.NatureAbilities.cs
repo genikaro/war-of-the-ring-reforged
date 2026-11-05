@@ -83,6 +83,12 @@ public partial class Main
             view.Player.Seek(animation.Fraction*view.Player.CurrentAnimationLength,true);
             view.Appearance?.Apply(animation.Clip,animation.Fraction);
         }
+    }
+
+    /// <summary>A knocked-back body's rise and fall (build-158: apart from the pose, as it moves the unit even unseen).</summary>
+    private void LiftKnockback(SimUnit unit,UnitView view,double fraction)
+    {
+        double tick=_world!.Tick-1+fraction;
         if (unit.KnockbackUntil > tick && tick >= unit.KnockbackStart)
         {
             double seconds=(tick-unit.KnockbackStart)/SimWorld.TicksPerSecond;

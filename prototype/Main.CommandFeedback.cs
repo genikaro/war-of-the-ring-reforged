@@ -89,16 +89,19 @@ public partial class Main
         return new Color(normal,baseline.A*Mathf.SmoothStep(0,CommandBlipRestore,second-CommandBlipOnTime));
     }
 
+    private static readonly Color OwnRingColor = new("e9c22d"),OtherRingColor = new("e65045");
+
     private void PresentCommandRing(SimUnit unit,UnitView view,float dt)
     {
         view.CommandBlip = Math.Max(0,view.CommandBlip-dt);
         bool flashing = view.CommandBlip > 0;
         bool selected = _selected.Contains(unit.Id), hovered = _hoveredUnit == unit.Id;
         var color = _observing || _sandboxMap ? TeamColor(unit.Team).Lightened(.25f)
-            : new Color(unit.Team == PlayerTeam ? "e9c22d" : "e65045");
+            : unit.Team == PlayerTeam ? OwnRingColor : OtherRingColor;
         if (hovered && !selected) color = new Color(TeamColor(unit.Team),.5f);
         color = CommandRingColor(view.CommandBlip,unit.Team,color,selected || hovered);
-        view.Ring.Visible = unit.Present && (flashing ? color.A > .001f : selected || hovered);
+        bool ring = unit.Present && (flashing ? color.A > .001f : selected || hovered);
+        if (ring != view.RingShown) { view.Ring.Visible = ring; view.RingShown = ring; }
         if (view.RingColor != color)
         {
             ((StandardMaterial3D)view.Ring.MaterialOverride).AlbedoColor = color;

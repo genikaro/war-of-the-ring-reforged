@@ -12,6 +12,8 @@ public partial class Main : Node3D
     private bool _loadFailed;
     private CombatRules _rules = CombatRules.Probe;
     private readonly Dictionary<string,JsonElement> _appearanceData = [];
+    /// <summary>Build-158: each model's appearance compiled once; every unit of the model shares it.</summary>
+    private readonly Dictionary<string,AppearanceTable> _appearanceTables = [];
     private NavigationPicker _picker = null!;
     private Camera3D _camera = null!;
     private Label _status = null!;
@@ -101,6 +103,16 @@ public partial class Main : Node3D
         public HeadingPlayback Heading = new();
         public bool Translucent;
         public (MeshInstance3D Mesh,int Surface,Material? Faded)[]? Ghost;
+        /// <summary>Build-158 (Main.UnitPresentation.cs): drawn this frame (visible to the viewer and in view), whether
+        /// the root will show, animation time banked while not drawn, and what Godot was last told.</summary>
+        public bool Drawn = true,WillShow = true,Shown = true,RingShown;
+        public double PendingAdvance;
+        /// <summary>Came back into view this frame: Main steps it once more before Godot takes over again.</summary>
+        public bool Resuming;
+        /// <summary>The clip the last physics frame showed the pieces for at time 0.</summary>
+        public string AppearanceClip = "";
+        public float Yaw,SpeedScale = 1;
+        public Dictionary<string,string?> AnimationNames = [],StateClips = [];
     }
 
     public override void _Ready()
@@ -396,13 +408,17 @@ public partial class Main : Node3D
         var health = new HealthBar(Math.Max(1.1f,2.2f*unit.Definition.BodyRadiusMm/1000f),.16f) { Position = new(0,.12f,0) };
         root.AddChild(health);
         if (!_appearanceData.ContainsKey(modelKey.Item1)) _appearanceData[modelKey.Item1] = UnitAppearance.Read(CachePath(modelKey.Item1));
-        var appearance = new UnitAppearance(visual,_appearanceData[modelKey.Item1]);
+        if (!_appearanceTables.TryGetValue(modelKey.Item1,out var appearanceTable))
+            _appearanceTables[modelKey.Item1] = appearanceTable = new AppearanceTable(_appearanceData[modelKey.Item1]);
+        var appearance = new UnitAppearance(visual,appearanceTable);
         appearance.Apply(model.GetProperty("idle").GetString()!,0);
         var player = Descendants(visual).OfType<AnimationPlayer>().FirstOrDefault()
             ?? throw new InvalidOperationException("Missing animation player for "+unit.Definition.Name);
         // Build-63: a bone a clip leaves unkeyed (the Ranger's hood and cape in idle, the Archer's hair) goes back to
         // rest, as the source's ready transitions show, instead of keeping the previous clip's pose (Godot's default).
         player.Deterministic = true;
+        // Build-158: a copied template may be paused off screen (Main.UnitPresentation.cs); a new unit starts animating.
+        player.CallbackModeProcess = AnimationMixer.AnimationCallbackModeProcess.Idle;
         foreach (string clip in unit.Definition.Attacks.Select(a => a.Clip).Append(unit.Definition.ReadyClip))
             if (!player.GetAnimationList().Any(a => a == clip || a.EndsWith('/'+clip)))
                 throw new InvalidOperationException("Missing combat animation: "+clip);
@@ -426,7 +442,12 @@ public partial class Main : Node3D
         }
         HeroGlow? heroGlow = unit.Definition.Hero ? new(TeamColor(unit.Team),unit.Definition.BodyRadiusMm/1000f) : null;
         if (heroGlow != null) root.AddChild(heroGlow.Ground);
-        _views[unit.Id] = new UnitView(root,ring,player,model) { DefinitionName = unit.Definition.Name,Team = unit.Team,Appearance = appearance,Health = health,HeroGlow = heroGlow };
+        string file = modelKey.Item1;
+        if (!_animationNames.TryGetValue(file,out var animationNames)) _animationNames[file] = animationNames = [];
+        if (!_stateClips.TryGetValue(file,out var stateClips)) _stateClips[file] = stateClips = [];
+        _views[unit.Id] = new UnitView(root,ring,player,model) { DefinitionName = unit.Definition.Name,Team = unit.Team,Appearance = appearance,Health = health,HeroGlow = heroGlow,
+            SpeedScale = player.SpeedScale,AnimationNames = animationNames,StateClips = stateClips };
+        AddPresented(unit.Id);
     }
 
     private static IEnumerable<Node> Descendants(Node root)
@@ -843,10 +864,13 @@ public partial class Main : Node3D
             _pendingObstacle = -1;
         }
         foreach (var (id, view) in _obstacleViews) view.Visible = _world.Navigation.IsObstacleActive(id);
-        foreach (var unit in _world.Units)
-        {
+        // Only active records can change type or team (Twisting Influence, transformations, revival).
+        foreach (var unit in _world.ActiveUnits)
             if (_views[unit.Id].DefinitionName != unit.Definition.Name || _views[unit.Id].Team != unit.Team) AddUnitView(unit);
-            var view = _views[unit.Id];
+        foreach (int id in _presented)
+        {
+            var unit = _world.Units[id];
+            var view = _views[id];
             if (view.Buried) continue;
             if (unit.Casting && unit.OrderTarget >= 0 && unit.OrderTarget != unit.Id)
             {
@@ -888,8 +912,8 @@ public partial class Main : Node3D
                     if (_friendlySquads[squad].Contains(unit.Id)) _squadsFought.Add(squad);
             string clip = nature?.Clip ?? (state == "camouflage" ? unit.EnabledAbilities.First(a => a.Kind == AbilityKind.Camouflage).CastClip : state == "cast" ? unit.Ability(unit.AbilitySlot)!.CastClip : state == "attack" ? unit.Definition.Attacks[unit.AttackVariant].Clip
                 : state is "walk" or "run" ? (unit.Walking ? unit.Definition.WalkClip : unit.Definition.RunClip)
-                : state == "ready" ? unit.Definition.ReadyClip : view.Model.GetProperty(state).GetString() ?? "");
-            if ((state is "walk" or "run") && clip == "") clip = view.Model.GetProperty("walk").GetString() ?? "";
+                : state == "ready" ? unit.Definition.ReadyClip : StateClip(view,state));
+            if ((state is "walk" or "run") && clip == "") clip = StateClip(view,"walk");
             var gather = WorkerAnimation(unit);
             if (gather != null) clip = gather.Value.Clip;
             bool timed = gather is { Ticks: > 0 };
@@ -897,9 +921,10 @@ public partial class Main : Node3D
             bool restartCast = unit.Casting && view.CastSerial != unit.CastSerial;
             if (view.Player != null && clip != "" && (clip != view.Clip || restartAttack || restartCast))
             {
-                string? animation = view.Player.GetAnimationList().FirstOrDefault(a => a == clip || a.EndsWith('/' + clip));
+                string? animation = AnimationName(view,clip);
                 if (animation != null)
                 {
+                    FlushAnimation(view);
                     var resource = view.Player.GetAnimation(animation);
                     resource.LoopMode = state is "death" or "attack" or "cast" or "nature" || timed ? Animation.LoopModeEnum.None : Animation.LoopModeEnum.Linear;
                     if (restartAttack || restartCast) view.Player.Stop();
@@ -908,12 +933,14 @@ public partial class Main : Node3D
                 }
             }
             // The carrying clip is a walk; a running worker plays it faster so its steps keep pace.
-            if (view.Player != null) view.Player.SpeedScale = _paused || unit.StrikeActive || unit.Casting || timed || nature != null ? 0
-                : gather != null && unit.Moving && !unit.Walking ? 1_000_000f/unit.Definition.WalkScale : 1;
+            SetAnimationSpeed(view,_paused || unit.StrikeActive || unit.Casting || timed || nature != null ? 0
+                : gather != null && unit.Moving && !unit.Walking ? 1_000_000f/unit.Definition.WalkScale : 1);
             view.AttackSerial = unit.AttackSerial;
             view.CastSerial = unit.CastSerial;
             view.State = gather?.State;
-            if (!unit.StrikeActive && !unit.Casting) view.Appearance?.Apply(clip,0,view.State);
+            // A unit not drawn gets this again when it comes into view (PresentPose).
+            view.AppearanceClip = clip;
+            if (!unit.StrikeActive && !unit.Casting && view.Drawn) view.Appearance?.Apply(clip,0,view.State);
             if (unit.Health <= 0) view.Died = true;
         }
         if (_combatSmoke)
@@ -936,12 +963,16 @@ public partial class Main : Node3D
         RefreshObserverPanel(delta);
         long unitPresentation = SimProfiler.Start();
         float dt = (float)Math.Min(delta, 0.1);
-        if (!_paused || _presentStep)
-            foreach (var unit in _world.Units)
+        PrepareViewCulling();
+        bool posed = !_paused || _presentStep;
+        if (posed)
+            foreach (int id in _presented)
             {
-                var view = _views[unit.Id];
+                var unit = _world.Units[id];
+                var view = _views[id];
                 double fraction = _paused ? 1 : Engine.GetPhysicsInterpolationFraction();
-                if (PresentCorpse(unit,view,fraction)) continue;
+                _lastPoseFraction = fraction;
+                if (PresentCorpse(unit,view,fraction)) { if (!view.Buried) UpdateDrawn(unit,view); else _presentedChanged = true; continue; }
                 if (unit.Movement.Count > 0)
                 {
                     var position = MovementPlayback.Sample(unit.Movement,fraction);
@@ -951,12 +982,12 @@ public partial class Main : Node3D
                     if (fraction > .001 && fraction < .999 && unit.Moving && view.Root.Position.DistanceSquaredTo(UnitPosition(unit)) > .000001f)
                         _interpolatedSeen++;
                 }
-                float before = Mathf.Abs(Mathf.AngleDifference(view.Root.Rotation.Y,view.DesiredYaw));
+                float before = Mathf.Abs(Mathf.AngleDifference(view.Yaw,view.DesiredYaw));
                 float yaw = unit.Definition.IsRanged ? (float)UnitFacing.Sample(unit.PreviousFacing,unit.Facing,fraction)
-                    : Mathf.RotateToward(view.Root.Rotation.Y,view.DesiredYaw,dt*8);
+                    : Mathf.RotateToward(view.Yaw,view.DesiredYaw,dt*8);
                 float after = Mathf.Abs(Mathf.AngleDifference(yaw,view.DesiredYaw));
                 if (before > .01f && after < before && after > .001f) _turningSeen++;
-                view.Root.Rotation = new(0,yaw,0);
+                if (yaw != view.Yaw) { view.Root.Rotation = new(0,yaw,0); view.Yaw = yaw; }
                 if (unit.Definition.IsRanged && unit.StrikeActive && _world.Tick-1 == unit.AttackStartTick)
                 {
                     _rangedFacingSamples++;
@@ -968,27 +999,32 @@ public partial class Main : Node3D
                     _rangedFacingVerified &= Mathf.Abs(Mathf.AngleDifference(yaw,view.DesiredYaw))
                         <= turn*Mathf.Pi/180000+.00001f && turn <= UnitFacing.StepAngle && aimed;
                 }
-                SeekAttack(unit,view,fraction);
-                SeekAbility(unit,view,fraction);
-                SeekNature(unit,view,fraction);
-                if (!SeekGather(unit,view,fraction) && !unit.StrikeActive && !unit.Casting && view.Player != null && view.Player.CurrentAnimation.ToString().Length > 0 && view.Player.CurrentAnimationLength > 0)
-                    view.Appearance?.Apply(view.Clip,view.Player.CurrentAnimationPosition/view.Player.CurrentAnimationLength,view.State);
+                LiftKnockback(unit,view,fraction);
+                bool appeared = UpdateDrawn(unit,view);
+                if (view.Drawn) PresentPose(unit,view,fraction,appeared);
             }
         PresentBlood(_paused ? 1 : Engine.GetPhysicsInterpolationFraction());
         UpdatePointerHover();
-        foreach (var unit in _world.Units)
+        foreach (int id in _presented)
         {
-            var view = _views[unit.Id];
+            var unit = _world.Units[id];
+            var view = _views[id];
             if (view.Buried) continue;
-            view.Root.Visible = unit.InsideSite < 0 && _world.CanSeeUnit(ViewTeam,unit) && !view.Exploded;
+            // Paused, nothing was posed above, but the camera may still move: a unit coming into view takes the pose
+            // the last posed frame gave every unit.
+            if (!posed && UpdateDrawn(unit,view)) PresentPose(unit,view,_lastPoseFraction,true);
+            if (view.Shown != view.WillShow) { view.Root.Visible = view.WillShow; view.Shown = view.WillShow; }
             PresentInvisibility(unit,view);
-            view.HeroGlow?.Draw(view.Root.GlobalPosition,unit.Present && view.Root.Visible && !view.Translucent,
+            view.HeroGlow?.Draw(view.Root.GlobalPosition,unit.Present && view.Shown && !view.Translucent,
                 point => unit.Node < _world.Navigation.GroundCount
                     ? _world.Navigation.GroundHeight((int)(-point.X*1000),(int)(point.Z*1000))/1000f : view.Root.GlobalPosition.Y);
-            view.Health?.SetStyle(_playerColoredBars ? TeamColor(unit.Team) : null,_overheadBars ? UnitBarHeight(unit) : .12f);
-            view.Health?.Refresh(unit.Present ? unit.Health : 0,unit.MaxHealth);
+            if (view.Drawn)
+            {
+                view.Health?.SetStyle(_playerColoredBars ? TeamColor(unit.Team) : null,_overheadBars ? UnitBarHeight(unit) : .12f);
+                view.Health?.Refresh(unit.Present ? unit.Health : 0,unit.MaxHealth);
+            }
             PresentCommandRing(unit,view,dt);
-            if (!view.Ring.Visible || (view.RingPosition == view.Root.Position && view.RingYaw == view.Root.Rotation.Y)) continue;
+            if (!view.Drawn || !view.RingShown || (view.RingPosition == view.Root.Position && view.RingYaw == view.Yaw)) continue;
             var transform = view.Root.GlobalTransform; var inverse = transform.AffineInverse();
             ScenePresentation.SelectionRing(local => {
                 local *= unit.Definition.BodyRadiusMm/650f;
@@ -998,8 +1034,9 @@ public partial class Main : Node3D
                 point.Y += .06f;
                 return inverse * point;
             }, (ArrayMesh)view.Ring.Mesh!);
-            view.RingPosition = view.Root.Position; view.RingYaw = view.Root.Rotation.Y;
+            view.RingPosition = view.Root.Position; view.RingYaw = view.Yaw;
         }
+        PrunePresented();
         SimProfiler.Record("godot units",unitPresentation);
         long effectPresentation = SimProfiler.Start();
         PresentProjectiles();
@@ -1129,6 +1166,8 @@ public partial class Main : Node3D
         if (_smoke && _capture != "" && _frames == (_combatSmoke ? 180 : 60)) _ = CaptureFrame(false);
         if (_smoke && _world.Tick >= 420) FinishSmoke();
         else if (!_placesSmoke && !_audioSmoke && !_smoke && !_commandSmoke && !_interactionSmoke && !_ordersSmoke && !_abilitySmoke && !_elvenSmoke && !_natureSmoke && !_bloodSmoke && !_globalPowerSmoke && !_heroSkillSmoke && !_heroExperienceSmoke && !_skirmishSmoke && !_constructionSmoke && !_structureSmoke && !_productionSmoke && !_placementSmoke && !_dwarfHallSmoke && !_minimapSmoke && !_frodoSmoke && !_techSmoke && !_tier2Smoke && !_evilSmoke && !_researchSmoke && !_siegeSmoke && !_defenseSmoke && !_victorySmoke && !_aiSmoke && !_observerSmoke && !_setupSmoke && !_engagementSmoke && !_sandboxMapSmoke && !_fogSmoke && _capture != "" && _frames == 20) _ = CaptureFrame(true);
+        // Units out of view bank their animation time (Main.UnitPresentation.cs).
+        AdvanceUnitAnimations(delta);
     }
 
     private string UnitName(int id) => _world!.Units[id].Definition.DisplayName;

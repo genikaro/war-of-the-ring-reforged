@@ -307,6 +307,7 @@ public partial class Main
             string? clip = player?.GetAnimationList().FirstOrDefault(a => a == attack.Clip || a.EndsWith('/'+attack.Clip));
             if (skeleton == null || bone < 0 || player == null || clip == null)
             { _archerBowFallbacks++; return legacyOrigin+Vector3.Up*.3f; }
+            FlushAnimation(view);
             string previous = player.CurrentAnimation; double time = player.CurrentAnimationPosition; bool playing = player.IsPlaying();
             player.Play(clip);
             double fraction = hit.SourceFraction >= 0 ? hit.SourceFraction : hit.Tick/(double)attack.DurationTicks;

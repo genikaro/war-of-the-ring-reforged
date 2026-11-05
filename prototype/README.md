@@ -1,5 +1,10 @@
 # Godot C# skirmish sandbox
 
+**build-158:** Units off screen or in fog stop animating and updating, then catch up when they come into view; a unit
+whose shadow reaches the screen still counts as seen. Unit appearances are compiled once per model instead of being
+read from JSON every frame, and health bars share their meshes. With 300 units out of view the frame takes 8 ms
+instead of 26. The benchmark's captures are pixel-identical to build-157.
+
 **build-157:** A rendered stress benchmark: `run.ps1 -StressBenchmark -Units 300` puts two durable armies in a
 windowed fight and records frame-time percentiles, draw calls and allocations with the fight on screen, off screen
 and at 4x. Every run draws the same frames, so `tools/compare_captures.py` can prove a presentation change altered

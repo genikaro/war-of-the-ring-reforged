@@ -85,7 +85,7 @@ public partial class Main
                 worker.AttackVariant = 0; worker.AttackStartTick = world.Tick-18; worker.AttackVictim = _interactionEnemy;
                 string clip = worker.Definition.Attacks[0].Clip;
                 view.Clip = clip; view.Player!.Play(view.Player.GetAnimationList().First(a => a == clip || a.EndsWith('/'+clip)));
-                view.Player.SpeedScale = 0; view.Player.Advance(0); SeekAttack(worker,view,1);
+                SetAnimationSpeed(view,0); view.Player.Advance(0); SeekAttack(worker,view,1);
                 break;
             case 188:
                 var punch = _views[_interactionUnit];

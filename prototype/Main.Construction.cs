@@ -382,7 +382,7 @@ public partial class Main
             old.Root.QueueFree();
         }
         foreach (var (id,ghost) in _constructionViews.Where(p => !_world!.ConstructionSites.TryGetValue(p.Key,out var s) || s.Team < 0))
-        { ghost.Bar.Visible = false; ghost.Fire?.Refresh(0,_world!.Tick); }
+        { ghost.Bar.Conceal(); ghost.Fire?.Refresh(0,_world!.Tick); }
         foreach (var site in _world!.ConstructionSites.Values.Where(s => s.Team >= 0))
         {
             var rules = _world.SiteRules(site); var (x,z) = _world.SitePosition(site);
@@ -406,7 +406,7 @@ public partial class Main
             view.Root.Visible = sight != SiteSight.Unknown;
             if (sight != SiteSight.Live)
             {
-                view.Bar.Visible = false; view.Fire?.Refresh(0,_world.Tick);
+                view.Bar.Conceal(); view.Fire?.Refresh(0,_world.Tick);
                 if (view.Player != null) view.Player.SpeedScale = _paused ? 0 : 1;
                 continue;
             }

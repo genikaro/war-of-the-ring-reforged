@@ -7,6 +7,13 @@ if (Array.IndexOf(args,"--late-match-benchmark") is int lateMatch && lateMatch >
     LateMatchChecks.Benchmark(args[lateMatch+1],args[lateMatch+2]); return;
 }
 
+if (Array.IndexOf(args,"--appearance-checks") is int appearanceChecks && appearanceChecks >= 0)
+{
+    int appearancePassed = 0;
+    AppearanceTableChecks.Cached((value,name) => { if (!value) throw new Exception(name); appearancePassed++; Console.WriteLine(name); },args[appearanceChecks+1]);
+    Console.WriteLine($"{appearancePassed} appearance checks passed"); return;
+}
+
 if (Array.IndexOf(args,"--siege-spacing-benchmark") is int siegeSpacing && siegeSpacing>=0)
 {
     SiegeSpacingChecks.Benchmark(args[siegeSpacing+1]); return;
@@ -651,6 +658,7 @@ if (cacheArg >= 0)
     string cache = args[cacheArg+1];
     MeleeChecks.Cached(Check,cache);
     RangedSpacingChecks.Cached(Check,cache);
+    AppearanceTableChecks.Cached(Check,cache);
     var nav = JsonDocument.Parse(File.ReadAllText(Path.Combine(cache, "navigation.json"))).RootElement;
     var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(cache, "manifest.json"))).RootElement;
     byte[] rawHeights = File.ReadAllBytes(Path.Combine(cache, "heights.bin"));

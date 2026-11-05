@@ -113,7 +113,7 @@ public partial class Main
         _audio.SetWorldPaused(paused);
         if (_world == null) return;
         foreach (var (id,view) in _views)
-            if (view.Player != null) view.Player.SpeedScale = paused || _world.Units[id].StrikeActive || _world.Units[id].Casting ? 0 : 1;
+            SetAnimationSpeed(view,paused || _world.Units[id].StrikeActive || _world.Units[id].Casting ? 0 : 1);
         foreach (var player in _impactPlayers.Concat(_launchPlayers)) player.StreamPaused = paused;
     }
 

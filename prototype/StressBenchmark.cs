@@ -213,9 +213,12 @@ public partial class Main
     {
         while (_stressCapturesPending > 0) await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
         var overlay = Descendants(this).OfType<BuildOverlay>().FirstOrDefault(o => o.IsVisibleInTree());
-        // The build/date/FPS line differs on every run: leave its band, out to the window's right edge, out of comparisons.
-        int width = (int)GetViewport().GetVisibleRect().Size.X;
-        var ignore = overlay?.GetGlobalRect() is { } rect ? new[] { Math.Max(0,(int)rect.Position.X-40),Math.Max(0,(int)rect.Position.Y-4),width,(int)Math.Ceiling(rect.End.Y)+6 } : null;
+        // The build/date/FPS line differs on every run: leave its band, out to the window's right edge, out of
+        // comparisons. The overlay is laid out in canvas units; captures are in pixels.
+        var pixels = GetViewport().GetTexture().GetSize();
+        float scale = pixels.X/GetViewport().GetVisibleRect().Size.X;
+        var ignore = overlay?.GetGlobalRect() is { } rect ? new[] { Math.Max(0,(int)(rect.Position.X*scale)-40),Math.Max(0,(int)(rect.Position.Y*scale)-4),
+            pixels.X,(int)Math.Ceiling(rect.End.Y*scale)+6 } : null;
         var report = new Dictionary<string,object?> {
             ["build"] = BuildInfo.Label,
             ["units"] = _stressUnits,

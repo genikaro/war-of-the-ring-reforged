@@ -25,7 +25,7 @@ public partial class Main
             view.Root.Position = UnitPosition(unit) with { Y = UnitPosition(unit).Y-CorpseSinkDepth*(float)(age/CorpseSinkTicks) };
             return true;
         }
-        view.Buried = true; view.Root.Visible = false; view.Ring.Visible = false;
+        view.Buried = true; view.Root.Visible = false; view.Ring.Visible = false; view.Shown = view.WillShow = view.RingShown = view.Drawn = false;
         view.Root.ProcessMode = Node.ProcessModeEnum.Disabled;
         view.Player?.Stop();
         RetainUnitTemplates(view);
