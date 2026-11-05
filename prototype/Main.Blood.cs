@@ -53,7 +53,8 @@ public partial class Main
                 Bleed(_world.Units[e.Target],UnitPosition(_world.Units[e.Unit]),null,e.Kind == AbilityEventKind.Trueshot,now,
                     e.Kind == AbilityEventKind.Trueshot ? e.HealthMilli : _world.Units[e.Unit].Ability(e.Slot)?.HealMilli ?? 0,e.Slot);
         if (_bloodSmoke) BloodSmokeStep();
-        foreach (var unit in _world.Units)
+        // A death is seen on the tick it happens, while the body is still on the active roster.
+        foreach (var unit in _world.ActiveUnits)
         {
             if (unit.Health > 0 || !_bloodDeaths.Add(unit.Id) || unit.InsideSite >= 0 || !_bloodShown) continue;
             if (_blood.Unit(unit.Definition.Name) is not { } source || !_world.CanSeeUnit(ViewTeam,unit)) continue;

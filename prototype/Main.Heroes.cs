@@ -46,7 +46,7 @@ public partial class Main
         }
     }
 
-    private List<SimUnit> FriendlyHeroes() => [.. _world!.Units.Where(u => u.Team == PlayerTeam && u.Present && u.Definition.Hero).OrderBy(u => u.Id).Take(HeroBar.Slots)];
+    private List<SimUnit> FriendlyHeroes() => [.. _world!.ActiveUnits.Where(u => u.Team == PlayerTeam && u.Present && u.Definition.Hero).OrderBy(u => u.Id).Take(HeroBar.Slots)];
 
     /// <summary>Original portrait behavior: a click selects the hero, a double click also centers the camera on him.</summary>
     private void ChooseHero(int id,bool center,bool append)

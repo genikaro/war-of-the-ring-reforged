@@ -1,5 +1,10 @@
 # Godot C# skirmish sandbox
 
+**build-159:** The console's unit text, the minimap and several per-tick HUD scans are redone only when something
+they show can have changed, and they no longer walk the whole casualty history. Fogged minimap terrain is rebuilt
+whole pixels at a time. At 300 units in view the stress benchmark goes from 31 to 34-38 FPS (runs vary) and
+allocates 1.4 MB a frame instead of 3.4. Pictures are unchanged.
+
 **build-158:** Units off screen or in fog stop animating and updating, then catch up when they come into view; a unit
 whose shadow reaches the screen still counts as seen. Unit appearances are compiled once per model instead of being
 read from JSON every frame, and health bars share their meshes. With 300 units out of view the frame takes 8 ms

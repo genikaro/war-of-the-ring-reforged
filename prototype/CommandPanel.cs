@@ -357,6 +357,10 @@ public partial class CommandPanel : Control
         "Nazgul King" => "Portrait_E_Nazgul_King","Saleme" => "Portrait_E_Qamara","Grishnakh" => "Portrait_E_Grishnakh","Saruman" => "Portrait_E_Saruman",
         _ => "Portrait_E_Uruk_Hai" };
 
+    private int _describedTick = -1,_describedTeam;
+    private string _describedKey = "";
+    private SimWorld? _describedWorld;
+
     public void Refresh(IReadOnlyList<SimUnit> units,Func<int,string> name,OrderKind? pending,bool paused,IReadOnlyList<int[]>? groups = null,int allies = 0,int enemies = 0,bool walking = false,int tick = 0,int pendingAbilitySlot = -1)
     {
         _map.ViewerTeam = SightTeam ?? PlayerTeam; _map.HazeTeams = HazeTeams;
@@ -373,21 +377,28 @@ public partial class CommandPanel : Control
         _title.Position = single ? new(335,59) : new(265,59); _title.Size = single ? new(435,22) : new(505,22);
         // Build-67: each unit's order readout. A single unit shows its order beside the portrait; a group's title stays
         // empty. Portrait tooltips carry each full readout, what the unit is doing included.
-        Dictionary<int,UnitOrderReadout> readouts = _world == null ? [] : units.ToDictionary(u => u.Id,u => UnitOrderReadout.From(_world,u,name));
         _title.Text = single ? name(units[0].Id) : "";
+        string key = string.Join(',',units.Select(u => u.Id));
+        // Build-159: what the console says about the selected units comes from the world, which only changes on a
+        // tick while the game runs: the same tick and selection need no new text. Paused, the console can change it.
+        bool fresh = paused || tick != _describedTick || key != _describedKey || _world != _describedWorld || PlayerTeam != _describedTeam;
+        _describedTick = tick; _describedKey = key; _describedWorld = _world; _describedTeam = PlayerTeam;
+        Dictionary<int,UnitOrderReadout> readouts = _world == null || !fresh ? [] : units.ToDictionary(u => u.Id,u => UnitOrderReadout.From(_world,u,name));
         // The bottom line: while observing, whose units these are; the job a bot gave them (so an observer sees why they
         // do what they do); then the queue.
         string side = !available || !observing ? "" : units.All(u => u.Team < 0) ? "Neutral"
             : units.Any(u => u.Team != units[0].Team) ? "Mixed sides" : $"Player {units[0].Team+1}";
-        int queued = units.Sum(u => u.OrderQueue.Count);
-        var only = single ? readouts.GetValueOrDefault(units[0].Id) : null;
-        _order.Text = string.Join(" · ",(single ? [side,only?.Role ?? "",only?.Queue ?? ""]
-            : new[] { side }.Concat(readouts.Values.Where(r => r.Role != "").GroupBy(r => r.Role).Select(g => g.Count() > 1 ? $"{g.Key} ×{g.Count()}" : g.Key))
-                .Append(queued > 0 ? $"{queued} queued" : "")).Where(part => part != ""));
+        if (fresh)
+        {
+            int queued = units.Sum(u => u.OrderQueue.Count);
+            var only = single ? readouts.GetValueOrDefault(units[0].Id) : null;
+            _order.Text = string.Join(" · ",(single ? [side,only?.Role ?? "",only?.Queue ?? ""]
+                : new[] { side }.Concat(readouts.Values.Where(r => r.Role != "").GroupBy(r => r.Role).Select(g => g.Count() > 1 ? $"{g.Key} ×{g.Count()}" : g.Key))
+                    .Append(queued > 0 ? $"{queued} queued" : "")).Where(part => part != ""));
+        }
         _armies.Text = $"Allies {allies}    Enemies {enemies}";
         _walkRun.SetPressedNoSignal(walking);
         _walkRun.TooltipText = $"Global Walk / Run [F2] · {(walking ? "Walking" : "Running")}";
-        string key = string.Join(',',units.Select(u => u.Id));
         if (_rosterKey != key)
         {
             bool sameArmy = units.Count > 1 && units.All(u => _portraits.ContainsKey(u.Id));
@@ -407,7 +418,7 @@ public partial class CommandPanel : Control
             }
             _roster.CustomMinimumSize = new(496,Math.Max(0,((units.Count+9)/10)*53-3));
         }
-        foreach (var unit in units)
+        if (fresh) foreach (var unit in units)
         {
             var stats = UnitHudStats.From(unit,_rules);
             var portrait = _portraits[unit.Id]; portrait.Health.Size = new(46*Math.Clamp(unit.Health/(float)unit.MaxHealth,0,1),4);
@@ -450,7 +461,7 @@ public partial class CommandPanel : Control
         }
         // Only refusals and the pause show above the console (build-67 dropped the targeting how-tos).
         _hint.Text = NoticeShowing ? _notice : paused && !observing ? "Paused" : "";
-        _map.QueueRedraw();
+        _map.RedrawIfChanged(paused);
         if (pending != OrderKind.UseAbility) UpdateCursor(pending);
     }
 

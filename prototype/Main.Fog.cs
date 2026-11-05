@@ -93,7 +93,7 @@ public partial class Main
     private bool GhostShown(int site) => Fogged && _world!.RememberedSite(ViewTeam,site) is { } seen && _world.IsGhost(seen);
 
     /// <summary>The console's enemy count: living enemy units, only those in sight under fog (build-150).</summary>
-    private int VisibleEnemies() => _world!.Units.Count(u => u.Team != PlayerTeam && u.Health > 0 && (!Fogged || u.Present && _world.CanSeeUnit(ViewTeam,u)));
+    private int VisibleEnemies() => _world!.ActiveUnits.Count(u => u.Team != PlayerTeam && u.Health > 0 && (!Fogged || u.Present && _world.CanSeeUnit(ViewTeam,u)));
 
     /// <summary>The health the console shows for a building: as last seen for an enemy building out of sight.</summary>
     private int ShownHealth(ConstructionSite site) => SightOf(site) == SiteSight.Remembered && _world!.RememberedSite(ViewTeam,site.Id) is { } seen

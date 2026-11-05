@@ -10,6 +10,7 @@ public partial class BattleMinimap : Control
     private ImageTexture? _terrain;
     /// <summary>Build-150: the terrain in colour and in grey, and the two mixed by the viewer's sight.</summary>
     private byte[] _colour = [],_grey = [],_mixed = [];
+    private int[] _sightColumns = [];
     private Image? _mixedImage;
     private ImageTexture? _fogged;
     private (string Teams,int Updates) _foggedFor = ("",-1);
@@ -70,17 +71,22 @@ public partial class BattleMinimap : Control
         if (_fogged != null && _foggedFor == (key,world.VisionUpdates)) return _fogged;
         _foggedFor = (key,world.VisionUpdates);
         var sights = haze.Select(t => world.Vision(t).Visible).ToArray();
+        // Build-159: whole RGBA pixels at a time (it was a 4-byte block copy per pixel); the same bytes result.
+        var colour = System.Runtime.InteropServices.MemoryMarshal.Cast<byte,uint>(_colour);
+        var grey = System.Runtime.InteropServices.MemoryMarshal.Cast<byte,uint>(_grey);
+        var mixed = System.Runtime.InteropServices.MemoryMarshal.Cast<byte,uint>(_mixed.AsSpan());
+        if (_sightColumns.Length != nav.Width)
+            _sightColumns = Enumerable.Range(0,nav.Width).Select(x => Math.Min(world.VisionWidth-1,x*nav.CellSize/SimWorld.VisionCellMm)).ToArray();
         for (int z = 0; z < nav.Height; z++)
         {
             int row = Math.Min(world.VisionHeight-1,z*nav.CellSize/SimWorld.VisionCellMm)*world.VisionWidth;
-            int line = (nav.Height-1-z)*nav.Width*4;
+            int line = (nav.Height-1-z)*nav.Width;
             for (int x = 0; x < nav.Width; x++)
             {
-                int cell = row+Math.Min(world.VisionWidth-1,x*nav.CellSize/SimWorld.VisionCellMm);
+                int cell = row+_sightColumns[x];
                 bool seen = false;
                 foreach (var visible in sights) if (visible[cell] != 0) { seen = true; break; }
-                var source = seen ? _colour : _grey;
-                Buffer.BlockCopy(source,line+x*4,_mixed,line+x*4,4);
+                mixed[line+x] = seen ? colour[line+x] : grey[line+x];
             }
         }
         if (_mixedImage == null) { _mixedImage = Image.CreateFromData(nav.Width,nav.Height,false,Image.Format.Rgba8,_mixed); _fogged = ImageTexture.CreateFromImage(_mixedImage); }
@@ -151,7 +157,22 @@ public partial class BattleMinimap : Control
         DrawRect(new(Vector2.Zero,Size),new Color("c4aa6e"),false,1);
     }
 
-    public IEnumerable<SimUnit> VisibleUnits() => _world!.Units.Where(u => u.Present && _world.CanSeeUnit(ViewerTeam,u));
+    public IEnumerable<SimUnit> VisibleUnits() => _world!.ActiveUnits.Where(u => u.Present && _world.CanSeeUnit(ViewerTeam,u));
+
+    private (int Tick,int Vision,int Units,int Sites,int Viewer,string Haze,object? Markers,object? Colors,Vector2 Size,int View) _drawnFor;
+
+    /// <summary>Build-159: redraws only when something it shows can have changed (a tick, sight, the camera's
+    /// footprint, markers, colours, size), or every frame while paused, when the console can change the world.</summary>
+    public void RedrawIfChanged(bool force)
+    {
+        var world = _world;
+        int view = 17;
+        foreach (var point in View) view = HashCode.Combine(view,point);
+        var key = (world?.Tick ?? -1,world?.VisionUpdates ?? -1,world?.Units.Count ?? -1,world?.ConstructionSites.Count ?? -1,
+            ViewerTeam,string.Join(',',Haze),(object?)_markers,(object?)TeamColors,Size,view);
+        if (!force && key == _drawnFor) return;
+        _drawnFor = key; QueueRedraw();
+    }
 
     public override void _GuiInput(InputEvent input)
     {

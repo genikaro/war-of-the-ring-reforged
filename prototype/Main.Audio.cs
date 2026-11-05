@@ -89,7 +89,8 @@ public partial class Main
             if (combat.Kind == CombatEventKind.Hit && combat.DamageMilli > 0 && target?.Health > 0 && Audible(target))
                 _audio.Speak(target.Definition.Name,2,UnitPosition(target));
         }
-        foreach (var unit in world.Units)
+        // Deaths and new arrivals happen on the active roster; settled corpses have nothing left to say.
+        foreach (var unit in world.ActiveUnits)
         {
             bool alive = unit.Health > 0;
             if (!alive && _audioAlive.GetValueOrDefault(unit.Id) && Audible(unit)) _audio.Speak(unit.Definition.Name,3,UnitPosition(unit));

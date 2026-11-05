@@ -845,7 +845,6 @@ public partial class Main : Node3D
             _world.Step();
             if (_sandboxMap) RefillSandboxMapBanks();
             while (_views.Count < _world.Units.Count) AddUnitView(_world.Units[_views.Count]);
-            if (_skirmish) ApplySkirmishHud(_commands);
             if (_engagementSmoke) RecordEngagementStep(System.Diagnostics.Stopwatch.GetElapsedTime(stepStart).TotalMilliseconds);
             PresentCombatEvents();
             PresentBloodEvents();
@@ -856,6 +855,9 @@ public partial class Main : Node3D
             if (_skirmish) PresentPlaceCaptures();
             PresentOutcome();
         }
+        // Build-159: the console's bank and population once per physics frame, for its last tick (nothing is drawn
+        // between the ticks of a speed burst).
+        if (_skirmish) ApplySkirmishHud(_commands);
         if (_pendingObstacle >= 0)
         {
             bool applied = _world.Navigation.IsObstacleActive(_pendingObstacle) == _pendingObstacleActive;
@@ -960,7 +962,7 @@ public partial class Main : Node3D
         PresentOrderSpeech();
         if (_audioSmoke) AudioSmokeInput();
         ReportProfile();
-        RefreshObserverPanel(delta);
+        using (SimProfiler.Time("hud observer")) RefreshObserverPanel(delta);
         long unitPresentation = SimProfiler.Start();
         float dt = (float)Math.Min(delta, 0.1);
         PrepareViewCulling();
@@ -1053,15 +1055,17 @@ public partial class Main : Node3D
         _commands.SetMinimapView(ViewFootprint());
         long hudPresentation = SimProfiler.Start();
         _selected.RemoveWhere(id => !LivingUnit(id) || !_world.CanSeeUnit(ViewTeam,_world.Units[id]));
-        var units = _world.Units.Where(u => _selected.Contains(u.Id)).ToList();
+        // Selected units are alive, so the active roster (in id order) holds them all.
+        var units = _world.ActiveUnits.Where(u => _selected.Contains(u.Id)).ToList();
         if (units.Count == 0 && _pendingGlobalPower < 0 && _pendingPlacePower < 0) _orders.Cancel();
         if (_skirmish) SyncBuildMenu();
+        using (SimProfiler.Time("hud console"))
         _commands.Refresh(units,UnitName,_orders.Pending,_paused,
             Enumerable.Range(0,10).Select(slot => _controlGroups.Recall(slot,LivingFriendly)).ToArray(),
-            _world.Units.Count(u => u.Team == PlayerTeam && u.Health > 0),VisibleEnemies(),_world.IsWalking(PlayerTeam),_world.Tick,_pendingAbilitySlot);
+            _world.ActiveUnits.Count(u => u.Team == PlayerTeam && u.Health > 0),VisibleEnemies(),_world.IsWalking(PlayerTeam),_world.Tick,_pendingAbilitySlot);
         UpdateAbilityCursor();
         _heroBar.Refresh(FriendlyHeroes(),_commands.Art,_commands.EffectiveScale);
-        if (_skirmish)
+        using (SimProfiler.Time("hud structures")) if (_skirmish)
         {
             if (!SelectedBuilders().Any()) ClearConstructionTargeting();
             _commands.RefreshConstruction(_world,units,_constructionTargeting,_constructionBuilding,PageChoices(),SelectedStructureDetails());
