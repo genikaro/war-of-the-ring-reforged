@@ -103,6 +103,17 @@ public static class AiChecks
         check(threw,"a style that does not sum to 100 is refused");
         int[] thinks = [.. new[] {0,1,2}.Select(d => { var w = Fixture(difficulty: d); Step(w,600); return w.AiPlayers[1].Thinks; })];
         check(thinks.SequenceEqual([10,30,60]),"in 30 s Easy thinks every 3 s, Normal every second and Hard twice a second: "+string.Join('/',thinks));
+        // Build-156: a Hard bot in slot 2 thinks first at tick 3; with a worker beside its well that think lays the Mill,
+        // which the journal used to take for start base and never wrote.
+        var early = Fixture(difficulty: 2); early.Economies[1] = new(5000,5000);
+        early.Units[0].Order = early.Units[1].Order = OrderKind.HoldGround; // So the builder is the worker beside the well.
+        early.Spawn(1,Cell(53,3),worker);
+        while (early.AiPlayers[1].Thinks == 0) early.Step();
+        bool laidFirst = early.ConstructionSites[Well].Team == 1;
+        Step(early,200);
+        check(laidFirst && early.AiPlayers[1].Journal.Entries.Any(e => e.Kind == AiJournalKind.Build && e.Text.StartsWith("Mill")),
+            "a foundation the bot's first think lays is written to its journal: laid "+laidFirst+", "
+            +string.Join("; ",early.AiPlayers[1].Journal.Entries.Select(e => e.Text)));
         int[] crews = [.. new[] {0,1,2}.Select(d =>
         {
             var w = Fixture(difficulty: d); w.Economies[1] = new(5000,5000);

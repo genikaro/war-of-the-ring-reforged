@@ -50,6 +50,16 @@ public sealed partial class SimWorld
 {
     private const int AiJournalQuietTicks = 30*TicksPerSecond;
 
+    /// <summary>The start base and starting units, which are no decisions: taken before the bot's first think. Build-156:
+    /// taken after it, a foundation that think laid (a Hard bot in slot 2 thinks first at tick 3, with a starting worker
+    /// beside its home well) counted as start base, so its home Mill never reached the journal.</summary>
+    private void AiJournalStart(AiPlayer ai)
+    {
+        ai.Journal.Started = true;
+        ai.Journal.Sites.UnionWith(ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Health > 0).Select(s => s.Id));
+        ai.Journal.Fielded.UnionWith(ActiveUnits.Where(u => u.Team == ai.Team && u.Health > 0).Select(u => u.Definition.Name));
+    }
+
     /// <summary>After each think: what the bot newly decided since the last one, compared with what the journal saw then.
     /// It only reads the world, so a match plays out the same whether anyone opens the journal or not.</summary>
     private void AiJournalUpdate(AiPlayer ai)
@@ -59,13 +69,6 @@ public sealed partial class SimWorld
         var mine = ConstructionSites.Values.Where(s => s.Team == ai.Team && s.Health > 0).ToArray();
         var queued = Producers.Values.Where(p => p.Team == ai.Team).SelectMany(p => p.Queue.Select(q => (Producer: p,q.Unit))).ToArray();
         void Write(AiJournalKind kind,string text) => journal.Add(Tick,kind,text);
-        if (!journal.Started)
-        {
-            // The start base and starting units are no decisions.
-            journal.Started = true;
-            journal.Sites.UnionWith(mine.Select(s => s.Id));
-            journal.Fielded.UnionWith(ActiveUnits.Where(u => u.Team == ai.Team && u.Health > 0).Select(u => u.Definition.Name));
-        }
         string? citadel = StartStructures.FirstOrDefault(s => s.Team == ai.Team)?.Building;
 
         if (ai.Composition is { } composition && journal.Composition != composition.Id)

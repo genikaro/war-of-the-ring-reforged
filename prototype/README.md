@@ -1,5 +1,10 @@
 # Godot C# skirmish sandbox
 
+**build-156:** A bot's journal no longer misses a building laid in its very first think. A Hard bot in slot 2 thinks first
+at tick 3 with a starting worker beside its home well, so its home Mill went up in that think and the journal took it for
+part of the start base. Both slots build the same Mills; only the journal differed. See
+[SKIRMISH.md](SKIRMISH.md#build-156-the-journal-takes-the-start-base-before-the-first-think).
+
 **build-155:** Bots claim food first: a Mill (50 ore) on every free, safe well near home now comes right after the
 first economy buildings instead of last, so a razed Mill is rebuilt at once, and the expansion Citadel comes as soon as
 its style's time is due instead of after every research building. Under fog a bot also counts the enemy towers it

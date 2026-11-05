@@ -3644,8 +3644,9 @@ Validation: default simulation suite 2623 checks (with build-149); `--fog-checks
 The same 14 matches on build-155 (headless observer smoke, fog on, 16x): **Aragorn 11, Maggot 1, none 2** (was 7, 5 and 2).
 Maggot now expands at 8:26-9:33 in all 14 (its style's 8:00 plus the walk and the build), Aragorn at 14:00-16:30 in 13. Maggot's
 one win (Aragorn in slot 1, seed 6) and both 40:00 draws (slot 1, seeds 3 and 4) come where it gathered 7300-9000 food to
-Aragorn's 4800-5500; otherwise both gather 3700-6400. Open: Aragorn in slot 2 lays only its home Mill in six of seven
-matches (two in the seventh), in slot 1 two to four.
+Aragorn's 4800-5500; otherwise both gather 3700-6400. (This note first claimed Aragorn in slot 2 laid fewer Mills, from
+counting journal lines; the two-minute snapshots show two Mills by 4:00 for both bots in both slots. The journal missed
+the home Mill: see build-156.)
 
 | Seed | Maggot slot 1, Aragorn slot 2 | Aragorn slot 1, Maggot slot 2 |
 | --- | --- | --- |
@@ -3660,4 +3661,22 @@ matches (two in the seventh), in slot 1 two to four.
 ```powershell
 # One match (the sweep runs seeds 0-6 in both seat orders, four at a time, each on its own copy of the cache):
 converted/tooling/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64_console.exe --path prototype --headless --fixed-fps 20 -- --view=squad --observer-smoke --observe --bots=FarmerMaggot,Aragorn --fog --seed=0 --cache=<copy of converted/skirmish>
+```
+
+## Build-156: the journal takes the start base before the first think
+
+Build-155's sweep seemed to show Aragorn in slot 2 laying fewer Mills: its journal never had a home Mill. The two-minute
+snapshots show two Mills by 4:00 for both bots in both slots, so the economy was even and the journal was wrong.
+
+A Hard bot thinks every 10 ticks, at `(Tick + 7 x team) % 10 == 0`, so slot 2 first thinks at tick 3. A starting worker
+stands beside its home well, and a Build order whose worker already stands beside a Mill site claims and pays for it at
+once (`Construction.cs`), so the home Mill went up inside that first think. The journal took everything the bot owned
+after its first think for the start base, and never wrote that Mill. Slot 1 thinks at tick 0 but its workers walk to the
+well first, so its Mill was written at 0:05.
+
+`AiJournalStart` now records the start base and starting units before the first think. It only reads the world, so the
+matches play out as before. `AiChecks` has a fixture for this case: its check fails with the old order ("laid True, camp").
+
+```powershell
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --target-priority-checks
 ```
