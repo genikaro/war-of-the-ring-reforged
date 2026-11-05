@@ -206,7 +206,7 @@ static class MeleeChecks
             check(rules.TypeScale(from,to) == Ratings[from,to]*10000,$"cached type matrix agrees with requested ratings {from}/{to}");
         check((hero.MaxHealth,knight.MaxHealth,orc.MaxHealth) == (485,350,240),"cached base health is traced to three source units");
         check((hero.DpsMilli,knight.DpsMilli,orc.DpsMilli) == (20000,10000,14000),"cached melee weapons have distinct source DPS");
-        check(hero.Attacks[2].Hits.Select(h => h.Tick).SequenceEqual(new[] {13,27}) && orc.Attacks[0].Hits[0].Tick == 15,
+        check(hero.Attacks[2].Hits.Select(h => h.Tick).SequenceEqual(new[] {13,27}) && orc.Attacks.Single(a => a.Melee).Hits[0].Tick == 15,
             "cached clip durations and multi-hit events quantize as expected");
         var reports = new List<object>();
         foreach (var pair in new[] {(hero,orc),(orc,hero),(knight,orc),(orc,knight)})

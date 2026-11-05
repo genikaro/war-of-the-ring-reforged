@@ -14,7 +14,7 @@ public partial class Main
     private readonly Dictionary<string,bool> _observerChecks = [];
     private int _observerPhase,_observerStep,_observerJournalStep,_observerTickMark,_observerFrameMark,_observerBurst,_observerInspected = -1,_observerSnapshotTick,_observerCaptures;
     private bool _observerOk = true; // the running result of a check spread over several frames
-    private const int ObserverSmokeChecks = 19;
+    private const int ObserverSmokeChecks = 23;
     private readonly List<string> _observerTimeline = [];
     /// <summary>A report key per bot: the player as well as the bot, so a mirror match (Gimli against Gimli) keeps both.</summary>
     private static string BotKey(AiPlayer bot) => $"Player {bot.Team+1} {bot.Personality.Id}";
@@ -34,6 +34,7 @@ public partial class Main
         switch (_observerPhase)
         {
             case 0:
+                ObserverAssetsSmoke();
                 _observerChecks["every_side_runs_its_bot"] = world.Contenders.Count >= 2 && world.AiPlayers.Keys.SequenceEqual(world.Contenders)
                     && world.AiPlayers.Values.All(a => _bots.ElementAtOrDefault(a.Team) is not { Length: > 0 } bot
                         || AiRoster.Parse(bot) is var choice && string.Equals(a.Personality.Id,choice.Id,StringComparison.OrdinalIgnoreCase) && a.Traits.SequenceEqual(choice.Traits));
@@ -85,11 +86,30 @@ public partial class Main
                 if (_observerStep == 8) { _observerOk &= !_observerHud.Collapsed && _observerHud.Tab == ObserverHud.Page.Economy; PushKey(Key.E); }
                 if (_observerStep == 9) { _observerOk &= _observerHud.Collapsed; PushKey(Key.Tab); }
                 if (_observerStep == 10) Click(_observerHud.NameCell(0).GetGlobalRect().GetCenter());
-                if (++_observerStep < 12) break;
+                if (_observerStep == 12)
+                {
+                    var home = world.ConstructionSites.Values.First(s => s.Team == world.Contenders.Min && s.Prebuilt);
+                    var (homeX,homeZ) = world.SitePosition(home); var homeAt = PositionOf(homeX,homeZ);
+                    _observerChecks["player_name_centres_on_base"] = new Vector2(_focus.X,_focus.Z).DistanceTo(new Vector2(homeAt.X,homeAt.Z)) < 1;
+                    Press(_observerHud.TabFor(ObserverHud.Page.Buildings).GetGlobalRect().GetCenter());
+                }
+                if (_observerStep == 13) Release(_observerHud.TabFor(ObserverHud.Page.Buildings).GetGlobalRect().GetCenter());
+                if (_observerStep == 15)
+                {
+                    _observerChecks["buildings_tab_counts_every_living_building"] = _observerHud.Tab == ObserverHud.Page.Buildings && _observerHud.BodyVisible
+                        && world.Contenders.Select((team,i) => _observerHud.DisplayedBuildingCounts(i).Sum()
+                            == world.ConstructionSites.Values.Count(s => s.Team == team && s.Health > 0)).All(v => v);
+                    PushKey(Key.G);
+                }
+                if (_observerStep == 17)
+                {
+                    _observerOk &= _observerHud.Tab == ObserverHud.Page.Upgrades && _observerHud.BodyVisible;
+                    PushKey(Key.B);
+                }
+                if (_observerStep == 19) { _observerOk &= _observerHud.Tab == ObserverHud.Page.Buildings; PushKey(Key.B); }
+                if (_observerStep == 21) { _observerOk &= _observerHud.Collapsed; PushKey(Key.E); }
+                if (++_observerStep < 24) break;
                 _observerChecks["observer_tabs_switch_and_fold"] = _observerOk && !_observerHud.Collapsed && _observerHud.BodyVisible;
-                var home = world.ConstructionSites.Values.First(s => s.Team == world.Contenders.Min && s.Prebuilt);
-                var (homeX,homeZ) = world.SitePosition(home); var homeAt = PositionOf(homeX,homeZ);
-                _observerChecks["player_name_centres_on_base"] = new Vector2(_focus.X,_focus.Z).DistanceTo(new Vector2(homeAt.X,homeAt.Z)) < 1;
                 _observerPhase = 3; _observerStep = 0; break;
             case 3:
                 // The speed slider and pause button, then the keys.
@@ -121,14 +141,14 @@ public partial class Main
                 // 40 game minutes for a duel, 20 more per extra player.
                 if (!world.MatchOver && world.Tick < 48000+24000*(world.Contenders.Count-2))
                 {
-                    if (_observerJournalStep <= 12 && _observerCaptures >= 3 && world.Tick >= 15*60*SimWorld.TicksPerSecond) { ObserverJournalSmoke(world); break; }
+                    if (_observerJournalStep <= 12 && (_capture == "" || _observerCaptures >= 5) && world.Tick >= 15*60*SimWorld.TicksPerSecond) { ObserverJournalSmoke(world); break; }
                     if (++_observerStep == 2 && _capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-observer.png");
                     // Mid-game frames of every tab, for reviewing the spectator HUD with armies on the field.
-                    if (_capture != "" && _observerCaptures < 3 && world.Tick >= (10+2*_observerCaptures)*60*SimWorld.TicksPerSecond)
+                    if (_capture != "" && _observerCaptures < 5 && world.Tick >= (6+2*_observerCaptures)*60*SimWorld.TicksPerSecond)
                     {
-                        _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+new[] {"-economy.png","-units.png","-stats.png"}[_observerCaptures++]);
+                        _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+new[] {"-economy.png","-units.png","-buildings.png","-upgrades.png","-stats.png"}[_observerCaptures++]);
                         // The next capture's tab, chosen now: the overview redraws a frame after a switch.
-                        if (_observerCaptures < 3) _observerHud.Choose(_observerCaptures == 1 ? ObserverHud.Page.Units : ObserverHud.Page.Stats);
+                        if (_observerCaptures < 5) _observerHud.Choose(new[] {ObserverHud.Page.Economy,ObserverHud.Page.Units,ObserverHud.Page.Buildings,ObserverHud.Page.Upgrades,ObserverHud.Page.Stats}[_observerCaptures]);
                     }
                     break;
                 }
@@ -151,9 +171,9 @@ public partial class Main
                     // A unit killed on the final tick has no presented death yet (DeathTick -1).
                     && _views.Where(p => !p.Value.Buried && world.Units[p.Key].Health <= 0 && p.Value.DeathTick >= 0)
                         .All(p => world.Tick-p.Value.DeathTick < CorpseTicks+CorpseSinkTicks+SimWorld.TicksPerSecond);
-                // Build-76: battle earns both sides Fate (bots do not spend it), within the source cap of 20.
+                // Battle earns both sides Fate; heroes, gear and powers may spend it before the match ends.
                 _observerChecks["bots_earn_fate_in_battle"] = world.Contenders.All(t => world.Economies[t] is var bank
-                    && (bank.Fate > 0 || bank.FateProgressMicro > 0) && bank.Fate == bank.FateEarned && bank.Fate <= world.MaxFate);
+                    && (bank.FateEarned > 0 || bank.FateProgressMicro > 0) && bank.Fate >= 0 && bank.Fate <= Math.Min(bank.FateEarned,world.MaxFate));
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-result.png");
                 _observerPhase = 5; _observerStep = 0; break;
             case 5:
@@ -205,6 +225,32 @@ public partial class Main
 
     /// <summary>Build-148, mid-match: the first bot's journal button opens its decision journal, newest first, the second
     /// bot's switches to that bot, and the cross closes it. The match waits paused meanwhile, so view and journal agree.</summary>
+    private void ObserverAssetsSmoke()
+    {
+        // Known progress and completed research, independent of the live bots' spending decisions.
+        var world = new SimWorld(new(8,8,1000,Enumerable.Repeat(true,64).ToArray(),new int[81]));
+        world.Contenders.Add(0);world.Economies[0]=new(0,0);
+        world.BuildingRules["hall"]=new("hall","Hall",null,0,0,100,1000,0,0,0,0,[]);
+        world.BuildingRules["hall2"]=world.BuildingRules["hall"] with {Name="hall2",DisplayName="Great Hall"};world.Upgrades["hall"]="hall2";
+        world.ConstructionSites[100]=new(100,100,1000,"hall"){Team=0,Health=1000,Complete=true,Upgrading=true,UpgradeTicks=25,Research="steel",ResearchTicks=50};
+        world.ConstructionSites[101]=new(101,101,1000,"hall"){Team=0,Health=100,Complete=false};
+        world.ConstructionSites[102]=new(102,102,1000,"hall"){Team=0,Health=0,Complete=true};
+        world.Techniques.Add(new("iron","Iron","hall",0,0,0,100,null,null,new Dictionary<string,(int,int)>()));
+        world.Techniques.Add(new("steel","Steel","hall",0,0,0,200,null,"iron",new Dictionary<string,(int,int)>()));
+        world.Researched[0]=["iron"];
+        var hud = new ObserverHud();_hud.AddChild(hud);
+        hud.Choose(ObserverHud.Page.Buildings);hud.Refresh(world,TeamColor,_commands.Art,1,1000);
+        _observerChecks["buildings_tab_includes_foundations_and_excludes_ruins"] = hud.DisplayedBuildingCounts(0).SequenceEqual([2]);
+        hud.Choose(ObserverHud.Page.Upgrades);hud.Refresh(world,TeamColor,_commands.Art,1,1000);
+        var tips=hud.DisplayedUpgradeTips(0);
+        _observerChecks["upgrades_tab_shows_completed_research_and_progress"] = tips.Length==3 && tips.Any(t=>t.StartsWith("Iron · Complete"))
+            && tips.Any(t=>t.StartsWith("Steel · Researching 25%")) && tips.Any(t=>t.StartsWith("Great Hall · Upgrading 25%"));
+        world.ConstructionSites[100].Health=0;hud.Refresh(world,TeamColor,_commands.Art,1,1000);
+        _observerChecks["upgrades_tab_retains_completed_research_after_building_loss"] = hud.DisplayedUpgradeTips(0).Length==1
+            && hud.DisplayedUpgradeTips(0)[0].StartsWith("Iron · Complete");
+        _hud.RemoveChild(hud);hud.QueueFree();
+    }
+
     private void ObserverJournalSmoke(SimWorld world)
     {
         var teams = world.Contenders.ToArray();

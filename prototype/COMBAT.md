@@ -25,8 +25,9 @@ matchups and bonuses still adjust damage normally. Raw source data stays intact.
 
 `Units.MeleeWeapon` resolves the `Weapons` record. The Elven Knight uses
 `WEAPON_GONDOR_SWORDSMAN_MELEE`. Damage comes from `CuttingDamagePerSecond`,
-not a per-hit field. All three source units specify eight attackers. Uruk-Hai's
-missile weapon/preference is outside this melee slice.
+not a per-hit field. All three source units specify eight attackers. Since build-149, Uruk-Hai use their source
+crossbow at range (13 m maximum) and retain weapon 74 and the source melee clip in close combat. The missile
+releases at tick 28 of its 41-tick animation; the melee hit remains at tick 15 of its 27-tick animation.
 
 `tools/combat_rules.py` reads unit, weapon, classification and pair-modifier
 tables; model states/events; skeleton durations; impact effects and sounds.

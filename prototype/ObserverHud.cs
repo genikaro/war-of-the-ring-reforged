@@ -3,14 +3,14 @@ using Reforged.Simulation;
 
 /// <summary>The spectator's overview at the top right, laid out like the observer panels of StarCraft II and
 /// Age of Empires II: one row per player in its colour, under an Economy tab (bank, income per minute,
-/// population, workers, army, buildings), a Units tab (a portrait per unit type with its count) or a Stats tab
-/// (food and ore gathered over the match, units killed and lost). E, U and S open a tab; the open tab's key or
+/// population, workers, army, buildings), Units and Buildings tabs (portraits with counts), an Upgrades tab
+/// (completed research and ongoing research/building upgrades) and Stats (gathering, kills and losses). E, U, B, G and S open a tab; the open tab's key or
 /// button, the chevron or Tab folds the panel down to its tab strip. A click on a player's name centres the
 /// camera on that player's base; the page button beside a bot's name opens its decision journal under the panel
 /// (build-148), newest decision first, and closes it again.</summary>
 public partial class ObserverHud : Control
 {
-    public enum Page { Economy,Units,Stats }
+    public enum Page { Economy,Units,Buildings,Upgrades,Stats }
     public event Action<int>? PlayerChosen;
     public Page Tab { get; private set; }
     public bool Collapsed { get; private set; }
@@ -34,7 +34,7 @@ public partial class ObserverHud : Control
         ("Food gathered · everything workers delivered this match",64),("Ore gathered · everything workers delivered this match",64),
         ("Kills · enemy units slain by this player's units and towers",64),("Losses · this player's units slain",64)];
     private PanelContainer _frame = null!;
-    private Button _economyTab = null!,_unitsTab = null!,_statsTab = null!,_fold = null!;
+    private Button _economyTab = null!,_unitsTab = null!,_buildingsTab = null!,_upgradesTab = null!,_statsTab = null!,_fold = null!;
     private Control _foldGlyph = null!;
     private VBoxContainer _economy = null!,_units = null!,_stats = null!;
     private readonly TextureRect[] _headerIcons = new TextureRect[EconomyColumns.Length],_statsIcons = new TextureRect[2];
@@ -62,6 +62,8 @@ public partial class ObserverHud : Control
         var header = new HBoxContainer(); header.AddThemeConstantOverride("separation",2); root.AddChild(header);
         _economyTab = TabButton("Economy","Economy [E] · bank, income, population, workers, army and buildings",Page.Economy); header.AddChild(_economyTab);
         _unitsTab = TabButton("Units","Units [U] · each player's living units by type",Page.Units); header.AddChild(_unitsTab);
+        _buildingsTab = TabButton("Buildings","Buildings [B] · each player's buildings by type, including foundations",Page.Buildings); header.AddChild(_buildingsTab);
+        _upgradesTab = TabButton("Upgrades","Upgrades [G] · completed research and research or building upgrades in progress",Page.Upgrades); header.AddChild(_upgradesTab);
         _statsTab = TabButton("Stats","Stats [S] · food and ore gathered over the match, units killed and lost",Page.Stats); header.AddChild(_statsTab);
         header.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill,MouseFilter = MouseFilterEnum.Ignore });
         _fold = new Button { CustomMinimumSize = new(24,22),FocusMode = FocusModeEnum.None,TooltipText = "Fold or unfold the overview [Tab]" };
@@ -88,6 +90,7 @@ public partial class ObserverHud : Control
             if (column < _statsIcons.Length) statsColumns.AddChild(_statsIcons[column] = HeaderIcon(width,tip));
             else statsColumns.AddChild(Heading(column == 2 ? "Kills" : "Losses",width,tip));
         }
+        CreateAssetPages(root);
         CreateJournal();
     }
 
@@ -188,7 +191,7 @@ public partial class ObserverHud : Control
     /// <summary>A bot's journal button: open its journal, or close it when it is the one open.</summary>
     public void ToggleJournal(int team) => JournalTeam = JournalTeam == team ? -1 : team;
 
-    /// <summary>E, U or S: open that tab, or fold the panel when it is already open.</summary>
+    /// <summary>Open a tab, or fold the panel when it is already open.</summary>
     public void Choose(Page page)
     {
         if (Tab == page && !Collapsed) Collapsed = true;
@@ -198,7 +201,8 @@ public partial class ObserverHud : Control
     public void Toggle() => Collapsed = !Collapsed;
 
     /// <summary>An offscreen capture's copy shows what the live panel shows.</summary>
-    public void Mirror(ObserverHud live) { Tab = live.Tab; Collapsed = live.Collapsed; Income = live.Income; JournalTeam = live.JournalTeam; }
+    public void Mirror(ObserverHud live) { Tab = live.Tab; Collapsed = live.Collapsed; Income = live.Income; JournalTeam = live.JournalTeam;
+        BuildingPortrait = live.BuildingPortrait; TechniquePortrait = live.TechniquePortrait; }
 
     /// <summary>Lays the panel out under the build label at the console's scale and fills in every contender; an open
     /// journal reaches down to just above the console's top.</summary>
@@ -212,11 +216,15 @@ public partial class ObserverHud : Control
         _teams.Clear(); _teams.AddRange(world.Contenders);
         _economyTab.SetPressedNoSignal(!Collapsed && Tab == Page.Economy); _unitsTab.SetPressedNoSignal(!Collapsed && Tab == Page.Units);
         _statsTab.SetPressedNoSignal(!Collapsed && Tab == Page.Stats);
+        _buildingsTab.SetPressedNoSignal(!Collapsed && Tab == Page.Buildings); _upgradesTab.SetPressedNoSignal(!Collapsed && Tab == Page.Upgrades);
         _economy.Visible = !Collapsed && Tab == Page.Economy; _units.Visible = !Collapsed && Tab == Page.Units; _stats.Visible = !Collapsed && Tab == Page.Stats;
+        _buildings.Visible = !Collapsed && Tab == Page.Buildings; _upgrades.Visible = !Collapsed && Tab == Page.Upgrades;
         if (_foldShown != Collapsed) { _foldShown = Collapsed; _foldGlyph.QueueRedraw(); }
         if (_economy.Visible) RefreshEconomy(world,color);
         if (_units.Visible) RefreshUnits(world,color,art);
         if (_stats.Visible) RefreshStats(world,color);
+        if (_buildings.Visible) RefreshAssets(world,color,art,Page.Buildings);
+        if (_upgrades.Visible) RefreshAssets(world,color,art,Page.Upgrades);
         foreach (var (button,index) in _journalButtons)
         {
             bool bot = index < _teams.Count && world.AiPlayers.ContainsKey(_teams[index]);
@@ -226,8 +234,9 @@ public partial class ObserverHud : Control
         }
         // The build label (BuildOverlay) keeps the top-right corner; the panel hangs just below it, the journal below that.
         var viewport = GetViewportRect().Size; float overlay = Math.Clamp(viewport.Y/800f,.75f,3);
+        LayoutAssetPages(scale,70*overlay,consoleTop);
         _frame.Scale = new(scale,scale); _frame.ResetSize();
-        _frame.Position = new(viewport.X-12*overlay-_frame.Size.X*scale,40*overlay);
+        _frame.Position = new(viewport.X-12*overlay-_frame.Size.X*scale,70*overlay);
         RefreshJournal(world,color,scale,consoleTop,overlay);
     }
 
@@ -388,8 +397,8 @@ public partial class ObserverHud : Control
 
     public int RowCount => _teams.Count;
     public string RowName(int index) => NameCell(index).Text;
-    public bool BodyVisible => _economy.IsVisibleInTree() || _units.IsVisibleInTree() || _stats.IsVisibleInTree();
-    public Button TabFor(Page page) => page switch { Page.Units => _unitsTab,Page.Stats => _statsTab,_ => _economyTab };
+    public bool BodyVisible => _economy.IsVisibleInTree() || _units.IsVisibleInTree() || _stats.IsVisibleInTree() || _buildings.IsVisibleInTree() || _upgrades.IsVisibleInTree();
+    public Button TabFor(Page page) => page switch { Page.Units => _unitsTab,Page.Buildings => _buildingsTab,Page.Upgrades => _upgradesTab,Page.Stats => _statsTab,_ => _economyTab };
     public Button FoldButton => _fold;
     /// <summary>A row's journal button on the open tab.</summary>
     public Button JournalButton(int index) => _journalButtons.Where(b => b.Index == index).Select(b => b.Button).First(b => b.IsVisibleInTree());
@@ -397,7 +406,7 @@ public partial class ObserverHud : Control
     public bool JournalVisible => _journal.IsVisibleInTree();
     /// <summary>The journal view's lines, newest first: "12:34 Attack Attack #2: ...".</summary>
     public IReadOnlyList<string> JournalLines => _journalLines;
-    public Label NameCell(int index) => Tab switch { Page.Units => _unitRows[index].Name,Page.Stats => _statsRows[index].Name,_ => _economyRows[index].Name };
+    public Label NameCell(int index) => Tab switch { Page.Units => _unitRows[index].Name,Page.Buildings => _buildingRows[index].Name,Page.Upgrades => _upgradeRows[index].Name,Page.Stats => _statsRows[index].Name,_ => _economyRows[index].Name };
     /// <summary>The Stats tab's numbers for a row: food and ore gathered, kills, losses.</summary>
     public int[] DisplayedStats(int index) => _statsRows[index].Values.Select(v => int.Parse(v.Text)).ToArray();
     /// <summary>The counts the Units tab shows for a row, in portrait order.</summary>

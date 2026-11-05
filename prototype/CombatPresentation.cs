@@ -32,7 +32,7 @@ public partial class Main
     private readonly Dictionary<(string Unit,int Scale,int Attack,int Hit),Vector3> _archerReleaseOffsets = [];
     private int _archerBowOrigins,_archerBowFallbacks;
     private readonly Dictionary<int,(Vector3 Axis,int Rate)> _arrowSpins = [];
-    private int _arrowReleases, _arrowHits, _arrowVisuals, _archerMeleeClipSamples;
+    private int _arrowReleases, _arrowHits, _arrowVisuals, _archerMeleeClipSamples,_urukMeleeClipSamples,_urukCrossbowClipSamples;
     private int _rangedFacingSamples;
     private bool _rangedFacingVerified = true;
     private readonly List<AudioStreamPlayer3D> _launchPlayers = [];

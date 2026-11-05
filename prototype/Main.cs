@@ -404,13 +404,14 @@ public partial class Main : Node3D
             if (!player.GetAnimationList().Any(a => a == clip || a.EndsWith('/'+clip)))
                 throw new InvalidOperationException("Missing combat animation: "+clip);
         if (_meleeSmoke && unit.Definition.HasMelee)
-            foreach (var attack in unit.Definition.Attacks.Where(a => a.Melee))
+            foreach (var attack in unit.Definition.Attacks.Where(a => a.Melee || unit.Definition.Id == 34))
             {
                 string clip = player.GetAnimationList().First(a => a == attack.Clip || a.EndsWith('/'+attack.Clip));
                 player.Play(clip); player.Advance(0);
                 player.Seek(player.CurrentAnimationLength*attack.Hits[0].Tick/attack.DurationTicks,true);
                 appearance.Apply(attack.Clip,attack.Hits[0].Tick/(double)attack.DurationTicks);
-                _archerMeleeClipSamples++;
+                if (unit.Definition.Id == 34) { if (attack.Melee) _urukMeleeClipSamples++; else _urukCrossbowClipSamples++; }
+                else _archerMeleeClipSamples++;
             }
         if (_meleeSmoke && unit.Definition.Id == 16)
         {
@@ -953,8 +954,13 @@ public partial class Main : Node3D
                 if (unit.Definition.IsRanged && unit.StrikeActive && _world.Tick-1 == unit.AttackStartTick)
                 {
                     _rangedFacingSamples++;
+                    // Tracking a moving target may start while interpolating from the previous tick's aim.
+                    // The current heading must aim at this windup's target, and rendering stays within its turn segment.
+                    int turn = Math.Abs(UnitFacing.Delta(unit.PreviousFacing,unit.Facing));
+                    bool aimed = unit.AttackAimTick != unit.AttackStartTick
+                        || Math.Abs(UnitFacing.Delta(unit.Facing,unit.AttackAimDirection)) <= UnitFacing.AttackTolerance;
                     _rangedFacingVerified &= Mathf.Abs(Mathf.AngleDifference(yaw,view.DesiredYaw))
-                        <= 2*UnitFacing.AttackTolerance*Mathf.Pi/180000+.00001f;
+                        <= turn*Mathf.Pi/180000+.00001f && turn <= UnitFacing.StepAngle && aimed;
                 }
                 SeekAttack(unit,view,fraction);
                 SeekAbility(unit,view,fraction);
@@ -1300,6 +1306,7 @@ public partial class Main : Node3D
             archer_melee_hits = _combatTrace.Count(e => e.Kind == CombatEventKind.Hit
                 && _world.Units[e.Unit].Definition.HasMelee && !_world.Units[e.Unit].Definition.FiresProjectile(e.Attack)),
             archer_melee_clip_samples = _archerMeleeClipSamples,
+            uruk_melee_clip_samples = _urukMeleeClipSamples,uruk_crossbow_clip_samples = _urukCrossbowClipSamples,
             ranged_facing_samples = _rangedFacingSamples, ranged_starts_aligned = _rangedFacingVerified,
             hit_timing = _combatTrace.Where(e => e.Kind == CombatEventKind.Hit && !_world.Units[e.Unit].Definition.FiresProjectile(e.Attack)).All(e =>
                 e.Tick-e.StartTick == _world.Units[e.Unit].Definition.Attacks[e.Attack].Hits[e.Hit].Tick),
@@ -1330,6 +1337,8 @@ public partial class Main : Node3D
             && report.arrow_releases > 0 && report.arrow_hits > 0 && report.arrow_visuals > 0 && report.ranged_release_timing
             && report.arrow_launch_samples == report.arrow_releases && report.arrow_trails_created == report.arrow_visuals && report.arrow_trail_samples > 0
             && report.archer_melee_clip_samples == 18
+            && report.uruk_melee_clip_samples > 0 && report.uruk_melee_clip_samples == _world.Units.Count(u => u.Definition.Id == 34)
+            && report.uruk_crossbow_clip_samples == report.uruk_melee_clip_samples
             && report.ranged_facing_samples > 0 && report.ranged_starts_aligned
             && report.hit_timing && report.hit_events > 0 && report.strike_starts > 0 && report.attack_seek_samples > 0
             && report.impact_samples > 0 && report.equipment_changes > 0 && report.equipment_idle_ready_verified;

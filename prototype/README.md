@@ -27,6 +27,12 @@ they saw and hold an attack against a stronger one. Bot heroes fight more and re
 Aggression. Patch or rebuild the content pack (`python tools/content_pack.py`) for the buildings' source sight;
 map caches can be reused. See [FOG.md](FOG.md).
 
+**build-149:** Uruk-Hai use their source crossbow at range and switch to their source melee animation in close combat.
+Observer mode adds Buildings [B] (counts by type, including foundations) and Upgrades [G] (completed research,
+research progress and building upgrades in progress). Evil hero recruitment is checked against the imported Fortress
+roster: Nazgul King, Saleme and Grishnakh all appear as first picks across match seeds, with repeatable choices and
+normal hero limits. Refresh `python tools/content_pack.py` for the crossbow data; map caches can be reused.
+
 **build-147:** A main menu and a game executable. `./prototype/export.ps1` builds
 `build/WarOfTheRingReforged.exe`, which opens (like a bare `./prototype/run.ps1`) on
 the main menu: Campaign (disabled), Skirmish, Sandbox, Settings and Exit on the

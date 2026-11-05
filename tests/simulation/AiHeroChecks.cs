@@ -213,6 +213,7 @@ static class AiHeroChecks
     public static void Cached(Action<bool,string> check,string folder)
     {
         var rules=CombatRules.Parse(File.ReadAllText(Path.Combine(folder,"combat/rules.json")));
+        CheckEvilRecruitment(check,folder,rules);
         foreach(string name in new[]{"FRODO","ARAGORN","GIMLI","LEGOLAS","GANDALF"})
         {
             var w=Fixture();w.Economies[0].Fate=20;
@@ -229,5 +230,49 @@ static class AiHeroChecks
                 "LEGOLAS"=>AbilityEventKind.Trueshot,_=>AbilityEventKind.BlindingLight};
             check(seen.Contains(expected),name+" bot uses its imported ability: "+expected);
         }
+    }
+
+    private static void CheckEvilRecruitment(Action<bool,string> check,string folder,CombatRules imported)
+    {
+        using var content=System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(folder,"content.json")));
+        var production=content.RootElement.GetProperty("skirmish").GetProperty("production");
+        var definitions=production.GetProperty("units");
+        const string fortress="BUILDING_E_TOWN_CENTER_LEVEL_2";
+        string[] heroes=["UNIT_E_HERO_NAZGUL_KING","UNIT_E_HERO_QAMARA","UNIT_E_HERO_GRISHNAKH"];
+        SimWorld Evil(int seed,bool reverse=false,int capacity=1)
+        {
+            var w=Fixture(specials:false,recruit:true);w.MatchSeed=seed;w.TeamFactions[0]=SimWorld.Evil;
+            w.Economies[0].FoodMilli=0;w.Economies[0].OreMilli=0;w.Economies[0].Fate=20;
+            w.BuildingRules[fortress]=w.BuildingRules["keep"] with {Name=fortress};
+            w.ConstructionSites[Keep].Building=fortress;w.UniqueGroupCapacity[fortress]=(1,capacity);
+            var offered=production.GetProperty("producers").GetProperty("BUILDING_E_TOWN_CENTER_LEVEL_1").GetProperty("units")
+                .EnumerateArray().Select(p=>p.GetString()!).Where(n=>imported.Units.GetValueOrDefault(n)?.Hero==true).ToArray();
+            foreach(string name in offered)
+            {
+                var source=definitions.GetProperty(name);w.Rules.Units[name]=imported.Units[name] with {Passive=true};
+                w.ProductionRules[name]=new(name,source.GetProperty("display_name").GetString()!,source.GetProperty("food_cost").GetInt32(),
+                    source.GetProperty("ore_cost").GetInt32(),source.GetProperty("population").GetInt32(),source.GetProperty("duration_ticks").GetInt32(),
+                    source.GetProperty("unique").GetBoolean(),[..source.GetProperty("prerequisites").EnumerateArray().Select(p=>p.GetString()!)],
+                    source.GetProperty("fate_cost").GetInt32(),source.GetProperty("unique_group").GetInt32());
+            }
+            w.Upgrades["BUILDING_E_TOWN_CENTER_LEVEL_1"]=fortress;
+            w.Producers[Keep].Units=reverse ? offered.Reverse().ToArray() : offered;
+            return w;
+        }
+        var choices=new HashSet<string>();
+        for(int seed=0;seed<32;seed++)
+        {
+            var w=Evil(seed);var replay=Evil(seed);var reverse=Evil(seed,true);
+            foreach(var candidate in new[]{w,replay,reverse})Step(candidate);
+            string? chosen=w.Producers[Keep].Queue.FirstOrDefault()?.Unit;
+            check(chosen!=null && heroes.Contains(chosen),$"Evil seed {seed} recruits an unlocked Fortress hero");
+            check(chosen==replay.Producers[Keep].Queue.FirstOrDefault()?.Unit && chosen==reverse.Producers[Keep].Queue.FirstOrDefault()?.Unit,
+                $"Evil seed {seed} repeats its hero preference regardless of button order");
+            if(chosen!=null)choices.Add(chosen);
+        }
+        check(heroes.All(choices.Contains),"Evil bots pick Nazgul King, Saleme and Grishnakh across match seeds");
+        var party=Evil(7,capacity:3);Step(party,2400);
+        check(heroes.All(name=>party.Units.Any(u=>u.Present && u.Definition.Name==name)),"Evil bots fill expanded hero capacity with three different heroes");
+        check(party.Units.Count(u=>u.Present && heroes.Contains(u.Definition.Name))==3,"Evil recruitment obeys uniqueness and group capacity");
     }
 }

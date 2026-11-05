@@ -33,6 +33,7 @@ static class RangedChecks
     public static void Cached(Action<bool,string> check,string cache)
     {
         var rules = CombatRules.Parse(File.ReadAllText(CacheManifest.Load(cache).Resolve("combat/rules.json")));
+        if (rules.Units.TryGetValue("UNIT_E_URUK_HAI",out var uruk)) CheckUruk(check,rules,uruk);
         if (!rules.Units.TryGetValue("UNIT_G_DWARVEN_AXETHROWER",out var axe)) return;
         var world = new SimWorld(new(40,10,1000,Enumerable.Repeat(true,400).ToArray(),new int[41*11]),rules);
         world.Spawn(0,4*40+5,axe); world.Spawn(2,4*40+13,UnitDefinition.Probe with {BodyHeightMm = 2000});
@@ -47,6 +48,30 @@ static class RangedChecks
         Advance(world,40);
         check(world.Units[1].HealthMilli < health && world.Projectiles.Count <= 1,"the thrown axe damages its target on arrival");
         check(axe.Attacks.All(a => a.Clip != "G_Dwarven_Axethrower_Attack_Missile_02"),"the throw with an undecoded release event is not used");
+    }
+
+    private static void CheckUruk(Action<bool,string> check,CombatRules rules,UnitDefinition uruk)
+    {
+        check(uruk.IsRanged && uruk.HasMelee && uruk.Attacks.Any(a => !a.Melee && a.Clip.Contains("Missile"))
+            && uruk.Attacks.Any(a => a.Melee && a.Clip.Contains("Melee")),"Uruk-Hai imports crossbow and melee timelines");
+        SimWorld Fight(int distance)
+        {
+            var w=new SimWorld(new(40,10,1000,Enumerable.Repeat(true,400).ToArray(),new int[41*11]),rules);
+            w.Spawn(0,165,uruk);w.Spawn(1,165+distance,UnitDefinition.Probe with {MaxHealth=10000,Passive=true});
+            w.Units[0].Facing=UnitFacing.FromDirection(1000,0);w.Enqueue(0,[0],OrderKind.Attack,target:1);
+            return w;
+        }
+        var ranged=Fight(8);CombatEvent? release=null;
+        for(int i=0;i<200 && release==null;i++){ranged.Step();release=ranged.CombatEvents.FirstOrDefault(e=>e.Kind==CombatEventKind.Release);}
+        check(release!=null && !uruk.Attacks[release.Attack].Melee && ranged.Units[0].X==5500 && ranged.Projectiles.Count==1,
+            "Uruk-Hai fires its crossbow at range without closing to melee");
+        Advance(ranged,40);check(ranged.Units[1].Health<10000,"Uruk-Hai bolt deals damage on impact");
+        var melee=Fight(2);bool hit=false,shot=false;
+        for(int i=0;i<100;i++){melee.Step();shot|=melee.Projectiles.Count>0;hit|=melee.CombatEvents.Any(e=>e.Kind==CombatEventKind.Hit && uruk.Attacks[e.Attack].Melee);}
+        check(hit && !shot && melee.Units[1].Health<10000,"Uruk-Hai uses its melee animation and damage in close combat without firing");
+        PlaceTarget(melee,173);release=null;
+        for(int i=0;i<200 && release==null;i++){melee.Step();release=melee.CombatEvents.FirstOrDefault(e=>e.Kind==CombatEventKind.Release);}
+        check(release!=null && !uruk.Attacks[release.Attack].Melee,"Uruk-Hai resumes its crossbow when melee contact ends");
     }
 
     public static void Run(Action<bool,string> check)
