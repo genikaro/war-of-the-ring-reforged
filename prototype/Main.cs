@@ -115,7 +115,10 @@ public partial class Main : Node3D
             if (arg == "--audio-smoke") _audioSmoke = true;
             if (arg == "--observe") _observing = true;
             if (arg == "--profile") SimProfiler.Enabled = true;
+            if (arg.StartsWith("--profile-until=")) _profileUntilTick = int.Parse(arg[16..])*60*SimWorld.TicksPerSecond;
             if (arg == "--performance-smoke") _performanceSmoke = true;
+            if (arg == "--stress-benchmark") _stressBenchmark = true;
+            if (arg.StartsWith("--stress-units=")) _stressUnits = int.Parse(arg[15..]);
             if (arg == "--economy-recovery-smoke") _economyRecoverySmoke = true;
             if (arg.StartsWith("--bots=")) _bots = arg[7..].Split(',');
             if (arg.StartsWith("--factions=")) _factions = arg[11..].Split(',');
@@ -212,7 +215,7 @@ public partial class Main : Node3D
             RefreshDebugMenu();
             _status.Text = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             GD.PushError(error.ToString());
-            if (_placesSmoke || _economyRecoverySmoke || _performanceSmoke || _audioSmoke || _smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _interactionSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _tier2Smoke || _evilSmoke || _researchSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke || _observerSmoke || _setupSmoke || _engagementSmoke || _sandboxMapSmoke || _menuSmoke || _capture != "") GetTree().Quit(1);
+            if (_placesSmoke || _economyRecoverySmoke || _performanceSmoke || _stressBenchmark || _audioSmoke || _smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _interactionSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _tier2Smoke || _evilSmoke || _researchSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke || _observerSmoke || _setupSmoke || _engagementSmoke || _sandboxMapSmoke || _menuSmoke || _capture != "") GetTree().Quit(1);
         }
         finally { _loading = false; HideLoadingScreen(); }
     }
@@ -806,6 +809,7 @@ public partial class Main : Node3D
     public override void _PhysicsProcess(double delta)
     {
         if (_world is null || _loadFailed || _loading || (_paused && !_singleStepRequested)) return;
+        using var stressPhysics = StressTime(1);
         _presentStep = _paused;
         _singleStepRequested = false;
         // Game speed: several fixed ticks per physics frame. A single step while paused stays a single step,
@@ -923,6 +927,8 @@ public partial class Main : Node3D
         if (_closing) return;
         if (_frontEndLayer != null) { _frames++; if (_setupSmoke) SetupSmokeInput(); if (_menuSmoke) MenuSmokeInput(); return; }
         if (_world is null || _loadFailed || _loading) return;
+        if (_stressBenchmark) StressFrameBegin();
+        using var stressProcess = StressTime(0);
         using var processTime = SimProfiler.Time("godot process frame");
         PresentOrderSpeech();
         if (_audioSmoke) AudioSmokeInput();
@@ -1004,7 +1010,7 @@ public partial class Main : Node3D
         var edge = EdgePan();
         float right = Math.Clamp((Input.IsPhysicalKeyPressed(Key.Right) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Left) ? 1 : 0) + edge.X,-1,1);
         float forward = Math.Clamp((Input.IsPhysicalKeyPressed(Key.Down) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Up) ? 1 : 0) + edge.Y,-1,1);
-        if (_constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _gameMenu.Visible) right = forward = 0;
+        if (_stressBenchmark || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _gameMenu.Visible) right = forward = 0;
         Pan(right * dt * _distance * 0.6f, forward * dt * _distance * 0.6f);
         UpdateCamera();
         _commands.SetMinimapView(ViewFootprint());
@@ -1039,6 +1045,7 @@ public partial class Main : Node3D
         SimProfiler.Record("godot hud",hudPresentation);
         _frames++;
         if (_performanceSmoke) PerformanceSmokeInput();
+        if (_stressBenchmark) StressBenchmarkInput();
         if (_economyRecoverySmoke) EconomyRecoverySmokeInput();
         if (_commandSmoke) CommandSmokeInput();
         if (_interactionSmoke)

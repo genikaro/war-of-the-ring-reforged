@@ -54,7 +54,12 @@ param(
     [int]$Speed,
     [int]$Seed,
     [switch]$Profile,
+    [ValidateRange(0,600)]
+    [int]$ProfileUntil,
     [switch]$PerformanceSmoke,
+    [switch]$StressBenchmark,
+    [ValidateRange(2,4000)]
+    [int]$Units = 300,
     [switch]$EconomyRecoverySmoke,
     [switch]$NoAi,
     [string]$AiPersonality,
@@ -99,7 +104,9 @@ if ($EconomyRecoverySmoke) {
     if (-not $Map -and -not $CachePath) { $Map = 'MP06_Wheel of Fate' }
     if (-not $Bots) { $Bots = @('Gimli','Gimli','Gimli','Gimli','Gimli','Gimli') }
 }
-if ($ElvenSmoke -or $NatureSmoke -or $BloodSmoke -or $GlobalPowerSmoke -or $PlacesSmoke -or $HeroSkillSmoke -or $HeroExperienceSmoke -or $PerformanceSmoke) { $Sandbox = $true }
+if ($ElvenSmoke -or $NatureSmoke -or $BloodSmoke -or $GlobalPowerSmoke -or $PlacesSmoke -or $HeroSkillSmoke -or $HeroExperienceSmoke -or $PerformanceSmoke -or $StressBenchmark) { $Sandbox = $true }
+# Build-157: the stress benchmark renders in a window (never headless) at a fixed 1/60 s per frame.
+if ($StressBenchmark -and -not $Resolution) { $Resolution = '1600x900' }
 & $DotnetPath build (Join-Path $PSScriptRoot 'Reforged.csproj') --nologo
 if ($LASTEXITCODE -ne 0) { throw 'C# build failed' }
 $arguments = @('--path', $PSScriptRoot)
@@ -118,6 +125,7 @@ if ($AudioSmoke) {
     if (-not $CapturePath) { $arguments += '--headless' }
     $arguments += @('--fixed-fps','20')
 }
+if ($StressBenchmark) { $arguments += @('--fixed-fps','60') }
 $arguments += '--'
 if ($AudioSmoke) { $arguments += '--audio-smoke' }
 $arguments += "--view=$View"
@@ -172,7 +180,9 @@ if ($Factions) { $arguments += "--factions=$($Factions -join ',')" }
 if ($Speed) { $arguments += "--speed=$Speed" }
 if ($Seed) { $arguments += "--seed=$Seed" }
 if ($Profile) { $arguments += '--profile' }
+if ($ProfileUntil) { $arguments += "--profile-until=$ProfileUntil" }
 if ($PerformanceSmoke) { $arguments += @('--performance-smoke','--no-ai') }
+if ($StressBenchmark) { $arguments += @('--stress-benchmark',"--stress-units=$Units",'--no-ai') }
 if ($EconomyRecoverySmoke) { $arguments += '--economy-recovery-smoke' }
 if ($NoAi) { $arguments += '--no-ai' }
 if ($AiPersonality) { $arguments += "--ai-personality=$AiPersonality" }

@@ -1,5 +1,11 @@
 # Godot C# skirmish sandbox
 
+**build-157:** A rendered stress benchmark: `run.ps1 -StressBenchmark -Units 300` puts two durable armies in a
+windowed fight and records frame-time percentiles, draw calls and allocations with the fight on screen, off screen
+and at 4x. Every run draws the same frames, so `tools/compare_captures.py` can prove a presentation change altered
+nothing. `-Profile` adds frame percentiles and writes its log; `-ProfileUntil` and `-Headless` measure a match
+unattended.
+
 **build-156:** A bot's journal no longer misses a building laid in its very first think. A Hard bot in slot 2 thinks first
 at tick 3 with a starting worker beside its home well, so its home Mill went up in that think and the journal took it for
 part of the start base. Both slots build the same Mills; only the journal differed. See
