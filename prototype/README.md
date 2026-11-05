@@ -1,5 +1,11 @@
 # Godot C# skirmish sandbox
 
+**build-161:** The setup screen's Side box offers **Random** beside Good and Evil: the slot plays a side drawn from the
+match seed when the match loads, so Restart keeps it and a new Start draws again (`--factions=random,good` works from
+the command line too). No place of power stands twice on a map any more: random markers and the stand-ins for the
+three excluded landmarks draw among the landmarks the map does not hold yet, named ones listed later included. See
+[PLACES-OF-POWER.md](PLACES-OF-POWER.md#build-161-one-of-each-landmark-per-map).
+
 **build-160:** Faster big battles, with the same matches: formation slot searches looked at every occupied cell for
 each cell they tested, so idle guards and guard orders cost 19 ms a tick at 10:00 in an 8-bot MP08_Rift match. That
 falls to 0.4 ms, and the whole tick from 33 to 13 ms. Graph-link movement checks, idle-guard ally checks and the

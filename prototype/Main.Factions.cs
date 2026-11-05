@@ -7,10 +7,11 @@ using System.Text.Json;
 /// team's start building (the Citadel, or the Goblin Hovel on a footprint of its own), workers and start units.</summary>
 public partial class Main
 {
-    /// <summary>Each slot's side by player index; slots past the list play Good.</summary>
+    /// <summary>Each slot's side by player index; slots past the list play Good. "random" (build-161) draws Good or Evil from the match seed.</summary>
     private string[] _factions = [];
 
-    private string FactionOfTeam(int team) => _factions.ElementAtOrDefault(team) is { Length: > 0 } faction ? faction : SimWorld.Good;
+    private string FactionOfTeam(int team) => _factions.ElementAtOrDefault(team) is { Length: > 0 } faction
+        ? SimWorld.ResolveFaction(faction,_matchSeed,team) : SimWorld.Good;
     private bool EvilTeam(int team) => FactionOfTeam(team) == SimWorld.Evil;
 
     /// <summary>Source metres of an Evil start building's footprint, by its obstacle id (the map's saved layers hold the Citadel's).</summary>

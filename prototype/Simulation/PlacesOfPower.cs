@@ -62,13 +62,26 @@ public sealed partial class SimWorld
     /// <summary>Chooses random places of power; the setup screen draws one per match and Restart keeps it.</summary>
     public int MatchSeed { get; set; }
 
+    /// <summary>Landmarks the map places by name that stay themselves (build-161). The map registers them before any of its
+    /// places, so a random marker loaded first never draws one of them.</summary>
+    public HashSet<string> MapPlaceTypes { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Notes the map's place-of-power objects before they are added: the named landmarks that stay themselves.</summary>
+    public void ReserveMapPlaces(IEnumerable<string> types) =>
+        MapPlaceTypes.UnionWith(types.Where(t => PlaceObjects.ContainsKey(t) && t != RandomPlaceObject && !ExcludedSkirmishPlaces.Contains(t)));
+
+    public const string RandomPlaceObject = "OBJECT_PLACE_OF_POWER_RANDOM";
+
     /// <summary>Places a map's place-of-power object: its default source places, or for the random object one of the places
-    /// allowed random placement.</summary>
+    /// allowed random placement. Build-161: no landmark stands twice on a map. A random marker, an excluded landmark's
+    /// stand-in or a repeat of a landmark already placed draws among those the map does not hold yet (all of them only
+    /// when the map has more markers than landmarks).</summary>
     public PlaceOfPower AddPlaceOfPower(int id,string type,int x,int z)
     {
         var (name,places) = PlaceObjects.TryGetValue(type,out var known) ? known : (type,[]);
         PlaceOfPowerRule[] rules = [.. places.Where(PlaceRules.ContainsKey).Select(p => PlaceRules[p])];
-        if (type == "OBJECT_PLACE_OF_POWER_RANDOM" || ExcludedSkirmishPlaces.Contains(type))
+        bool repeat = PlaceObjects.ContainsKey(type) && PlacesOfPower.Any(p => p.Type == type);
+        if (type == RandomPlaceObject || ExcludedSkirmishPlaces.Contains(type) || repeat)
         {
             var pool = PlaceObjects.Where(o => !ExcludedSkirmishPlaces.Contains(o.Key)
                     && o.Value.Places.Any(p => PlaceRules.TryGetValue(p,out var r) && r.Random))
@@ -79,6 +92,15 @@ public sealed partial class SimWorld
                 uint hash = unchecked((uint)MatchSeed*2654435761u^(uint)id*2246822519u);
                 hash = unchecked((hash^hash >> 15)*2654435761u); hash ^= hash >> 13;
                 var pick = pool[(int)(hash%(uint)pool.Length)];
+                // A landmark the map already holds draws again among the free ones: still uniform over them, and a
+                // draw that did not collide stays what it was before build-161.
+                var taken = PlacesOfPower.Select(p => p.Type).Concat(MapPlaceTypes).ToHashSet(StringComparer.Ordinal);
+                var free = pool.Where(o => !taken.Contains(o.Key)).ToArray();
+                if (taken.Contains(pick.Key) && free.Length > 0)
+                {
+                    hash = unchecked((hash^0x9e3779b9u)*0x85ebca6bu); hash ^= hash >> 16;
+                    pick = free[(int)(hash%(uint)free.Length)];
+                }
                 type = pick.Key; name = pick.Value.Name;
                 rules = [.. pick.Value.Places.Where(PlaceRules.ContainsKey).Select(p => PlaceRules[p])];
             }

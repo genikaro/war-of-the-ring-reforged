@@ -79,7 +79,8 @@ Back and Start boxes (0.653 and 0.809, 0.908). Drop-downs are the black
 `control_checkbox_*`. The frame keeps its 4:3 shape with dark stone beside it.
 
 - **Skirmish** lists the 32 multiplayer maps (the Sandbox is no longer among them).
-  Each row: player and colour, controller (You, Closed, a bot), side (Good / Evil),
+  Each row: player and colour, controller (You, Closed, a bot), side (Good / Evil / Random,
+  build-161: drawn from the match seed at load, kept by Restart),
   traits, and the bot in a few words (difficulty and style). The bot card and the
   start speed sit under Game settings. Behaviour is the build-39/49/51/133 lobby's.
 - **Sandbox** shows the Sandbox field, both start positions yours with a side each,

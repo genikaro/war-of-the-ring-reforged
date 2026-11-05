@@ -29,6 +29,8 @@ public partial class Main
         if (!data.TryGetProperty("selectable_objects",out var objects))
             throw new InvalidOperationException("Refresh neutral selection: python tools/skirmish_construction.py --cache converted/skirmish");
         foreach (var item in objects.GetProperty("definitions").EnumerateObject()) _structureDefinitions[item.Name] = item.Value.Clone();
+        // Build-161: the landmarks the map names are known before any random marker draws, whatever the placement order.
+        _world!.ReserveMapPlaces(objects.GetProperty("placements").EnumerateArray().Select(p => p.GetProperty("type").GetString()!));
         foreach (var item in objects.GetProperty("placements").EnumerateArray())
         {
             int id = item.GetProperty("id").GetInt32();

@@ -7,7 +7,8 @@ using System.Text.Json;
 /// and the bot card must describe the bots chosen (build-49), and Gimli's traits, ticked in the lobby (Defender, then
 /// Marksman, then Rusher, which drops Defender), must reach the match and come back with the setup (build-51). The debug menu's
 /// Skirmish setup button then returns to the screen, which keeps those choices, and an observer match of a Normal random bot
-/// against Aragorn on Bilbo's Bluffs at 16x must load as chosen. Restart must retain its random draw. The Sandbox test map has its own
+/// against Aragorn on Bilbo's Bluffs at 16x must load as chosen. Restart must retain its random draw. Build-161: a Random side
+/// (the Easy random bot's on Boneyard, both on Bilbo's Bluffs) plays the side its seed draws and Restart keeps it. The Sandbox test map has its own
 /// setup screen since build-147 and stays out of the list. Clicks press and release on separate frames.</summary>
 public partial class Main
 {
@@ -15,11 +16,11 @@ public partial class Main
     /// <summary>Which screen or match the smoke is in; static, like the checks, because each start reloads the scene.</summary>
     private static int _setupPhase;
     private static readonly Dictionary<string,bool> SetupChecks = [];
-    private const int SetupSmokeChecks = 27;
+    private const int SetupSmokeChecks = 29;
     private const string SetupBigMap = "MP08_Boneyard",SetupSmallMap = "MP02_Bilbos_Bluffs";
     private static string _setupBigTitle = "";
     private static bool _setupCardOk;
-    private static string[] _setupRolledBots=[];
+    private static string[] _setupRolledBots=[],_setupRolledSides=[];
     private static int _setupSavedSeed;
 
     private void PickSlot(int slot,int item)
@@ -102,8 +103,9 @@ public partial class Main
                         && screen.CardStyle == new AiStyle(50,20,30);
                     SetupChecks["status_names_the_match"] = screen.StatusText == "You play Player 3 (Good) against 4 bots · 2x speed" && !screen.StartButton.Disabled;
                     // Build-133: each slot has a side; the last bot plays Evil.
-                    SetupChecks["setup_offers_both_sides"] = screen.SlotSide(4).ItemCount == 2 && screen.SlotSide(4).GetItemText(1) == "Evil" && screen.SlotSide(4).Selected == 0;
-                    screen.SlotSide(4).Select(1);
+                    SetupChecks["setup_offers_both_sides"] = screen.SlotSide(4).ItemCount == 3 && screen.SlotSide(4).GetItemText(1) == "Evil"
+                        && screen.SlotSide(4).GetItemText(2) == "Random" && screen.SlotSide(4).Selected == 0;
+                    screen.SlotSide(4).Select(1); screen.SlotSide(3).Select(2);
                     if(_capture!="") Press(screen.SlotChoice(3).GetGlobalRect().GetCenter());
                 }
                 if(_frames==12 && _capture!="")
@@ -132,7 +134,13 @@ public partial class Main
                     SetupChecks["evil_slot_plays_the_evil_side"] = world.FactionOf(4) == SimWorld.Evil && world.FactionOf(2) == SimWorld.Good && world.FactionOf(0) == SimWorld.Good
                         && world.Units.Count(u => u.Team == 4 && u.Definition.Name == "UNIT_E_GOBLIN_SLAVE") == 4 && world.Units.Any(u => u.Team == 4 && u.Definition.Name == "UNIT_E_GOBLIN_SLAVE_MASTER")
                         && world.StartStructures.Any(s => s.Team == 4 && s.Building == "BUILDING_E_WORKER_STRUCTURE") && world.StartStructures.Any(s => s.Team == 2 && s.Building == "BUILDING_G_TOWN_CENTER_LEVEL_1")
-                        && _lastSetup!.Factions!.Take(5).SequenceEqual(["good","good","good","good","evil"]) && world.AiPlayers.ContainsKey(4);
+                        && _lastSetup!.Factions!.Take(5).SequenceEqual(["good","good","good","random","evil"]) && world.AiPlayers.ContainsKey(4);
+                    // Build-161: the Random slot plays the side the seed draws, with that side's start.
+                    bool randomEvil = SimWorld.ResolveFaction(SimWorld.RandomSide,_matchSeed,3) == SimWorld.Evil;
+                    SetupChecks["random_side_plays_its_draw"] = world.FactionOf(3) == (randomEvil ? SimWorld.Evil : SimWorld.Good)
+                        && world.StartStructures.Any(s => s.Team == 3 && s.Building == (randomEvil ? "BUILDING_E_WORKER_STRUCTURE" : "BUILDING_G_TOWN_CENTER_LEVEL_1"))
+                        && world.Units.Any(u => u.Team == 3 && u.Definition.Name == (randomEvil ? "UNIT_E_GOBLIN_SLAVE" : "UNIT_G_HUMAN_WORKER"))
+                        && Enumerable.Range(0,64).Select(seed => SimWorld.ResolveFaction(SimWorld.RandomSide,seed,3)).Distinct().Count() == 2;
                     SetupChecks["lobby_traits_reach_the_bot"] = world.AiPlayers[0].Traits.SequenceEqual([AiTrait.Rusher,AiTrait.Marksman])
                         && world.AiPlayers[0].Profile.SmallestParties && world.AiPlayers[1].Traits.Length == 0;
                     SetupChecks["random_bots_start_at_the_chosen_difficulty"] = world.AiPlayers[3].Personality.Difficulty==0
@@ -154,6 +162,7 @@ public partial class Main
                         && screen.SlotTraits(1).Count == 0;
                     SetupChecks["random_choices_survive_the_return"] = screen.SlotChoice(3).Selected==BotItem(AiBotOptions.RandomId(0))
                         && screen.SlotChoice(4).Selected==BotItem(AiBotOptions.RandomId(2)) && screen.SlotTraits(3).SequenceEqual([AiTrait.Defender]);
+                    SetupChecks["random_side_survives_the_return"] = screen.SlotSide(3).Selected == 2 && screen.SlotSide(4).Selected == 1 && screen.SlotSide(2).Selected == 0;
                     screen.RevealMap(SetupSmallMap);
                 }
                 if (_frames == 5) Press(screen.MapButton(SetupSmallMap).GetGlobalRect().GetCenter());
@@ -161,7 +170,7 @@ public partial class Main
                 if (_frames == 8)
                 {
                     PickSlot(0,BotItem(AiBotOptions.RandomId(1))); PickSlot(1,BotItem("Aragorn"));
-                    TickTrait(0,AiTrait.Marksman);
+                    TickTrait(0,AiTrait.Marksman); screen.SlotSide(0).Select(2); screen.SlotSide(1).Select(2);
                     Press(screen.SpeedSlider.NotchGlobal(Speeds.Length-1));
                 }
                 if (_frames == 9) Release(screen.SpeedSlider.NotchGlobal(Speeds.Length-1));
@@ -180,13 +189,15 @@ public partial class Main
                 SetupChecks["random_observer_bot_keeps_its_traits"] = _world.AiPlayers[0].Traits.SequenceEqual([AiTrait.Marksman])
                     && _lastSetup!.Bots[0]==AiBotOptions.RandomId(1)+"+Marksman";
                 _setupRolledBots=_world.AiPlayers.Values.Select(a=>new AiBotChoice(a.Personality.Id,a.Traits).ToString()).ToArray();
+                _setupRolledSides=[.. Enumerable.Range(0,2).Select(_world.FactionOf)];
                 _setupSavedSeed=_matchSeed;
                 _setupPhase=4; _ = ReloadWithAudio(); break;
             case 4 when _world != null:
                 if(_frames<5) break;
                 SetupChecks["restart_keeps_the_random_draw"] = _matchSeed==_setupSavedSeed
                     && _world.AiPlayers.Values.Select(a=>new AiBotChoice(a.Personality.Id,a.Traits).ToString()).SequenceEqual(_setupRolledBots)
-                    && _lastSetup!.Bots[0]==AiBotOptions.RandomId(1)+"+Marksman";
+                    && _lastSetup!.Bots[0]==AiBotOptions.RandomId(1)+"+Marksman"
+                    && Enumerable.Range(0,2).Select(_world.FactionOf).SequenceEqual(_setupRolledSides) && _lastSetup.Factions!.All(f => f == SimWorld.RandomSide);
                 FinishSetupSmoke(); break;
         }
     }
@@ -203,7 +214,7 @@ public partial class Main
     {
         _setupPhase = 5;
         var report = new { build = BuildInfo.Label,checks = SetupChecks,passed = SetupChecks.Count == SetupSmokeChecks && SetupChecks.Values.All(v => v),
-            fixture = $"--setup: {SetupBigMap} with you in slot 3, named and Easy/Hard random bots, slots 6-8 closed, 2x; return retains random choices; then Bilbo's Bluffs observed with a Normal random bot at 16x" };
+            fixture = $"--setup: {SetupBigMap} with you in slot 3, named and Easy/Hard random bots, slots 6-8 closed, 2x; return retains random choices and sides; then Bilbo's Bluffs observed with a Normal random bot at 16x, both sides Random" };
         string json = JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true });
         System.IO.File.WriteAllText(System.IO.Path.Combine(ProjectSettings.GlobalizePath("res://../converted"),"setup-smoke-report.json"),json);
         GD.Print("SETUP_SMOKE "+JsonSerializer.Serialize(report));

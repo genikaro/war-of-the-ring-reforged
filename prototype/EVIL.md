@@ -1,7 +1,8 @@
 # The Evil faction
 
-The Minions of Sauron play from the setup screen (a Good / Evil box beside each start position, the Sandbox lets
-you pick both of yours) or from the command line (`-Factions evil,good`, one entry per player slot).
+The Minions of Sauron play from the setup screen (a Good / Evil / Random box beside each start position, the Sandbox lets
+you pick both of yours) or from the command line (`-Factions evil,good`, one entry per player slot; `random` draws a
+side from the match seed and slot, `SimWorld.ResolveFaction`, build-161).
 
 ```powershell
 ./prototype/run.ps1 -Skirmish                       # setup screen; pick Evil for any slot

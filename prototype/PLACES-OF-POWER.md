@@ -1,5 +1,21 @@
 # Places of Power — build-128
 
+## Build-161: one of each landmark per map
+
+No landmark stands twice on a map (owner's rule). Before adding its places the
+map registers the landmarks it names (`SimWorld.ReserveMapPlaces`), so a random
+marker listed before a named Fountain still knows the Fountain is taken. A random
+marker, the stand-in for an excluded landmark (Steed, Aviary, Willow) or a second
+copy of a named landmark first draws as before; only when that draw is a landmark
+the map already holds or names does it draw again among the free ones (uniform
+over them). A draw that collided with nothing keeps its pre-161 landmark, so most
+seeds load the same map as before. With more markers than eligible landmarks (12
+today; maps have at most four markers plus three named) the extras repeat rather
+than stand empty. Before this, River Raid, Wasteland and Crazy Corners (four
+random markers each), Soggy Downs, Drain and Wheel of Fate (three), Three Prong,
+Mighty Silverlode and Valley of Death (two) and the stand-ins
+on Boneyard, King of the Hill, Choke, Sorrow and Rift could repeat a landmark.
+
 **Build-132 balance update:** Steed of Rohan, Radagast's Aviary and Enchanting
 Willow are excluded from normal skirmishes. Random markers and explicit map
 placements of these three resolve to seeded replacements from the other

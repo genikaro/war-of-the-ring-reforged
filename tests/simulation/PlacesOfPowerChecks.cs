@@ -98,7 +98,47 @@ static class PlacesOfPowerChecks
         ReplayPowers(check);
         BotPowers(check);
         SkirmishExclusions(check);
+        UniquePlaces(check);
         Narsil(check);
+    }
+
+    /// <summary>Build-161: no landmark stands twice on a map, whatever order the map lists its places in.</summary>
+    private static void UniquePlaces(Action<bool,string> check)
+    {
+        const string Random = SimWorld.RandomPlaceObject,Steed = "OBJECT_PLACE_OF_POWER_STEED_OF_ROHAN",
+            Fountain = "OBJECT_PLACE_OF_POWER_ANCIENT_FOUNTAIN",Mask = "OBJECT_PLACE_OF_POWER_ORC_MASK";
+        bool distinct = true,namedKept = true,unchangedFirst = true,repeatsRedrawn = true; int collisions = 0;
+        foreach (int seed in Enumerable.Range(0,256))
+        {
+            SimWorld Map()
+            {
+                var w = Open(); w.MatchSeed = seed; w.ExcludedSkirmishPlaces.Add(Steed); w.PlaceObjects[Steed] = ("Steed",[1]);
+                return w;
+            }
+            // Four random markers and an excluded landmark first, the named Fountain and Orc Mask listed after them.
+            (int Id,string Type)[] listed = [(521,Random),(522,Random),(523,Steed),(524,Random),(525,Random),(526,Fountain),(527,Mask)];
+            var w = Map(); w.ReserveMapPlaces(listed.Select(p => p.Type));
+            var placed = listed.Select(p => w.AddPlaceOfPower(p.Id,p.Type,30500,10500)).ToArray();
+            distinct &= placed.Select(p => p.Type).Distinct().Count() == placed.Length && placed.All(p => p.Rules.Length > 0 && p.Type != Steed);
+            namedKept &= placed[5].Type == Fountain && placed[6].Type == Mask;
+            // A draw that collides with nothing stays what an empty map gives the same marker.
+            var alone = Map().AddPlaceOfPower(521,Random,30500,10500);
+            unchangedFirst &= alone.Type == Fountain || alone.Type == Mask || placed[0].Type == alone.Type;
+            collisions += placed[1].Type != Map().AddPlaceOfPower(522,Random,30500,10500).Type ? 1 : 0;
+            // A map naming the same landmark twice gets another one for the second.
+            var twice = Map(); twice.ReserveMapPlaces([Mask,Mask]);
+            var first = twice.AddPlaceOfPower(600,Mask,30500,10500); var second = twice.AddPlaceOfPower(601,Mask,30500,10500);
+            repeatsRedrawn &= first.Type == Mask && second.Type != Mask && second.Rules.Length > 0;
+        }
+        check(distinct && namedKept,$"random markers and stand-ins never repeat a landmark, named ones loaded later included, across 256 seeds: {distinct}/{namedKept}");
+        check(unchangedFirst && collisions > 0,$"only a colliding draw changes; the others keep their pre-build-161 landmark ({collisions} of 256 second markers redrawn)");
+        check(repeatsRedrawn,"a landmark the map names twice stands once; the second becomes another landmark");
+        // More markers than landmarks: every landmark first, then repeats rather than empty places.
+        var crowded = Open(); crowded.MatchSeed = 7;
+        var many = Enumerable.Range(0,9).Select(i => crowded.AddPlaceOfPower(700+i,Random,30500,10500)).ToArray();
+        int landmarks = crowded.PlaceObjects.Count(o => o.Key != Random);
+        check(many.Take(landmarks).Select(p => p.Type).Distinct().Count() == landmarks && many.All(p => p.Rules.Length > 0),
+            $"with more markers than landmarks each landmark stands once before any repeats: {string.Join(", ",many.Select(p => p.Name))}");
     }
 
     private static void RandomBundles(Action<bool,string> check)
@@ -121,13 +161,18 @@ static class PlacesOfPowerChecks
         bool randomAllowed = true,explicitAllowed = true,deterministic = true;
         foreach (int seed in Enumerable.Range(0,128))
         {
-            var w = Open(); w.MatchSeed = seed; w.ExcludedSkirmishPlaces.UnionWith(excluded);
-            foreach (string type in excluded) w.PlaceObjects[type] = (type,[1]);
-            var random = w.AddPlaceOfPower(521,"OBJECT_PLACE_OF_POWER_RANDOM",30500,10500);
+            // A world each: since build-161 a second place in one world avoids the first's landmark.
+            SimWorld Excluding()
+            {
+                var w = Open(); w.MatchSeed = seed; w.ExcludedSkirmishPlaces.UnionWith(excluded);
+                foreach (string type in excluded) w.PlaceObjects[type] = (type,[1]);
+                return w;
+            }
+            var random = Excluding().AddPlaceOfPower(521,"OBJECT_PLACE_OF_POWER_RANDOM",30500,10500);
             randomAllowed &= !excluded.Contains(random.Type) && random.Rules.Length > 0;
             foreach (string type in excluded)
             {
-                var replacement = w.AddPlaceOfPower(521,type,30500,10500);
+                var replacement = Excluding().AddPlaceOfPower(521,type,30500,10500);
                 explicitAllowed &= !excluded.Contains(replacement.Type) && replacement.Rules.Length > 0;
                 deterministic &= replacement.Type == random.Type;
             }

@@ -54,11 +54,14 @@ public partial class SetupScreen : Control
     private ScrollContainer _scroll = null!;
     private Label _title = null!,_mapTitle = null!,_mapDetail = null!,_status = null!,_sandboxText = null!;
     private readonly (Control Row,ColorRect Swatch,Label Name,OptionButton Choice,MenuButton Traits)[] _slots = new (Control,ColorRect,Label,OptionButton,MenuButton)[Slots];
-    /// <summary>Each slot's side (build-133): Good or Evil. The Sandbox lets you choose both of yours.</summary>
+    /// <summary>Each slot's side (build-133): Good, Evil or (build-161) Random, drawn from the match seed when the match
+    /// loads. The Sandbox lets you choose both of yours.</summary>
     private readonly OptionButton[] _sides = new OptionButton[Slots];
     /// <summary>Each row's bot in a few words: its difficulty and style (build-147).</summary>
     private readonly Label[] _summaries = new Label[Slots];
-    private const int GoodSide = 0,EvilSide = 1;
+    private const int GoodSide = 0,EvilSide = 1,RandomSide = 2;
+    private static readonly string[] SideNames = ["Good","Evil","Random"];
+    private static readonly string[] SideKeys = [SimWorld.Good,SimWorld.Evil,SimWorld.RandomSide];
     /// <summary>Each slot's bot traits, kept while the slot stays a bot.</summary>
     private readonly SortedSet<AiTrait>[] _traits = [.. Enumerable.Range(0,Slots).Select(_ => new SortedSet<AiTrait>())];
     private MapPreview _preview = null!;
@@ -108,8 +111,10 @@ public partial class SetupScreen : Control
             var choice = PlaceIn(row,new OptionButton { FocusMode = FocusModeEnum.None },121,1,250,23);
             StyleDropDown(choice,choice.GetPopup()); choice.ItemSelected += item => ChooseSlot(index,(int)item);
             choice.Pressed += () => { _cardSlot = index; Refresh(); };
-            var side = PlaceIn(row,new OptionButton { FocusMode = FocusModeEnum.None,TooltipText = "The side this player commands: the Free Peoples (Good) or the Minions of Sauron (Evil)" },379,1,100,23);
-            side.AddItem("Good"); side.AddItem("Evil"); StyleDropDown(side,side.GetPopup()); side.ItemSelected += _ => Refresh(); _sides[slot] = side;
+            var side = PlaceIn(row,new OptionButton { FocusMode = FocusModeEnum.None,TooltipText = "The side this player commands: the Free Peoples (Good), the Minions of Sauron (Evil) or Random" },379,1,100,23);
+            foreach (string sideName in SideNames) side.AddItem(sideName);
+            side.SetItemTooltip(RandomSide,"Good or Evil, drawn when the match starts; Restart keeps the draw");
+            StyleDropDown(side,side.GetPopup()); side.ItemSelected += _ => Refresh(); _sides[slot] = side;
             // Traits (build-51): check items that stay open, so several can be ticked in one go.
             var traits = PlaceIn(row,new MenuButton { Text = "Traits",FocusMode = FocusModeEnum.None,Flat = false },487,1,120,23);
             var menu = traits.GetPopup(); menu.HideOnCheckableItemSelection = false;
@@ -237,7 +242,7 @@ public partial class SetupScreen : Control
             if (!row.Visible) continue;
             swatch.Color = slot < map.Colors.Length ? map.Colors[slot] : Dim;
             choice.Clear();
-            _sides[slot].Select(previous != null && previous.Cache == map.Cache && previous.Factions?.ElementAtOrDefault(slot) == "evil" ? EvilSide : GoodSide);
+            _sides[slot].Select(previous != null && previous.Cache == map.Cache && Array.IndexOf(SideKeys,previous.Factions?.ElementAtOrDefault(slot)) is int side and >= 0 ? side : GoodSide);
             choice.AddItem("You"); choice.AddItem("Closed");
             // On the Sandbox both start positions are yours.
             choice.Disabled = map.Sandbox;
@@ -379,7 +384,7 @@ public partial class SetupScreen : Control
             : open < 2 ? "At least two start positions must be open."
             : map.Sandbox ? $"Sandbox: you command Player 1 and Player 2 · Tab switches · {speed} speed"
                 + (_instantBuild.ButtonPressed ? "" : " · building and training take their time") + (_trainingDummies.ButtonPressed ? "" : " · no training dummies")
-            : (human >= 0 ? $"You play Player {human+1} ({(_sides[human].Selected == EvilSide ? "Evil" : "Good")}) against {open-1} bot{(open == 2 ? "" : "s")} · {speed} speed"
+            : (human >= 0 ? $"You play Player {human+1} ({SideNames[Math.Max(GoodSide,_sides[human].Selected)]}) against {open-1} bot{(open == 2 ? "" : "s")} · {speed} speed"
             : $"Nobody plays: you watch {open} bots · {speed} speed")+(_fogOfWar.ButtonPressed ? "" : " · no fog of war");
     }
 
@@ -390,7 +395,7 @@ public partial class SetupScreen : Control
         var bots = choices.Select((c,slot) => c >= FirstBot ? new AiBotChoice(map.Personalities[c-FirstBot].Id,[.. _traits[slot]]).ToString() : "").ToArray();
         Started?.Invoke(new(cache,map.Title,Array.IndexOf(choices,You),bots,
             Enumerable.Range(0,map.Players).Where(s => choices[s] == Closed).ToArray(),Speeds[_speed.Index],Random.Shared.Next(),
-            Enumerable.Range(0,map.Players).Select(s => _sides[s].Selected == EvilSide ? "evil" : "good").ToArray(),
+            Enumerable.Range(0,map.Players).Select(s => SideKeys[Math.Max(GoodSide,_sides[s].Selected)]).ToArray(),
             SandboxInstantBuild: !map.Sandbox || _instantBuild.ButtonPressed,SandboxTrainingDummies: !map.Sandbox || _trainingDummies.ButtonPressed,
             FogOfWar: !map.Sandbox && _fogOfWar.ButtonPressed));
     }

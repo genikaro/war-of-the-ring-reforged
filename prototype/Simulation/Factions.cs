@@ -9,8 +9,24 @@ public sealed record CorruptionRules(Dictionary<string,int> Creators,Dictionary<
 /// become, how its population grows and where it may build (corruption).</summary>
 public sealed partial class SimWorld
 {
-    public const string Good = "good",Evil = "evil";
+    public const string Good = "good",Evil = "evil",RandomSide = "random";
     public Dictionary<int,string> TeamFactions { get; } = [];
+
+    /// <summary>Build-161: a slot set to Random plays Good or Evil drawn from the match seed and its slot, so Restart keeps
+    /// the side and a new Start draws again. Other slots' choices never change a slot's draw.</summary>
+    public static string ResolveFaction(string faction,int seed,int slot)
+    {
+        if (faction != RandomSide) return faction;
+        uint draw;
+        unchecked
+        {
+            draw = (uint)seed^((uint)slot+1)*0xc2b2ae35u^0x27d4eb2fu;
+            draw = (draw^(draw>>16))*0x7feb352du;
+            draw = (draw^(draw>>15))*0x846ca68bu;
+            draw ^= draw>>16;
+        }
+        return (draw&1) == 0 ? Good : Evil;
+    }
     public string FactionOf(int team) => TeamFactions.GetValueOrDefault(team,Good);
     public static string FactionOfName(string name) => name.StartsWith("BUILDING_E_",StringComparison.Ordinal) || name.StartsWith("UNIT_E_",StringComparison.Ordinal) ? Evil : Good;
     /// <summary>Whether any team plays the side, so its rules are worth loading.</summary>
