@@ -121,8 +121,9 @@ public sealed partial class AiPlayer(int team,AiPersonality personality,AiStyle?
 /// moving one gatherer a think. Building: one project at a time with the skill's builders, who lay and pay for the
 /// foundation on arrival, placed on rings around home toward the enemy and 10 m clear of resources, abandoned for the
 /// source refund if it makes no progress for 30 s, in the order the source columns allow: economy buildings first (all
-/// AIMustHaveFirstPass), then one of each military building, then the remaining first-pass buildings (the Watchtower;
-/// a style of Aggression 30 or less builds it before the military), then more military buildings up to AIMaxDefault
+/// AIMustHaveFirstPass; a style of Aggression 30 or less adds the Watchtower), then the expansion Citadel once due and a
+/// Mill on every further well near home (AILowerPriorityIfExists false; both build-155), one of each military building,
+/// the research buildings and the remaining first-pass buildings, then more military buildings up to AIMaxDefault
 /// while the bank can pay twice over (AILowerPriorityIfExists; at Aggression 50 or more, once every producer is
 /// busy), and a Camp whenever the population is within three of the cap. The next building's cost is reserved before
 /// anything is trained. Army: producers train toward the Assault party's melee/missile shares, best Assault effectiveness first.
@@ -268,7 +269,7 @@ public sealed partial class SimWorld
         string intel = !FogOfWar ? "" : $" · knows {AiKnownSites(ai).Length} enemy buildings, {ai.Contacts.Count} soldiers"
             +(ai.Scout >= 0 ? $" · scout #{ai.Scout} {ai.ScoutStops+1}/{AiScoutStopsPerTrip(ai)}" : "")
             +(ai.SearchCell >= 0 && ai.Party.Count > 0 ? " · searching" : "")
-            +(ai.Holding is (int enemy,int ours) ? $" · holding: seen army {enemy} vs {ours}" : "");
+            +(ai.Holding is (int army,int towers,int ours) ? $" · holding: seen army {army}{(towers > 0 ? $" + towers {towers}" : "")} vs {ours}" : "");
         ai.Status = (ai.Composition is { } composition ? composition.Name+" · " : "")+$"workers {workers.Length} · army {home.Length}+{ai.Party.Count}/{AiPartySize(ai)}{march}{waits}{raid}{places}{defense}{(guards > 0 ? $" · guards {guards}" : "")}{(heroes > 0 ? $" · heroes {heroes} ({ai.RecoveringHeroes.Count} recovering)" : "")}{intel} · {ai.Plan}{(ai.TechPlan != "" ? " · "+ai.TechPlan : "")} · parties {ai.PartiesSent}{(ai.RaidsSent > 0 ? $" · raids {ai.RaidsSent}" : "")}";
     }
 
@@ -612,19 +613,26 @@ public sealed partial class SimWorld
             .OrderByDescending(n => AiProducerWeight(ai,n)).ToArray();
         string[] Pass(string cls,bool first) => order.Where(n => AiBuildings[n].Class == cls && AiBuildings[n].MustHaveFirstPass == first).ToArray();
         bool defensive = ai.Profile.TowerFirst;
-        var firstCopies = Pass("ECONOMY",true).Concat(defensive ? Pass("DEFENSIVE",true) : [])
-            .Concat(order.Where(n => AiBuildings[n].Class == "MILITARY"))
-            // Build-47: one research building of each kind once the tech level allows it.
-            .Concat(order.Where(n => AiBuildings[n].Class == "UPGRADE")).Concat(defensive ? [] : Pass("DEFENSIVE",true))
-            .Concat(order.Where(n => AiBuildings[n].MustHaveFirstPass));
-        foreach (var name in firstCopies.Distinct())
-            if (AiCount(team,name) == 0 && Can(name)
-                && (AiBuildings[name].Class != "DEFENSIVE" || AiTowerCitadel(ai,name) != null)) return name;
-        // Every growing base gets more coverage (build-117); upgraded towers still fill their original tower slot.
-        if (Pass("DEFENSIVE",true).FirstOrDefault(n => Can(n) && AiTowerCitadel(ai,n) != null) is { } tower) return tower;
-        // Expansion (owner rule): a Citadel by unclaimed resources once the time comes, then one more every interval.
+        string? FirstMissing(IEnumerable<string> names) => names.Distinct().FirstOrDefault(name => AiCount(team,name) == 0 && Can(name)
+            && (AiBuildings[name].Class != "DEFENSIVE" || AiTowerCitadel(ai,name) != null));
+        if (FirstMissing(Pass("ECONOMY",true).Concat(defensive ? Pass("DEFENSIVE",true) : [])) is { } economy) return economy;
+        // Expansion (owner rule): a Citadel by unclaimed resources once the time comes, then one more every interval. Build-155:
+        // ahead of the other first copies and further towers, which used to keep the style's timing from ever mattering
+        // (Farmer Maggot, due at 8:00, often never expanded); its own Mill and Foundry follow it (above).
         if (citadel != null && citadels < ai.Profile.MaxCitadels && Tick >= AiExpansionTick(ai)+(citadels-1)*ai.Profile.ExpansionIntervalTicks
             && Can(citadel) && AiCitadelSite(ai,citadel,rebuild: false)) return citadel;
+        // A Mill on every further well near home or an expansion (AILowerPriorityIfExists is false for the Mill). Build-155:
+        // ahead of every first copy that costs food, as it costs ore alone and food is every army's bottleneck. Easy Farmer
+        // Maggot beat Hard Aragorn on Bilbo's Bluffs (four wells of 4500 food) because a razed middle Mill came back only
+        // after the Ranger Post, Forge, Natures Haven, Elven Sanctuary, Wilderness Outpost and House of Lore.
+        if (order.FirstOrDefault(n => !AiBuildings[n].LowerPriorityIfExists && AiBuildings[n].Class == "ECONOMY" && Can(n)
+            && ResourceRulesNamed(n)?.Kind is { } kind && AiResourceSite(ai,kind,0,0,anyDistance: false) >= 0) is { } well) return well;
+        if (FirstMissing(order.Where(n => AiBuildings[n].Class == "MILITARY")) is { } producer) return producer;
+        // Build-47: one research building of each kind once the tech level allows it.
+        if (FirstMissing(order.Where(n => AiBuildings[n].Class == "UPGRADE").Concat(defensive ? [] : Pass("DEFENSIVE",true))
+            .Concat(order.Where(n => AiBuildings[n].MustHaveFirstPass))) is { } first) return first;
+        // Every growing base gets more coverage (build-117); upgraded towers still fill their original tower slot.
+        if (Pass("DEFENSIVE",true).FirstOrDefault(n => Can(n) && AiTowerCitadel(ai,n) != null) is { } tower) return tower;
         // AIMustHaveFirstPass: multiples come only after every first-pass building stands, which the loop above ensures.
         // An aggressive style (FreeMilitary) does not wait for the bank to pay twice over once every producer it has is
         // training: with food the bottleneck, a producer more than the food keeps busy only takes food from the army.
@@ -637,9 +645,7 @@ public sealed partial class SimWorld
             if ((rule.MaxDefault < 0 || AiCount(team,name) < rule.MaxDefault) && Can(name)
                 && (!rule.LowerPriorityIfExists || busy || bank.FoodMilli >= 2000L*rules.FoodCost && bank.OreMilli >= 2000L*rules.OreCost)) return name;
         }
-        // A Mill on every further well near home or an expansion (AILowerPriorityIfExists is false for the Mill).
-        return order.FirstOrDefault(n => !AiBuildings[n].LowerPriorityIfExists && AiBuildings[n].Class == "ECONOMY" && Can(n)
-            && ResourceRulesNamed(n)?.Kind is { } kind && AiResourceSite(ai,kind,0,0,anyDistance: false) >= 0);
+        return null;
     }
 
     /// <summary>The nearest unclaimed, gatherable resource site of a kind away from enemy buildings, within 80 m of home
@@ -653,8 +659,10 @@ public sealed partial class SimWorld
         bool Open(GatherSource r) => CanStartConstruction(ai.Team,r.Id,out var reason) || reason is "Insufficient resources" or UnitBlocksFoundation;
         var worker = reachable ? ActiveUnits.Where(u => u.Team == ai.Team && u.Health > 0 && IsAiWorker(u))
             .OrderByDescending(u => Nav(u).CanStand(u.Node)).ThenBy(u => u.Id).FirstOrDefault() : null;
+        // Build-155: an emptied well never gets another Mill, now that further Mills come early in the plan.
         return Resources.Values.Where(r => r.Kind == kind && ConstructionSites.TryGetValue(r.Id,out var site) && site.Team < 0 && Open(r)
-                && (!reachable || r.ImprovedRateMilliPerTick > 0 && r.RemainingMilli > r.ImprovedFloorMilli && worker != null
+                && r.RemainingMilli > r.ImprovedFloorMilli
+                && (!reachable || r.ImprovedRateMilliPerTick > 0 && worker != null
                     && EconomyRouteCandidates(worker,SiteArea(site),n => ClaimSpot(worker,site,n),ignoreUnits:true).Any())
                 && (anyDistance || homes.Any(h => DistanceSquared(r.X,r.Z,h.X,h.Z) <= 80000L*80000)) && !AiUnsafe(ai,r.X,r.Z))
             .OrderBy(r => DistanceSquared(r.X,r.Z,bx,bz)).ThenBy(r => r.Id).Select(r => r.Id).DefaultIfEmpty(-1).First();

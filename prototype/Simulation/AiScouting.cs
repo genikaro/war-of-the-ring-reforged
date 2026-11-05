@@ -22,8 +22,9 @@ public sealed partial class AiPlayer
     /// <summary>Where a party that knows no enemy building looks for one, and since when it looks there.</summary>
     public int SearchCell { get; internal set; } = -1;
     public int SearchSince { get; internal set; }
-    /// <summary>Set while the next assault waits because the enemy army it has seen is stronger: (its power, ours).</summary>
-    public (int Enemy,int Ours)? Holding { get; internal set; }
+    /// <summary>Set while the next assault waits because the enemy it has seen is stronger: the power of its army and of its
+    /// towers by the target (build-155), and ours.</summary>
+    public (int Army,int Towers,int Ours)? Holding { get; internal set; }
 }
 
 /// <summary>Bots under fog of war (owner request, build-150): a bot knows only what its side sees and remembers. It sends
@@ -96,9 +97,10 @@ public sealed partial class SimWorld
     /// <summary>The power of a side's soldiers the bot has seen in the last three minutes.</summary>
     private int AiKnownArmy(AiPlayer ai,int team) => ai.Contacts.Values.Where(c => c.Team == team && Tick-c.Tick <= AiContactRecentTicks).Sum(c => c.Power);
 
-    /// <summary>With fog, a new assault waits while the army the bot has seen of the side it would attack is stronger than its
-    /// own by more than its Aggression accepts: it goes once its power times (60 + Aggression)% matches the enemy's, so a timid
-    /// bot (Aggression 0) wants five to three, a balanced one about even odds and the boldest attacks at five to eight. It goes
+    /// <summary>With fog, a new assault waits while the army the bot has seen of the side it would attack, with that side's
+    /// known towers within AiTowerReachMm of the nearest of its buildings (build-155), is stronger than its own by more than
+    /// its Aggression accepts: it goes once its power times (60 + Aggression)% matches the enemy's, so a timid bot
+    /// (Aggression 0) wants five to three, a balanced one about even odds and the boldest attacks at five to eight. It goes
     /// anyway with twice the largest party, or when its population cannot grow.</summary>
     private bool AiHoldsAttack(AiPlayer ai,SimUnit[] ready,int bx,int bz)
     {
@@ -106,14 +108,22 @@ public sealed partial class SimWorld
         if (!FogOfWar || ActiveUnits.Count(u => u.Team == ai.Team && u.Health > 0 && IsAiSoldier(u)) >= 2*AiAssaultParty.MaxSize
             || PopulationUsed(ai.Team)+3 >= Math.Min(PopulationCapacity(ai.Team),MaxPopulation)) return false;
         // The side owning the nearest building it knows of; before it has found one, the strongest army it has seen.
-        var target = AiKnownSites(ai).OrderBy(s => DistanceSquared(SitePosition(s).X,SitePosition(s).Z,bx,bz)).ThenBy(s => s.Id).FirstOrDefault();
-        int enemy = target != null ? AiKnownArmy(ai,target.Team)
+        var known = AiKnownSites(ai);
+        var target = known.OrderBy(s => DistanceSquared(SitePosition(s).X,SitePosition(s).Z,bx,bz)).ThenBy(s => s.Id).FirstOrDefault();
+        int army = target != null ? AiKnownArmy(ai,target.Team)
             : ai.Contacts.Values.Select(c => c.Team).Distinct().Select(team => AiKnownArmy(ai,team)).DefaultIfEmpty(0).Max();
+        int towers = target == null ? 0 : known.Where(s => s.Team == target.Team && s.Complete && SiteDefense(s) != null
+                && DistanceSquared(SitePosition(s).X,SitePosition(s).Z,SitePosition(target).X,SitePosition(target).Z) <= (long)AiTowerReachMm*AiTowerReachMm)
+            .Sum(AiTowerPower);
         int ours = ready.Sum(AiPower);
-        if ((long)ours*(60+ai.Profile.Style.Aggression) >= (long)enemy*100) return false;
-        ai.Holding = (enemy,ours);
+        if ((long)ours*(60+ai.Profile.Style.Aggression) >= ((long)army+towers)*100) return false;
+        ai.Holding = (army,towers,ours);
         return true;
     }
+
+    /// <summary>A tower's power as a soldier's: the square root of its full health (what fog shows of it) times its weapon's
+    /// damage per second.</summary>
+    private int AiTowerPower(ConstructionSite site) => (int)Math.Sqrt((double)SiteMaxHealth(site)*(SiteDefense(site)?.DpsMilli ?? 0));
 
     /// <summary>The spots worth a look for a unit at (x, z): every enemy start position whose side has not been found yet
     /// (worth the most), every resource and place of power, by how long ago the side last saw them (capped at ten minutes)

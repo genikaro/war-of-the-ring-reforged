@@ -1,5 +1,12 @@
 # Godot C# skirmish sandbox
 
+**build-155:** Bots claim food first: a Mill (50 ore) on every free, safe well near home now comes right after the
+first economy buildings instead of last, so a razed Mill is rebuilt at once, and the expansion Citadel comes as soon as
+its style's time is due instead of after every research building. Under fog a bot also counts the enemy towers it
+knows by its target before attacking, so a Hard bot no longer feeds small parties into a tower-first base. Easy Farmer
+Maggot used to beat Hard Aragorn in 5 of 14 matches on Bilbo's Bluffs; now it wins 1 (Aragorn 11, 2 unfinished at 40:00).
+See [SKIRMISH.md](SKIRMISH.md#build-155-food-first-and-towers-in-the-attack-hold).
+
 **build-154:** Cloud shadows only darken the ground, as in the original: build-152 also let them brighten it, so
 sunlit grass came out brighter than the retail game. See [LIGHTING.md](LIGHTING.md).
 

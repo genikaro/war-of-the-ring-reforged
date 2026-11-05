@@ -272,10 +272,12 @@ public sealed partial class SimWorld
             Write(AiJournalKind.Attack,$"Attack #{ai.PartiesSent} searches for the enemy → {AiJournalWhere(bx,bz,x,z)}");
         }
         journal.Searching = searching;
-        if (ai.Holding is (int enemy,int ours))
+        if (ai.Holding is (int army,int towers,int ours))
         {
+            // Build-155: the bot accepts odds of (60 + Aggression)%, so the line says what its own power is worth.
             if ((long)Tick-journal.HoldTick > AiJournalQuietTicks)
-                Write(AiJournalKind.Attack,$"Holds the attack: the enemy army it has seen (power {enemy}) outweighs its own ({ours})");
+                Write(AiJournalKind.Attack,$"Holds the attack: the enemy it has seen (army {army}{(towers > 0 ? $" + towers {towers}" : "")}) outweighs"
+                    +$" its own power {ours} at {60+ai.Profile.Style.Aggression}% courage");
             journal.HoldTick = Tick;
         }
     }

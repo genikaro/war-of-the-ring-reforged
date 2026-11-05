@@ -166,6 +166,26 @@ static class FogChecks
                 aggression==100 ? "the boldest bot attacks an army it saw 1.2 times its own" : "a careful bot holds its attack against it");
             if(aggression==0) check(bot.Journal.Entries.Any(e => e.Text.StartsWith("Holds the attack")),"the journal says why it holds");
         }
+        // Build-155: the towers the bot knows by its target count with the army. A worker 14 m from the enemy keep has seen
+        // the keep and the Watchtower beside it; the army it saw is out of that sight, worth 0.9 of its party.
+        foreach(bool tower in new[]{false,true})
+        {
+            var w=World();
+            w.BuildingRules.Add("tower",new("tower","Tower",null,100,100,30,400,750000,750000,100000,50000,[]));
+            w.Defenses.Add("tower",new(14000,0,19000,[1000,1200,1400,1600,1750],0,5000,0));
+            if(tower) w.ConstructionSites.Add(10002,new(10002,10002,2000,"tower",100500,30500){Team=1,Complete=true,Health=400});
+            w.Spawn(0,Cell(96),Worker with {MaxHealth=5000});Step(w,SimWorld.VisionTicks);
+            var bot=Bot(w,0,40);int size=w.AiPartySize(bot);
+            for(int i=0;i<size;i++)w.Spawn(0,Cell(16+i%8,22+i/8*2),Soldier);
+            var army=Enumerable.Range(0,4).Select(i => w.Spawn(1,Cell(110+i%2*2,52+i/2*2),Soldier with {Passive=true})).ToArray();
+            int ours=size*(int)Math.Sqrt(155.0*10000);
+            foreach(var unit in army) bot.Contacts[unit.Id]=new(1,0,unit.X,unit.Z,ours*9/40);
+            Step(w,SimWorld.TicksPerSecond+1);
+            bool held=bot.Party.Count==0 && bot.Holding is {Towers:>0};
+            check(w.KnowsSite(0,w.ConstructionSites[Keep1]) && (tower ? held && bot.Journal.Entries.Any(e => e.Text.StartsWith("Holds the attack") && e.Text.Contains("towers"))
+                : !held && bot.Party.Count==size),
+                tower ? "a known Watchtower by the target tips the odds: the bot holds and says so" : "without it the bot attacks the same army");
+        }
     }
 
     private static void Heroes(Action<bool,string> check)

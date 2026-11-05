@@ -133,6 +133,19 @@ static class AiExpansionChecks
         Step(distant);
         check(Planned(distant,"tower") is { } close && Distance(close,67500,55500)<=16000L*16000,
             "a legacy tower outside firing range cannot satisfy an expansion's defense budget");
+        // Build-155: before an expansion is due, a free well near home takes a Mill ahead of a missing producer; an
+        // emptied one does not.
+        foreach(bool empty in new[]{false,true})
+        {
+            var well=Fixture();well.AiPlayers[0].Profile=well.AiPlayers[0].Profile with {ExpansionTicks=int.MaxValue};
+            well.BuildingRules.Add("barracks",Building("barracks"));well.Placements.Add("barracks",new(Box(2000,2000),-400,400,3000,false,false));
+            well.PlaceableBuildings.Add("barracks");well.AiBuildings.Add("barracks",new("MILITARY",false,3,true));
+            if(empty) well.Resources[NewFood].RemainingMilli=0;
+            Step(well);
+            bool mill=well.Units.Any(u=>u.Order==OrderKind.Build && u.OrderTarget==NewFood);
+            check(empty ? !mill && Planned(well,"barracks")!=null : mill && Planned(well,"barracks")==null,
+                empty ? "an emptied well gets no Mill, and the producer goes up instead" : "a free well near home takes a Mill before a missing producer");
+        }
         var replayA=Fixture();var replayB=Fixture();Step(replayA,2500);Step(replayB,2500);
         check(replayA.StateDigest()==replayB.StateDigest(),"expansion layout and economy construction replay deterministically");
     }

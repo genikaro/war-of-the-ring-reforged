@@ -3621,3 +3621,43 @@ too: Gimli's base outlasts the 40-minute limit, and bots now spend Fate on heroe
 ./prototype/run.ps1 -ObserverSmoke -CapturePath converted/skirmish/build-148-observer.png -Resolution 1600x900
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --target-priority-checks
 ```
+
+## Build-155: food first, and towers in the attack hold
+
+Owner report: Easy Farmer Maggot beat Hard Aragorn decisively. On Bilbo's Bluffs (four wells of 4500 food: one per base, two in
+the middle) build-154 gave Maggot 5 of 14 matches (seeds 0-6, both seats, fog on), Aragorn 7, none 2. Aragorn gathered about
+4700 food (its home well) in 12 of them and won on Fate heroes alone.
+
+- **Plan order** (`AiNextBuilding`): economy first copies (and the Watchtower at Aggression 30 or less), then the expansion
+  Citadel once due, then a Mill on every further free, safe well within 80 m of home or a Citadel (it costs 50 ore; the source's
+  AILowerPriorityIfExists is false for the Mill), then one of each producer, the research buildings, further towers and more
+  producers. Before, further Mills came last and the expansion after every first copy, so a razed middle Mill came back only
+  after the Ranger Post, Forge, Natures Haven, Elven Sanctuary, Wilderness Outpost and House of Lore, and Maggot (due at 8:00)
+  often never expanded. An emptied well never gets another Mill.
+- **Attack hold** (`AiHoldsAttack`, fog only): the enemy's known towers within 42 m of the nearest of its buildings add their
+  power (square root of full health times weapon DPS) to the army it has seen. The journal line now names the towers and the
+  bot's courage ((60 + Aggression)%).
+
+Validation: default simulation suite 2623 checks (with build-149); `--fog-checks` 43 (2 new), `--ai-expansion-checks` 22
+(2 new); composition 99, defence 30, hero 125, Evil bot 114, recovery 11, worker 20, tower 69, target priority 114 pass.
+
+The same 14 matches on build-155 (headless observer smoke, fog on, 16x): **Aragorn 11, Maggot 1, none 2** (was 7, 5 and 2).
+Maggot now expands at 8:26-9:33 in all 14 (its style's 8:00 plus the walk and the build), Aragorn at 14:00-16:30 in 13. Maggot's
+one win (Aragorn in slot 1, seed 6) and both 40:00 draws (slot 1, seeds 3 and 4) come where it gathered 7300-9000 food to
+Aragorn's 4800-5500; otherwise both gather 3700-6400. Open: Aragorn in slot 2 lays only its home Mill in six of seven
+matches (two in the seventh), in slot 1 two to four.
+
+| Seed | Maggot slot 1, Aragorn slot 2 | Aragorn slot 1, Maggot slot 2 |
+| --- | --- | --- |
+| 0 | Aragorn 16:36 | Aragorn 20:32 |
+| 1 | Aragorn 23:15 | Aragorn 16:17 |
+| 2 | Aragorn 15:39 | Aragorn 19:41 |
+| 3 | Aragorn 21:00 | none at 40:00 |
+| 4 | Aragorn 16:33 | none at 40:00 |
+| 5 | Aragorn 14:12 | Aragorn 16:02 |
+| 6 | Aragorn 18:21 | Maggot 19:29 |
+
+```powershell
+# One match (the sweep runs seeds 0-6 in both seat orders, four at a time, each on its own copy of the cache):
+converted/tooling/godot/Godot_v4.7.2-stable_mono_win64/Godot_v4.7.2-stable_mono_win64_console.exe --path prototype --headless --fixed-fps 20 -- --view=squad --observer-smoke --observe --bots=FarmerMaggot,Aragorn --fog --seed=0 --cache=<copy of converted/skirmish>
+```
