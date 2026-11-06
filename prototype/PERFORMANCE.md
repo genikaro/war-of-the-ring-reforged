@@ -487,7 +487,75 @@ scratch copy of this build in progress (before its tower and opponent changes) w
 `Reforged.csproj` ran the same headless match with the same digest at 3.3 instead of 9.3 ms per tick from 10:00 to
 12:00, and finished in 82 instead of 165 s. It changes no
 simulation result; what it costs is debugging (stepping and locals in the debugger), so it waits for the owner's
-choice.
+choice. Build-169 made it the default (next section).
+
+### Build-169: the Debug build is compiled optimized
+
+`run.ps1` and the Godot editor build `Reforged.csproj` in its Debug configuration. Until build-168 that turned JIT
+optimizations off, so every timing in this file up to build-168 is unoptimized code; exported games were always
+optimized. Build-169 sets `<Optimize>true</Optimize>` for every configuration of `Reforged.csproj`. It changes no
+code, only how the same code is compiled. The cost is debugging: locals can be optimized away and stepping skips
+lines. `ReforgedDebugJit=true` in the environment (for `run.ps1` or the editor) turns optimization off for a
+debugger session (`dotnet msbuild -getProperty:Optimize` evaluates to `false` with it, `true` without it).
+`export.ps1 -DebugBuild` exports are now optimized too unless the same variable is set. The simulation test project
+compiles the simulation sources itself and is not affected (its documented runs already use `-c Release`).
+
+The 8-bot MP08_Rift match, headless at 16x, build-168 and build-169 run back to back (ms per tick):
+
+| Section | 10:00-12:00, build-168 | build-169 | 12:00-14:00, build-168 | build-169 |
+| --- | ---: | ---: | ---: | ---: |
+| Step | 10.14 | 3.32 | 10.39 | 3.84 |
+| Unit movement | 3.06 | 0.88 | 2.57 | 0.81 |
+| `FindPath` | 2.52 | 0.80 | 2.82 | 0.98 |
+| Unit combat | 2.01 | 0.59 | 1.37 | 0.41 |
+| Bots (`ai`) | 1.42 | 0.60 | 2.91 | 1.30 |
+| Blocked replan | 1.31 | 0.43 | 1.28 | 0.44 |
+| `CanTraverseGroundPoints` | 1.12 | 0.26 | 0.64 | 0.17 |
+| Production | 0.84 | 0.21 | 0.40 | 0.12 |
+| Connected region flood | 0.78 | 0.19 | 0.36 | 0.10 |
+| Towers (`defenses`) | 0.74 | 0.34 | 0.70 | 0.34 |
+| Allocated | 3,998 MiB | 3,768 MiB | 4,680 MiB | 4,350 MiB |
+
+The run to 14:00 took 91 instead of 184 s. A second pair, run later while the machine was busier, gave 11.72 against
+4.01 ms (10:00-12:00) and 200 against 102 s; build-168 measured 8.75 ms on a quiet machine the day before. The gain
+is 2.9-3.1x on the tick, a little less on towers, which spend more of their time in library code (LINQ) that was
+already optimized. Allocation falls by 6-7%, probably because the optimizing JIT keeps some short-lived objects on
+the stack.
+
+The late-game play benchmark (`-FastUntil 10 -ProfileUntil 12 -CameraTour -Resolution 1600x900`, windowed, back to
+back): 13,060 frames instead of 10,620 (105 instead of 91 FPS), frame p50 / p95 / p99 8.5 / 13.4 / 17.0 ms instead
+of 9.3 / 20.5 / 31.7 (max 279 instead of 908 ms), the step 3.26 instead of 8.89 ms per tick, and `_Process`
+1.10 instead of 1.47 ms per frame (unit presentation 0.53 instead of 0.65, the HUD 0.29 instead of 0.44). Drawing
+itself is engine work and does not change. The same build-168 benchmark gave 9,711 frames (79 FPS) the day before,
+so compare only runs made back to back.
+
+300-unit stress fight (`-StressBenchmark -Units 300`, then with `-Fog`), back to back:
+
+| | Build-168 | Build-169 | Fogged, build-168 | Fogged, build-169 |
+| --- | ---: | ---: | ---: | ---: |
+| Phase A FPS | 38.7 | 46.6 | 39.0 | 46.4 |
+| Phase A tick (mean `godot physics frame`) | 13.8 ms | 4.0 ms | 13.4 ms | 4.0 ms |
+| Phase A frame p99 | 41.7 ms | 32.0 ms | 40.8 ms | 31.2 ms |
+| Phase B FPS | 100.2 | 184.0 | 114.6 | 182.7 |
+| Phase C ticks in 1,196 frames (effective speed) | 1,165 (1.45x) | 1,600 (2.69x) | 1,147 (1.46x) | 1,600 (2.70x) |
+
+Another session's smokes ran on the same machine during the unfogged build-168 run, so the fogged pair is the
+cleaner comparison; during every other run here a stuck smoke held one of the 16 cores, for both builds alike.
+Phase A stays bound by drawing (render CPU about 10 ms a frame). Phase C now runs every tick of 4x (1,600 in 20 s),
+so it plays further than build-168 and its captures and final digest differ, as phase C's always do.
+
+Nothing else changes. Build-169 prints `PROFILE_DIGEST tick 14400 72BE0238…` headless and in the play benchmark,
+and `tick 16800 7F22CD22…` headless, as build-168 does. Phase A and B captures of both fights are
+pixel-identical to build-168 (`compare_captures.py --ignore 1000,30,1600,95`: 0 of 1,440,000 pixels differ), from
+the runs above and from the build-168 runs the day before. The fifteen smokes from build-168 report the same as
+build-168, apart from timing fields, the build label and one ObserverSmoke snapshot. That smoke's two-minute
+snapshots are taken on the first frame at or after each mark, and at 16x the number of ticks per frame depends on
+tick speed, so a faster build can take its 12:00 snapshot a few ticks later in the same second (build-167 and
+build-168 differed in three snapshots the same way). Its final digest `98C53EB7…` and outcome tick 23,840 match.
+FormationSmoke still fails only `attack_move_dispatch`.
+
+Timings from before build-169 are unoptimized. Compare a later build with build-169 or newer, or build the older
+tree with `<Optimize>true</Optimize>` in its `Reforged.csproj` first.
 
 ## Repeating the checks
 
@@ -548,8 +616,9 @@ After build-168 the 8-bot Rift late game spends 8.6 ms a tick in the Debug build
 2.2 ms (the searches themselves, each body graph's first region flood and long replans), combat 1.7, bots 1.2,
 about 950 ground sweeps 1.0, production 0.7 and towers 0.6. Allocation fell by a quarter; the largest sources left are
 the bots' LINQ queries and the visibility tests every tower makes of every unit each tick (`CanSeeUnit` asks
-`PlacePowerAreas.Any` and `Tracks.Any` with a new closure each time). The biggest single saving left is the Debug
-build itself (the proposal at the end of the build-168 section): about a third of the tick, with nothing else changed.
+`PlacePowerAreas.Any` and `Tracks.Any` with a new closure each time). Build-169 compiles that build optimized: the
+same window takes 3.3-4.0 ms a tick, with route searches 0.8 ms, bots 0.6, combat 0.6, towers 0.3 and ground sweeps
+0.3; towers and bots lose least, since their time is mostly in library code.
 
 The standard observer smoke's Fate assertion fails in the original baseline and
 the updated run. Both reach tick 22,621 with the same final digest; corpse-release

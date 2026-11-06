@@ -1023,8 +1023,11 @@ window 4.2 ms per tick, 16x at 17-26 fps.
 - [x] Exact movement, route searches and occupancy (build-168): connected regions updated around an obstacle change
   instead of re-flooded on every body graph (about 400 floods in two Rift minutes), one inlined A* loop for
   `FindPath`/`FindPathToAny`, cheaper occupancy, ground sweeps, tower targeting and opponent choice; 8-bot Rift
-  10:00-12:00 tick 15.0 -> 8.6 ms, allocation 5.5 -> 4.1 GB, digests and captures unchanged. Proposal waiting for the
-  owner: build `run.ps1`'s Debug configuration with JIT optimizations (the same match ran at 3.3 ms a tick).
+  10:00-12:00 tick 15.0 -> 8.6 ms, allocation 5.5 -> 4.1 GB, digests and captures unchanged.
+- [x] Optimized Debug build (build-169): `Reforged.csproj` compiles with `<Optimize>true</Optimize>` in every
+  configuration (`ReforgedDebugJit=true` turns it off for a debugger); 8-bot Rift 10:00-12:00 tick 10.1 -> 3.3 ms back
+  to back, play benchmark 91 -> 105 FPS (p99 31.7 -> 17.0 ms), stress phase A 39 -> 46 FPS, digests and captures
+  unchanged. Earlier builds' timings are unoptimized.
 - [x] Late-game presentation (build-167): fog overlay blur and fade, hero glows, building loop; 8-bot Rift at 1x
   from 10:00 runs at 77 FPS instead of 64 (frame p50 12.5 -> 9.9 ms). `-FastUntil`/`-CameraTour` play benchmark.
 - [x] Wide-body combat position searches (build-162): blocker data once per candidate

@@ -1,5 +1,12 @@
 # Godot C# skirmish sandbox
 
+**build-169:** The game's own code runs about three times faster in `run.ps1` and editor builds, with the same results
+and pictures: they now compile the C# with optimizations, as exported games always were. In the 8-bot MP08_Rift late game a tick takes 3.3
+instead of 10.1 ms, the late-game play benchmark draws 105 instead of 91 FPS (frame p99 17 instead of 32 ms), and the
+300-unit stress fight 46 instead of 39 FPS. Set `ReforgedDebugJit=true` in the environment before starting `run.ps1`
+or the editor when a debugger needs every local. Timings from earlier builds were unoptimized. See
+[PERFORMANCE.md](PERFORMANCE.md#build-169-the-debug-build-is-compiled-optimized).
+
 **build-168:** Big matches simulate faster with the same results. Connected regions are updated around a building
 that goes up or comes down instead of being flooded again for every body (about 400 floods in two minutes of a late
 8-bot match), route searches run as one tighter loop, the occupied-cell set is no longer built where nothing needs it,

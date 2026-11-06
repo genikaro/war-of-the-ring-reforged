@@ -4,5 +4,8 @@
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Build-169: run.ps1 and the editor build Debug; compile it optimized anyway (same results, ticks about
+         three times cheaper). ReforgedDebugJit=true in the environment turns it off for a debugger session. -->
+    <Optimize Condition="'$(ReforgedDebugJit)' != 'true'">true</Optimize>
   </PropertyGroup>
 </Project>
