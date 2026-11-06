@@ -38,7 +38,7 @@ static class StatusChecks
         world.EnqueueAbility(0,[frodo.Id],0,-1); world.Step();
         var ring = world.StatusesOf(frodo).Single(s => s.Kind == StatusKind.OneRing);
         check(ring.Ability == Ring && UnitStatusText.From(world,frodo,ring,Name).Tooltip
-            == "The One Ring\nInvisible to enemies and does not fight.\nLoses 2 HP per second (stops at 1 HP).","the worn Ring is a status with its drain");
+            == "The One Ring\nInvisible to enemies and does not fight. Gollum, the Nazgul King and Black Riders see through it (Ringsight).\nLoses 2 HP per second (stops at 1 HP).","the worn Ring is a status with its drain");
 
         var windy = Open();
         var legolas = windy.Spawn(0,Cell(10),UnitDefinition.Probe with { Name = "legolas",Hero = true,Abilities = [Wind] });

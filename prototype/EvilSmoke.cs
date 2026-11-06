@@ -197,19 +197,29 @@ public partial class Main
                 _evilChecks["fate_orb_shows_the_five_evil_powers"] = _commands.GlobalAbilitiesOpen && menu.All(b => b.IsVisibleInTree() && b.Icon != null)
                     && new[] {"Summon Bog","Murder of Crows","Vile Surge","Obelisk","Summon Balrog"}.Select((name,i) => menu[i].TooltipText.StartsWith(name)).All(v => v)
                     && new[] {2,3,3,4,7}.Select((cost,i) => menu[i].TooltipText.Contains(cost+" Fate")).All(v => v);
-                _evilChecks["obelisk_is_listed_but_not_castable"] = menu[3].Disabled && menu[3].TooltipText.Contains("not simulated");
+                _evilChecks["obelisk_is_castable"] = !menu[3].Disabled && menu[3].TooltipText.Contains("soaks");
                 _evilNotes["fate_menu"] = string.Join(" | ",menu.Select(b => b.TooltipText.Split((char)10)[0]));
                 if (_capture != "") _ = CaptureFrame(false,Shot("fate"));
                 // Casting through the command path: Vile Surge heals a wounded Goblin Slave and a Balrog answers the Summon.
                 var slave = Unit(EvilGoblin); slave.Health = 40;
                 world.EnqueueGlobalPower(0,2,slave.Node,slave.X,slave.Z);
                 world.EnqueueGlobalPower(0,4,world.Navigation.Nearest(world.Navigation.Cell(slave.X+14000,slave.Z+14000)));
+                // Build-164: the Obelisk rises beside the same Goblin Slave and protects it.
+                world.EnqueueGlobalPower(0,3,slave.Node,slave.X,slave.Z);
                 Next(); break;
             case 10:
                 if (!Wait(4)) break;
                 _evilChecks["vile_surge_heals_a_goblin"] = Unit(EvilGoblin).Health >= 200 || world.Units.Where(u => u.Team == 0 && u.Definition.Name == EvilGoblin).Any(u => u.Health >= 90);
                 var balrog = world.Units.FirstOrDefault(u => u.Team == 0 && u.Definition.Name == "UNIT_E_HERO_BALROG");
                 _evilChecks["summon_balrog_raises_a_balrog"] = balrog is { Health: > 0 } && _views.ContainsKey(balrog.Id);
+                var obeliskView = _droppedViews.FirstOrDefault(p => p.Key.Kind == "obelisk").Value;
+                var meshes = obeliskView == null ? Array.Empty<MeshInstance3D>() : Descendants(obeliskView).OfType<MeshInstance3D>().ToArray();
+                _evilChecks["obelisk_rises_with_its_idle_model"] = world.GlobalActive(0,9) && world.ObeliskHealthMilli.GetValueOrDefault(0) > 0
+                    && obeliskView is { Visible: true } && meshes.Length > 0 && meshes.All(m => m.Visible && m.Name.ToString().EndsWith("_Idle"));
+                _evilNotes["obelisk_view"] = $"model={_droppedModels.ContainsKey("obelisk")} view={obeliskView != null} visible={obeliskView?.Visible} clip={(obeliskView == null ? null : Descendants(obeliskView).OfType<AnimationPlayer>().FirstOrDefault())?.CurrentAnimation} meshes="
+                    +string.Join(",",meshes.Select(m => m.Name+(m.Visible ? "+" : "-")));
+                _evilChecks["obelisk_protects_the_goblin"] = world.Units.Where(u => u.Team == 0 && u.Definition.Name == EvilGoblin)
+                    .Any(u => world.StatusesOf(u).Any(st => st.Kind == StatusKind.Obelisk));
                 if (_capture != "") _ = CaptureFrame(false,Shot("balrog"));
                 Next(); break;
             case 11:

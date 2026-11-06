@@ -30,7 +30,8 @@ static class GlobalPowerChecks
     private static readonly GlobalPowerDefinition Bog = new(7,0,"Summon Bog","bog","bog",2,10000,300,200,"Bog",[],TimeScalePpm:500_000,Faction:"evil");
     private static readonly GlobalPowerDefinition Crows = new(8,1,"Murder of Crows","crows","crows",3,12000,440,200,"Crows",[],MissilePpm:10_000,Faction:"evil");
     private static readonly GlobalPowerDefinition Surge = new(2,2,"Vile Surge","surge","surge",3,12000,0,200,"Surge",[],HealMilli:200_000,Faction:"evil");
-    private static readonly GlobalPowerDefinition Obelisk = new(9,3,"Obelisk","obelisk","obelisk",4,15000,0,200,"Obelisk",[],Faction:"evil");
+    private static readonly GlobalPowerDefinition Obelisk = new(9,3,"Obelisk","obelisk","obelisk",4,15000,1334,200,"Obelisk",[],Faction:"evil",
+        ObjectHealth:5000,DegenerationPpm:15000,DamageUnitPpm:500_000,DamageObeliskPpm:500_000);
     private static readonly GlobalPowerDefinition Summoned = new(0,4,"Summon Balrog","balrog","move",7,2000,2400,200,"Balrog",[],SummonUnit:"UNIT_E_HERO_BALROG",Faction:"evil");
 
     /// <summary>Build-135: the Evil side's Fate menu beside the Good one, each team casting from its own.</summary>
@@ -45,7 +46,6 @@ static class GlobalPowerChecks
         w.Economies.Add(0,new(1000,1000) {Fate=20}); w.Economies.Add(1,new(0,0) {Fate=20});
         check(w.GlobalPower(0,0)?.Name=="Summon Bog" && w.GlobalPower(0,1)?.Name=="Blind" && w.GlobalPower(4,0)?.Kind==GlobalPowerKind.SummonBalrog && w.GlobalPower(4,1)?.Kind==GlobalPowerKind.GiantEnt && w.GlobalPower(4)?.Kind==GlobalPowerKind.GiantEnt,
             "each team's Fate menu is its own side's");
-        check(!w.CanUseGlobalPower(0,3,out string notYet) && notYet.Contains("not simulated"),"the Obelisk is listed but cannot be cast");
         var enemy = w.Spawn(1,Cell(40),Soldier); var friend = w.Spawn(0,Cell(41),Soldier); friend.Health = 300;
         Cast(w,0,x:40,team:0); Step(w);
         check(enemy.WillowUntil>w.Tick && enemy.WillowTimeScalePpm==500_000 && friend.WillowTimeScalePpm==1_000_000 && w.Economies[0].Fate==18,
@@ -63,9 +63,63 @@ static class GlobalPowerChecks
         check(w.StatusesOf(balrog!).Any(s => s.Kind==StatusKind.Summoned),"the Balrog shows the summoned status of its own power");
     }
 
+    /// <summary>Build-164: Summon Obelisk from its GlobalSpells row: 5000 health (Object 561), 15 m, DamageUnit/DamageObelisk 0.5
+    /// each, DegenerationRate 1.5 percent per second.</summary>
+    private static void RunObelisk(Action<bool,string> check)
+    {
+        var rules = new CombatRules();
+        foreach (var d in new[] {Soldier,Hero,Ent,Balrog}) rules.Units.Add(d.Name,d);
+        rules.GlobalPowers.AddRange([Blind,Brambles,Legacy,Wind,Summon,Bog,Crows,Surge,Obelisk,Summoned]);
+        SimWorld World()
+        {
+            var world = new SimWorld(new(W,60,1000,Enumerable.Repeat(true,W*60).ToArray(),new int[(W+1)*61]),rules);
+            world.TeamFactions[0] = SimWorld.Evil; world.TeamFactions[1] = SimWorld.Good;
+            world.Economies.Add(0,new(1000,1000) {Fate=20}); world.Economies.Add(1,new(0,0) {Fate=20});
+            return world;
+        }
+        const long decay = 3750; // 5000 health x 1.5% per second / 20 ticks, in milli-health
+        var w = World();
+        var guarded = w.Spawn(0,Cell(30),Soldier); var exposed = w.Spawn(0,Cell(70),Soldier);
+        var biter = w.Spawn(1,Cell(31),UnitDefinition.Probe); w.Spawn(1,Cell(71),UnitDefinition.Probe);
+        check(w.CanUseGlobalPower(0,3,out _),"the Obelisk can be cast");
+        var stale = Obelisk with {ObjectHealth=0,DurationTicks=0,DegenerationPpm=0}; stale.Validate();
+        var oldRules = new CombatRules(); oldRules.GlobalPowers.Add(stale);
+        var oldCache = new SimWorld(new(W,60,1000,Enumerable.Repeat(true,W*60).ToArray(),new int[(W+1)*61]),oldRules);
+        oldCache.TeamFactions[0] = SimWorld.Evil; oldCache.Economies.Add(0,new(0,0) {Fate=20});
+        check(!oldCache.CanUseGlobalPower(0,3,out string staleReason) && staleReason.Contains("predates"),"a pre-build-164 cache still loads its Obelisk row but cannot cast it");
+        Cast(w,3,x:30,team:0); Step(w);
+        check(w.Economies[0].Fate==16 && w.GlobalActive(0,9) && w.ObeliskHealthMilli[0] <= 5_000_000-decay,
+            "the Obelisk costs its 4 Fate and stands with its object's 5000 health");
+        Step(w,200);
+        check(w.GlobalCooldown(0,9)==0 && !w.CanUseGlobalPower(0,3,out string again) && again.Contains("already active"),"a team raises one Obelisk at a time, even once recharged");
+        long guardedLoss = 1_000_000-guarded.HealthMilli,exposedLoss = 1_000_000-exposed.HealthMilli;
+        check(exposedLoss > 0 && Math.Abs(guardedLoss*2-exposedLoss) <= 10,"a friendly unit within 15 m takes half the damage of one outside it");
+        long soaked = 5_000_000-201*decay-w.ObeliskHealthMilli[0];
+        check(Math.Abs(soaked-(exposedLoss-guardedLoss)) <= 10,"the Obelisk soaks the other half on top of its 1.5% per second decay");
+        check(w.StatusesOf(guarded).Any(s => s.Kind==StatusKind.Obelisk && s.Scale==500_000) && !w.StatusesOf(exposed).Any(s => s.Kind==StatusKind.Obelisk)
+            && !w.StatusesOf(biter).Any(s => s.Kind==StatusKind.Obelisk),"only friendly units inside the radius show the Obelisk's protection");
+
+        var fade = World(); Cast(fade,3,x:30,team:0); Step(fade);
+        Step(fade,1332);
+        check(fade.GlobalActive(0,9) && fade.ObeliskHealthMilli[0]==5_000_000-1333*decay,"an untouched Obelisk still stands after 66.6 seconds");
+        Step(fade);
+        check(!fade.GlobalActive(0,9),"its decay alone fells it after 1334 ticks, 100 / 1.5 seconds");
+        Step(fade);
+        check(!fade.ObeliskHealthMilli.ContainsKey(0) && fade.CanUseGlobalPower(0,3,out _),"a fallen Obelisk leaves nothing behind and can be raised again");
+
+        var spent = World(); var ward = spent.Spawn(0,Cell(30),Soldier); spent.Spawn(1,Cell(31),UnitDefinition.Probe);
+        var open = spent.Spawn(0,Cell(70),Soldier); spent.Spawn(1,Cell(71),UnitDefinition.Probe);
+        Cast(spent,3,x:30,team:0); Step(spent); spent.ObeliskHealthMilli[0] = 20_000;
+        Step(spent,60);
+        check(!spent.GlobalActive(0,9) && !spent.StatusesOf(ward).Any(s => s.Kind==StatusKind.Obelisk),"damage it soaks can empty and fell the Obelisk early");
+        long before = ward.HealthMilli,openBefore = open.HealthMilli; Step(spent,100);
+        check(before-ward.HealthMilli == openBefore-open.HealthMilli && before > ward.HealthMilli,"after it falls, its units take full damage again");
+    }
+
     public static void Run(Action<bool,string> check)
     {
         RunEvil(check);
+        RunObelisk(check);
         foreach (var p in new[] {Blind,Brambles,Legacy,Wind,Summon}) p.Validate();
         var blind = Open(); var enemy = blind.Spawn(1,Cell(40),Soldier); var ally = blind.Spawn(0,Cell(42),Soldier);
         var immune = blind.Spawn(1,Cell(44),Soldier with {NativeImmunities=StatusProtection.Blind});
@@ -187,6 +241,14 @@ static class GlobalPowerChecks
         check(hero.HeroicLegacy!=null,"bots invest Heroic Legacy in healthy experienced heroes in battle");
         var hurt=Bot(Legacy);var wounded=hurt.Spawn(0,Cell(32),Hero);wounded.HeroLevel=3;wounded.Health=200;hurt.Spawn(1,Cell(42),Soldier);Step(hurt);
         check(wounded.HeroicLegacy==null,"bots avoid risking Heroic Legacy on wounded heroes");
+        var pillar=Bot(Obelisk);pillar.TeamFactions[0]=SimWorld.Evil;
+        for(int i=0;i<5;i++)pillar.Spawn(0,Cell(32+i),Soldier);
+        for(int i=0;i<3;i++)pillar.Spawn(1,Cell(38+i),Soldier);
+        Step(pillar);check(pillar.GlobalActive(0,9),"bots raise an Obelisk among five or more friendly fighters in battle");
+        var skirmish=Bot(Obelisk);skirmish.TeamFactions[0]=SimWorld.Evil;
+        for(int i=0;i<2;i++)skirmish.Spawn(0,Cell(32+i),Soldier);
+        skirmish.Spawn(1,Cell(38),Soldier);Step(skirmish);
+        check(!skirmish.GlobalActive(0,9),"bots keep the Obelisk for larger fights");
     }
 
     public static void Cached(Action<bool,string> check,string cache)
@@ -198,7 +260,8 @@ static class GlobalPowerChecks
         check(good.Select(p=>p.FateCost).SequenceEqual([2,3,3,2,7]),"cached global powers use source Fate costs");
         check(good.Select(p=>p.DurationTicks).SequenceEqual([200,500,0,400,2400]),"source spell timers determine global durations");
         check(evil.Select(p=>p.Id).SequenceEqual([7,8,2,9,0]) && evil.Select(p=>p.Slot).SequenceEqual([0,1,2,3,4]),"cached Evil powers follow the manual's menu: bog, crows, surge, obelisk, Balrog");
-        check(evil.Select(p=>p.FateCost).SequenceEqual([2,3,3,4,7]) && evil.Select(p=>p.DurationTicks).SequenceEqual([300,440,0,0,2400]),"Evil powers use the source costs and spell timers");
+        check(evil.Select(p=>p.FateCost).SequenceEqual([2,3,3,4,7]) && evil.Select(p=>p.DurationTicks).SequenceEqual([300,440,0,1334,2400]),"Evil powers use the source costs and spell timers");
+        check(evil[3] is {ObjectHealth:5000,DegenerationPpm:15_000,DamageUnitPpm:500_000,DamageObeliskPpm:500_000,RadiusMm:15_000},"the cached Obelisk carries its row's health, decay and damage split");
         check(evil[0].TimeScalePpm==500_000 && evil[1].MissilePpm==10_000 && evil[2].HealMilli==200_000 && evil[4].SummonUnit=="UNIT_E_HERO_BALROG","Evil powers carry their source child-spell values");
         check(rules.Units.TryGetValue("UNIT_E_HERO_BALROG",out var balrog) && balrog.MaxHealth==2200 && balrog.KnockbackImmune && balrog.BodyRadiusMm==2560,"shared content includes the source Balrog");
         check(rules.Units[Ent.Name] is {MaxHealth:2000,KnockbackImmune:true,IsRanged:true},"shared content includes the source Giant Ent and its missile weapon");

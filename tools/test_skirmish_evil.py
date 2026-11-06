@@ -194,6 +194,29 @@ class EvilImportTests(unittest.TestCase):
         self.assertEqual((evil[1]['MissilePpm'], evil[1]['DurationTicks']), (10_000, 440))
         self.assertEqual(evil[2]['HealMilli'], 200_000)
         self.assertEqual(evil[4]['SummonUnit'], 'UNIT_E_HERO_BALROG')
+        # Build-164: the Obelisk from its own row: Object 561's 5000 health, 1.5% per second decay, a 50/50 damage split.
+        obelisk = evil[3]
+        self.assertEqual((obelisk['ObjectHealth'], obelisk['DegenerationPpm'], obelisk['DamageUnitPpm'], obelisk['DamageObeliskPpm']),
+                         (5000, 15_000, 500_000, 500_000))
+        self.assertEqual((obelisk['RadiusMm'], obelisk['DurationTicks']), (15_000, 1334))
+
+    def test_obelisk_model_comes_from_its_object(self):
+        import tempfile
+        from pathlib import Path
+        import global_powers
+        with tempfile.TemporaryDirectory() as folder:
+            drop = global_powers.dropped_objects(Path(folder), self.resolver)['obelisk']
+            self.assertEqual((drop['Object'], drop['Model'], drop['Invisible']), (561, 'MODEL_OBELISK', False))
+            self.assertTrue((Path(folder) / drop['File']).stat().st_size > 0)
+
+    def test_ringsight_detectors_see_the_frodo_invisibility_type(self):
+        # Build-164: the Ring is INVISIBILITY_TYPE_FRODO (bit 1); Gollum, the Nazgul King and the Black Rider detect it.
+        units = self.resolver.db['Units']
+        frodo_type = self.resolver.db['InvisibilityTypes'].get('INVISIBILITY_TYPE_FRODO')
+        self.assertEqual(units.get('UNIT_G_HERO_FRODO')['InvisibilityType1'], frodo_type.id)
+        for name in ['UNIT_E_HERO_GOLLUM', 'UNIT_E_HERO_NAZGUL_KING', 'UNIT_E_BONUS_BLACK_RIDER']:
+            self.assertEqual(units.get(name)['DetectorType1'], frodo_type.id, name)
+        self.assertNotEqual(units.get('UNIT_E_WRAITH')['DetectorType1'], frodo_type.id)
 
     def test_troll_root_joint_is_accepted(self):
         # The trolls name their root J_Positional, which the importer used to reject (their bodies were left out of the pack).

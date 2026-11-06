@@ -99,6 +99,11 @@ if (args.Contains("--evil-ai-checks"))
     if (evilCache>=0) EvilAiChecks.Cached(Check,args[evilCache+1]);
     Console.WriteLine($"{passed} Evil bot build checks passed"); return;
 }
+if (args.Contains("--frodo-checks"))
+{
+    FrodoChecks.Run(Check);
+    Console.WriteLine($"{passed} Frodo and Ringsight checks passed"); return;
+}
 if (args.Contains("--evil-ability-checks"))
 {
     EvilAbilityChecks.Run(Check);

@@ -116,7 +116,7 @@ Obelisk, A Summon Balrog); numbers are the source's.
 | Summon Bog | `MARSHLANDS`, 2 Fate | enemy units within 10 m move and attack at x0.5 for 15 s (while they stand in it) |
 | Murder of Crows | `MURDER_OF_CROWS`, 3 | enemy missile units within 12 m do 1% of their missile damage for 22 s |
 | Vile Surge | `RAIN_OF_BLOOD`, 3 | friendly units within 12 m heal 200 and every ability they have is ready again |
-| Summon Obelisk | `OBELISK`, 4 | listed, **not castable**: the source tables record no effect |
+| Summon Obelisk | `OBELISK`, 4 | build-164: a 5000-HP Obelisk; friendly units within 15 m take half of every hit, it soaks the other half and decays 1.5% per second ([below](#build-164-the-obelisk-and-ringsight)) |
 | Summon Balrog | `SUMMON_BALROG`, 7 | a controllable Balrog for 120 s, no population |
 
 The Balrog (2200 HP, armour 7, 65 damage per second, body 2.56 m x 6.58 m) has no Run state; it runs at its walking pace. Bots cast Bog and
@@ -237,8 +237,8 @@ Every battle gear of the five Evil heroes is simulated now (`-EvilSmoke -Sandbox
 
 ### Still open for the Evil side
 
-* The Obelisk, unrecovered ordinary-unit specials such as Warg abilities, and Ringsight revealing Frodo under the Ring.
-  The thirteen research effects previously listed here are implemented in build-144 below.
+* The Obelisk and Ringsight are implemented in build-164 below; the thirteen research effects in build-144. The source gives the
+  ordinary Warg Rider, Uruk-Hai, Orc Slasher, Goblin and troll units no battle gear of their own (build-164 audit).
 * The Evil start (Hovel, four workers, one Slavemaster) and the 25 m corruption radius are adapters; a capture of the original would settle them.
 * Evil Tower garrisons (like the Good ones, not simulated), the minimap's corruption and the Evil menu frame. Setup deliberately plays the neutral Hobbit menu cue; matches play the commanded faction's music.
 * Slaughterhouse and Smelter reuse the map's Mill and Foundry footprints.
@@ -292,10 +292,10 @@ played Evil music for their first slot. Test processes used writable local appda
 
 Remaining gameplay work confirmed by the audit:
 
-* Obelisk is listed but cannot be cast; its effect is not recovered.
+* Obelisk is listed but cannot be cast; its effect is not recovered. (Done in build-164.)
 * Ordinary Evil unit specials remain incomplete (Slavemaster whip, spider / Warg / troll
   specials, Haradrim cloak). Wraith / Black Rider Ringsight is exported as detection bit 1,
-  but `CanSeeUnit` still refuses every enemy view of a Ring-active Frodo.
+  but `CanSeeUnit` still refuses every enemy view of a Ring-active Frodo. (Done in builds 144 and 164.)
 * Thirteen Evil techniques remain explicitly unsimulated: Poison Dart, Perpetual Darkness,
   Savage Influence, Spray Venom, Poison Arrows, Goblin Frenzy, Flame Arrows, Paralyze,
   Greater Perception, Sweeping Axe, Assassin's Cloak, Morgul Blade and Darkness.
@@ -403,3 +403,41 @@ Reinstating the old blend makes three pose checks fail; the fix passes all four.
 Validation: clean C# build; 92 headless and 93 rendered Evil Sandbox checks; 88 Evil
 hero, 51 nature and 46 hero-skill simulation checks; three nature exporter tests.
 Rendered captures confirm both source models, and the smoke checks satchel cleanup.
+
+## Build-164: the Obelisk and Ringsight
+
+An audit of the source tables against the pack found two Evil abilities still missing. Every Evil `BattleGear` row used
+in skirmish (the five heroes' 16, the 13 researched ones) was already simulated. Ordinary units have no
+`BattleGear1-4` of their own. The rest of the gear table belongs to campaign units (Khamul, the Orc Bomber, the
+Dol Guldur troll's Troll Fury) or to the Minas Morgul place of power.
+
+**Summon Obelisk** (`GLOBAL_SPELL_OBELISK`, 4 Fate). The row has no spell graph, but its own columns give the
+rule. `tools/lqr.py schema GlobalSpells` documents `DegenerationRate` as "Percent per second".
+
+| Source | Value | Simulation |
+|---|---|---|
+| `ObjectType` 561 `OBJECT_FATE_POWER_OBELISK` | MaxHealth 5000, attackable obstacle, model `MODEL_OBELISK` | an Obelisk with 5000 health, drawn with the source model's idle meshes and idle clip |
+| `AreaOfEffectRadius` | 15 m | friendly units of the casting team inside it are protected (purple ring) |
+| `DamageUnit` / `DamageObelisk` | 0.5 / 0.5 | each hit on a protected unit: the unit takes half, the Obelisk loses the other half |
+| `DegenerationRate` | 1.5 % per second | 75 health per second, so an untouched Obelisk falls after 1334 ticks (66.7 s) |
+| `RechargeTime`, `IsBlockingGlobalSpells` | 10 s, 1 | one Obelisk per team at a time |
+
+The split runs in `ApplyHit` after Elven Protection, so every weapon, tower and spell hit on a protected unit is
+shared; Ring drain and the Slavemaster's whip cost are not hits. When the Obelisk's health cannot cover its share,
+the uncovered part reaches the unit in full and the Obelisk falls that tick. Protected units show an Obelisk
+status with its remaining health. Bots raise it among five or more friendly fighters within 8 m of the enemy.
+
+Adapters: the row's `Duration` (6000) is not used as a timer, since the decay always ends the Obelisk first.
+Units cannot attack the Obelisk or path around it, because the simulation has no attackable, blocking
+world object. It is drawn without its summon and collapse animations. Its fall plays no destruction effect.
+
+**Ringsight.** Frodo's unit row gives the Ring's invisibility as `INVISIBILITY_TYPE_FRODO` (bit 1). Gollum, the
+Nazgul King and the Black Rider carry `DetectorType1` of that type (the pack's `DetectionMask` 2). `CanSeeUnit`
+now shows a Ring-bearer to a side that has such a detector within its sight radius, and to no other side.
+Wraiths and Rangers detect only normal invisibility. A side that sees him may target and attack him. Putting
+the Ring on next to a Ringsight attacker no longer ends that fight. The source spell's `ENABLE_DETECTION` on Frodo
+most likely switches on his own detector for the Frodo type, which no enemy unit carries, so it changes nothing here.
+
+Checks: `--frodo-checks` (20, with six Ringsight checks), `--global-power-checks` (Obelisk rules and two bot checks),
+`tools/test_skirmish_evil.py` (the Obelisk row, its model and the detector types), and two new `-EvilSmoke -Sandbox` checks:
+the Obelisk shows its idle model, and the Goblin Slave beside it shows the protection.

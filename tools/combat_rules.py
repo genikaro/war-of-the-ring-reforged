@@ -410,6 +410,8 @@ def export(output, resolver=None, roster=None):
         import evil_abilities
         hero_visuals = {**hero_visuals, **evil_abilities.visuals(output,resolver,trace)}
         dropped_objects = evil_abilities.dropped_objects(output,resolver)
+    if any(power['Id'] == 9 for power in powers):
+        dropped_objects = {**dropped_objects, **global_powers.dropped_objects(output,resolver)}
     global_visuals = global_powers.visuals(output,resolver,trace)
     data = {'GlobalPowers': powers, 'GlobalVisuals': global_visuals, 'FormatVersion': 3,'TicksPerSecond': 20,'Units': units,'Pairs': pairs,'Sounds': sounds,'HeroExperienceSource':hero_experience.SOURCE,
         'TypeMatchups': type_matchups(resolver.db['DamageTypes']),

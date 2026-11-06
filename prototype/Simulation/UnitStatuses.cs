@@ -1,7 +1,7 @@
 namespace Reforged.Simulation;
 
 /// <summary>The effects the console's status bar shows (build-70).</summary>
-public enum StatusKind { HeroicAura, SiegeAura, GuardianWind, OneRing, PlaceOfPower, ShieldBreak, Camouflage, ElvenCloak, Protection, SearingLight, Treeform, Dazed, ElvenSpeed, NegateAbility, FlameShield, RainOfFire, Blind, BlessedWind, HeroicLegacy, Brambles, Summoned, Willow, Frozen, Poisoned, Healing, Sneak, Tracked, Darkness, SavageInfluence }
+public enum StatusKind { HeroicAura, SiegeAura, GuardianWind, OneRing, PlaceOfPower, ShieldBreak, Camouflage, ElvenCloak, Protection, SearingLight, Treeform, Dazed, ElvenSpeed, NegateAbility, FlameShield, RainOfFire, Blind, BlessedWind, HeroicLegacy, Brambles, Summoned, Willow, Frozen, Poisoned, Healing, Sneak, Tracked, Darkness, SavageInfluence, Obelisk }
 
 /// <summary>An effect a unit is under: the ability or place behind it, the unit it comes from (-1 when the simulation keeps
 /// none), its strength (a multiplier in millionths; 0 for a place, whose rules carry theirs) and the tick it ends (-1 when
@@ -37,6 +37,8 @@ public sealed partial class SimWorld
         foreach (var patch in GlobalAreas.Where(a => a.Power.Kind == GlobalPowerKind.Brambles && a.Until > Tick && a.Team != unit.Team
                      && DistanceSquared(a.X,a.Z,unit.X,unit.Z) <= (long)a.Power.RadiusMm*a.Power.RadiusMm).Take(1))
             statuses.Add(new(StatusKind.Brambles,patch.Power.StatusAbility,-1,patch.Power.DpsMilli,patch.Until));
+        if (ObeliskOver(unit) is {} obelisk)
+            statuses.Add(new(StatusKind.Obelisk,obelisk.Power.StatusAbility,-1,obelisk.Power.DamageUnitPpm,obelisk.Until));
         if (unit.SummonedUntil > Tick && Rules.GlobalPowers.FirstOrDefault(p => p.SummonUnit == unit.Definition.Name) is {} summon)
             statuses.Add(new(StatusKind.Summoned,summon.StatusAbility,-1,0,unit.SummonedUntil));
         foreach (var (effect,kind) in new[] {(unit.ElvenSpeed,StatusKind.ElvenSpeed),(unit.Negated,StatusKind.NegateAbility),(unit.FlameShield,StatusKind.FlameShield)})

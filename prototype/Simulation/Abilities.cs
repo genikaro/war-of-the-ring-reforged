@@ -265,7 +265,8 @@ public sealed partial class SimWorld
         if (unit.Order is OrderKind.Attack or OrderKind.ForceAttack) Apply(new(Tick,sequence,unit.Team,[unit.Id],-1,Kind:OrderKind.Stop));
         else if (unit.Target >= 0) ReleaseCombat(unit);
         unit.AutoEngage = false;
-        foreach (var enemy in ActiveUnits.Where(u => u.Team != unit.Team && u.Present && u.Target == unit.Id).ToArray())
+        // Ringsight: a side with a Frodo-type detector near him keeps him in view and may keep fighting him.
+        foreach (var enemy in ActiveUnits.Where(u => u.Team != unit.Team && u.Present && u.Target == unit.Id && !CanSeeUnit(u.Team,unit)).ToArray())
             if (enemy.Order is OrderKind.Attack or OrderKind.ForceAttack && enemy.OrderTarget == unit.Id)
                 Apply(new(Tick,sequence,enemy.Team,[enemy.Id],-1,Kind:OrderKind.Stop));
             else ReleaseCombat(enemy);

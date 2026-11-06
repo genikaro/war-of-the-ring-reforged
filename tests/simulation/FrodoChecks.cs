@@ -41,6 +41,28 @@ static class FrodoChecks
         hidden.EnqueueAbility(0,[bearer.Id],0,-1); Advance(hidden,40);
         check(!bearer.RingActive && orc.Target == bearer.Id,"taking the Ring off makes Frodo visible to enemies again");
 
+        // Ringsight (build-164): the Ring is source invisibility type FRODO (bit 1); only DetectorType FRODO units see through it.
+        var ringDetector = UnitDefinition.Probe with { Id = 32,Name = "UNIT_E_HERO_NAZGUL_KING",DetectionMask = 2 };
+        var normalDetector = UnitDefinition.Probe with { Id = 52,Name = "UNIT_E_WRAITH",DetectionMask = 1 };
+        var blind = Open(); var unseen = blind.Spawn(0,403,Frodo); var wraith = blind.Spawn(1,406,normalDetector);
+        blind.EnqueueAbility(0,[unseen.Id],0,-1); Advance(blind,30);
+        check(!blind.CanSeeUnit(1,unseen) && wraith.Target != unseen.Id,"a normal detector such as the Wraith does not see through the Ring");
+        var distant = Open(); var remote = distant.Spawn(0,403,Frodo); distant.Spawn(1,428,ringDetector);
+        distant.EnqueueAbility(0,[remote.Id],0,-1); Advance(distant,5);
+        check(!distant.CanSeeUnit(1,remote),"a Ringsight unit beyond its 20 m sight radius does not see the Ring-bearer");
+        var sight = Open(); var seen = sight.Spawn(0,403,Frodo); var hunter = sight.Spawn(1,428,ringDetector);
+        sight.EnqueueAbility(0,[seen.Id],0,-1); sight.Step();
+        sight.Enqueue(1,[hunter.Id],OrderKind.Move,410); Advance(sight,80);
+        check(sight.CanSeeUnit(1,seen) && !sight.CanSeeUnit(2,seen),"Ringsight reveals the Ring-bearer to the detector's side only, once he is within its sight");
+        sight.Enqueue(1,[hunter.Id],OrderKind.Attack,-1,seen.Id); Advance(sight,120);
+        check(hunter.Order == OrderKind.Attack && hunter.Target == seen.Id && seen.HealthMilli < 305_000-201*100,
+            "a Frodo-type detector's side may order an attack on the Ring-bearer, and it lands");
+
+        var marked = Open(); var wearer = marked.Spawn(0,403,Frodo); var rider = marked.Spawn(1,405,ringDetector);
+        Advance(marked,30); bool riderFought = rider.Target == wearer.Id;
+        marked.EnqueueAbility(0,[wearer.Id],0,-1); marked.Step();
+        check(riderFought && rider.Target == wearer.Id && wearer.Target < 0,"putting the Ring on does not shake off a Ringsight attacker");
+
         var engaged = Open(); var target = engaged.Spawn(0,403,Frodo); var attacker = engaged.Spawn(1,405);
         Advance(engaged,30); bool fought = attacker.Target == target.Id;
         engaged.EnqueueAbility(0,[target.Id],0,-1); engaged.Step();

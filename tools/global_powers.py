@@ -4,6 +4,7 @@ Timers are seconds at 20 simulation ticks/second. Blessed Wind uses its spell's
 20-second timer, rather than the GlobalSpells row's otherwise unused 30 field.
 Global recharge is adapted as a per-power 10-second cooldown from release.
 """
+import math
 from pathlib import PureWindowsPath
 from elven_abilities import graph
 
@@ -14,7 +15,8 @@ EVIL_DESCRIPTIONS = {
     7: 'Raises a marsh in 10 m for 15 seconds. Enemy units standing in it move and attack at half speed.',
     8: 'A murder of crows harries the 12 m area for 22 seconds: enemy missile weapons there do 1% of their damage.',
     2: 'Heals friendly units in 12 m for 200 health and refreshes every ability they have.',
-    9: 'Raises an Obelisk. Its effect is not recorded in the source tables and is not simulated yet.',
+    9: 'Raises an Obelisk with 5000 health. Friendly units within 15 m take half of any damage; the Obelisk soaks the other half. '
+       'It loses 1.5% of its health each second and falls when its health is gone.',
     0: 'Summons a controllable Balrog for 120 seconds. Requires clear ground and costs no population.',
 }
 
@@ -79,8 +81,30 @@ def one(db, faction, slot, ident, descriptions):
         if ident == 2:
             item.update(HealMilli=round(typed('_APPLY_HEALTH')[0]['Float_01']*1000), DurationTicks=0)
         if ident == 9:
-            item['DurationTicks'] = 0
+            # Build-164: the row's own columns. ObjectType 561 (OBJECT_FATE_POWER_OBELISK) gives the 5000 health;
+            # DegenerationRate is "Percent per second" (lqr schema comment); DamageUnit / DamageObelisk split a hit on a
+            # friendly unit in AreaOfEffectRadius between the unit and the Obelisk. The row's Duration (6000) is no timer
+            # the decay could reach, so the area lasts until the decay alone would empty the health.
+            health = db['Objects'].get(row['ObjectType'])['MaxHealth']
+            decay = round(row['DegenerationRate']*10_000)
+            item.update(ObjectHealth=health, DegenerationPpm=decay,
+                        DamageUnitPpm=round(row['DamageUnit']*1_000_000), DamageObeliskPpm=round(row['DamageObelisk']*1_000_000),
+                        DurationTicks=math.ceil(1_000_000*20/decay))
+            item['Source']['Object'] = db['Objects'].get(row['ObjectType']).values
         return item
+
+
+def dropped_objects(output, resolver):
+    """The Obelisk's model (ObjectType 561 -> ModelEvent 567 -> MODEL_OBELISK), drawn where the power is cast."""
+    from lms2gltf import convert_model
+    obj = resolver.db['Objects'].get(resolver.db['GlobalSpells'].get(9)['ObjectType'])
+    event = resolver.db['ModelEvents'].get(obj['ModelEvent'])
+    model = resolver.db['Models'].get(event['AssociatedModelResource1'])
+    filename = 'objects/global-powers/' + model.name + '.glb'
+    target = output / filename
+    target.parent.mkdir(parents=True, exist_ok=True)
+    convert_model(resolver, model.name, str(target))
+    return {'obelisk': {'File': filename, 'Object': obj.id, 'Model': model.name, 'Invisible': bool(obj['IsInvisible'])}}
 
 
 def visuals(output, resolver, trace):

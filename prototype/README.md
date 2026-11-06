@@ -1,5 +1,11 @@
 # Godot C# skirmish sandbox
 
+**build-164:** The last two missing Evil abilities. **Summon Obelisk** (4 Fate) raises a 5000-health Obelisk. Friendly
+units within 15 m take half of every hit and the Obelisk soaks the other half. It loses 1.5% of its health each second and
+falls when its health is gone; bots raise it in larger fights. **Ringsight:** Gollum, the Nazgul King and Black Riders see
+Frodo while he wears the Ring, within their sight range, and their side may attack him.
+See [EVIL.md](EVIL.md#build-164-the-obelisk-and-ringsight).
+
 **build-163:** Bots finish their matches. A bot that can never earn food again and has nothing left to train makes a
 **last stand**: every soldier, guard, hero and worker charges at once, heroes no longer run home to heal, and losing it
 loses the match. Until then its last food buys soldiers instead of waiting for a building, and its heroes count toward an

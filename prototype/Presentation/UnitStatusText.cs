@@ -26,6 +26,8 @@ public sealed record UnitStatusText(string Icon,string Title,string Tooltip)
         {
             StatusKind.Darkness => (status.Ability?.Icon,ability,new[] {$"Moves and attacks at {Percent(status.Scale)} speed.",status.Ability?.Blinds==true ? "Blinded: cannot attack." : "",Left()}),
             StatusKind.SavageInfluence => (status.Ability?.Icon,ability,new[] {$"Deals {Percent(status.Scale)} normal attack damage.",Left()}),
+            StatusKind.Obelisk => (status.Ability?.Icon,ability,new[] {$"Takes {Percent(status.Scale)} of every hit; the Obelisk soaks the rest.",
+                $"Obelisk health {world.ObeliskHealthMilli.GetValueOrDefault(unit.Team)/1000} · at most "+Left()}),
             StatusKind.Blind => (status.Ability?.Icon,"Blind",new[] {"Cannot attack; can still move and cast abilities.",Left()}),
             StatusKind.BlessedWind or StatusKind.HeroicLegacy or StatusKind.Brambles or StatusKind.Summoned =>
                 (status.Ability?.Icon,ability,new[] {status.Ability?.Description ?? "",Left()}),
@@ -48,7 +50,7 @@ public sealed record UnitStatusText(string Icon,string Title,string Tooltip)
             StatusKind.NegateAbility => (status.Ability?.Icon,ability,new[] {"Active and passive abilities are disabled.",Left()}),
             StatusKind.FlameShield => (status.Ability?.Icon,ability,new[] {status.Ability?.Description ?? "Burns nearby enemies.",Left()}),
             StatusKind.RainOfFire => (status.Ability?.Icon,"Burning",new[] {$"Takes {status.Scale/1000m:0.#} damage per second.",Left()}),
-            StatusKind.OneRing => (status.Ability?.Icon,ability,new[] {"Invisible to enemies and does not fight.",
+            StatusKind.OneRing => (status.Ability?.Icon,ability,new[] {"Invisible to enemies and does not fight. Gollum, the Nazgul King and Black Riders see through it (Ringsight).",
                 string.Create(CultureInfo.InvariantCulture,$"Loses {(status.Ability?.DrainMilliPerTick ?? 0)*SimWorld.TicksPerSecond/1000m:0.#} HP per second (stops at 1 HP).")}),
             StatusKind.ShieldBreak => (status.Ability?.Icon,ability,new[] {
                 string.Create(CultureInfo.InvariantCulture,$"Armor reduced by {status.Scale/1000m:0.###} ({unit.ShieldBreaks.Count} stacks)."),Left()}),

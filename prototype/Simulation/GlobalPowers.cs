@@ -1,13 +1,14 @@
 namespace Reforged.Simulation;
 
 /// <summary>The Good side's five powers and the Evil side's (build-135): Summon Balrog, Vile Surge (the source's Rain of Blood), Summon Bog
-/// (Marshlands), Murder of Crows and the Obelisk, whose effect the source tables do not record.</summary>
+/// (Marshlands), Murder of Crows and the Obelisk (build-164: a damage-soaking pillar from the GlobalSpells row's own columns).</summary>
 public enum GlobalPowerKind { SummonBalrog = 0, GiantEnt = 1, RainOfBlood = 2, BlessedWind = 3, Blind = 4, HeroicLegacy = 5, Brambles = 6, Marshlands = 7, MurderOfCrows = 8, Obelisk = 9 }
 
 public sealed record GlobalPowerDefinition(int Id,int Slot,string Name,string Icon,string Cursor,int FateCost,int RadiusMm,
     int DurationTicks,int RechargeTicks,string Description,int[] SoundEvents,int DpsMilli = 0,int DamagePpm = 1_000_000,
     int HealthPpm = 1_000_000,int ArmorMilli = 0,int KnockbackSpeedMm = 0,int KnockbackAngle = 60,string? SummonUnit = null,
-    string Faction = "good",int HealMilli = 0,int TimeScalePpm = 1_000_000,int MissilePpm = 1_000_000)
+    string Faction = "good",int HealMilli = 0,int TimeScalePpm = 1_000_000,int MissilePpm = 1_000_000,
+    int ObjectHealth = 0,int DegenerationPpm = 0,int DamageUnitPpm = 1_000_000,int DamageObeliskPpm = 0)
 {
     public GlobalPowerKind Kind => (GlobalPowerKind)Id;
     public AbilityDefinition StatusAbility => new(10000+Id,0,Name,Icon,true,AbilityKind.Unsimulated,
@@ -17,7 +18,8 @@ public sealed record GlobalPowerDefinition(int Id,int Slot,string Name,string Ic
         if (!Enum.IsDefined(Kind) || Slot is < 0 or > 4 || FateCost is < 1 or > 20 || RadiusMm is < 0 or > 50000
             || DurationTicks is < 0 or > 12000 || RechargeTicks is < 1 or > 12000 || DpsMilli is < 0 or > 1000000
             || DamagePpm is < 1000000 or > 5000000 || HealthPpm is < 1000000 or > 5000000 || ArmorMilli is < 0 or > 100000
-            || Faction is not ("good" or "evil") || HealMilli is < 0 or > 10_000_000 || TimeScalePpm is < 100_000 or > 1_000_000 || MissilePpm is < 0 or > 1_000_000)
+            || Faction is not ("good" or "evil") || HealMilli is < 0 or > 10_000_000 || TimeScalePpm is < 100_000 or > 1_000_000 || MissilePpm is < 0 or > 1_000_000
+            || ObjectHealth is < 0 or > 100_000 || DegenerationPpm is < 0 or > 1_000_000 || DamageUnitPpm is < 0 or > 1_000_000 || DamageObeliskPpm is < 0 or > 1_000_000)
             throw new ArgumentException("Invalid global power");
     }
 }
@@ -45,6 +47,8 @@ public sealed partial class SimWorld
     public List<GlobalArea> GlobalAreas { get; } = [];
     public List<GlobalPowerEvent> GlobalPowerEvents { get; } = [];
     public SortedDictionary<(int Team,int Power),int> GlobalReadyAt { get; } = [];
+    /// <summary>Build-164: each team's standing Obelisk health (one at a time: a power cannot be recast while active).</summary>
+    public SortedDictionary<int,long> ObeliskHealthMilli { get; } = [];
 
     /// <summary>The power in a Fate menu slot of the team's side (the Good menu without a team).</summary>
     public GlobalPowerDefinition? GlobalPower(int slot,int team = -1)
@@ -59,7 +63,9 @@ public sealed partial class SimWorld
     {
         reason = "Unknown global ability";
         if (team < 0 || GlobalPower(slot,team) is not {} power || !Economies.TryGetValue(team,out var bank) || DefeatedTeams.Contains(team)) return false;
-        if (power.Kind == GlobalPowerKind.Obelisk) { reason = "The Obelisk is not simulated yet"; return false; }
+        // A cache exported before build-164 lists the Obelisk without its object: it still loads, but cannot be cast.
+        if (power.Kind == GlobalPowerKind.Obelisk && (power.ObjectHealth == 0 || power.DegenerationPpm == 0 || power.DurationTicks == 0))
+        { reason = "This cache predates the Obelisk; rebuild it"; return false; }
         if (GlobalCooldown(team,power.Id) > 0) { reason = "Ability is recharging"; return false; }
         if (power.Kind != GlobalPowerKind.HeroicLegacy && GlobalActive(team,power.Id)) { reason = "Ability is already active"; return false; }
         if (bank.Fate < power.FateCost) { reason = $"Requires {power.FateCost} Fate"; return false; }
@@ -106,6 +112,7 @@ public sealed partial class SimWorld
             hero.HealthMilli = hero.HealthMilli*hero.MaxHealth/Math.Max(1,max);
             x = hero.X; y = hero.Y; z = hero.Z;
         }
+        else if (power.Kind == GlobalPowerKind.Obelisk) ObeliskHealthMilli[command.Team] = power.ObjectHealth*1000L;
         else if (power.Kind is GlobalPowerKind.RainOfBlood or GlobalPowerKind.MurderOfCrows)
         {
             // Vile Surge: the friendly units around the point heal and every ability they have is ready again. Murder of Crows: the
@@ -141,6 +148,8 @@ public sealed partial class SimWorld
     private void ExpireGlobalPowers()
     {
         GlobalAreas.RemoveAll(a => a.Until <= Tick || a.Summon >= 0 && Units[a.Summon].Health <= 0);
+        foreach (int team in ObeliskHealthMilli.Keys.Where(t => !GlobalAreas.Any(a => a.Team == t && a.Power.Kind == GlobalPowerKind.Obelisk)).ToArray())
+            ObeliskHealthMilli.Remove(team);
         foreach (var unit in ActiveUnits.ToArray())
         {
             if (unit.BlindUntil <= Tick || !unit.Present) unit.BlindPower = null;
@@ -168,9 +177,47 @@ public sealed partial class SimWorld
         if (!any) return;
     }
 
+    /// <summary>The team's standing Obelisk whose radius covers the unit, if any.</summary>
+    public GlobalArea? ObeliskOver(SimUnit unit)
+    {
+        if (unit.Team < 0 || !ObeliskHealthMilli.ContainsKey(unit.Team)) return null;
+        foreach (var area in GlobalAreas)
+            if (area.Team == unit.Team && area.Power.Kind == GlobalPowerKind.Obelisk && area.Until > Tick
+                && DistanceSquared(area.X,area.Z,unit.X,unit.Z) <= (long)area.Power.RadiusMm*area.Power.RadiusMm) return area;
+        return null;
+    }
+
+    /// <summary>Summon Obelisk (build-164): a hit on a friendly unit inside the radius is split by the row's DamageUnit and
+    /// DamageObelisk shares. Once the Obelisk's health cannot cover its share, the uncovered rest reaches the unit in full.</summary>
+    private long SoakByObelisk(SimUnit target,long damage)
+    {
+        if (damage <= 0 || ObeliskOver(target) is not { } area) return damage;
+        var power = area.Power; long health = ObeliskHealthMilli[area.Team];
+        long share = damage*power.DamageObeliskPpm/1_000_000;
+        long covered = share <= health || power.DamageObeliskPpm == 0 ? damage : health*1_000_000/power.DamageObeliskPpm;
+        ObeliskHealthMilli[area.Team] = Math.Max(0,health-Math.Min(share,health));
+        if (ObeliskHealthMilli[area.Team] == 0) FellObelisk(area);
+        return covered*power.DamageUnitPpm/1_000_000+(damage-covered);
+    }
+
+    /// <summary>An emptied Obelisk falls at once: its area ends this tick.</summary>
+    private void FellObelisk(GlobalArea area)
+    {
+        int index = GlobalAreas.IndexOf(area);
+        if (index >= 0 && area.Until > Tick) GlobalAreas[index] = area with { Until = Tick };
+    }
+
     private void UpdateGlobalPowers()
     {
         UpdateTerrorAuras();
+        // Summon Obelisk: DegenerationRate percent of its health each second, until nothing is left.
+        foreach (var area in GlobalAreas.Where(a => a.Power.Kind == GlobalPowerKind.Obelisk && a.Until > Tick).ToArray())
+        {
+            long decay = (long)area.Power.ObjectHealth*1000*area.Power.DegenerationPpm/1_000_000/TicksPerSecond;
+            long left = Math.Max(0,ObeliskHealthMilli.GetValueOrDefault(area.Team)-decay);
+            ObeliskHealthMilli[area.Team] = left;
+            if (left == 0) FellObelisk(area);
+        }
         // The source ONUNITINMOTION health update: strongest overlapping patch wins,
         // with no weapon damage, armor mitigation, Fate or hero XP from this spell.
         var damage = new SortedDictionary<int,int>();
@@ -191,5 +238,6 @@ public sealed partial class SimWorld
 
     private string GlobalPowersDigest() => ":global:"+string.Join(';',GlobalReadyAt.Select(p => $"{p.Key.Team},{p.Key.Power},{p.Value}"))
         + ":global-areas:"+string.Join(';',GlobalAreas.Select(a => $"{a.Team},{a.Power.Id},{a.X},{a.Y},{a.Z},{a.Start},{a.Until},{a.Summon}"))
+        + (ObeliskHealthMilli.Count > 0 ? ":obelisks:"+string.Join(';',ObeliskHealthMilli.Select(o => $"{o.Key},{o.Value}")) : "")
         + ":global-units:"+string.Join(';',Units.Select(u => $"{u.Id},{u.BlindUntil},{u.BlessedWindUntil},{u.HeroicLegacy?.Id ?? -1},{u.SummonedUntil}"+(u.CrowsUntil >= 0 ? ","+u.CrowsUntil : "")));
 }

@@ -42,7 +42,15 @@ public sealed partial class SimWorld
                 if (spot.Unit != null && spot.Score >= 4) { Cast(power,spot.Unit); return; }
                 continue;
             }
-            if (power.Kind == GlobalPowerKind.Obelisk) continue;
+            if (power.Kind == GlobalPowerKind.Obelisk)
+            {
+                // Build-164: raise the Obelisk among the most friendly fighters already trading blows.
+                var engaged = allies.Where(a => enemies.Any(e => Near(a,e,8000))).ToArray();
+                var spot = engaged.Select(a => (Unit:a,Score:engaged.Count(v => Near(a,v,power.RadiusMm))))
+                    .OrderByDescending(a => a.Score).ThenBy(a => a.Unit.Id).FirstOrDefault();
+                if (spot.Unit != null && spot.Score >= 5) { Cast(power,spot.Unit); return; }
+                continue;
+            }
             if (power.Kind is GlobalPowerKind.GiantEnt or GlobalPowerKind.SummonBalrog)
             {
                 if (enemies.Length < 5 && !(ai.Party.Count >= 4 && CanAttackSite(ai.Team,ai.PartyTarget))) continue;

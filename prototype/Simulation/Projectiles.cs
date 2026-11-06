@@ -86,6 +86,7 @@ public sealed partial class SimWorld
             long absorbed = Math.Min(damage,target.ProtectionMilli);
             target.ProtectionMilli -= absorbed; damage -= absorbed;
         }
+        damage = SoakByObelisk(target,damage);
         damage = Math.Min(damage,target.HealthMilli); target.HealthMilli -= damage;
         if (unit!=null) EarnHeroExperience(unit,target.Team,damage,building:false,experiencePpm ?? (spell ? 0 : WeaponExperiencePpm(unit,attack)));
         if (unit!=null && damage>0) RecordHostileDamage(unit,target.Team,target.X,target.Z,IsAiWorker(target));
