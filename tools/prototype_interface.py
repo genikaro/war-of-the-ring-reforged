@@ -37,7 +37,7 @@ def export(output, resolver=None):
         raise ValueError('interface cache must be outside original and extracted data')
     resolver = resolver or Resolver()
     cursor_descriptors = {}
-    for descriptor in [d for side in ('Good', 'Evil', 'Neutral') for d in (ROOT / 'extracted/Cursors' / side).glob('*.lcr')]:
+    for descriptor in (ROOT / 'extracted/Cursors').glob('*/*.lcr'):
         raw_cursor = descriptor.read_bytes()
         if len(raw_cursor) != 32 or raw_cursor[:8] != b'LIQDCRSR':
             raise ValueError('unsupported cursor descriptor: '+str(descriptor))
@@ -65,7 +65,7 @@ def export(output, resolver=None):
     paths += [p for p in (source / 'Cursors/Good').glob('*.uva')
               if any(word in p.stem for word in ['attack', 'move', 'guard', 'patrol', 'kingsfoil', 'negative', 'protection',
                                                'negate', 'dispel', 'light_of_lothlorien', 'trueshot', 'flame_shield',
-                                               'rain_of_fire', 'capture', 'blind', 'brambles', 'heroic_legacy', 'blessed_wind', 'willow', 'aviary'])]
+                                               'rain_of_fire', 'capture', 'blind', 'brambles', 'heroic_legacy', 'blessed_wind', 'willow', 'aviary', 'pointer'])]
     # The in-game menu (build-96): the Good menu frame (InGame_MainMenu), the Exit box (Quit_Acknowledgement), and the
     # gold-edged buttons, check boxes, radio buttons and slider pieces of the original Settings screen (InGame_Options).
     paths += [source / 'Menu/background_good_mainmenu.uva']
@@ -85,7 +85,7 @@ def export(output, resolver=None):
     paths += [p for p in (source / 'Cursors/Evil').glob('*.uva')
               if any(word in p.stem for word in ['attack', 'move', 'guard', 'patrol', 'negative', 'repair', 'mining', 'enter',
                                                  'cast', 'fate_power', 'extinguish', 'prison_of_ice', 'invisible_force', 'pestilence', 'twisting_influence',
-                                                 'bind_shadow', 'blood_mark', 'dark_tracking', 'grishnakh', 'poison_trap', 'shadow_walk'])]
+                                                 'bind_shadow', 'blood_mark', 'dark_tracking', 'grishnakh', 'poison_trap', 'shadow_walk', 'pointer'])]
     paths += [source / 'Menu/background_evil_mainmenu.uva']
     target = output / 'interface'; target.mkdir(parents=True, exist_ok=True)
     index = {'format_version': 1, 'assets': {}}
@@ -103,7 +103,7 @@ def export(output, resolver=None):
         index['assets'][path.stem] = {'file': 'interface/' + filename, 'size': list(cropped.size),
             'uva': path.relative_to(ROOT).as_posix(), 'uva_sha256': hashlib.sha256(raw).hexdigest(),
             'texture': texture, 'texture_sha256': hashlib.sha256(texture_path.read_bytes()).hexdigest(), 'crop': box}
-        if path.parent in (source / 'Cursors/Good', source / 'Cursors/Evil') and path.stem in cursor_descriptors:
+        if path.stem in cursor_descriptors:
             descriptor,raw_cursor = cursor_descriptors[path.stem]
             index['assets'][path.stem]['cursor_hotspot'] = cursor_hotspot(raw_cursor, cropped.size)
             index['assets'][path.stem]['cursor_source'] = {'file': descriptor.relative_to(ROOT).as_posix(),

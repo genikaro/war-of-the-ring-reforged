@@ -25,6 +25,7 @@ public partial class CommandPanel : Control
     private readonly Dictionary<int,(Button Button,ColorRect Health)> _portraits = [];
     private readonly Dictionary<string,Texture2D> _art = [];
     private readonly Dictionary<string,Vector2> _cursorHotspots = [];
+    private readonly Dictionary<Texture2D,Texture2D> _scaledCursorTextures = [];
     private readonly Button[] _groups = new Button[10];
     private Control _content = null!, _roster = null!;
     private ScrollContainer _rosterScroll = null!;
@@ -50,6 +51,7 @@ public partial class CommandPanel : Control
     private string _rosterKey = "";
     public string? DisplayedCursorName { get; private set; }
     public Vector2 DisplayedCursorHotspot { get; private set; }
+    public Vector2I DisplayedCursorSize { get; private set; }
     public double ScalePercent { get; private set; } = 100;
     public float EffectiveScale { get; private set; }
     public bool ManageCursor { get; set; } = true;
@@ -289,6 +291,7 @@ public partial class CommandPanel : Control
             else if (original.Hotspot is { } restored) _cursorHotspots[key] = restored;
         }
         EvilSkin = evil;
+        _appliedCursor = null;
         ApplySkin();
     }
 
@@ -305,6 +308,7 @@ public partial class CommandPanel : Control
                 _cursorHotspots[asset.Name] = new(hotspot[0].GetSingle(),hotspot[1].GetSingle());
         }
         UseSkin(evil);
+        ApplyCursor(null);
         foreach (var command in Commands) _buttons[command.Kind].Icon = _art[command.Icon];
         LoadTooltipArt();
         _map.Configure(world);
@@ -462,31 +466,87 @@ public partial class CommandPanel : Control
         // Only refusals and the pause show above the console (build-67 dropped the targeting how-tos).
         _hint.Text = NoticeShowing ? _notice : paused && !observing ? "Paused" : "";
         _map.RedrawIfChanged(paused);
-        if (pending != OrderKind.UseAbility) UpdateCursor(pending);
+    }
+
+    private string? _appliedCursor;
+    private int _cursorSizePercent = GameSettings.DefaultCursorSizePercent;
+
+    public void SetCursorSizePercent(int percent)
+    {
+        if (_cursorSizePercent == percent) return;
+        _cursorSizePercent = percent;
+        _scaledCursorTextures.Clear();
+        _appliedCursor = null;
+        ApplyCursor(DisplayedCursorName);
+    }
+
+    public void UseMenuPointer(Texture2D? texture,Vector2 hotspot)
+    {
+        if (texture != null)
+        {
+            _art["cursor_g_pointer"] = texture;
+            _cursorHotspots["cursor_g_pointer"] = hotspot;
+        }
+        _appliedCursor = null;
+        ApplyCursor(null);
     }
 
     public void UpdateCursor(OrderKind? pending,bool? validAbilityTarget = null,bool overInterface = false,string? abilityCursor = null)
     {
-        if (!ManageCursor) return;
         string? cursor = overInterface ? null : pending switch {
             OrderKind.UseAbility or OrderKind.UseGlobalPower or OrderKind.UsePlacePower => validAbilityTarget == false ? "cursor_g_negative"
                 : abilityCursor != null && _art.ContainsKey(abilityCursor) ? abilityCursor : "cursor_g_greater_kingsfoil",
             OrderKind.Move => "cursor_g_move",OrderKind.Guard => "cursor_g_guard",OrderKind.Patrol => "cursor_g_patrol",
             OrderKind.AttackMove => "cursor_g_attack_move",OrderKind.Attack or OrderKind.ForceAttack => "cursor_g_force_attack",_ => null };
-        if (DisplayedCursorName == cursor) return;
+        ApplyCursor(cursor);
+    }
+
+    private void ApplyCursor(string? cursor)
+    {
+        if (!ManageCursor) return;
         DisplayedCursorName = cursor;
-        if (cursor != null && _art.TryGetValue(cursor,out var texture))
+        string pointerName = EvilSkin && _art.ContainsKey("cursor_e_pointer") ? "cursor_e_pointer" : "cursor_g_pointer";
+        string name = cursor ?? pointerName;
+        if (_appliedCursor == name) return;
+        _appliedCursor = name;
+        var pointer = ScaledCursor(pointerName);
+        var arrow = name == pointerName ? pointer : ScaledCursor(name);
+        if (arrow.Texture == null) arrow = pointer;
+        DisplayedCursorSize = arrow.Texture?.GetSize() is { } size ? (Vector2I)size : Vector2I.Zero;
+        DisplayedCursorHotspot = arrow.Hotspot;
+        Input.SetCustomMouseCursor(arrow.Texture,Input.CursorShape.Arrow,arrow.Hotspot);
+        Input.SetCustomMouseCursor(pointer.Texture,Input.CursorShape.PointingHand,pointer.Hotspot);
+    }
+
+    private (Texture2D? Texture,Vector2 Hotspot) ScaledCursor(string name)
+    {
+        if (!_art.TryGetValue(name,out var original)) return (null,Vector2.Zero);
+        int Round(double value) => (int)Math.Round(value,MidpointRounding.AwayFromZero);
+        var texture = original;
+        if (_cursorSizePercent != 100 && !_scaledCursorTextures.TryGetValue(original,out texture))
         {
-            DisplayedCursorHotspot = _cursorHotspots.GetValueOrDefault(cursor,new Vector2(texture.GetWidth()/2f,texture.GetHeight()/2f));
-            Input.SetCustomMouseCursor(texture,Input.CursorShape.Arrow,DisplayedCursorHotspot);
+            using var source = original.GetImage();
+            // The headless renderer can return the texture's backing image directly.
+            using var image = (Image)source.Duplicate();
+            int width = Math.Max(1,Round(image.GetWidth()*_cursorSizePercent/100.0));
+            int height = Math.Max(1,Round(image.GetHeight()*_cursorSizePercent/100.0));
+            image.Resize(width,height,Image.Interpolation.Lanczos);
+            _scaledCursorTextures[original] = texture = ImageTexture.CreateFromImage(image);
         }
-        else { DisplayedCursorHotspot = Vector2.Zero; Input.SetCustomMouseCursor(null); }
+        var hotspot = _cursorHotspots.GetValueOrDefault(name,original.GetSize()/2);
+        int x = Math.Clamp(Round(hotspot.X*texture.GetWidth()/original.GetWidth()),0,texture.GetWidth()-1);
+        int y = Math.Clamp(Round(hotspot.Y*texture.GetHeight()/original.GetHeight()),0,texture.GetHeight()-1);
+        return (texture,new(x,y));
     }
 
     public override void _ExitTree()
     {
         GetViewport().SizeChanged -= ResizeConsole;
-        if (ManageCursor) Input.SetCustomMouseCursor(null);
+        if (ManageCursor)
+        {
+            Input.SetCustomMouseCursor(null);
+            Input.SetCustomMouseCursor(null,Input.CursorShape.PointingHand);
+        }
     }
     public Button ButtonFor(OrderKind kind) => _buttons[kind];
     public Button AbilityButton(int slot) => _abilities[slot];

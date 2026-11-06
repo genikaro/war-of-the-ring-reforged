@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Rendering;
 using Reforged.Simulation;
 using System.Text.Json;
 
@@ -47,6 +48,8 @@ public partial class Main
             case 761: Release(Portrait()); break;
             case 763:
                 _frodoChecks["portrait_click_selects_frodo"] = _selected.SetEquals([_frodoId]) && _commands.DisplayedName == "Frodo" && _commands.DisplayedHealth == "305/305";
+                _frodoChecks["heroic_aura_shows_frodo_and_recipients"] = _auraEffects.ContainsKey((_frodoId,AuraEffect.Heroic,true))
+                    && _auraEffects.Keys.Any(a => a.Unit != _frodoId && a.Effect == AuraEffect.Heroic && !a.Source);
                 _frodoChecks["source_abilities_in_qwe"] = _commands.AbilityButton(0) is { Visible: true,Disabled: false,ButtonPressed: false,Icon: not null }
                     && _commands.AbilityButton(1) is { Visible: true,Disabled: false,Icon: not null } && _commands.AbilityButton(2) is { Visible: true,Disabled: true,Icon: not null }
                     && !_commands.AbilityButton(3).Visible && _commands.AbilityButton(0).TooltipText.StartsWith("The One Ring\n");
@@ -66,6 +69,7 @@ public partial class Main
                     && _heroBar.Portrait(0).TooltipText.Contains("One Ring") && world.Commands.Last() is { Kind: OrderKind.UseAbility,AbilitySlot: 0,Target: -1 };
                 _frodoChecks["ring_bearer_drawn_translucent"] = Faded(true);
                 _frodoChecks["invisible_hero_glow_is_hidden"] = !_views[_frodoId].HeroGlow!.Ground.Visible;
+                _frodoChecks["ring_hides_frodos_emitter"] = !_auraEffects.ContainsKey((_frodoId,AuraEffect.Heroic,true));
                 if (_capture != "") _ = CaptureFrame(false);
                 break;
             case 808:
@@ -77,7 +81,7 @@ public partial class Main
                 _frodoChecks["q_takes_the_ring_off"] = !world.Units[_frodoId].RingActive && !_commands.AbilityButton(0).ButtonPressed && Faded(false);
                 _frodoChecks["visible_hero_glow_returns"] = _views[_frodoId].HeroGlow!.Ground.Visible;break;
             case 812:
-                var report = new { build = BuildInfo.Label,checks = _frodoChecks,passed = _frodoChecks.Count == 16 && _frodoChecks.Values.All(v => v),
+                var report = new { build = BuildInfo.Label,checks = _frodoChecks,passed = _frodoChecks.Count == 18 && _frodoChecks.Values.All(v => v),
                     fixture = "Start bank credited 300 food and 300 ore at frame 2",
                     frodo = _frodoId < 0 ? null : new { world.Units[_frodoId].Id,world.Units[_frodoId].HealthMilli,world.Units[_frodoId].RingActive },
                     hero_portrait = _heroBar.Portrait(0).GetGlobalRect() is var r ? new[] { r.Position.X,r.Position.Y,r.Size.X,r.Size.Y } : null,

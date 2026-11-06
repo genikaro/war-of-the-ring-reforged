@@ -27,6 +27,8 @@ public partial class Main
     private void ShowFrontEnd(FrontEndScreen screen)
     {
         _nextScreen = null;
+        var pointer = FrontEndArt.Shared.MenuPointer;
+        _commands.UseMenuPointer(pointer.Texture,pointer.Hotspot);
         _hud.Visible = false;
         _frontEndLayer = new CanvasLayer { Layer = 10 }; AddChild(_frontEndLayer);
         _audio.Load(GamePaths.Data("converted/content/good/audio/index.json"));

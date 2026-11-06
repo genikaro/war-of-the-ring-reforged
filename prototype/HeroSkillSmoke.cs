@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Rendering;
 using Reforged.Simulation;
 using System.Text.Json;
 
@@ -21,7 +22,7 @@ public partial class Main
                 System.IO.Path.GetFileNameWithoutExtension(_capture)+"-"+stage+".png"));
         }
         bool Cursor(string name) => _commands.DisplayedCursorName==name && _commands.Art(name)!=null
-            && _commands.DisplayedCursorHotspot==new Vector2(1,3);
+            && _commands.DisplayedCursorSize==new Vector2I(32,32) && _commands.DisplayedCursorHotspot==new Vector2(1,2);
         switch (_frames)
         {
             case 2:
@@ -36,7 +37,7 @@ public partial class Main
                     foreach(var a in (d.Abilities ?? []).Where(a=>a.Purchasable))w.EnqueueAbilityPurchase(team,unit.Id,a.Slot);
                     return unit.Id;
                 }
-                _skillGimli=Spawn(0,"UNIT_G_HERO_GIMLI",cx-8000,cz);
+                _skillGimli=Spawn(0,"UNIT_G_HERO_GIMLI",cx-6000,cz);
                 _skillLegolas=Spawn(0,"UNIT_G_HERO_LEGOLAS",cx+3000,cz);
                 _skillGandalf=Spawn(0,"UNIT_G_HERO_GANDALF",cx+3000,cz+8000);
                 _skillEnemy=Spawn(1,"UNIT_E_URUK_HAI",cx-8000,cz+4000);
@@ -48,6 +49,9 @@ public partial class Main
                     !_views[id].Ring.Visible && _views[id].HeroGlow is {} glow && glow.Ground.Visible && glow.PlayerColor==TeamColor(w.Units[id].Team));
                 _heroSkillChecks["gimli_qw_active_and_e_passive"] = !_commands.AbilityButton(0).Disabled && !_commands.AbilityButton(1).Disabled
                     && _commands.AbilityButton(2).Disabled && _commands.AbilityButton(0).Icon!=null;
+                _heroSkillChecks["siege_aura_shows_source_and_ally_but_not_enemy"] = _auraEffects.ContainsKey((_skillGimli,AuraEffect.Siege,true))
+                    && _auraEffects.ContainsKey((_skillLegolas,AuraEffect.Siege,false)) && !_auraEffects.ContainsKey((_skillEnemy,AuraEffect.Siege,false));
+                CaptureSkill("siege-aura");
                 _commands.UpdateCursor(OrderKind.UseAbility,abilityCursor:"missing_ability_cursor");
                 _heroSkillChecks["missing_ability_art_keeps_targeting_visible"] = _commands.DisplayedCursorName=="cursor_g_greater_kingsfoil"
                     && _commands.Art("cursor_g_greater_kingsfoil")!=null;
@@ -58,7 +62,8 @@ public partial class Main
                 CaptureSkill("sunder");Select(_skillLegolas);break;
             case 35:PushKey(Key.W);break;
             case 38:
-                _heroSkillChecks["elven_speed_and_original_aura"] = w.Units[_skillAlly].ElvenSpeed!=null && _elvenAttachments.ContainsKey((_skillAlly,328));
+                _heroSkillChecks["elven_speed_and_original_aura"] = w.Units[_skillAlly].ElvenSpeed!=null && _elvenAttachments.ContainsKey((_skillAlly,328))
+                    && _auraEffects.ContainsKey((_skillLegolas,328,true));
                 CaptureSkill("speed");PushKey(Key.Q);HoverAbilityPoint(new Vector2(20,100));break;
             case 39:
                 _heroSkillChecks["trueshot_hotkey_shows_targeting_cursor_on_ground"] = _orders.Pending==OrderKind.UseAbility && Cursor("cursor_g_trueshot");

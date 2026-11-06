@@ -139,17 +139,27 @@ public partial class Main
                 _siegeChecks["enemy_citadel_is_destroyed"] = !world.Navigation.IsObstacleActive(SmokeEnemyCitadel)
                     && !world.Producers.ContainsKey(SmokeEnemyCitadel) && !world.DropOffs.Any(d => d.Obstacle == SmokeEnemyCitadel)
                     && !world.StartBuildings[1].Contains("BUILDING_G_TOWN_CENTER_LEVEL_1");
-                _siegeChecks["ruined_building_leaves_no_view"] = !_constructionViews.ContainsKey(SmokeEnemyCitadel)
+                _siegeChecks["ruined_building_is_removed_from_picking"] = !_constructionViews.ContainsKey(SmokeEnemyCitadel)
                     && !_structureViews.ContainsKey(SmokeEnemyCitadel) && !_obstacleViews.ContainsKey(SmokeEnemyCitadel);
+                _siegeChecks["ruined_building_uses_original_collapse_clip"] = _buildingCollapses.Any(c =>
+                    c.View.Obstacle == SmokeEnemyCitadel && c.Clip.EndsWith("_Ruined") && c.ClipLength > 0 && !c.View.Bar.Visible);
                 _siegeChecks["attackers_stand_down_after_the_ruin"] = _selected.All(id => world.Units[id].Order == OrderKind.Idle);
                 _siegeChecks["ruin_costs_the_enemy_its_population"] = world.PopulationCapacity(1) < _siegeEnemyCapacity
                     && world.PopulationCapacity(0) == _siegeCapacity;
-                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-ruined.png");
                 _siegePhase = 6; _siegeStep = 0; break;
             case 6:
-                if (_siegeStep++ < 3) break; // Let the ruin capture finish writing.
+                _siegeStep++;
+                if (_siegeStep == 9)
+                {
+                    _siegeChecks["collapse_animates_with_faction_debris"] = _buildingCollapses.Any(c =>
+                        c.View.Obstacle == SmokeEnemyCitadel && c.View.Player?.CurrentAnimationPosition > 0 && c.View.Model.Position.Y < -.1f)
+                        && _buildingDust.Any(d => d.Team == 1 && d.Effect.Root.Visible);
+                }
+                if (_siegeStep == 23 && _capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-ruined.png");
+                if (_siegeStep < 130) break;
+                _siegeChecks["collapse_and_debris_are_cleaned_up"] = _buildingCollapses.Count == 0 && _buildingDust.Count == 0;
                 var report = new { build = BuildInfo.Label,checks = _siegeChecks,
-                    passed = _siegeChecks.Count == 17 && _siegeChecks.Values.All(v => v),
+                    passed = _siegeChecks.Count == 20 && _siegeChecks.Values.All(v => v),
                     fixture = "Both squads spawn beside their target; the first wave is removed before the repair pass",
                     citadel = own == null ? null : new { own.Id,own.Team,own.Health,max = ownMax,own.Prebuilt },
                     damaged_to = _siegeDamaged,facing_samples = _siegeFacingSamples,ticks = world.Tick,status = _status.Text,digest = world.StateDigest() };

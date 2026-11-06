@@ -20,6 +20,14 @@ public sealed class GameSettings
         (Edition.Custom,"Custom Edition","Choose each improvement yourself.")];
 
     public const string DefaultPath = "user://settings.cfg";
+    public const int DefaultCursorSizePercent = 50;
+    public static IReadOnlyList<int> CursorSizes { get; } = Array.AsReadOnly(new[] { 50,75,100 });
+    private int _cursorSizePercent = DefaultCursorSizePercent;
+    public int CursorSizePercent
+    {
+        get => _cursorSizePercent;
+        set => _cursorSizePercent = CursorSizes.Contains(value) ? value : DefaultCursorSizePercent;
+    }
     public bool PlayerColoredBars { get; set; } = true;
     public bool OverheadBars { get; set; } = true;
     /// <summary>Build-129: hit blood, death blood pools and bloody weapons, the effects and decals the source flags
@@ -39,7 +47,7 @@ public sealed class GameSettings
     public bool IsOn(string key) => ReforgedEdition switch {
         Edition.Purist => false,Edition.Reforged => true,_ => CustomOn.Contains(key) };
 
-    public GameSettings Copy() => new() { PlayerColoredBars = PlayerColoredBars,OverheadBars = OverheadBars,Blood = Blood,
+    public GameSettings Copy() => new() { PlayerColoredBars = PlayerColoredBars,OverheadBars = OverheadBars,Blood = Blood,CursorSizePercent = CursorSizePercent,
         ReforgedEdition = ReforgedEdition,CustomOn = [.. CustomOn],Muted = Muted,
         MasterVolume = MasterVolume,MusicVolume = MusicVolume,EffectsVolume = EffectsVolume,VoiceVolume = VoiceVolume };
 
@@ -50,6 +58,7 @@ public sealed class GameSettings
         settings.PlayerColoredBars = config.GetValue("health_bars","player_colored",true).AsBool();
         settings.OverheadBars = config.GetValue("health_bars","overhead",true).AsBool();
         settings.Blood = config.GetValue("game","blood",true).AsBool();
+        settings.CursorSizePercent = config.GetValue("interface","cursor_size_percent",DefaultCursorSizePercent).AsInt32();
         settings.Muted = config.GetValue("audio","muted",false).AsBool();
         settings.MasterVolume = config.GetValue("audio","master",80.0).AsDouble();
         settings.MusicVolume = config.GetValue("audio","music",45.0).AsDouble();
@@ -67,6 +76,7 @@ public sealed class GameSettings
         config.SetValue("health_bars","player_colored",PlayerColoredBars);
         config.SetValue("health_bars","overhead",OverheadBars);
         config.SetValue("game","blood",Blood);
+        config.SetValue("interface","cursor_size_percent",CursorSizePercent);
         config.SetValue("audio","muted",Muted);
         config.SetValue("audio","master",MasterVolume);
         config.SetValue("audio","music",MusicVolume);

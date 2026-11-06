@@ -91,6 +91,27 @@ public partial class Main
             foreach (var layer in _buildingFireLayers.Where(l => l.Name == "Smoke"))
                 foreach (var material in layer.Materials) material.BlendMode = BaseMaterial3D.BlendModeEnum.Mix;
         }
+        if (rules.TryGetProperty("BuildingDamageVisuals",out var damageVisuals))
+            foreach (var item in damageVisuals.EnumerateObject())
+            {
+                var (_,layers) = HealingEffect.Load(_cacheFiles.Content,item.Value);
+                _buildingDamageLayers[item.Name == "evil"] = layers;
+                foreach (var material in layers.SelectMany(layer => layer.Materials))
+                    material.BlendMode = BaseMaterial3D.BlendModeEnum.Mix;
+            }
+        if (rules.TryGetProperty("AuraVisuals",out var auras))
+            foreach (var item in auras.EnumerateObject())
+            {
+                int id = int.Parse(item.Name);
+                var data = HealingEffect.Load(_cacheFiles.Content,item.Value);
+                _elvenVisuals.Add(id,data);
+                foreach (var layer in data.Layers)
+                    foreach (var material in layer.Materials)
+                    {
+                        if (AuraEffect.GroundLayer(id,layer.Name)) material.BillboardMode = BaseMaterial3D.BillboardModeEnum.Disabled;
+                        if (id == AuraEffect.TerrorTarget) material.BlendMode = BaseMaterial3D.BlendModeEnum.Mix;
+                    }
+            }
         foreach (var sound in rules.GetProperty("Sounds").EnumerateArray())
             _impactSounds.Add(LoadCombatSound(sound));
         if (rules.TryGetProperty("AbilitySounds",out var abilitySounds))

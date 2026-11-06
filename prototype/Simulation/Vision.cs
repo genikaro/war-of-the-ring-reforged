@@ -62,6 +62,8 @@ public sealed partial class SimWorld
     /// <summary>Whether the side sees the point now. Observers (a negative team) and a match without fog see everything.</summary>
     public bool InSight(int team,int x,int z) => !FogOfWar || team < 0 || Vision(team).Visible[VisionCell(x,z)] != 0;
 
+    public bool SiteInSight(int team,int x,int z,int radiusMm) => !FogOfWar || team < 0 || SiteInSight(Vision(team),x,z,radiusMm);
+
     /// <summary>The last tick the side saw the point, or -1 if it never has; the current tick without fog.</summary>
     public int SeenTick(int team,int x,int z) => !FogOfWar || team < 0 ? Tick : Vision(team).SeenTick[VisionCell(x,z)];
 

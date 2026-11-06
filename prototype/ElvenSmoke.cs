@@ -58,7 +58,7 @@ public partial class Main
                 break;
             case 8:
                 _elvenChecks["protection_cursor_uses_source_arrow_tip"]=_commands.DisplayedCursorName=="cursor_g_protection"
-                    && _commands.DisplayedCursorHotspot==new Vector2(1,3);
+                    && _commands.DisplayedCursorSize==new Vector2I(32,32) && _commands.DisplayedCursorHotspot==new Vector2(1,2);
                 _elvenChecks["arrow_tip_over_body_picks_shield_target"]=UnitAt(_pointerPosition)?.Id==_elvenArcher;
                 break;
             case 9: Click(_pointerPosition); break;

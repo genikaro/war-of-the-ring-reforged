@@ -42,6 +42,7 @@ public partial class Main
     private void UseSettings(GameSettings settings)
     {
         _settings = settings.Copy();
+        _commands.SetCursorSizePercent(_settings.CursorSizePercent);
         _playerColoredBars = settings.PlayerColoredBars; _overheadBars = settings.OverheadBars;
         UseBloodSetting(settings.Blood);
         _audio.Apply(settings);

@@ -26,9 +26,12 @@ public partial class Main
         if (_herbsTargetingCaster >= 0 && (_orders.Pending != OrderKind.UseAbility || _pendingAbilityCaster != _herbsTargetingCaster
             || !_selected.Contains(_herbsTargetingCaster))) ReserveHerbsTargeting(-1);
         if (_abilityAreaPreview != null) _abilityAreaPreview.Visible = false;
-        if (_world == null || _orders.Pending is not (OrderKind.UseAbility or OrderKind.UseGlobalPower or OrderKind.UsePlacePower)) return;
-        bool overInterface = _commands.IsVisibleInTree() && _commands.GetGlobalRect().HasPoint(_pointerPosition)
+        if (_world == null) return;
+        bool overInterface = _gameMenu.Visible || GetViewport().GuiGetHoveredControl() != null
+            || _commands.IsVisibleInTree() && _commands.GetGlobalRect().HasPoint(_pointerPosition)
             || _toolsPanel.IsVisibleInTree() && _toolsPanel.GetGlobalRect().HasPoint(_pointerPosition);
+        if (_orders.Pending is not (OrderKind.UseAbility or OrderKind.UseGlobalPower or OrderKind.UsePlacePower))
+        { _commands.UpdateCursor(_orders.Pending,overInterface:overInterface); return; }
         if (_orders.Pending == OrderKind.UseGlobalPower) { UpdateGlobalPowerCursor(overInterface); return; }
         if (_orders.Pending == OrderKind.UsePlacePower) { UpdatePlacePowerCursor(overInterface); return; }
         bool? valid = null;

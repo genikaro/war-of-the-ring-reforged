@@ -19,7 +19,7 @@ public partial class Main
     private StandardMaterial3D? _previewMaterial,_ghostMaterial;
     private readonly Dictionary<(string Building,int X,int Z),Node3D> _foundationGhosts = [];
     private bool _previewValid;
-    private sealed class BuildingVisual(Node3D root,Node3D model,UnitAppearance appearance,AnimationPlayer? player,string[] clips,HealthBar bar,string building)
+    private sealed class BuildingVisual(Node3D root,Node3D model,UnitAppearance appearance,AnimationPlayer? player,string[] clips,HealthBar bar,string building,ConstructionSite site)
     {
         public string Building = building;
         public Node3D Model = model;
@@ -35,6 +35,10 @@ public partial class Main
         public Vector2 BarViewport;
         public bool BarAnchorValid;
         public int Stage = -1;
+        public int DamageStage;
+        public bool Live;
+        public int Obstacle = site.Obstacle;
+        public float Radius = site.RadiusMm/1000f;
         public BuildingFireEffect? Fire;
     }
 
@@ -293,9 +297,10 @@ public partial class Main
     private static string[] BuildingStateClips(JsonElement data)
     {
         var states = data.GetProperty("models")[0].GetProperty("states").EnumerateArray().ToArray();
-        string Clip(int id) => (states.FirstOrDefault(s => s.GetProperty("id").GetInt32() == id) is { ValueKind: JsonValueKind.Object } state ? state
-            : states.First(s => s.GetProperty("id").GetInt32() == 0)).GetProperty("choices")[0].GetProperty("clip").GetString()!;
-        return new[] {19,17,18,0}.Select(Clip).ToArray();
+        string Clip(int id) => states.FirstOrDefault(s => s.GetProperty("id").GetInt32() == id) is { ValueKind: JsonValueKind.Object } state
+            ? state.GetProperty("choices")[0].GetProperty("clip").GetString() ?? "" : "";
+        string healthy = Clip(0);
+        return [.. new[] {19,17,18,0,1,2}.Select(id => Clip(id) is { Length: > 0 } clip ? clip : healthy),Clip(10),Clip(26)];
     }
 
     private void ClearConstructionTargeting()
@@ -363,7 +368,7 @@ public partial class Main
         var data = UnitAppearance.Read(CachePath(_constructionFiles[building]));
         view.Model = model; view.Appearance = new UnitAppearance(model,data); view.Clips = BuildingStateClips(data);
         view.Player = Descendants(model).OfType<AnimationPlayer>().FirstOrDefault();
-        view.Building = building; view.Stage = -1; view.BarVertices = []; view.BarAnchorValid = false;
+        view.Building = building; view.Stage = -1; view.DamageStage = 0; view.Live = false; view.BarVertices = []; view.BarAnchorValid = false;
         var entry = _structureViews[site.Obstacle];
         _structureViews[site.Obstacle] = entry with { Type = building,Team = site.Team,
             Meshes = Descendants(model).OfType<MeshInstance3D>().Where(m => m.Mesh != null).Select(m => (Mesh: m,Faces: m.Mesh!.GetFaces())).ToArray() };
@@ -373,13 +378,17 @@ public partial class Main
     {
         // Build-150: a building that fell out of the shown side's sight stays, as last seen, until its spot is seen.
         PresentFog((float)GetProcessDeltaTime());
-        foreach (int id in _constructionViews.Keys.Where(id => (!_world!.ConstructionSites.TryGetValue(id,out var s) || s.Team < 0) && !GhostShown(id)).ToArray())
+        foreach (int id in _constructionViews.Keys.Where(id => _buildingDestructions.ContainsKey(id)
+                     || (!_world!.ConstructionSites.TryGetValue(id,out var s) || s.Team < 0) && !GhostShown(id)).ToArray())
         {
             if (!_constructionViews.Remove(id,out var old)) continue;
-            int obstacle = _structureViews.Values.First(v => v.Root == old!.Root).Id;
+            int obstacle = old.Obstacle;
+            var structure = _structureViews[obstacle];
             _structureViews.Remove(obstacle); if (_selectedStructure == obstacle) _selectedStructure = null;
             _obstacleViews.Remove(obstacle); _buildingViews.Remove(old.Root);
-            old.Root.QueueFree();
+            structure.Ring.Hide();
+            if (_buildingDestructions.Remove(id,out int tick)) StartBuildingCollapse(old,structure.Team,tick);
+            else old.Root.QueueFree();
         }
         foreach (var (id,ghost) in _constructionViews.Where(p => !_world!.ConstructionSites.TryGetValue(p.Key,out var s) || s.Team < 0))
         { ghost.Bar.Conceal(); ghost.Fire?.Refresh(0,_world!.Tick); }
@@ -395,7 +404,7 @@ public partial class Main
                 var clips = BuildingStateClips(appearanceData);
                 var (barWidth,barHeight) = SiteBarSize(site);
                 var bar = new HealthBar(barWidth,barHeight) { Position = new(0,.14f,0) };
-                view = new(root,model,new UnitAppearance(model,appearanceData),Descendants(model).OfType<AnimationPlayer>().FirstOrDefault(),clips,bar,rules.Name);
+                view = new(root,model,new UnitAppearance(model,appearanceData),Descendants(model).OfType<AnimationPlayer>().FirstOrDefault(),clips,bar,rules.Name,site);
                 _constructionViews.Add(site.Id,view);
                 RegisterStructure(site.Obstacle,site.Team,rules.Name,root,site.Resource);
                 // Added after registration so the strip is not picked as the structure's own geometry.
@@ -406,36 +415,42 @@ public partial class Main
             view.Root.Visible = sight != SiteSight.Unknown;
             if (sight != SiteSight.Live)
             {
-                view.Bar.Conceal(); view.Fire?.Refresh(0,_world.Tick);
+                view.Live = false; view.Bar.Conceal(); view.Fire?.Refresh(0,_world.Tick);
                 if (view.Player != null) view.Player.SpeedScale = _paused ? 0 : 1;
                 continue;
             }
             if (view.Building != rules.Name || _structureViews[site.Obstacle].Team != site.Team) SwapBuildingModel(site,view,rules.Name);
             int stage = site.Complete ? 3 : (int)Math.Min(2,site.ProgressMicroTicks*3/(rules.DurationTicks*1_000_000L));
-            if (stage != view.Stage)
+            int maxHealth = _world.SiteMaxHealth(site);
+            int damage = !site.Complete ? 0 : site.Health*100L <= maxHealth*33L ? 2 : site.Health*100L <= maxHealth*66L ? 1 : 0;
+            if (view.Live && view.Stage == 3 && damage > view.DamageStage)
+                StartBuildingDust(view,site.Team,_world.Tick,false);
+            view.Live = true;
+            if (stage != view.Stage || damage != view.DamageStage)
             {
                 view.BarVertices = []; view.BarAnchorValid = false;
-                string clip = view.Clips[stage]; view.Appearance.Apply(clip,0);
-                string? animation = view.Player?.GetAnimationList().FirstOrDefault(a => a == clip || a.EndsWith('/'+clip));
+                string clip = view.Clips[stage+damage]; view.Appearance.Apply(clip,0);
+                string? animation = BuildingAnimation(view,clip);
                 if (animation != null)
                 {
                     // glTF imports clips as one-shots. Healthy buildings keep running (the Mill's sails),
                     // including a missing construction state's healthy-clip fallback, shared by other instances.
-                    view.Player!.GetAnimation(animation).LoopMode = clip == view.Clips[3]
+                    view.Player!.GetAnimation(animation).LoopMode = stage == 3 || clip == view.Clips[3]
                         ? Animation.LoopModeEnum.Linear : Animation.LoopModeEnum.None;
                     view.Player.Play(animation); view.Player.Advance(0);
                 }
-                view.Stage = stage;
+                view.Stage = stage; view.DamageStage = damage;
             }
             if (view.Player != null) view.Player.SpeedScale = _paused ? 0 : 1;
             // Health includes damage taken during construction; completion percentage is shown separately in the console.
-            view.Bar.Refresh(site.Health,_world!.SiteMaxHealth(site));
+            view.Bar.Refresh(site.Health,maxHealth);
             var barPosition = _overheadBars && view.Bar.Visible ? BuildingBarPosition(_structureViews[site.Obstacle],view) : new Vector3(0,.14f,0);
             view.Bar.SetStyle(_playerColoredBars ? TeamColor(site.Team) : null,barPosition);
             int fireIntensity = Math.Max(site.FirePpm,_world.FlameShieldSites.Contains(site.Id) ? 500000 : 0);
             if (fireIntensity > 0 && _buildingFireLayers.Length > 0) view.Fire ??= new BuildingFireEffect(view.Root,site.RadiusMm/1000f,_buildingFireLayers);
             view.Fire?.Refresh(fireIntensity,_world.Tick);
         }
+        PresentBuildingDamage();
         if (_fogSmoke && _fogPhase < 99) FogSmokeInput();
     }
 }

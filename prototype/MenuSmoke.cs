@@ -14,7 +14,7 @@ public partial class Main
     private static readonly List<float> MenuLoadingProgress = [];
     private static bool _menuLoadingCaptured,_menuLoadingArt;
     private static string _menuLoadingTitle = "";
-    private const int MenuSmokeChecks = 17;
+    private const int MenuSmokeChecks = 22;
 
     private string MenuCapture(string name) => System.IO.Path.ChangeExtension(_capture,null)+"-"+name+".png";
     private void Hover(Vector2 point) => GetViewport().PushInput(new InputEventMouseMotion { Position = point,GlobalPosition = point },true);
@@ -79,10 +79,29 @@ public partial class Main
             case 12: ReleaseButton(menu.SettingsButton); break;
             case 13:
                 MenuChecks["settings_open_from_menu"] = _frontEndSettings is { SettingsOpen: true } && !menu.Visible;
-                PressButton(_frontEndSettings!.CancelButton); break;
+                var options = _frontEndSettings!;
+                MenuChecks["menu_cursor_defaults_to_half_size"] = options.CursorSizeButton(50).ButtonPressed
+                    && _commands.DisplayedCursorSize == new Vector2I(32,32) && _commands.DisplayedCursorHotspot == new Vector2(2,2);
+                Click(options.CursorSizeButton(75).GetGlobalRect().GetCenter());
+                bool deferred = options.CursorSizeButton(75).ButtonPressed && _commands.DisplayedCursorSize == new Vector2I(32,32);
+                Click(options.ApplyButton.GetGlobalRect().GetCenter());
+                string path = "user://cursor-smoke-"+Guid.NewGuid()+".cfg";
+                _settings.Save(path); var saved = GameSettings.Load(path);
+                DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(path));
+                Click(options.ResetButton.GetGlobalRect().GetCenter());
+                MenuChecks["cursor_change_waits_for_apply"] = deferred;
+                MenuChecks["cursor_apply_resizes_and_round_trips_through_settings"] = saved.CursorSizePercent == 75
+                    && _commands.DisplayedCursorSize == new Vector2I(48,48) && _commands.DisplayedCursorHotspot == new Vector2(3,2);
+                if (!MenuChecks["cursor_apply_resizes_and_round_trips_through_settings"])
+                    GD.Print($"CURSOR_SMOKE applied={_settings.CursorSizePercent} saved={saved.CursorSizePercent} size={_commands.DisplayedCursorSize} hotspot={_commands.DisplayedCursorHotspot}");
+                MenuChecks["cursor_reset_only_changes_the_draft"] = options.CursorSizeButton(50).ButtonPressed;
+                if (_capture != "") _ = CaptureScreen(MenuCapture("cursor-settings"));
+                PressButton(options.CancelButton); break;
             case 14: ReleaseButton(_frontEndSettings!.CancelButton); break;
             case 15:
                 MenuChecks["settings_open_from_menu"] &= !_frontEndSettings!.Visible && menu.Visible;
+                MenuChecks["cursor_reset_only_changes_the_draft"] &= _settings.CursorSizePercent == 75
+                    && _commands.DisplayedCursorSize == new Vector2I(48,48);
                 PressButton(menu.SandboxButton); break;
             case 16: ReleaseButton(menu.SandboxButton); break;
             case 18:
@@ -138,6 +157,13 @@ public partial class Main
                     && _chosenKind == SetupScreen.SetupKind.Sandbox && _lastSandboxSetup is { SandboxTrainingDummies: false,SandboxInstantBuild: false };
                 MenuChecks["match_hud_after_loading"] = _hud.Visible && _loadingLayer == null && !_loading;
                 OpenGameMenu();
+                _gameMenu.ShowSettings();
+                Click(_gameMenu.CursorSizeButton(100).GetGlobalRect().GetCenter());
+                Click(_gameMenu.OkButton.GetGlobalRect().GetCenter());
+                CommandSandboxPlayer(1);
+                _commands.UpdateCursor(null);
+                MenuChecks["match_cursor_size_applies_to_both_factions"] = _settings.CursorSizePercent == 100 && _commands.EvilSkin
+                    && _commands.DisplayedCursorSize == new Vector2I(64,64) && _commands.DisplayedCursorHotspot == new Vector2(2,1);
                 break;
             case 5: PressButton(_gameMenu.ExitButton); break;
             case 6: ReleaseButton(_gameMenu.ExitButton); break;

@@ -31,12 +31,13 @@ public partial class GameMenu : Control
     private readonly List<(Control Control,int Size)> _fonts = [];
     private readonly List<(Control Page,Vector2 Size)> _pages = [];
     private readonly Dictionary<TextureRect,Panel> _fallbacks = [];
-    private readonly ButtonGroup _tabGroup = new(),_editionGroup = new();
+    private readonly ButtonGroup _tabGroup = new(),_editionGroup = new(),_cursorSizeGroup = new();
     private Control _main = null!,_settings = null!,_exit = null!,_gameTab = null!,_controlsTab = null!,_reforgedTab = null!,_audioTab = null!;
     private TextureRect _mainFrame = null!,_settingsFrame = null!,_exitFrame = null!,_capLeft = null!,_capRight = null!;
     private Button _settingsButton = null!,_exitButton = null!,_resumeButton = null!,_exitToMain = null!,_exitToWindows = null!,_exitCancel = null!;
     private Button _reset = null!,_apply = null!,_cancel = null!,_ok = null!;
     private readonly Button[] _tabs = new Button[4];
+    private readonly Dictionary<int,Button> _cursorSizes = [];
     private readonly HSlider[] _volumes = new HSlider[4];
     private readonly Label[] _volumeValues = new Label[4];
     private CheckBox _mute = null!;
@@ -59,6 +60,7 @@ public partial class GameMenu : Control
     public Button ApplyButton => _apply;
     public Button OkButton => _ok;
     public Button TabButton(int tab) => _tabs[tab];
+    public Button CursorSizeButton(int percent) => _cursorSizes[percent];
     public HSlider VolumeSlider(int channel) => _volumes[channel];
     public CheckBox MuteBox => _mute;
     public Button VoicePreviewButton => _testVoice;
@@ -121,6 +123,13 @@ public partial class GameMenu : Control
         _capRight = Place(_gameTab,new TextureRect { MouseFilter = MouseFilterEnum.Ignore,StretchMode = TextureRect.StretchModeEnum.KeepCentered },678,38,14,24);
         _scaleValue = Place(_gameTab,Caption("100%",15,Ink),700,36,57,28);
         _interfaceScale.ValueChanged += value => { _draftScale = value; _scaleValue.Text = $"{value:0}%"; };
+        Place(_gameTab,Caption("Cursor size",17,Ink),400,86,357,26);
+        foreach (int percent in GameSettings.CursorSizes)
+        {
+            var button = BoxButton($"{percent}%",() => _draft.CursorSizePercent = percent);
+            button.ToggleMode = true; button.ButtonGroup = _cursorSizeGroup;
+            _cursorSizes.Add(percent,Place(_gameTab,button,400+_cursorSizes.Count*100,118,90,32));
+        }
 
         string[] channels = ["Master volume","Music","Sound effects","Unit speech"];
         for (int i=0;i<channels.Length;i++)
@@ -229,6 +238,7 @@ public partial class GameMenu : Control
         _overheadBars.SetPressedNoSignal(_draft.OverheadBars);
         _blood.SetPressedNoSignal(_draft.Blood);
         _interfaceScale.SetValueNoSignal(_draftScale); _scaleValue.Text = $"{_draftScale:0}%";
+        foreach (var (percent,button) in _cursorSizes) button.SetPressedNoSignal(_draft.CursorSizePercent == percent);
         double[] volumes = [_draft.MasterVolume,_draft.MusicVolume,_draft.EffectsVolume,_draft.VoiceVolume];
         for (int i=0;i<volumes.Length;i++) { _volumes[i].SetValueNoSignal(volumes[i]); _volumeValues[i].Text = $"{volumes[i]:0}%"; }
         _mute.SetPressedNoSignal(_draft.Muted);
@@ -341,7 +351,7 @@ public partial class GameMenu : Control
         if (Box("control_yellowbox_regular") is { } normal)
         {
             var hover = Box("control_yellowbox_highlighted") ?? normal; var pressed = Box("control_yellowbox_pressed") ?? hover;
-            foreach (var button in _tabs.Concat([_reset,_apply,_cancel,_ok,_testVoice]))
+            foreach (var button in _tabs.Concat(_cursorSizes.Values).Concat([_reset,_apply,_cancel,_ok,_testVoice]))
             {
                 button.AddThemeStyleboxOverride("normal",normal); button.AddThemeStyleboxOverride("focus",normal);
                 button.AddThemeStyleboxOverride("disabled",normal); button.AddThemeStyleboxOverride("hover",hover);

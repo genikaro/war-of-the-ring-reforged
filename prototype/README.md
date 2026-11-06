@@ -1,5 +1,16 @@
 # Godot C# skirmish sandbox
 
+**build-166:** The original pointers and targeting cursors default to half size. In **Settings → Game → Cursor size**,
+choose **50%**, **75%**, or **100%**. Apply or OK saves the size for menus and matches.
+
+**build-165:** Damaged buildings show their original damage states and faction dust. Razing a building plays its
+ruin clip where available, tilts into the dust and scatters debris while immediately opening the ground to units.
+Heroic Aura, Siege Aura and Aura of Terror now show effects on the bearer and affected units.
+Legolas's Elven Speed has a stronger effect on the caster, and Obelisk protection marks its recipients.
+The menus use the original Good pointer, and matches switch between the original Good and Evil pointers.
+Particle movement and building damage thresholds are adapted for the prototype. Rebuild the shared assets with
+`python tools/content_pack.py` to pick up the new art.
+
 **build-164:** The last two missing Evil abilities. **Summon Obelisk** (4 Fate) raises a 5000-health Obelisk. Friendly
 units within 15 m take half of every hit and the Obelisk soaks the other half. It loses 1.5% of its health each second and
 falls when its health is gone; bots raise it in larger fights. **Ringsight:** Gollum, the Nazgul King and Black Riders see

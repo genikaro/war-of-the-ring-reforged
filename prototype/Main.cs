@@ -843,6 +843,7 @@ public partial class Main : Node3D
         {
             long stepStart=_engagementSmoke?System.Diagnostics.Stopwatch.GetTimestamp():0;
             _world.Step();
+            RecordBuildingDestructions();
             RecordProfileDigest();
             if (_sandboxMap) RefillSandboxMapBanks();
             while (_views.Count < _world.Units.Count) AddUnitView(_world.Units[_views.Count]);
@@ -1045,6 +1046,7 @@ public partial class Main : Node3D
         PresentProjectiles();
         PresentHealingEffects();
         PresentElvenEffects();
+        PresentAuras();
         PresentDroppedObjects();
         SimProfiler.Record("godot effects",effectPresentation);
         var edge = EdgePan();

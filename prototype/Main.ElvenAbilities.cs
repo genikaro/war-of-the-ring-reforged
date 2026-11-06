@@ -90,7 +90,7 @@ public partial class Main
                          unit.Dazed?.Until > _world.Tick ? unit.Dazed.Ability.Kind == AbilityKind.Sunder ? 253 : unit.Dazed.Ability.Kind == AbilityKind.BlindingLight ? 143 : unit.Dazed.Ability.Kind == AbilityKind.PrisonOfIce ? 356 : 363 : -1,
                          unit.Poisons.Any(p => p.Until > _world.Tick) ? unit.Poisons.Any(p => p.Until > _world.Tick && p.Ability.Kind == AbilityKind.PoisonTrap) ? 164 : 200 : -1,
                          unit.HealEffects.Any(h => h.Until > _world.Tick) ? 169 : -1,
-                         unit.ElvenSpeed?.Until > _world.Tick ? 328 : -1,
+                         unit.ElvenSpeed?.Until > _world.Tick && !SpeedAuraBearer(unit) ? 328 : -1,
                          unit.Negated?.Until > _world.Tick ? 185 : -1,
                          unit.FlameShield?.Until > _world.Tick ? 178 : -1,
                          unit.HeroBurns.Any(b => b.Until > _world.Tick) ? 176 : -1,

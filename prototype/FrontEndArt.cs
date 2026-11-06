@@ -18,6 +18,9 @@ public sealed class FrontEndArt
     public string? MenuScene { get; }
     public string? MenuSky { get; }
     public bool Available { get; }
+    private Vector2 _cursorHotspot;
+
+    public (Texture2D? Texture,Vector2 Hotspot) MenuPointer => (Art("cursor_g_pointer"),_cursorHotspot);
 
     private FrontEndArt(string converted)
     {
@@ -41,8 +44,13 @@ public sealed class FrontEndArt
         if (!System.IO.File.Exists(path)) return false;
         try
         {
-            foreach (var asset in JsonDocument.Parse(System.IO.File.ReadAllText(path)).RootElement.GetProperty("assets").EnumerateObject())
+            using var document = JsonDocument.Parse(System.IO.File.ReadAllText(path));
+            foreach (var asset in document.RootElement.GetProperty("assets").EnumerateObject())
+            {
                 _files[asset.Name] = Inside(folder,asset.Value.GetProperty("file").GetString()!);
+                if (asset.Name == "cursor_g_pointer" && asset.Value.TryGetProperty("cursor_hotspot",out var hotspot))
+                    _cursorHotspot = new(hotspot[0].GetSingle(),hotspot[1].GetSingle());
+            }
             return true;
         }
         catch (Exception error) when (error is JsonException or KeyNotFoundException or InvalidOperationException or IOException)

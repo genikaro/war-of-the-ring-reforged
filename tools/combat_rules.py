@@ -401,6 +401,15 @@ def export(output, resolver=None, roster=None):
             projectiles[key]=projectile_presentation(output,resolver,None,trace,weapon['AssociatedProjectile'],include_sprite_effects=True)
     heal_visual = healing_visual.export(output,resolver,trace)
     fire_visual = healing_visual.export_sprite_effect(output,resolver,trace,'EFFECT_BUILDING_FIRE_TORCH','building-fire')
+    building_damage_visuals = {
+        side: healing_visual.export_sprite_effect(output,resolver,trace,'EFFECT_FX_BUILDING_DAMAGE_'+side.upper(),
+                                                   'building-damage/'+side)
+        for side in ('good', 'evil')}
+    aura_visuals = {
+        str(i): healing_visual.export_sprite_effect(output,resolver,trace,resolver.db['Effects'].get(i).name,'auras/'+str(i))
+        for i in (147, 148, 338, 353, 354)}
+    # Terror's target particle track has no bound emitter. The wind, whisps and ring do.
+    aura_visuals['353']['Layers'] = [layer for layer in aura_visuals['353']['Layers'] if layer['Name'] != 'particle']
     elven_visuals = elven_abilities.visuals(output,resolver,trace) if 'UNIT_G_ELVEN_LIGHTBRINGER' in roster else {}
     nature_visuals = nature_abilities.visuals(output,resolver,trace) if 'UNIT_G_BEORNING' in roster else {}
     import hero_skills
@@ -420,6 +429,7 @@ def export(output, resolver=None, roster=None):
                             'NeutralPolicy': 'Same type and attacks against Hero: 100%.',
                             'Guide': 'https://gamefaqs.gamespot.com/pc/563555-the-lord-of-the-rings-war-of-the-ring/faqs/29079'},
         'Projectiles': projectiles,'AbilitySounds': ability_sounds,'HealVisual': heal_visual,'BuildingFireVisual': fire_visual,'ElvenVisuals':elven_visuals,'NatureVisuals':nature_visuals,'HeroVisuals':hero_visuals,
+        'BuildingDamageVisuals': building_damage_visuals, 'AuraVisuals': aura_visuals,
         'DroppedObjects': dropped_objects,
         'BuildingCompositions': {b.name:b['CompositionType'] for b in resolver.db['Buildings'].records},
         'Regeneration': regeneration(resolver.db['UnitAnimStates']),'RegenerationSource': REGENERATION_STATES,

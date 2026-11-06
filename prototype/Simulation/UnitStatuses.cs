@@ -22,6 +22,27 @@ public sealed partial class SimWorld
     private int _auraSourcesTick = -1;
     private readonly List<(SimUnit Source,AbilityDefinition Aura)> _auraSources = [];
 
+    private void FindAuraSources()
+    {
+        if (_auraSourcesTick == Tick) return;
+        _auraSourcesTick = Tick; _auraSources.Clear();
+        foreach (var source in ActiveUnits.Where(u => u.Present && u.Definition.Abilities != null))
+            foreach (var aura in source.EnabledAbilities.Where(a => a.Kind is AbilityKind.Aura or AbilityKind.SiegeAura))
+                _auraSources.Add((source,aura));
+    }
+
+    private static bool CoveredBy(SimUnit unit,SimUnit source,AbilityDefinition aura) => source.Present
+        && source.Team == unit.Team && source.AbilityEnabled(aura)
+        && SeparationSquared(source,unit) <= (long)aura.RangeMm*aura.RangeMm;
+
+    public bool HeroicAuraOver(SimUnit unit)
+    {
+        FindAuraSources();
+        foreach (var (source,aura) in _auraSources)
+            if (aura.Kind == AbilityKind.Aura && aura.RechargeScalePpm > 1_000_000 && CoveredBy(unit,source,aura)) return true;
+        return false;
+    }
+
     public List<UnitStatus> StatusesOf(SimUnit unit)
     {
         var statuses = new List<UnitStatus>();
@@ -51,17 +72,10 @@ public sealed partial class SimWorld
         foreach (var heal in unit.HealEffects.Where(h => h.Until > Tick)) statuses.Add(new(StatusKind.Healing,heal.Ability,heal.Source,heal.Ability.DpsMilli,heal.Until));
         foreach (var field in HealFields.Where(f => f.Until > Tick && f.Team == unit.Team && DistanceSquared(f.X,f.Z,unit.X,unit.Z) <= (long)f.Ability.AreaRadiusMm*f.Ability.AreaRadiusMm).Take(1))
             statuses.Add(new(StatusKind.Healing,field.Ability,field.Source,field.Ability.FieldDpsMilli,field.Until));
-        if (_auraSourcesTick != Tick)
-        {
-            _auraSourcesTick = Tick; _auraSources.Clear();
-            foreach (var source in ActiveUnits.Where(u => u.Present && u.Definition.Abilities != null))
-                foreach (var aura in source.EnabledAbilities.Where(a => a.Kind is AbilityKind.Aura or AbilityKind.SiegeAura))
-                    _auraSources.Add((source,aura));
-        }
+        FindAuraSources();
         foreach (var (kind,status) in new[] {(AbilityKind.Aura,StatusKind.HeroicAura),(AbilityKind.SiegeAura,StatusKind.SiegeAura)})
         {
-            var covering = _auraSources.Where(a => a.Aura.Kind == kind && a.Source.Present && a.Source.AbilityEnabled(a.Aura) && a.Source.Team == unit.Team
-                && SeparationSquared(a.Source,unit) <= (long)a.Aura.RangeMm*a.Aura.RangeMm).ToArray();
+            var covering = _auraSources.Where(a => a.Aura.Kind == kind && CoveredBy(unit,a.Source,a.Aura)).ToArray();
             int Strength(AbilityDefinition aura) => kind == AbilityKind.Aura ? aura.RechargeScalePpm : aura.BonusScale;
             // Siege Aura's multiplier is the one this tick's damage used; a source that has since walked out of range is unknown.
             int scale = kind == AbilityKind.SiegeAura ? unit.SiegeAuraPpm : covering.Select(a => Strength(a.Aura)).DefaultIfEmpty(1_000_000).Max();

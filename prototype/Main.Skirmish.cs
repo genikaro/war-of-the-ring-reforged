@@ -164,7 +164,7 @@ public partial class Main
             var bar = new Reforged.Rendering.HealthBar(barWidth,barHeight) { Position = new(0,.14f,0) };
             root.AddChild(bar);
             _constructionViews.Add(obstacle,new BuildingVisual(root,model,new Reforged.Rendering.UnitAppearance(model,appearance),
-                Descendants(model).OfType<AnimationPlayer>().FirstOrDefault(),BuildingStateClips(appearance),bar,name));
+                Descendants(model).OfType<AnimationPlayer>().FirstOrDefault(),BuildingStateClips(appearance),bar,name,site));
         }
     }
 
