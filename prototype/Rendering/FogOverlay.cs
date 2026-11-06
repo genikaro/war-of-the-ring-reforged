@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 using Reforged.Simulation;
 
 namespace Reforged.Rendering;
@@ -37,20 +38,20 @@ public sealed class FogOverlay
     private const float FadeSeconds = .33f;
     public MeshInstance3D Node { get; }
     private readonly int _width,_height;
-    private readonly float[] _target,_shown;
-    private readonly byte[] _bytes;
+    /// <summary>Build-167: the blur and fade (Presentation/FogFade.cs), same bytes as the build-150 loops.</summary>
+    private readonly FogFade _fade;
     private readonly Image _image;
     private readonly ImageTexture _texture;
     private readonly ShaderMaterial _material;
-    private string _teams = "";
+    /// <summary>The sides last shown (null: none, so the next shown set jumps in).</summary>
+    private int[]? _teams;
     private int _updates = -1;
-    private bool _settled;
 
     public FogOverlay(SimWorld world)
     {
         _width = world.VisionWidth; _height = world.VisionHeight;
-        _target = new float[_width*_height]; _shown = new float[_width*_height]; _bytes = new byte[_width*_height];
-        _image = Image.CreateFromData(_width,_height,false,Image.Format.L8,_bytes);
+        _fade = new FogFade(_width,_height);
+        _image = Image.CreateFromData(_width,_height,false,Image.Format.L8,_fade.Bytes);
         _texture = ImageTexture.CreateFromImage(_image);
         var material = _material = new ShaderMaterial { Shader = new Shader { Code = ShaderCode },RenderPriority = 100 };
         material.SetShaderParameter("sight",_texture);
@@ -81,43 +82,17 @@ public sealed class FogOverlay
     public void Refresh(SimWorld world,IReadOnlyList<int> teams,float delta)
     {
         Node.Visible = world.FogOfWar && teams.Count > 0;
-        if (!Node.Visible) { _teams = ""; return; }
-        string key = string.Join(',',teams);
-        bool jump = key != _teams;
+        if (!Node.Visible) { _teams = null; return; }
+        bool jump = _teams == null || !teams.SequenceEqual(_teams);
         if (jump || world.VisionUpdates != _updates)
         {
-            _teams = key; _updates = world.VisionUpdates; _settled = false;
-            var visible = teams.Count == 1 ? world.Vision(teams[0]).Visible : Together(world,teams);
-            // A 3 x 3 box blur: a cell at the edge of sight is part lit.
-            for (int z = 0; z < _height; z++)
-                for (int x = 0; x < _width; x++)
-                {
-                    int lit = 0,count = 0;
-                    for (int dz = -1; dz <= 1; dz++)
-                        for (int dx = -1; dx <= 1; dx++)
-                        {
-                            int px = x+dx,pz = z+dz;
-                            if (px < 0 || pz < 0 || px >= _width || pz >= _height) continue;
-                            count++; lit += visible[pz*_width+px];
-                        }
-                    _target[z*_width+x] = (float)lit/count;
-                }
+            if (jump) _teams = [.. teams];
+            _updates = world.VisionUpdates;
+            _fade.Retarget(teams.Count == 1 ? world.Vision(teams[0]).Visible : Together(world,teams));
         }
-        if (_settled && !jump) return;
-        float step = jump ? 1 : Math.Min(1,delta/FadeSeconds);
-        bool moving = false;
-        for (int i = 0; i < _shown.Length; i++)
-        {
-            float shown = _shown[i],target = _target[i];
-            if (shown != target)
-            {
-                shown = Math.Abs(target-shown) <= step ? target : shown+Math.Sign(target-shown)*step;
-                _shown[i] = shown; moving |= shown != target;
-            }
-            _bytes[i] = (byte)(shown*255+.5f);
-        }
-        _settled = !moving;
-        _image.SetData(_width,_height,false,Image.Format.L8,_bytes);
+        if (_fade.Settled && !jump) return;
+        _fade.Step(jump ? 1 : Math.Min(1,delta/FadeSeconds));
+        _image.SetData(_width,_height,false,Image.Format.L8,_fade.Bytes);
         _texture.Update(_image);
     }
 
@@ -137,5 +112,5 @@ public sealed class FogOverlay
     }
 
     /// <summary>The share of sight shown for the cell at the map point, 0 (fog) to 1 (in sight); for smokes.</summary>
-    public float Shown(int x,int z) => _shown[Math.Clamp(z/SimWorld.VisionCellMm,0,_height-1)*_width+Math.Clamp(x/SimWorld.VisionCellMm,0,_width-1)];
+    public float Shown(int x,int z) => _fade.Shown[Math.Clamp(z/SimWorld.VisionCellMm,0,_height-1)*_width+Math.Clamp(x/SimWorld.VisionCellMm,0,_width-1)];
 }

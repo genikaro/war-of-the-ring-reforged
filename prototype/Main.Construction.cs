@@ -40,6 +40,16 @@ public partial class Main
         public int Obstacle = site.Obstacle;
         public float Radius = site.RadiusMm/1000f;
         public BuildingFireEffect? Fire;
+        /// <summary>Build-167: the clip speed Godot was last told (null: not yet), so it changes only on change.</summary>
+        public float? Speed;
+    }
+
+    private readonly List<int> _siteRemovals = [];
+
+    private static void SetBuildingSpeed(BuildingVisual view,float speed)
+    {
+        if (view.Player == null || view.Speed == speed) return;
+        view.Player.SpeedScale = speed; view.Speed = speed;
     }
 
     /// <summary>Owner-chosen turns of building models about their origin, in degrees counterclockwise seen from above
@@ -367,7 +377,7 @@ public partial class Main
         var model = TurnModel(LoadGlb(_constructionFiles[building],_teamColors[site.Team]),building); view.Root.AddChild(model);
         var data = UnitAppearance.Read(CachePath(_constructionFiles[building]));
         view.Model = model; view.Appearance = new UnitAppearance(model,data); view.Clips = BuildingStateClips(data);
-        view.Player = Descendants(model).OfType<AnimationPlayer>().FirstOrDefault();
+        view.Player = Descendants(model).OfType<AnimationPlayer>().FirstOrDefault(); view.Speed = null;
         view.Building = building; view.Stage = -1; view.DamageStage = 0; view.Live = false; view.BarVertices = []; view.BarAnchorValid = false;
         var entry = _structureViews[site.Obstacle];
         _structureViews[site.Obstacle] = entry with { Type = building,Team = site.Team,
@@ -377,9 +387,13 @@ public partial class Main
     private void PresentConstruction()
     {
         // Build-150: a building that fell out of the shown side's sight stays, as last seen, until its spot is seen.
-        PresentFog((float)GetProcessDeltaTime());
-        foreach (int id in _constructionViews.Keys.Where(id => _buildingDestructions.ContainsKey(id)
-                     || (!_world!.ConstructionSites.TryGetValue(id,out var s) || s.Team < 0) && !GhostShown(id)).ToArray())
+        using (SimProfiler.Time("hud fog")) PresentFog((float)GetProcessDeltaTime());
+        // Build-167: the same views in the same order, without a query and a copied array every frame.
+        _siteRemovals.Clear();
+        foreach (int id in _constructionViews.Keys)
+            if (_buildingDestructions.ContainsKey(id)
+                || (!_world!.ConstructionSites.TryGetValue(id,out var s) || s.Team < 0) && !GhostShown(id)) _siteRemovals.Add(id);
+        foreach (int id in _siteRemovals)
         {
             if (!_constructionViews.Remove(id,out var old)) continue;
             int obstacle = old.Obstacle;
@@ -390,10 +404,11 @@ public partial class Main
             if (_buildingDestructions.Remove(id,out int tick)) StartBuildingCollapse(old,structure.Team,tick);
             else old.Root.QueueFree();
         }
-        foreach (var (id,ghost) in _constructionViews.Where(p => !_world!.ConstructionSites.TryGetValue(p.Key,out var s) || s.Team < 0))
-        { ghost.Bar.Conceal(); ghost.Fire?.Refresh(0,_world!.Tick); }
-        foreach (var site in _world!.ConstructionSites.Values.Where(s => s.Team >= 0))
+        foreach (var (id,ghost) in _constructionViews)
+            if (!_world!.ConstructionSites.TryGetValue(id,out var s) || s.Team < 0) { ghost.Bar.Conceal(); ghost.Fire?.Refresh(0,_world!.Tick); }
+        foreach (var site in _world!.ConstructionSites.Values)
         {
+            if (site.Team < 0) continue;
             var rules = _world.SiteRules(site); var (x,z) = _world.SitePosition(site);
             if (!_constructionViews.TryGetValue(site.Id,out var view))
             {
@@ -412,11 +427,12 @@ public partial class Main
             }
             // Build-150: an enemy building never seen is hidden; one out of sight keeps the look it had when last seen.
             var sight = SightOf(site);
+            // Set every frame: the physics frame shows every standing obstacle's root, buildings included.
             view.Root.Visible = sight != SiteSight.Unknown;
             if (sight != SiteSight.Live)
             {
                 view.Live = false; view.Bar.Conceal(); view.Fire?.Refresh(0,_world.Tick);
-                if (view.Player != null) view.Player.SpeedScale = _paused ? 0 : 1;
+                SetBuildingSpeed(view,_paused ? 0 : 1);
                 continue;
             }
             if (view.Building != rules.Name || _structureViews[site.Obstacle].Team != site.Team) SwapBuildingModel(site,view,rules.Name);
@@ -441,7 +457,7 @@ public partial class Main
                 }
                 view.Stage = stage; view.DamageStage = damage;
             }
-            if (view.Player != null) view.Player.SpeedScale = _paused ? 0 : 1;
+            SetBuildingSpeed(view,_paused ? 0 : 1);
             // Health includes damage taken during construction; completion percentage is shown separately in the console.
             view.Bar.Refresh(site.Health,maxHealth);
             var barPosition = _overheadBars && view.Bar.Visible ? BuildingBarPosition(_structureViews[site.Obstacle],view) : new Vector3(0,.14f,0);

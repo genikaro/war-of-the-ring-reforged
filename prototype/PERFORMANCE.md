@@ -305,6 +305,75 @@ tick, so ticks there barely moved (12:00: 13.7 → 13.1 ms; 14:00: 11.8 → 11.1
 profiled run's phase C froze at 2,111 draw calls for every frame because the window
 stopped being drawn (covered or minimized), so its timings were discarded.
 
+### Build-167: fog, hero glows and buildings in real matches
+
+The stress benchmark has no fog, few buildings and no heroes. A late-game play benchmark
+measures them instead. `-FastUntil 10` plays a match at 16x until 10:00, then at 1x, and
+starts a profile window right there. `-CameraTour` moves the camera to each player's base
+in turn every 5 game seconds. With `-ProfileUntil 12`, the profile line then covers two
+minutes of real-speed play in the window:
+
+```powershell
+./prototype/run.ps1 -Map MP08_Rift -Observe -Bots Gimli,Aragorn,Legolas,Saruman -Profile -FastUntil 10 -ProfileUntil 12 -CameraTour -Resolution 1600x900
+```
+
+Profiling that match showed three costs, all fixed exactly:
+
+- **The fog overlay.** On every sight update it blurred every 2 m sight cell 3x3, and on
+  every frame while anything faded it stepped every cell and rebuilt every byte; at 4x and
+  above sight changes all the time. `Presentation/FogFade.cs` blurs with running row and
+  column sums and fades only the cells still moving: the others keep their byte. That is
+  all the old full pass wrote for them. `FogFadeChecks` compares it with the build-150
+  loops over 1,540 frames of random sight, side changes and frame steps, on maps down to
+  one cell wide: same targets, shown values, bytes and settling. The overlay no longer
+  builds a string of the shown sides every frame.
+- **Hero glows.** Each moving hero rebuilt its ground glow every frame, all 1,728 vertices
+  with their own trigonometry and terrain lookups, even off screen. A hero out of view now
+  hides its glow, which lies within the view margin, so nothing on screen changes. Drawing
+  it again when the hero returns puts it where the hero is. A first version left the glow
+  where it was, which could have shown a stale glow; HeroExperienceSmoke caught it. The 343 distinct ring points are worked out
+  once per rebuild, with the same float expressions, into reused arrays. A temporary
+  in-game check compared 390 rebuilds in the Sandbox smoke with the old loop, vertex for
+  vertex.
+- **Buildings.** Each frame the building loop set every building's animation speed in
+  Godot and built three queries. The speed is now written only on change, with no
+  queries, and a fire effect shows or hides only on change. Visibility is still set every
+  frame, because the physics frame shows every standing obstacle's root. FogSmoke caught a
+  version that skipped it: an unseen enemy base could appear in fog.
+
+Profiler sections added: `hud fog`, `hud sites`, `hud ghosts`, `hud corruption`, `hud
+selection`, `hud production`, `hud build panel`, `units loop A`, `units loop B` and
+`units blood`.
+
+8-bot MP08_Rift, 10:00 to 12:00 at 1x with the camera tour, 1600x900, against a baseline
+with the same benchmark options:
+
+| | Build-166 | Build-167 |
+| --- | ---: | ---: |
+| Frames in the 2 minutes | 7,678 (64 FPS) | 9,271 (77 FPS) |
+| Frame p50 / p95 / p99 | 12.5 / 32.2 / 60.8 ms | 9.9 / 26.6 / 54.4 ms |
+| `_Process` per frame | 3.33 ms | 1.56 ms |
+| `godot units` | 2.15 ms | 0.69 ms |
+| `units loop B` (hero glows) | 1.54 ms | 0.10 ms |
+| `hud sites` (buildings and fog) | 0.66 ms | 0.35 ms |
+| `hud fog` | 0.42 ms | 0.13 ms |
+
+The simulation is the same in both (`godot physics frame` 14.7 ms per tick): it is now the larger cost.
+Windowed frame rates swing between runs: an earlier build-167 run of the same benchmark drew 14,714 frames
+(123 FPS) with nearly the same costs inside `_Process` (1.41 ms per frame), so compare the per-frame costs.
+
+The baseline is build-166 with only the benchmark options added. Both runs have the same state digest at
+tick 14,400 (`72BE0238…`), and so does a headless 16x run to 12:00 with and without the change. The change was
+made and first measured on build-163 (8,129 against 10,806 frames, frame p50 12.4 against 8.8 ms, `E7D5C2E2…`
+both) and landed after builds 164 and 166. On build-166 all 2,744 simulation checks pass, and so do 18 smokes,
+among them the fog, hero, Evil, building, siege, victory and menu smokes. In the fogged
+300-unit stress fight, captures of phases A and B are pixel-identical to the baseline, and
+frame rates are the same within run-to-run spread (38.2 against 38.0 FPS in phase
+A), since that scene has neither heroes nor many buildings. The Sandbox smoke's own
+captures are not usable for such comparisons: cloud shadows follow the shader clock,
+which counts loading time, so two runs of the same build differ by up to 12 levels over
+a fifth of the pixels.
+
 ## Repeating the checks
 
 ```powershell

@@ -1,5 +1,12 @@
 # Godot C# skirmish sandbox
 
+**build-167:** Late-game matches with heroes, buildings and fog draw faster with the same pictures: the fog overlay
+blurs with running sums and fades only the cells still changing, hero glows are rebuilt only for heroes on screen (from
+a fifth of the points they used to compute), and buildings skip repeated work. In an 8-bot MP08_Rift match from 10:00 to
+12:00 at 1x the frame median falls from 12.5 to 9.9 ms (64 to 77 FPS). `run.ps1 -FastUntil 10
+-ProfileUntil 12 -CameraTour` measures that late-game play. See
+[PERFORMANCE.md](PERFORMANCE.md#build-167-fog-hero-glows-and-buildings-in-real-matches).
+
 **build-166:** The original pointers and targeting cursors default to half size. In **Settings → Game → Cursor size**,
 choose **50%**, **75%**, or **100%**. Apply or OK saves the size for menus and matches.
 

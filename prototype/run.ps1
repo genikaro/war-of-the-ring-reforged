@@ -56,6 +56,9 @@ param(
     [switch]$Profile,
     [ValidateRange(0,600)]
     [int]$ProfileUntil,
+    [ValidateRange(0,600)]
+    [int]$FastUntil,
+    [switch]$CameraTour,
     [switch]$PerformanceSmoke,
     [switch]$Headless,
     [switch]$StressBenchmark,
@@ -184,6 +187,9 @@ if ($Speed) { $arguments += "--speed=$Speed" }
 if ($Seed) { $arguments += "--seed=$Seed" }
 if ($Profile) { $arguments += '--profile' }
 if ($ProfileUntil) { $arguments += "--profile-until=$ProfileUntil" }
+# Build-167: e.g. -Map MP08_Rift -Observe -Bots ... -Profile -FastUntil 10 -ProfileUntil 12 -CameraTour (windowed, late-game play at 1x).
+if ($FastUntil) { $arguments += "--fast-until=$FastUntil" }
+if ($CameraTour) { $arguments += '--camera-tour' }
 if ($PerformanceSmoke) { $arguments += @('--performance-smoke','--no-ai') }
 if ($StressBenchmark) { $arguments += @('--stress-benchmark',"--stress-units=$Units",'--no-ai') }
 if ($EconomyRecoverySmoke) { $arguments += '--economy-recovery-smoke' }

@@ -1019,6 +1019,8 @@ window 4.2 ms per tick, 16x at 17-26 fps.
   guard acquisition and blocked-producer retries; caching building-placement refusals;
   the simulation on a worker thread with snapshot interpolation; MultiMesh with
   vertex-animation textures for distant units.
+- [x] Late-game presentation (build-167): fog overlay blur and fade, hero glows, building loop; 8-bot Rift at 1x
+  from 10:00 runs at 77 FPS instead of 64 (frame p50 12.5 -> 9.9 ms). `-FastUntil`/`-CameraTour` play benchmark.
 - [x] Wide-body combat position searches (build-162): blocker data once per candidate
   search, cheapest point tests first, the lane filter once per node in `FindPathToAny`;
   `CombatPosition` cost a third less and a 300-unit melee tick 19.6 → 16.2 ms, digests

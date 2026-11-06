@@ -28,10 +28,14 @@ public sealed class BuildingFireEffect
         }
     }
 
+    /// <summary>Build-167: whether the fire is shown (its root starts visible), so Godot hears only about a change.</summary>
+    private bool _shown = true;
+
     public void Refresh(int intensity,int tick)
     {
-        Root.Visible = intensity > 0;
-        if (!Root.Visible) return;
+        bool shown = intensity > 0;
+        if (shown != _shown) { Root.Visible = shown; _shown = shown; }
+        if (!shown) return;
         float strength = .4f+.6f*intensity/1_000_000f;
         foreach (var (sprite,layer,index,count) in _sprites)
         {

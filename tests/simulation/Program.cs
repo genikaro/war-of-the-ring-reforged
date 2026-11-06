@@ -10,6 +10,11 @@ if (Array.IndexOf(args,"--late-match-benchmark") is int lateMatch && lateMatch >
     LateMatchChecks.Benchmark(args[lateMatch+1],args[lateMatch+2]); return;
 }
 
+if (args.Contains("--fog-fade-checks"))
+{
+    FogFadeChecks.Run((value,name) => { Console.WriteLine(name); if (!value) throw new Exception(name); }); return;
+}
+
 if (Array.IndexOf(args,"--appearance-checks") is int appearanceChecks && appearanceChecks >= 0)
 {
     int appearancePassed = 0;
@@ -349,6 +354,7 @@ OrderChecks.Run(Check);
 ExtendedOrderChecks.Run(Check);
 MeleeChecks.Run(Check);
 BloodIntensityChecks.Run(Check);
+FogFadeChecks.Run(Check);
 ConsistentHitDamageChecks.Run(Check);
 AttackVariantChecks.Run(Check);
 RangedChecks.Run(Check);

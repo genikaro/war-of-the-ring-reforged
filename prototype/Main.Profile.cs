@@ -27,8 +27,35 @@ public partial class Main
         if (_profileUntilTick > 0 && _profileDigest == null && _world!.Tick == _profileUntilTick) _profileDigest = _world.StateDigest();
     }
 
+    /// <summary>Build-167: --fast-until=M plays the match at 16x until game minute M, then at 1x, with a profile window
+    /// starting right there; --camera-tour moves the camera to each player's base in turn every 5 game seconds. With
+    /// --profile-until they measure late-game frames at real speed, e.g. an 8-bot MP08_Rift from 10:00 to 12:00.</summary>
+    private int _fastUntilTick;
+    private bool _cameraTour,_fastDone;
+    private int _tourStop = -1;
+
+    private void PlayBenchmarkInput()
+    {
+        if (_world == null || _fastUntilTick <= 0 && !_cameraTour) return;
+        if (_fastUntilTick > 0 && !_fastDone)
+        {
+            if (_world.Tick < _fastUntilTick) { if (_speed != 16) SetSpeed(16); return; }
+            _fastDone = true; SetSpeed(1);
+            // The next window measures only real-speed play.
+            SimProfiler.Take(); _profileFrameMs.Clear(); _profileFrames = 0; _profileFrameStart = 0;
+            _profileAllocated = GC.GetTotalAllocatedBytes();
+            for (int g = 0; g < 3; g++) _profileCollections[g] = GC.CollectionCount(g);
+            _profileNextTick = _world.Tick+2400;
+        }
+        if (!_cameraTour || _world.Contenders.Count == 0) return;
+        int stop = _world.Tick/(5*SimWorld.TicksPerSecond)%_world.Contenders.Count;
+        if (stop == _tourStop) return;
+        _tourStop = stop; CenterOnPlayer(_world.Contenders.ElementAt(stop));
+    }
+
     private void ReportProfile()
     {
+        PlayBenchmarkInput();
         if (!SimProfiler.Enabled || _world == null) return;
         _profileFrames++;
         long now = System.Diagnostics.Stopwatch.GetTimestamp();

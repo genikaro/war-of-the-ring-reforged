@@ -128,6 +128,8 @@ public partial class Main : Node3D
             if (arg == "--observe") _observing = true;
             if (arg == "--profile") SimProfiler.Enabled = true;
             if (arg.StartsWith("--profile-until=")) _profileUntilTick = int.Parse(arg[16..])*60*SimWorld.TicksPerSecond;
+            if (arg.StartsWith("--fast-until=")) _fastUntilTick = int.Parse(arg[13..])*60*SimWorld.TicksPerSecond;
+            if (arg == "--camera-tour") _cameraTour = true;
             if (arg == "--performance-smoke") _performanceSmoke = true;
             if (arg == "--stress-benchmark") _stressBenchmark = true;
             if (arg.StartsWith("--stress-units=")) _stressUnits = int.Parse(arg[15..]);
@@ -969,6 +971,7 @@ public partial class Main : Node3D
         float dt = (float)Math.Min(delta, 0.1);
         PrepareViewCulling();
         bool posed = !_paused || _presentStep;
+        long loopA = SimProfiler.Start();
         if (posed)
             foreach (int id in _presented)
             {
@@ -1007,7 +1010,9 @@ public partial class Main : Node3D
                 bool appeared = UpdateDrawn(unit,view);
                 if (view.Drawn) PresentPose(unit,view,fraction,appeared);
             }
-        PresentBlood(_paused ? 1 : Engine.GetPhysicsInterpolationFraction());
+        SimProfiler.Record("units loop A",loopA);
+        using (SimProfiler.Time("units blood")) PresentBlood(_paused ? 1 : Engine.GetPhysicsInterpolationFraction());
+        long loopB = SimProfiler.Start();
         UpdatePointerHover();
         foreach (int id in _presented)
         {
@@ -1019,7 +1024,10 @@ public partial class Main : Node3D
             if (!posed && UpdateDrawn(unit,view)) PresentPose(unit,view,_lastPoseFraction,true);
             if (view.Shown != view.WillShow) { view.Root.Visible = view.WillShow; view.Shown = view.WillShow; }
             PresentInvisibility(unit,view);
-            view.HeroGlow?.Draw(view.Root.GlobalPosition,unit.Present && view.Shown && !view.Translucent,
+            // Build-167: a hero out of view hides its glow (within its view margin, so nothing on screen changes) instead
+            // of rebuilding it every frame; coming back into view redraws it where the hero is.
+            if (!view.Drawn) view.HeroGlow?.Conceal();
+            else view.HeroGlow?.Draw(view.Root.GlobalPosition,unit.Present && view.Shown && !view.Translucent,
                 point => unit.Node < _world.Navigation.GroundCount
                     ? _world.Navigation.GroundHeight((int)(-point.X*1000),(int)(point.Z*1000))/1000f : view.Root.GlobalPosition.Y);
             if (view.Drawn)
@@ -1040,6 +1048,7 @@ public partial class Main : Node3D
             }, (ArrayMesh)view.Ring.Mesh!);
             view.RingPosition = view.Root.Position; view.RingYaw = view.Yaw;
         }
+        SimProfiler.Record("units loop B",loopB);
         PrunePresented();
         SimProfiler.Record("godot units",unitPresentation);
         long effectPresentation = SimProfiler.Start();
@@ -1071,12 +1080,12 @@ public partial class Main : Node3D
         using (SimProfiler.Time("hud structures")) if (_skirmish)
         {
             if (!SelectedBuilders().Any()) ClearConstructionTargeting();
-            _commands.RefreshConstruction(_world,units,_constructionTargeting,_constructionBuilding,PageChoices(),SelectedStructureDetails());
-            PresentConstruction();
-            PresentFoundationGhosts();
-            PresentCorruption();
-            PresentStructureSelection(dt);
-            PresentProduction();
+            using (SimProfiler.Time("hud build panel")) _commands.RefreshConstruction(_world,units,_constructionTargeting,_constructionBuilding,PageChoices(),SelectedStructureDetails());
+            using (SimProfiler.Time("hud sites")) PresentConstruction();
+            using (SimProfiler.Time("hud ghosts")) PresentFoundationGhosts();
+            using (SimProfiler.Time("hud corruption")) PresentCorruption();
+            using (SimProfiler.Time("hud selection")) PresentStructureSelection(dt);
+            using (SimProfiler.Time("hud production")) PresentProduction();
             UpdateConstructionPreview();
         }
         _commands.RefreshFatePage($"{_selectedStructure}:{string.Join(',',_selected.Order())}");
