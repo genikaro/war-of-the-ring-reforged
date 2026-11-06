@@ -23,3 +23,6 @@ __pycache__/
 /build/
 # Godot editor UID sidecars (the headless export writes one per script)
 *.uid
+
+# Smoke/debug captures (prototype/run.ps1 -CapturePath artifacts/...)
+/artifacts/
