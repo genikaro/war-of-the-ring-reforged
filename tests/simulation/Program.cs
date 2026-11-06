@@ -10,6 +10,21 @@ if (Array.IndexOf(args,"--late-match-benchmark") is int lateMatch && lateMatch >
     LateMatchChecks.Benchmark(args[lateMatch+1],args[lateMatch+2]); return;
 }
 
+if (Array.IndexOf(args,"--route-search-benchmark") is int routeBenchmark && routeBenchmark >= 0)
+{
+    RouteSearchChecks.Benchmark(args[routeBenchmark+1]); return;
+}
+if (Array.IndexOf(args,"--route-search-checks") is int routeChecks && routeChecks >= 0)
+{
+    // Build-168: the old and new route searches on a skirmish map, for every unit body its rules define.
+    void RouteCheck(bool value,string name) { Console.WriteLine(name); if (!value) throw new Exception(name); }
+    RouteSearchChecks.Run(RouteCheck);
+    var routeWorld = WorkerTrafficChecks.Load(args[routeChecks+1]);
+    RouteSearchChecks.OnMap(RouteCheck,routeWorld.Navigation,
+        routeWorld.Rules.Units.Values.Select(u => (u.BodyRadiusMm,u.BodyHeightMm)),200,Path.GetFileName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(args[routeChecks+1]))));
+    return;
+}
+
 if (args.Contains("--fog-fade-checks"))
 {
     FogFadeChecks.Run((value,name) => { Console.WriteLine(name); if (!value) throw new Exception(name); }); return;
@@ -355,6 +370,7 @@ ExtendedOrderChecks.Run(Check);
 MeleeChecks.Run(Check);
 BloodIntensityChecks.Run(Check);
 FogFadeChecks.Run(Check);
+RouteSearchChecks.Run(Check);
 ConsistentHitDamageChecks.Run(Check);
 AttackVariantChecks.Run(Check);
 RangedChecks.Run(Check);
@@ -698,6 +714,7 @@ if (cacheArg >= 0)
     Check(Enumerable.Range(0, realNav.GroundCount).Select(realNav.CanStand).SequenceEqual(
         Convert.FromBase64String(nav.GetProperty("allowed_base64").GetString()!).Select(b => b != 0)),
         "runtime obstacle layers reproduce the static ground snapshot");
+    RouteSearchChecks.OnMap(Check,realNav,[(500,700),(350,1200)],60,"the test cache");
     var realWorld = new SimWorld(realNav);
     BodyCollisionChecks.Cached(Check,realNav,CombatRules.Parse(File.ReadAllText(Path.Combine(cache,"combat/rules.json"))),nav,manifest);
     var mapScene = JsonDocument.Parse(File.ReadAllText(Path.Combine(cache, "map", "scene.json"))).RootElement;

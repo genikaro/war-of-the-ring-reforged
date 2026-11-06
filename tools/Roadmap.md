@@ -986,7 +986,8 @@ window 4.2 ms per tick, 16x at 17-26 fps.
   an occupancy count per node updated as units move, or a per-tick spatial grid.
   Build-160: `CanReserveMovement` and the membership test on graph links are local, and
   formation slots no longer walk the set per cell; callers that need the whole set still
-  build it (1.5-1.8 ms per tick in Rift fights).
+  build it (1.5-1.8 ms per tick in Rift fights). Build-168: 0.19 ms per tick in the Rift late
+  game (height table, reused sets, waypoint shortcuts and blocked exits ask only nearby units).
 - [x] Route rebase after a map change (build-37): only units whose remaining route
   passes near a toggled obstacle, or never reached its goal, re-plan. On MP08_Rift
   with 8 bots a change cost about 0.5 s and now about 90 ms. Play change: other
@@ -1019,6 +1020,11 @@ window 4.2 ms per tick, 16x at 17-26 fps.
   guard acquisition and blocked-producer retries; caching building-placement refusals;
   the simulation on a worker thread with snapshot interpolation; MultiMesh with
   vertex-animation textures for distant units.
+- [x] Exact movement, route searches and occupancy (build-168): connected regions updated around an obstacle change
+  instead of re-flooded on every body graph (about 400 floods in two Rift minutes), one inlined A* loop for
+  `FindPath`/`FindPathToAny`, cheaper occupancy, ground sweeps, tower targeting and opponent choice; 8-bot Rift
+  10:00-12:00 tick 15.0 -> 8.6 ms, allocation 5.5 -> 4.1 GB, digests and captures unchanged. Proposal waiting for the
+  owner: build `run.ps1`'s Debug configuration with JIT optimizations (the same match ran at 3.3 ms a tick).
 - [x] Late-game presentation (build-167): fog overlay blur and fade, hero glows, building loop; 8-bot Rift at 1x
   from 10:00 runs at 77 FPS instead of 64 (frame p50 12.5 -> 9.9 ms). `-FastUntil`/`-CameraTour` play benchmark.
 - [x] Wide-body combat position searches (build-162): blocker data once per candidate
@@ -1030,7 +1036,8 @@ window 4.2 ms per tick, 16x at 17-26 fps.
   above is headless), including skinned-mesh and shadow cost.
 - [ ] Allocation pressure: many per-tick LINQ queries and fresh `HashSet`s in the
   simulation; replace the hottest with reusable buffers once profiling points at
-  them.
+  them. (Build-168: the occupancy sets, tower targeting, opponent choice, region floods and
+  sweeps; left: bot queries and `CanSeeUnit`'s closures, asked by every tower of every unit.)
 
 ## Deferred navigation and engine work
 

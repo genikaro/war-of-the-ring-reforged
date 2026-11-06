@@ -1,5 +1,13 @@
 # Godot C# skirmish sandbox
 
+**build-168:** Big matches simulate faster with the same results. Connected regions are updated around a building
+that goes up or comes down instead of being flooded again for every body (about 400 floods in two minutes of a late
+8-bot match), route searches run as one tighter loop, the occupied-cell set is no longer built where nothing needs it,
+and ground sweeps, tower targeting and opponent choice do less repeated work. On MP08_Rift from 10:00 to 12:00 a tick
+takes 8.6 ms instead of 15.0 and allocates a quarter less; the late-game play benchmark draws 79 instead of 71 FPS.
+State digests and stress captures are unchanged. See
+[PERFORMANCE.md](PERFORMANCE.md#build-168-route-searches-regions-and-occupancy-in-real-matches).
+
 **build-167:** Late-game matches with heroes, buildings and fog draw faster with the same pictures: the fog overlay
 blurs with running sums and fades only the cells still changing, hero glows are rebuilt only for heroes on screen (from
 a fifth of the points they used to compute), and buildings skip repeated work. In an 8-bot MP08_Rift match from 10:00 to

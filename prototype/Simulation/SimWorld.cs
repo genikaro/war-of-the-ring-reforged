@@ -15,6 +15,8 @@ public sealed partial class SimUnit(int id, int team, int x, int z)
     internal bool ActiveInRoster;
     internal int DeathCleanupTick = -1;
     internal int GridBucket = -1;
+    /// <summary>Build-168: the UnitGrid query that last listed this unit (see UnitGrid.AddTransits).</summary>
+    internal int ScanStamp;
     public int X { get => _x; internal set { _x = value; Grid?.Moved(this); } }
     public int Z { get => _z; internal set { _z = value; Grid?.Moved(this); } }
     public int Y { get; internal set; }
@@ -291,8 +293,10 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             HealthMilli = (long)definition.MaxHealth*1000*definition.StartingHealthPercent/100 };
     }
 
-    private bool CanPlace(SimUnit candidate) => CanReserveMovement(candidate,candidate.Node) && !OccupiedNodes(-1).Contains(candidate.Node)
-        && !ActiveUnits.Any(u => u.Present && BodiesOverlap(candidate,u));
+    // Build-168: the occupancy and body tests are local scans (NodeHeld, BodyBlockedAt), checked against the full
+    // scans they replace under VerifyFastPaths; a blocked exit tried 16 cells a tick, building the set each time.
+    private bool CanPlace(SimUnit candidate) => CanReserveMovement(candidate,candidate.Node) && !NodeHeld(candidate.Node)
+        && !BodyBlockedAt(candidate,candidate.X,candidate.Y,candidate.Z);
 
     public void Enqueue(int team, IEnumerable<int> units, int cell, int target = -1)
         => Enqueue(team, units, target >= 0 ? OrderKind.Attack : OrderKind.Move, cell, target);
@@ -653,15 +657,17 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
     /// <summary>A local repair rejoins the route within this many nodes ahead, closing at most RepairBudget nodes.</summary>
     private const int RepairReach = 24,RepairBudget = 1024;
 
-    private HashSet<int> OccupiedNodes(int except,IEnumerable<SimUnit>? candidates = null,bool combatSpacing = false)
+    /// <summary>The nodes other present units hold: each one's node, the far end of a graph link it is crossing, and
+    /// (unless every body has the default size) the nodes its body covers. Build-168: a caller that is done with the set
+    /// before it asks again may pass its own set to refill; cleared, it is filled in the same order as a new one.</summary>
+    private HashSet<int> OccupiedNodes(int except,IEnumerable<SimUnit>? candidates = null,bool combatSpacing = false,HashSet<int>? into = null)
     {
         using var time = SimProfiler.Time("OccupiedNodes");
         var self = except >= 0 && except < Units.Count ? Units[except] : null;
         int radius = self?.Definition.BodyRadiusMm ?? 350, height = self?.Definition.BodyHeightMm ?? 700;
-        bool uniform = radius == 350;
-        if (uniform) foreach (var u in Units) if (u.Definition.BodyRadiusMm != 350) { uniform = false; break; }
+        bool uniform = radius == 350 && UniformBodies();
         // Plain loops in the order the set was always filled: callers may enumerate it.
-        var nodes = new HashSet<int>();
+        var nodes = into ?? new HashSet<int>(); nodes.Clear();
         foreach (var other in candidates ?? ActiveUnits)
         {
             if (other.Id == except || !other.Present) continue;
@@ -676,6 +682,20 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         }
         return nodes;
     }
+
+    /// <summary>Whether every unit, living or dead, has the default body radius. Build-168: the last unit found with
+    /// another radius is checked first; only when it no longer has one are all units scanned again.</summary>
+    private bool UniformBodies()
+    {
+        if (_wideBody < Units.Count && Units[_wideBody].Definition.BodyRadiusMm != 350) return false;
+        for (int i = 0; i < Units.Count; i++) if (Units[i].Definition.BodyRadiusMm != 350) { _wideBody = i; return false; }
+        return true;
+    }
+    private int _wideBody = int.MaxValue;
+
+    /// <summary>Build-168: sets refilled by the per-tick callers that are done with them before asking again.</summary>
+    private readonly HashSet<int> _replanOccupied = [],_positionOccupied = [],_siegeOccupied = [],_routeOccupied = [],_waypointOccupied = [];
+    private readonly List<SimUnit> _waypointOccupants = [];
 
     private bool CanReserveMovement(SimUnit unit, int to)
     {
@@ -704,7 +724,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         if (unit.Target >= 0 || unit.Node >= Navigation.GroundCount || unit.Waypoint >= unit.Path.Count) return;
         var (ax,az) = Navigation.Center(unit.Node); var (bx,bz) = Navigation.Center(unit.Path[unit.Waypoint]);
         int firstX = bx-ax, firstZ = bz-az, best = unit.Waypoint;
-        var occupied = OccupiedNodes(unit.Id);
+        HashSet<int>? occupied = null;
         bool bends = false;
         for (int i = unit.Waypoint+1; i < Math.Min(unit.Path.Count,unit.Waypoint+6); i++)
         {
@@ -712,9 +732,31 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
             if (candidate >= Navigation.GroundCount) break;
             var (px,pz) = Navigation.Center(unit.Path[i-1]); var (x,z) = Navigation.Center(candidate);
             bends |= (long)firstX*(z-pz) != (long)firstZ*(x-px);
-            if (bends && Nav(unit).CanTraverseGround(unit.Node,candidate,occupied) && CanReserveMovement(unit,candidate)) best = i;
+            if (!bends) continue;
+            occupied ??= WaypointOccupied(unit);
+            bool clear = Nav(unit).CanTraverseGround(unit.Node,candidate,occupied);
+            if (VerifyFastPaths) Verified(clear,Nav(unit).CanTraverseGround(unit.Node,candidate,OccupiedNodes(unit.Id)),
+                $"waypoint shortcut of unit {unit.Id} to node {candidate}");
+            if (clear && CanReserveMovement(unit,candidate)) best = i;
         }
         unit.Waypoint = best;
+    }
+
+    /// <summary>Build-168: OccupiedNodes(unit.Id) as far as SmoothWaypoint's shortcuts can ask it, built only once a
+    /// shortcut is tested and only from the units near them. A shortcut's body test asks about cells within a body
+    /// radius and a cell of its line; a unit holds nodes within a cell of its position (or anywhere on the graph link it
+    /// is crossing, and the grid returns all of those) or within body separation of it. Units farther from every
+    /// shortcut line than the margin hold none of the cells asked about, so leaving them out changes no answer.</summary>
+    private HashSet<int> WaypointOccupied(SimUnit unit)
+    {
+        var (x0,z0) = Navigation.Center(unit.Node); int x1 = x0,z1 = z0;
+        for (int i = unit.Waypoint+1; i < Math.Min(unit.Path.Count,unit.Waypoint+6) && unit.Path[i] < Navigation.GroundCount; i++)
+        {
+            var (x,z) = Navigation.Center(unit.Path[i]);
+            x0 = Math.Min(x0,x); x1 = Math.Max(x1,x); z0 = Math.Min(z0,z); z1 = Math.Max(z1,z);
+        }
+        int margin = Nav(unit).BodyRadiusMm+SeparationBound(unit)+5*Navigation.CellSize;
+        return OccupiedNodes(unit.Id,Grid.InRectangle(x0-margin,z0-margin,x1+margin,z1+margin,_waypointOccupants),into: _waypointOccupied);
     }
 
     public void Step()
@@ -855,7 +897,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 bool avoid = !(unit.FreeMovement && unit.Definition.BodyRadiusMm > 350);
                 // Wide-ground followers avoid bodies continuously. Their replan does not consume an occupancy
                 // map; building one here needlessly rasterized every body for every blocked unit's retry.
-                var blocked = avoid ? OccupiedNodes(unit.Id) : null;
+                var blocked = avoid ? OccupiedNodes(unit.Id,into: _replanOccupied) : null;
                 blocked?.Remove(start);
                 // A unit whose last replan already failed keeps no route to repair; it retries on a smaller budget.
                 bool routed = unit.Path.Count > 0 && unit.Path[^1] == unit.Goal;

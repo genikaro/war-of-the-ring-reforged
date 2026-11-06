@@ -9,7 +9,7 @@ public sealed partial class SimWorld
         if (!TryCombatPlanning(unit)) return SiegeStep.Walking;
         unit.SiegePlanTick=Tick;
         var area=SiegeArea(unit,site);
-        var blocked=OccupiedNodes(unit.Id,combatSpacing:!unit.Definition.IsRanged);
+        var blocked=OccupiedNodes(unit.Id,combatSpacing:!unit.Definition.IsRanged,into: _siegeOccupied);
         // An attack spot reserves room for a body, not just its cell. Routes themselves are not reserved.
         var reserved=new HashSet<int>();
         foreach(var other in ActiveUnits.Where(u=>u.Id!=unit.Id && u.Team==unit.Team && u.Present && SiegeTarget(u)==site.Id && u.Goal>=0))

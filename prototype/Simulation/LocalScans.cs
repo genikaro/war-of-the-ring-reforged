@@ -45,6 +45,24 @@ public sealed partial class SimWorld
         return false;
     }
 
+    /// <summary>Build-168: OccupiedNodes(-1).Contains(node) without building the set (the default 350 mm body asking):
+    /// a present unit stands on the node, is crossing a graph link to it, or (bodies not all the default size) its
+    /// body covers it at the default spacing. The same reach as NodeOccupiedLocal finds every such unit.</summary>
+    private bool NodeHeld(int node)
+    {
+        bool uniform = UniformBodies(), held = false;
+        var (x,z) = Navigation.Center(node);
+        int bound = (uniform ? 0 : 2*(350+Grid.MaxBodyRadiusMm))+3*Navigation.CellSize;
+        foreach (var other in Grid.AlongMovement(x,z,x,z,bound,_localScan))
+        {
+            if (!other.Present) continue;
+            if (other.Node == node || other.TransitNode == node && !other.GroundSegment
+                || !uniform && Navigation.BodyCovers(node,other.X,other.Y,other.Z,other.Definition.BodyHeightMm,350+other.Definition.BodyRadiusMm,700)) { held = true; break; }
+        }
+        if (VerifyFastPaths) Verified(held,OccupiedNodes(-1).Contains(node),$"node {node} held");
+        return held;
+    }
+
     /// <summary>Whether another present unit's body overlaps this one's at a point it would step to.</summary>
     private bool BodyBlockedAt(SimUnit unit,int x,int y,int z)
     {

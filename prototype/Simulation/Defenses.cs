@@ -43,10 +43,19 @@ public sealed partial class SimWorld
     public DefenseDefinition? SiteDefense(ConstructionSite site)
     {
         if (site.Building is not {} name || !Defenses.TryGetValue(name,out var defense)) return null;
-        var upgraded=Techniques.FirstOrDefault(t=>t.BuildingWeapon is {} weapon && Satisfies(name,weapon.Building) && TechniqueApplies(site.Team,t))?.BuildingWeapon;
-        return upgraded == null ? defense : defense with {DpsMilli=upgraded.DpsMilli,RangeMm=upgraded.RangeMm,
+        // Build-168: the first applying technique found by a loop (as FirstOrDefault found it, without a closure each
+        // call), and the upgraded weapon made once per weapon and upgrade: a record is a value, so one serves every call.
+        BuildingWeaponUpgrade? upgraded = null;
+        foreach (var technique in Techniques)
+            if (technique.BuildingWeapon is {} weapon && Satisfies(name,weapon.Building) && TechniqueApplies(site.Team,technique)) { upgraded = weapon; break; }
+        if (upgraded == null) return defense;
+        if (_upgradedDefenses.TryGetValue(upgraded,out var made) && ReferenceEquals(made.Base,defense)) return made.Upgraded;
+        var result = defense with {DpsMilli=upgraded.DpsMilli,RangeMm=upgraded.RangeMm,
             MinimumRangeMm=upgraded.MinimumRangeMm,FatePpm=upgraded.FatePpm};
+        _upgradedDefenses[upgraded] = (defense,result);
+        return result;
     }
+    private readonly Dictionary<BuildingWeaponUpgrade,(DefenseDefinition Base,DefenseDefinition Upgraded)> _upgradedDefenses = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>The building's weapon that fired a projectile: its first (Attack 0) or a further one (Attack 1, 2...).</summary>
     private DefenseDefinition? DefenseWeapon(ConstructionSite site,int attack) => attack == 0 ? SiteDefense(site)
@@ -97,11 +106,32 @@ public sealed partial class SimWorld
         if (siteTarget >= 0 && (!ConstructionSites.TryGetValue(siteTarget,out var held) || !DefenseCanTarget(site,defense,held))) siteTarget = -1;
         if (target < 0 && siteTarget < 0)
         {
-            target = ActiveUnits.Where(u => DefenseCanTarget(site,defense,u))
-                .OrderBy(u => DistanceSquared(site.X,site.Z,u.X,u.Z)).ThenBy(u => u.Id).Select(u => u.Id).DefaultIfEmpty(-1).First();
-            if (target < 0) siteTarget = ConstructionSites.Values.Where(s => DefenseCanTarget(site,defense,s))
-                .OrderBy(s => { var (x,z) = SitePosition(s); return DistanceSquared(site.X,site.Z,x,z); })
-                .ThenBy(s => s.Id).Select(s => s.Id).DefaultIfEmpty(-1).First();
+            // Build-168: the nearest target, ties to the lower id, as the sorted queries chose it, found in one pass that
+            // asks every unit and then every building in the same order whether the weapon can target it.
+            var units = ActiveUnits; long nearest = 0;
+            for (int i = 0; i < units.Count; i++)
+            {
+                var unit = units[i];
+                if (!DefenseCanTarget(site,defense,unit)) continue;
+                long distance = DistanceSquared(site.X,site.Z,unit.X,unit.Z);
+                if (target < 0 || distance < nearest || distance == nearest && unit.Id < target) { target = unit.Id; nearest = distance; }
+            }
+            if (target < 0)
+                foreach (var other in ConstructionSites.Values)
+                {
+                    if (!DefenseCanTarget(site,defense,other)) continue;
+                    var (x,z) = SitePosition(other); long distance = DistanceSquared(site.X,site.Z,x,z);
+                    if (siteTarget < 0 || distance < nearest || distance == nearest && other.Id < siteTarget) { siteTarget = other.Id; nearest = distance; }
+                }
+            if (VerifyFastPaths)
+            {
+                int expected = ActiveUnits.Where(u => DefenseCanTarget(site,defense,u))
+                    .OrderBy(u => DistanceSquared(site.X,site.Z,u.X,u.Z)).ThenBy(u => u.Id).Select(u => u.Id).DefaultIfEmpty(-1).First();
+                int expectedSite = expected >= 0 ? -1 : ConstructionSites.Values.Where(s => DefenseCanTarget(site,defense,s))
+                    .OrderBy(s => { var (x,z) = SitePosition(s); return DistanceSquared(site.X,site.Z,x,z); })
+                    .ThenBy(s => s.Id).Select(s => s.Id).DefaultIfEmpty(-1).First();
+                Verified(target == expected && siteTarget == expectedSite,true,$"tower target of building {site.Id}");
+            }
         }
         if ((target < 0 && siteTarget < 0) || cooldown > 0) return (cooldown,target,siteTarget);
         int interval = DefenseInterval(defense);

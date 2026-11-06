@@ -171,12 +171,13 @@ public sealed partial class SimWorld
             long range = DistanceSquared(x,z,target.X,target.Z)+(long)(y-target.Y)*(y-target.Y);
             if (range >= (long)minimum*minimum && range <= (long)outer*outer) points.Add((item.Node,x,y,z));
             if (item.Depth >= depth) continue;
-            foreach (int next in nav.Neighbors(item.Node))
+            foreach (int next in nav.NeighborsInto(item.Node,_geometryNeighbors))
                 if (nav.CanStand(next) && seen.Add(next)) queue.Enqueue((next,item.Depth+1));
         }
         _combatGeometry[key]=(target.X,target.Y,target.Z,target.Node,Navigation.Revision,points);
         return points;
     }
+    private readonly List<int> _geometryNeighbors = new(8);
 
     private (int Node,List<int> Path,bool Waiting,int Target) CombatPosition(SimUnit unit, SimUnit target)
     {
@@ -190,7 +191,7 @@ public sealed partial class SimWorld
         // Missile units may pass between allies to reach their firing area;
         // the firing endpoint still reserves the full combat comfort distance.
         HashSet<int> blocked;
-        using (SimProfiler.Time("CombatPosition blocked")) blocked = OccupiedNodes(unit.Id,combatSpacing:!UsesMissile(unit,target));
+        using (SimProfiler.Time("CombatPosition blocked")) blocked = OccupiedNodes(unit.Id,combatSpacing:!UsesMissile(unit,target),into: _positionOccupied);
         blocked.Remove(unit.Node); blocked.Remove(start);
         if (unit.Definition.BodyRadiusMm > 350)
         {

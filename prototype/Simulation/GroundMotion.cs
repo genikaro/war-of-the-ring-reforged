@@ -120,9 +120,9 @@ public sealed partial class SimWorld
         }
     }
 
-    private bool FreeGround(int node) => node >= 0 && node < Navigation.GroundCount
-        && Navigation.Neighbors(node).Any(n => n < Navigation.GroundCount && Navigation.CanStand(n)
-            && n/Navigation.Width != node/Navigation.Width && n%Navigation.Width != node%Navigation.Width);
+    // Build-168: the same test without a neighbour list and a closure per node (SmoothGroundRoute asks it of every
+    // node left on a route, every step).
+    private bool FreeGround(int node) => node >= 0 && node < Navigation.GroundCount && Navigation.HasOpenDiagonalGround(node);
 
     private bool SteerGround(SimUnit unit, int x, int z, ref long budget)
     {
@@ -202,6 +202,6 @@ public sealed partial class SimWorld
         // Include inflated body nodes and the cell centers of units between waypoints.
         int padding=unit.Definition.BodyRadiusMm+Grid.MaxBodyRadiusMm+2*Navigation.CellSize;
         return OccupiedNodes(unit.Id,Grid.InRectangle(x0-padding,z0-padding,x1+padding,z1+padding,_routeOccupants),
-            combatSpacing:MeleeSiegeSpacing(unit) || unit.Target>=0 && !UsesMissile(unit,Units[unit.Target]));
+            combatSpacing:MeleeSiegeSpacing(unit) || unit.Target>=0 && !UsesMissile(unit,Units[unit.Target]),into: _routeOccupied);
     }
 }

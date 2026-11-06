@@ -150,10 +150,28 @@ public sealed class UnitGrid
     {
         int half=Math.Max(Math.Abs(bx-ax),Math.Abs(bz-az))/2+1;
         Near(ax+(bx-ax)/2,az+(bz-az)/2,radius+half+MaxMovementMm,into);
-        foreach (var u in _transits)
-            if (!u.GroundSegment && !into.Contains(u)) into.Add(u);
+        AddTransits(into);
         return into;
     }
+
+    /// <summary>Appends the units crossing graph links that the list does not hold yet, in _transits order, as
+    /// `if (!into.Contains(u)) into.Add(u)` did. Build-168: the list's units are stamped once instead of searched once
+    /// per transit, which cost the list's length for every unit on a link.</summary>
+    private void AddTransits(List<SimUnit> into)
+    {
+        if (_transits.Count == 0) return;
+        if (++_scanStamp == int.MaxValue) { foreach (var bucket in _buckets) foreach (var unit in bucket) unit.ScanStamp = 0; foreach (var unit in _transits) unit.ScanStamp = 0; _scanStamp = 1; }
+        int stamp = _scanStamp, listed = into.Count;
+        foreach (var unit in into) unit.ScanStamp = stamp;
+        foreach (var u in _transits)
+            if (!u.GroundSegment && u.ScanStamp != stamp) { into.Add(u); u.ScanStamp = stamp; }
+        if (!SimWorld.VerifyFastPaths) return;
+        var expected = into.GetRange(0,listed);
+        foreach (var u in _transits)
+            if (!u.GroundSegment && !expected.Contains(u)) expected.Add(u);
+        if (!expected.SequenceEqual(into)) throw new InvalidOperationException("Local scan disagrees with the full scan: units on graph links");
+    }
+    private int _scanStamp;
 
     public List<SimUnit> InRectangle(int x0,int z0,int x1,int z1,List<SimUnit> into)
     {
@@ -161,8 +179,7 @@ public sealed class UnitGrid
         for (int row=Row(z0);row<=Row(z1);row++)
         for (int column=Column(x0);column<=Column(x1);column++)
             into.AddRange(_buckets[row*_columns+column]);
-        foreach (var u in _transits)
-            if (!u.GroundSegment && !into.Contains(u)) into.Add(u);
+        AddTransits(into);
         return into;
     }
 

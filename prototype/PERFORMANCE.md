@@ -374,6 +374,121 @@ captures are not usable for such comparisons: cloud shadows follow the shader cl
 which counts loading time, so two runs of the same build differ by up to 12 levels over
 a fifth of the pixels.
 
+### Build-168: route searches, regions and occupancy in real matches
+
+Build-167 left the simulation as the larger cost of the late-game play benchmark. Profiling the 8-bot MP08_Rift
+match from 10:00 to 12:00 showed where a tick went: route searches, the occupied-node set rebuilt about nine times a
+tick, ground sweeps, and allocations (5.5 GB in the two minutes). All changes are exact: the match, the stress
+fight and every check play out the same, and captures are pixel-identical.
+
+- **Connected regions.** Every building placed, finished or razed dropped the connected regions of every body
+  graph, and the next `IsConnected` on each graph flooded its whole region again: about 410 floods of some 15 ms in
+  the two minutes, 2.5 ms per tick, most of `FindPath`'s time and much of the bots'. `NavigationRegions.cs` updates
+  the regions around the change instead. A change can only alter nodes and edges inside the area `InvalidateNear`
+  already forgets (A), and any path that leaves A re-enters it through the ring of nodes next to it (B). Adding an
+  obstacle can only split regions: a region keeps its name when a flood from one of its remaining nodes in A∪B
+  reaches all the others (usually after a few hundred nodes; one that runs out of its budget forgets the region).
+  Removing one can only merge them: the pieces of A∪B the new graph links merge the regions they touch and take in
+  the new nodes. A forgotten region, or one never flooded, is flooded when next asked about, as before. Regions are
+  only compared and counted, so `IsConnected` and `ComponentSize` answer as after a full re-flood; with
+  `VerifyFastPaths` every update is checked against one. This needs an undirected cached graph: if a change ever
+  leaves a ground edge across A's border cached open one way and closed the other, that graph goes back to forgetting
+  all regions for good. In the Rift match that never happened; the window had 15 floods and 106 local updates.
+- **Route searches.** `FindPath` and `FindPathToAny` are one search loop (`GridNavigation.Search`) with the
+  per-neighbour work written out instead of five helper calls per neighbour: the node records (seen, closed, cost,
+  predecessor) sit in one struct per node, the open set is a binary heap of (priority, node) packed into longs,
+  blocked nodes are stamped into an array, ground costs come from the direction and the octile heuristic from the
+  cell's coordinates. The neighbour order, the order of the tests (standing, blocked, closed, lane filter, cost),
+  the heuristic and the keys are the build-167 ones. A node is queued again only at a strictly lower cost, so no two
+  entries share a key and any correct heap pops them in the PriorityQueue's order. On a fixed set of 5,550 route and
+  group searches on MP08_Rift for every body (`--route-search-benchmark`) a Release build takes 8.8 s instead of
+  19.2 s and a Debug build 29.0 s instead of 53.7 s, with the same digest of every route (`DB42B44C7EA8E5F5`).
+- **Occupancy.** `OccupiedNodes` reads ground heights from a table built once per map (shared by the body graphs)
+  and centres from the row and column. Its five per-tick callers (blocked replans, attack-position and siege
+  searches, route and waypoint smoothing) refill their own set: cleared, a set is filled in the same order as a new
+  one. `SmoothWaypoint` built the whole set for every constrained step and used it only to test up to five shortcuts
+  of a few cells; it now builds it only once a shortcut is tested and only from the units near those shortcuts
+  (every unit that can hold a cell a shortcut asks about), checked against the full set with `VerifyFastPaths`.
+  A blocked production exit built the whole set up to sixteen times a tick to test one cell each; it asks the grid
+  instead (`NodeHeld`, `BodyBlockedAt`). The set now costs 0.19 instead of 1.72 ms per tick in the window.
+- **Ground sweeps.** `CanTraverseGroundPoints` keeps the swept cells as row intervals and checks a row's terrain as
+  one span, steps its sample points by exact quotient and remainder instead of two long divisions each, skips a
+  sample in the cell the previous one tested, reads blocked nodes, the body's clearance profile and the cells that
+  hold footprints from arrays instead of hash lookups, and skips rows of footprint-free cells as spans. The old
+  column list and sample points are recomputed and compared under `VerifyFastPaths`.
+- **Smaller scans and allocations.** The grid's movement and rectangle queries dedupe units on graph links with a
+  stamp instead of a list search per unit (checked against the old list). `FreeGround`, ring geometry, region
+  floods and movement heights no longer allocate per node. Towers pick the nearest target in one pass instead of
+  sorting every candidate each tick, and a researched tower weapon is made once instead of every call. Wide and
+  ranged units choose an opponent in one pass over reused lists (the same pool and tests in the same order, the
+  same keys as the sorted query). Each is checked against the query it replaced under `VerifyFastPaths`.
+
+8-bot MP08_Rift, 10:00 to 12:00, headless at 16x, ms per tick (sections nest):
+
+| | Build-167 | Build-168 |
+| --- | ---: | ---: |
+| Whole step | 15.03 | 8.61 |
+| Unit movement | 5.11 | 2.59 |
+| `FindPath` (5 a tick) | 3.82 | 2.18 |
+| Blocked replan | 2.13 | 1.13 |
+| `OccupiedNodes` | 1.72 (8.8 builds) | 0.19 (6.6 builds) |
+| `CanTraverseGroundPoints` (954 a tick) | 1.37 | 0.95 |
+| `SmoothGroundRoute` | 1.07 | 0.65 |
+| `SmoothWaypoint` | 0.77 | 0.03 |
+| `ClearGroundStep` | 0.75 | 0.48 |
+| Unit combat | 2.80 | 1.72 |
+| `CombatPosition` | 0.68 | 0.28 |
+| `ChooseOpponent` | 0.24 | 0.11 |
+| Bots (`ai`) | 2.52 | 1.19 |
+| Production | 0.87 | 0.71 |
+| Defenses | 0.66 | 0.61 |
+| Allocated in the window | 5,458 MiB | 4,109 MiB |
+| GCs (gen 0/1/2) | 110/15/2 | 83/11/1 |
+
+From 12:00 to 14:00 the step falls from 14.4 to 9.1 ms. The headless 16x run to 14:00 took 166 s instead of 230 s.
+
+The late-game play benchmark (`-FastUntil 10 -ProfileUntil 12 -CameraTour -Resolution 1600x900`, windowed, run back to
+back against build-167): 9,711 frames instead of 8,626 (79 instead of 71 FPS), frame p50 / p95 / p99 10.4 / 22.0 /
+34.1 ms instead of 10.9 / 28.2 / 57.9, the step 9.0 instead of 14.2 ms per tick, and `_Process` the same per frame
+(1.62 against 1.65 ms). It allocated 5,632 instead of 6,713 MiB (GCs 115/16/1 against 135/19/1).
+
+300-unit stress fight (`-StressBenchmark -Units 300`, then with `-Fog`), build-167 against build-168:
+
+| | Build-167 | Build-168 | Fogged, build-167 | Fogged, build-168 |
+| --- | ---: | ---: | ---: | ---: |
+| Phase A FPS | 38.6 | 39.9 | 39.8 | 42.2 |
+| Phase A tick (mean `godot physics frame`) | 16.9 ms | 12.9 ms | 16.7 ms | 12.4 ms |
+| Phase B FPS | 101.9 | 109.1 | 97.7 | 110.3 |
+| Phase C ticks in 1,196 frames (effective speed) | 812 (1.14x) | 1,120 (1.30x) | 810 (1.16x) | 1,155 (1.42x) |
+
+Phase A stays bound by drawing (0.67x of real speed). Phase C now runs more ticks in each frame's 25 ms budget, so
+it shows fewer frames (27.8 against 33.5 FPS) but plays faster; its captures are never comparable. The phase A and B
+captures of both fights are pixel-identical to build-167 (`compare_captures.py --ignore 1000,30,1600,95`: 0 of
+1,440,000 pixels differ).
+
+Proofs: the headless run to 12:00 prints `PROFILE_DIGEST tick 14400 72BE0238…` as build-167 does, and both builds
+print `7F22CD22…` at tick 16,800 (14:00); the play benchmarks of both builds print `72BE0238…` too. All 2,749
+simulation checks pass (2,744 before, plus `RouteSearchChecks`), with every scenario digest the suite prints equal to
+build-167's. `RouteSearchChecks` keeps the build-167 searches (as `Old`, over the public navigation API) and asks both
+the same questions: on 400 random grids with walls, decks, legacy and swept obstacles toggled on and off, a footprint
+that arrives late, and four body sizes, 72,000 route and 72,000 group searches give the same routes, floods, budgets,
+fallbacks, flooded nodes and lane-filter questions, and regions kept across 6,757 changes (4,804 kept, 5,709 grown,
+342 joined, 1,632 forgotten) match a full flood; on MP08_Rift for all 38 body sizes 7,600 routes and 7,600 group
+searches match (`--route-search-checks converted/skirmish-maps/MP08_Rift`). Fifteen smokes (Fog, Skirmish, Sandbox, Observer,
+Formation, Motion, Combat, Melee, Orders, Engagement, AttackMoveEngagement, Obstacle, Construction, Siege and
+Performance) report exactly what build-167 reports, digests included; all pass except FormationSmoke's known
+`attack_move_dispatch`, which fails on build-167 too.
+
+**Proposal, not part of this build: optimize the Debug build.** `run.ps1` builds `Reforged.csproj` in its default
+Debug configuration, which turns JIT optimizations off, and every measurement in this file was taken that way.
+Exported games (Release) are optimized. App code then pays for every method call (the route search is 1.9x faster in
+Debug than build-167 but 2.2x in Release), while library code (`PriorityQueue`, `HashSet`, LINQ) stays optimized. A
+scratch copy of this build in progress (before its tower and opponent changes) with `<Optimize>true</Optimize>` in
+`Reforged.csproj` ran the same headless match with the same digest at 3.3 instead of 9.3 ms per tick from 10:00 to
+12:00, and finished in 82 instead of 165 s. It changes no
+simulation result; what it costs is debugging (stepping and locals in the debugger), so it waits for the owner's
+choice.
+
 ## Repeating the checks
 
 ```powershell
@@ -386,7 +501,12 @@ python tools/compare_captures.py converted/skirmish-maps/Sandbox/stress-300-buil
 ./prototype/run.ps1 -Map MP08_Rift -Observe -Bots Gimli,Aragorn,Legolas,Saruman -Speed 16 -Profile -ProfileUntil 14 -Headless
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation -c Release -- --appearance-checks converted/skirmish
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation -c Release -- --army-soak converted/skirmish-maps/Sandbox soak.json --verify-fast-paths
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation -c Release -- --route-search-checks converted/skirmish-maps/MP08_Rift
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation -c Release -- --route-search-benchmark converted/skirmish-maps/MP08_Rift
 ```
+
+`--route-search-benchmark` prints the time and a digest of every answer (`ROUTE_BENCHMARK best … ms digest …`); it uses
+only public navigation calls, so the same file runs on an older tree to compare builds.
 
 Two builds play a match the same way when the `PROFILE_DIGEST` lines of their
 `-ProfileUntil` runs match. Stress-benchmark timings vary by a few percent between
@@ -423,6 +543,13 @@ owner's choice: shared group routes (flow fields or a sector/portal layer); spre
 bot thinks over ticks; throttling idle-guard acquisition and blocked-producer retries;
 a simulation thread with snapshot interpolation; and instanced vertex-animation crowds
 or cheaper shadows for distant units.
+
+After build-168 the 8-bot Rift late game spends 8.6 ms a tick in the Debug build that `run.ps1` makes: route searches
+2.2 ms (the searches themselves, each body graph's first region flood and long replans), combat 1.7, bots 1.2,
+about 950 ground sweeps 1.0, production 0.7 and towers 0.6. Allocation fell by a quarter; the largest sources left are
+the bots' LINQ queries and the visibility tests every tower makes of every unit each tick (`CanSeeUnit` asks
+`PlacePowerAreas.Any` and `Tracks.Any` with a new closure each time). The biggest single saving left is the Debug
+build itself (the proposal at the end of the build-168 section): about a third of the tick, with nothing else changed.
 
 The standard observer smoke's Fate assertion fails in the original baseline and
 the updated run. Both reach tick 22,621 with the same final digest; corpse-release

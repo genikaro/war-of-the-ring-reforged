@@ -52,6 +52,44 @@ public sealed partial class SimWorld
             .ThenBy(c => c.Unit.Id).Select(c => c.Unit);
     }
 
+    /// <summary>Build-168: Opponents(unit).FirstOrDefault() in one pass over reused lists: the same pool in the same
+    /// order (nearby units, then the targets allies share that are not among them), each asked the same tests in the
+    /// same order (some reach decks through a route search or flood a region, so the order is kept), and the least by
+    /// the same keys (room left first, then distance plus a weight for each attacker already assigned, then id),
+    /// which is what the sorted sequence put first.</summary>
+    private SimUnit? FirstOpponent(SimUnit unit)
+    {
+        int shareRadius=IdleGuardEnabled(unit) ? IdleAwarenessMm : 6000;
+        var shared=_opponentShared; shared.Clear();
+        foreach (var u in Grid.Near(unit.X,unit.Z,shareRadius,_opponentScan))
+            if (u.Id != unit.Id && u.Team==unit.Team && u.Present && u.Target >= 0 && SeparationSquared(unit,u)<=(long)shareRadius*shareRadius) shared.Add(u.Target);
+        long radius=Math.Max(AcquireRadius(unit),unit.ReachMm);
+        var pool=Grid.Near(unit.X,unit.Z,(int)radius,_opponentPool);
+        foreach (int id in shared)
+        {
+            bool listed=false;
+            foreach (var u in pool) if (u.Id == id) { listed=true; break; }
+            if (!listed) pool.Add(Units[id]);
+        }
+        int from=PlanningNode(unit);
+        SimUnit? best=null; bool bestFull=false; long bestScore=0;
+        foreach (var u in pool)
+        {
+            if (!(u.Team != unit.Team && u.Present
+                && (SeparationSquared(unit,u) <= radius*radius || shared.Contains(u.Id)) && MayAcquire(unit,u)
+                && ((unit.Definition.IsRanged && AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u)) || Nav(unit).IsConnected(from,u.Node))
+                && (!HoldsPosition(unit) || AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u)))) continue;
+            int assigned=AssignedAttackers(unit,u),capacity=ApproachCapacity(unit,u);
+            bool full=assigned >= capacity; long score=SeparationSquared(unit,u)+assigned*6_000_000L;
+            if (best == null || bestFull && !full || full == bestFull && (score < bestScore || score == bestScore && u.Id < best.Id))
+            { best=u; bestFull=full; bestScore=score; }
+        }
+        if (VerifyFastPaths && best != Opponents(unit).FirstOrDefault()) Verified(false,true,$"first opponent of unit {unit.Id}");
+        return best;
+    }
+    private readonly HashSet<int> _opponentShared=[];
+    private readonly List<SimUnit> _opponentScan=[],_opponentPool=[];
+
     // The nearest candidate that passes the filter, the lower id on ties. A
     // candidate that cannot beat the best so far never needs the filter at all.
     private static SimUnit? NearestUnit(SimUnit unit,IEnumerable<SimUnit> candidates,Func<SimUnit,bool> filter)
@@ -65,7 +103,7 @@ public sealed partial class SimWorld
         return best;
     }
 
-    private SimUnit? ChooseOpponent(SimUnit unit) => unit.Definition.BodyRadiusMm > 350 || unit.Definition.IsRanged ? Opponents(unit).FirstOrDefault()
+    private SimUnit? ChooseOpponent(SimUnit unit) => unit.Definition.BodyRadiusMm > 350 || unit.Definition.IsRanged ? FirstOpponent(unit)
         : NearestUnit(unit,NearUnits(unit.X,unit.Z,10_000),u => u.Team != unit.Team && u.Present && SeparationSquared(unit,u)<=10_000L*10_000
             && Nav(unit).IsConnected(PlanningNode(unit),u.Node) && MayAcquire(unit,u)
             && (!HoldsPosition(unit) || AttackReach(unit,unit.Node,unit.X,unit.Y,unit.Z,u)));
