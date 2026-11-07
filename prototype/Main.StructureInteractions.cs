@@ -23,6 +23,10 @@ public partial class Main
             Send(OrderKind.Build,workers,site.Id,site.Complete ? "Repair" : "Resume construction");
         else if (_structureViews[obstacle].Resource is int resource and >= 0)
             Send(OrderKind.Gather,workers.Where(u => _world.CanGather(PlayerTeam,resource) || u.CargoMilli > 0),resource,"Gather");
+        // Build-173: units that may garrison a finished tower of their own go inside (as many as it has room for).
+        int room = _world.GarrisonCapacityOf(site)-_world.GarrisonCount(site);
+        if (site.Complete && room > 0)
+            Send(OrderKind.ApproachStructure,units.Where(u => u.Definition.CanGarrison && !assigned.Contains(u.Id)).Take(room),site.Id,"Garrison");
         Send(OrderKind.ApproachStructure,units,site.Id,"Move to");
         if (assigned.Count == 0) return false;
         ShowStructureCommandFeedback(obstacle);

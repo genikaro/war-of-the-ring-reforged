@@ -17,8 +17,9 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
     HeroExperienceDefinition? Experience = null,int WeaponExperiencePpm = 1_000_000,int MeleeWeaponExperiencePpm = 1_000_000,StatusProtection NativeImmunities = StatusProtection.None,
     int KnockbackTicks = 0,string GetUpClip = "",int GetUpTicks = 0,
     bool CriticallyKillable = false,bool CriticalWeapon = false,bool CriticalMeleeWeapon = false,
-    int SplashRadiusMm = 0,int SplashDpsMilli = 0,int FirePpmPerSecond = 0)
+    int SplashRadiusMm = 0,int SplashDpsMilli = 0,int FirePpmPerSecond = 0,bool CanGarrison = false)
 {
+    // Build-173: CanGarrison is the unit's source CanEnterWatchtower, the flag Rings.exe's garrison test reads.
     // Build-171: SplashRadiusMm / SplashDpsMilli are the main weapon's source AreaOfEffectRange / AreaOfEffectDamage (a rate
     // per second like DpsMilli, so a hit's splash is that rate over the hit's share of the attack); FirePpmPerSecond is a melee
     // weapon's FireDamagePerSecond, the fire it puts into the buildings it strikes.

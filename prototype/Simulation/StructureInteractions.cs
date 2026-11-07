@@ -73,6 +73,8 @@ public sealed partial class SimWorld
         }
         if (Reaches(area,unit.X,unit.Z) && unit.TransitNode < 0 && unit.YieldFor < 0)
         {
+            // Build-173: at its own tower a unit that may garrison goes inside, if there is room.
+            if (!delivery && TryGarrison(unit,ConstructionSites[unit.OrderTarget])) return;
             if (!delivery) { FinishStructureInteraction(unit); return; }
             if (unit.Goal >= 0) ReleaseCombat(unit);
         }
@@ -88,6 +90,7 @@ public sealed partial class SimWorld
         }
         if (Reaches(area,unit.X,unit.Z))
         {
+            if (!delivery && TryGarrison(unit,ConstructionSites[unit.OrderTarget])) return;
             if (!delivery) { FinishStructureInteraction(unit); return; }
             if (unit.GatherPhase != GatherPhase.PuttingDown) BeginPhase(unit,GatherPhase.PuttingDown);
             else if (Tick-unit.GatherPhaseTick >= worker!.PutDownTicks)

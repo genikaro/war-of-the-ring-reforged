@@ -492,6 +492,11 @@ public partial class Main : Node3D
         _commands.TrainingCancelled += CancelTraining;
         _commands.UpgradeChosen += ChooseUpgrade;
         _commands.ResearchChosen += ChooseResearch;
+        // Build-173: a garrison box sends its unit out of the tower.
+        _commands.GarrisonSlotChosen += unit => {
+            if (_world == null || _observing || SelectedOwnSite() is not { } tower) return;
+            _world.EnqueueUngarrison(PlayerTeam,tower.Id,unit); _status.Text = UnitName(unit)+" leaves the "+_world.SiteRules(tower).DisplayName;
+        };
         _commands.StructurePortraitChosen += () => {
             if (_selectedStructure is int id && _structureViews.TryGetValue(id,out var structure))
             { _focus = structure.Root.GlobalPosition; UpdateCamera(); }

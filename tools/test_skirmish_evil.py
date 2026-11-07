@@ -227,6 +227,21 @@ class EvilImportTests(unittest.TestCase):
         boulder = weapons.get(combat_rules.missile_weapon_id(self.resolver, 'UNIT_G_GIANT_ENT'))
         self.assertEqual((boulder['AreaOfEffectRange'], boulder['AreaOfEffectDamage']), (5.0, 15.0))
 
+    def test_garrison_follows_can_enter_watchtower(self):
+        # Build-173: Rings.exe's garrison test (0x51bdfc) reads the unit's CanEnterWatchtower, not GarrisonProfiles; both
+        # towers hold four and fire 1 / 1.2 / 1.4 / 1.6 / 1.75 arrows a second for zero to four inside.
+        units = self.resolver.db['Units']
+        allowed = {n for n in skirmish_map.EVIL_UNITS if units.get(n)['CanEnterWatchtower']}
+        self.assertTrue({'UNIT_E_URUK_HAI', 'UNIT_E_ORC_SLASHER', 'UNIT_E_ORC_BOWMAN', 'UNIT_E_HARADRIM_ASSASSIN', 'UNIT_E_WRAITH',
+                         'UNIT_E_GOBLIN_SPEARMAN', 'UNIT_E_HERO_SARUMAN', 'UNIT_E_HERO_GOLLUM'} <= allowed)
+        self.assertFalse({'UNIT_E_GOBLIN_SLAVE', 'UNIT_E_WARG_RIDER', 'UNIT_E_TROLL_BONECLEAVER', 'UNIT_E_HERO_NAZGUL_KING'} & allowed)
+        for name in ('BUILDING_E_TOWER', 'BUILDING_G_TOWER'):
+            tower = self.resolver.db['Buildings'].get(name)
+            defense = self.resolver.db['BuildingDefenses'].get(tower['BuildingDefenses1'])
+            self.assertEqual((tower['IsGarrisonable'], tower['MaxGarrisonedUnits']), (1, 4))
+            self.assertEqual([round(defense[k], 2) for k in ('BaseRateOfFire', 'RateOfFireWithOneUnitGarrisoned', 'RateOfFireWithTwoUnitsGarrisoned',
+                              'RateOfFireWithThreeUnitsGarrisoned', 'RateOfFireWithFourUnitsGarrisoned')], [1.0, 1.2, 1.4, 1.6, 1.75])
+
     def test_obelisk_model_comes_from_its_object(self):
         import tempfile
         from pathlib import Path

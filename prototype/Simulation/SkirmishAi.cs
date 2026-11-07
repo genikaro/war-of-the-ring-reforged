@@ -393,6 +393,10 @@ public sealed partial class SimWorld
                 && (AiAttacksAssets(ai,u,buildings) || buildings.Any(b => DistanceSquared(b.X,b.Z,u.X,u.Z) <= (long)AiDefenseRadiusMm*AiDefenseRadiusMm)))
             .OrderBy(u => AiAttacksAssets(ai,u,buildings) ? 0 : 1).ThenBy(u => IsAiWorker(u) ? 1 : 0)
             .ThenBy(u => buildings.Min(b => DistanceSquared(b.X,b.Z,u.X,u.Z))).ThenBy(u => u.Id).ToArray();
+        // Build-173: soldiers bound for a tower's garrison are no defenders to send at the intruders.
+        var garrisoning = AiGarrisonTowers(ai,home,intruders);
+        if (garrisoning.Count > 0 || home.Any(u => u.Order == OrderKind.ApproachStructure))
+            home = [.. home.Where(u => !garrisoning.Contains(u.Id) && u.Order != OrderKind.ApproachStructure)];
         var intruder = AiStalled(ai,ai.IntruderSeen,intruders);
         if (intruder == null) { ai.Intruder = -1; return alarm; }
         ai.Intruder = intruder.Id; ai.IntruderSince = ai.IntruderSeen[intruder.Id].Since;

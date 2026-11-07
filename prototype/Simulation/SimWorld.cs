@@ -356,6 +356,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         if (command.Kind == OrderKind.UseAbility) { BeginAbility(command,activating); return; }
         if (command.Kind == OrderKind.UseGlobalPower) { UseGlobalPower(command); return; }
         if (command.Kind == OrderKind.UsePlacePower) { UsePlacePower(command); return; }
+        if (command.Kind == OrderKind.Ungarrison) { Ungarrison(command); return; }
         if (command.Kind == OrderKind.PurchaseAbility) { PurchaseAbility(command); return; }
         if (command.Kind == OrderKind.SetHerbsTargeting) { SetHerbsTargeting(command); return; }
         if (command.Kind == OrderKind.ToggleWalkRun)
@@ -774,6 +775,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         using var stepTime = SimProfiler.Time("step");
         CombatEvents.Clear();
         AbilityEvents.Clear();
+        GarrisonEvents.Clear();
         HeroLevelEvents.Clear();
         GlobalPowerEvents.Clear();
         ExpireGlobalPowers();
@@ -839,7 +841,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 unit.Dazed = null; unit.TreeformAbility = null; unit.TreeformUntil = unit.TreeformExitUntil = unit.KnockbackUntil = unit.KnockbackRecoverUntil = -1;
                 EndCamouflage(unit);
                 unit.CargoMilli = 0; unit.ReturningCargo = false; unit.ReturnCargoSource = -1;
-                unit.GatherPhase = GatherPhase.None; unit.InsideSite = -1;
+                unit.GatherPhase = GatherPhase.None; unit.InsideSite = -1; unit.Garrisoned = false;
                 CancelAbility(unit);
                 CancelStrike(unit);
                 unit.Order = OrderKind.Idle; unit.OrderDestination = unit.OrderTarget = -1;
@@ -847,7 +849,8 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 unit.Target = unit.Goal = unit.AttackNode = unit.CombatTarget = unit.SiteTarget = unit.PlacementCell = -1;
                 unit.AutoEngage = false; unit.Path.Clear(); continue;
             }
-            if (unit.InsideSite >= 0) { UpdateGather(unit); continue; }
+            // Build-173: a garrison sits in its tower; a worker inside a Mill works.
+            if (unit.InsideSite >= 0) { if (!unit.Garrisoned) UpdateGather(unit); continue; }
             if (unit.YieldFor >= 0)
             {
                 var priority = Units[unit.YieldFor];
@@ -1062,6 +1065,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         text += PlacesDigest();
         text += SiegeDigest();
         text += DefenseDigest();
+        text += GarrisonDigest();
         text += OutcomeDigest();
         text += AiDigest();
         text += VisionDigest();

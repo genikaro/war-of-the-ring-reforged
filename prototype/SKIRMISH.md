@@ -76,7 +76,7 @@ timed status icons and dispelling. Tower Capture approaches the tower, transfers
 ownership and recolors its model while preserving its health. See the full
 [hero controls and source limits](ABILITIES.md#remaining-good-hero-skills--build-105).
 Restart after the locally refreshed shared content pack. Hero levels followed in
-build-106; garrisons remain future work.
+build-106; garrisons followed in build-173 (EVIL.md).
 
 ## Build-89: contextual right-click on owned buildings
 
@@ -85,7 +85,7 @@ to clear ground beside its footprint. Workers carrying food or ore deliver to
 the clicked completed drop-off (a Citadel), even when another depot is nearer.
 Empty workers repair damaged buildings, resume foundations, or gather from a
 completed Mill or Foundry. Mixed selections split those jobs; Shift queues each
-group's order. Tower garrison loading remains future work.
+group's order. Build-173: units that may garrison go inside an own tower they are sent to (EVIL.md).
 
 Deliveries play the normal put-down clip before crediting resources, respect
 storage capacity, preserve cargo if interrupted or the depot disappears, and

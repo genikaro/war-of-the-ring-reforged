@@ -134,7 +134,7 @@ public sealed partial class SimWorld
             }
         }
         if ((target < 0 && siteTarget < 0) || cooldown > 0) return (cooldown,target,siteTarget);
-        int interval = DefenseInterval(defense);
+        int interval = GarrisonInterval(site,defense); // Build-173: faster with each unit inside.
         if (target >= 0)
         {
             var unit = Units[target];

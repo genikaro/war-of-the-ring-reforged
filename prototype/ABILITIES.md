@@ -56,7 +56,7 @@ Adapters and limits: existing prototype armor, damage/Fate and normalized buildi
 fire rules still apply; knockback uses the existing bounded collision/gravity
 adapter. Sprite emission/placement adapts the legacy effects. Controlled comparisons
 with the original game remain open. Capture leaves Gimli outside the tower because
-tower garrisons are not simulated. Hero levels followed in build-106; ability
+tower garrisons followed in build-173 (EVIL.md). Hero levels followed in build-106; ability
 purchasing and bot hero recruitment remain future work.
 
 Validation: `SimulationTests --hero-skill-checks --cache converted/content/good`,

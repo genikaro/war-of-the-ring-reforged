@@ -202,6 +202,7 @@ public sealed partial class SimWorld
         var area = SiteArea(site) with { ReachMm = reach,RadiusMm = site.RadiusMm+reach };
         if (Reaches(area,unit.X,unit.Z) && unit.TransitNode < 0)
         {
+            EjectGarrison(site); // Build-173: Capture throws the enemy garrison out (the manual; Rings.exe 0x54f600).
             site.Team = unit.Team; site.DefenseTarget = site.DefenseSiteTarget = -1;
             Array.Fill(site.ExtraDefenseTargets,-1); Array.Fill(site.ExtraDefenseSiteTargets,-1);
             StartAbilityCooldown(unit,ability);

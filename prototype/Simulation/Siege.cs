@@ -230,6 +230,7 @@ public sealed partial class SimWorld
         { CancelStrike(unit); unit.Order = OrderKind.Idle; unit.OrderTarget = -1; unit.SiegePlanTick = -1; unit.SiegeForced = false; unit.AutoEngage = true; unit.CombatWaiting=false; }
         foreach (var unit in ActiveUnits.Where(u => u.Order == OrderKind.Build && u.OrderTarget == site.Id))
         { unit.Order = OrderKind.Idle; unit.OrderTarget = -1; unit.GatherPlanTick = -1; }
+        EjectGarrison(site); // Build-173: a fallen tower's garrison steps out (Rings.exe 0x519f68).
         foreach (var unit in ActiveUnits.Where(u => u.InsideSite == site.Id)) { LeaveBuilding(unit); FinishGather(unit); }
         Producers.Remove(site.Id);
         DropOffs.RemoveAll(d => d.Obstacle == site.Obstacle && d.Team == site.Team);

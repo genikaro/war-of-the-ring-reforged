@@ -162,6 +162,8 @@ public partial class Main
                 return defense;
             }).ToArray();
             world.Defenses.Add(item.Name,loaded[0]);
+            // Build-173: MaxGarrisonedUnits rides on the building's defenses export.
+            if (weapons[0].TryGetProperty("max_garrison",out var garrison) && garrison.GetInt32() > 0) world.GarrisonCapacity[item.Name] = garrison.GetInt32();
             if (loaded.Length > 1) world.ExtraDefenses.Add(item.Name,loaded[1..]);
             _defenseLabels[item.Name] = weapons.Select(w => w.TryGetProperty("weapon",out var key) && key.GetString()!.EndsWith("_BOLT") ? "Ballista" : "Arrows").ToArray();
         }

@@ -4,6 +4,10 @@ using Reforged.Presentation;
 public partial class CommandPanel
 {
     public event Action? StructurePortraitChosen;
+    /// <summary>Build-173: a garrison box was clicked: the unit inside it.</summary>
+    public event Action<int>? GarrisonSlotChosen;
+    private readonly Button[] _garrisonSlots = new Button[4];
+    private readonly int[] _garrisonUnits = [-1,-1,-1,-1];
     private Control _structureDetails = null!;
     private Control _structureHealthDetails = null!;
     private Button _structurePortrait = null!;
@@ -47,6 +51,16 @@ public partial class CommandPanel
             MouseFilter = MouseFilterEnum.Stop,Visible = false,
             TooltipText = "Burning\nTakes damage over time until the fire goes out." };
         _structureDetails.AddChild(_structureBurning);
+        // Build-173: the tower's four outlined garrison boxes (the Evil compendium's capture 24), beside the portrait.
+        for (int slot = 0; slot < _garrisonSlots.Length; slot++)
+        {
+            int index = slot;
+            var box = new Button { Position = new(70+slot*46,22),Size = new(42,42),ExpandIcon = true,FocusMode = FocusModeEnum.None,Visible = false };
+            foreach (string style in new[] {"normal","hover","pressed","disabled"})
+                box.AddThemeStyleboxOverride(style,Border(new Color(0,0,0,style == "hover" ? .25f : .45f),new Color("bda56b")));
+            box.Pressed += () => { if (_garrisonUnits[index] >= 0) GarrisonSlotChosen?.Invoke(_garrisonUnits[index]); };
+            _structureDetails.AddChild(box); _garrisonSlots[slot] = box;
+        }
     }
 
     public void RefreshStructure(StructureDetails? details)
@@ -80,6 +94,17 @@ public partial class CommandPanel
             name.TooltipText = value.TooltipText = row < count ? weapons[row].Tooltip : "Armor\nReduces incoming weapon damage.";
             if (row == count) _structureArmorText = value;
         }
+        var garrison = details.Garrison ?? [];
+        for (int slot = 0; slot < _garrisonSlots.Length; slot++)
+        {
+            var box = _garrisonSlots[slot]; var inside = slot < garrison.Length ? garrison[slot] : null;
+            box.Visible = slot < details.GarrisonCapacity && !details.UnderConstruction;
+            _garrisonUnits[slot] = inside?.Unit ?? -1;
+            box.Icon = inside == null ? null : _art.GetValueOrDefault(inside.Portrait);
+            box.Disabled = inside == null || details.Team != PlayerTeam;
+            box.TooltipText = inside == null ? "Garrison: empty" : $"{inside.Name} · {inside.Health}/{inside.MaxHealth}"
+                +(details.Team == PlayerTeam ? "\nLeaves the tower" : "");
+        }
         _structureProgressText.Text = string.Join("\n",new[] {details.UnderConstruction ? $"Construction {details.ProgressPercent}%" : "",
             details.Resource}.Where(line => line != ""));
         // A place of power's holder and benefits take the room the health bar leaves (build-54).
@@ -95,6 +120,8 @@ public partial class CommandPanel
     public Label StructureAttackValue(int row) => _structureStatRows[row].Value;
     public TextureRect StructureBurningStatus => _structureBurning;
     public Color StructureHealthColor => _structureHealthBar.Color;
+    public Button GarrisonBox(int slot) => _garrisonSlots[slot];
+    public int GarrisonBoxUnit(int slot) => _garrisonUnits[slot];
     public bool StructureStatsVisible => _structureStats.Visible;
     public bool StructureHealthCounterCentered => Math.Abs(_structureHealthText.GetRect().GetCenter().Y-_structureHealthBar.GetRect().GetCenter().Y) < .01f;
 }

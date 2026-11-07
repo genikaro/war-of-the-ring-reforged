@@ -61,6 +61,7 @@ public partial class Main
     private int _evilSaleme = -1,_evilPatient = -1,_evilGrishnakh = -1,_evilTarget = -1,_evilSatchelFoe = -1;
     private long _evilFoeHealth;
     private int _evilTargetHealth,_evilGollum = -1,_evilMarked = -1,_evilHudStep,_evilBurnSite = -1;
+    private int[] _evilGarrison = []; private int _evilGarrisonLeaver = -1;
     private long _evilClusterHealth;
 
     /// <summary>The Evil Sandbox (--factions=evil,good on the Sandbox map): every Evil building stands and is promoted to the end of
@@ -516,6 +517,7 @@ public partial class Main
     private readonly List<string> _evilTimeline = [];
     private int _evilSnapshotTick,_evilMostSoldiers,_evilMostPosts,_evilMostSlavemasters,_evilTopFortress,_evilFirstHeroTick = -1,_evilHeroProbeTick;
     private readonly List<string> _evilHeroProbes = [];
+    private readonly Dictionary<int,int> _evilGarrisonPeak = [];
     private const int EvilObserveMinutes = 24;
 
     /// <summary>A bot of the Evil side against a bot of the Good side (--observe --factions=evil,good --bots=Saruman,Gimli): the
@@ -534,6 +536,9 @@ public partial class Main
             && _audio.MusicContext == (world.FactionOf(world.TeamFactions.Keys.Min()) == SimWorld.Evil
                 ? Reforged.Presentation.MusicContext.Evil : Reforged.Presentation.MusicContext.Good);
         int Own(string building) => world.ConstructionSites.Values.Count(s => s.Team == bot.Team && s.Health > 0 && s.Complete && s.Building != null && world.Satisfies(s.Building,building));
+        // Build-173: the most units each bot has had inside its towers at once.
+        foreach (var a in world.AiPlayers.Values)
+            _evilGarrisonPeak[a.Team] = Math.Max(_evilGarrisonPeak.GetValueOrDefault(a.Team),world.ConstructionSites.Values.Where(t => t.Team == a.Team).Sum(world.GarrisonCount));
         _evilMostSoldiers = Math.Max(_evilMostSoldiers,world.Units.Count(u => u.Team == bot.Team && u.Health > 0 && !world.Workers.ContainsKey(u.Definition.Name)
             && u.Definition.Name != EvilSlavemaster && !u.Definition.Hero));
         _evilMostPosts = Math.Max(_evilMostPosts,Own(EvilWarPost));
@@ -582,6 +587,7 @@ public partial class Main
                     .Select(p => w.Rules.GlobalPowers.First(g => g.Id == p.Key.Power).Kind.ToString()).ToArray()),
                 timeline = _evilTimeline,soldiers = _evilMostSoldiers,war_posts = _evilMostPosts,slavemasters = _evilMostSlavemasters,fortress_level = _evilTopFortress,
                 compositions = w.AiPlayers.Values.ToDictionary(a => $"Player {a.Team+1} {a.Personality.Id}",a => a.Composition?.Id),
+                garrison_peak = w.AiPlayers.Values.ToDictionary(a => $"Player {a.Team+1} {a.Personality.Id}",a => _evilGarrisonPeak.GetValueOrDefault(a.Team)),
                 armies = w.AiPlayers.Values.ToDictionary(a => $"Player {a.Team+1} {a.Personality.Id}",a => string.Join(",",w.Units.Where(u => u.Team == a.Team && u.Health > 0)
                     .GroupBy(u => u.Definition.DisplayName).OrderBy(g => g.Key).Select(g => g.Key+" "+g.Count()))),
                 winner = w.Winner,tick = w.Tick,digest = w.StateDigest() };
@@ -785,7 +791,7 @@ public partial class Main
                 _evilBurnSite = site.Id; site.FirePpm = 600_000;
                 _selectedObelisk = -1; _selected.Clear(); _selectedStructure = site.Obstacle; FocusStructure(site.Obstacle);
                 _evilHudStep = 4; break;
-            default:
+            case 4:
                 var burning = world.ConstructionSites[_evilBurnSite];
                 var orange = new Color(HealthTints.Hex(HealthTint.Burning));
                 _evilChecks["burning_building_bars_turn_orange"] = burning.FirePpm > 0 && _commands.StructureHealthColor.IsEqualApprox(orange)
@@ -793,6 +799,33 @@ public partial class Main
                 _evilNotes["burning_bars"] = $"fire={burning.FirePpm} console={_commands.StructureHealthColor.ToHtml(false)} details={_commands.StructureDetailsVisible}"
                     +$" world={(_constructionViews.TryGetValue(burning.Id,out var shown) ? shown.Bar.FillColor.ToHtml(false) : "none")} building={burning.Building}";
                 burning.FirePpm = 0; burning.FireSource = -1; _selectedStructure = null;
+                // Build-173: two Orc Slashers ordered onto the Evil Tower go inside; its boxes show them and one is sent out.
+                var tower = world.ConstructionSites.Values.First(s => s.Team == 0 && s.Complete && s.Building == "BUILDING_E_TOWER");
+                var slasher = world.Rules.Units["UNIT_E_ORC_SLASHER"];
+                var bodyNav = world.Navigation.ForBody(slasher.BodyRadiusMm,slasher.BodyHeightMm);
+                _evilGarrison = [.. Enumerable.Range(0,2).Select(i => world.Spawn(0,bodyNav.Nearest(bodyNav.Cell(tower.X+6000+i*1500,tower.Z+5000)),slasher).Id)];
+                _selected.Clear(); _selected.UnionWith(_evilGarrison); FocusStructure(tower.Obstacle);
+                _evilChecks["tower_right_click_garrisons"] = TryOwnStructure(tower.Obstacle,false) && _status.Text.StartsWith("Garrison");
+                _evilBurnSite = tower.Id; _evilHudStep = 5; break;
+            case 5:
+                var garrisoned = world.ConstructionSites[_evilBurnSite];
+                if (world.GarrisonCount(garrisoned) < 2 && _frames-_evilSandboxMark < 400) return;
+                _selected.Clear(); _selectedStructure = garrisoned.Obstacle; _evilHudStep = 6; break;
+            case 6:
+                var held = world.ConstructionSites[_evilBurnSite];
+                _evilChecks["slashers_garrison_the_evil_tower"] = world.GarrisonCount(held) == 2 && _evilGarrison.All(id => world.Units[id].Garrisoned && !world.Units[id].Present);
+                _evilChecks["tower_panel_shows_four_garrison_boxes"] = Enumerable.Range(0,4).All(i => _commands.GarrisonBox(i).IsVisibleInTree())
+                    && _commands.GarrisonBox(0).Icon != null && _commands.GarrisonBox(1).Icon != null && _commands.GarrisonBox(2).Icon == null
+                    && _evilGarrison.Contains(_commands.GarrisonBoxUnit(0));
+                _evilNotes["garrison"] = $"count={world.GarrisonCount(held)} boxes={string.Join(',',Enumerable.Range(0,4).Select(_commands.GarrisonBoxUnit))} status={_status.Text}";
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-garrison.png");
+                _evilGarrisonLeaver = _commands.GarrisonBoxUnit(0);
+                Click(_commands.GarrisonBox(0).GetGlobalRect().GetCenter()); _evilHudStep = 7; break;
+            default:
+                var after = world.ConstructionSites[_evilBurnSite];
+                _evilChecks["garrison_box_sends_the_unit_out"] = _evilGarrisonLeaver >= 0 && world.Units[_evilGarrisonLeaver].Present
+                    && !world.Units[_evilGarrisonLeaver].Garrisoned && world.GarrisonCount(after) == 1;
+                world.EnqueueUngarrison(0,after.Id); _selectedStructure = null;
                 _evilHudStep = 0; _evilSandboxStep++; break;
         }
         _evilSandboxMark = _frames;

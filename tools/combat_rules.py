@@ -349,6 +349,8 @@ def export(output, resolver=None, roster=None):
             # (the Firesword's 2 a second) for the buildings it strikes.
             'SplashRadiusMm': quantize(weapon['AreaOfEffectRange']),'SplashDpsMilli': quantize(weapon['AreaOfEffectDamage']),
             'FirePpmPerSecond': 0 if ranged else quantize(melee_weapon['FireDamagePerSecond'],1_000_000),
+            # Build-173: Rings.exe's garrison test (0x51bdfc) reads this flag, not the GarrisonProfiles lists.
+            'CanGarrison': bool(unit['CanEnterWatchtower']),
             **demo_body_tuning(name, radius, body_height),
             'AttackGapMm': 0 if ranged else quantize(weapon['MaximumRange']),
             'Source': {'Unit': unit.name,'ModelId': model['id'],'ModelFile': model['file'],

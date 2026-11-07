@@ -218,7 +218,10 @@ public partial class Main
             !definition.TryGetProperty("has_health",out var hasHealth) || hasHealth.GetBoolean(),site?.Id ?? -1,
             place == null ? "" : place.Owner == PlayerTeam && !_observing ? "Place of power · yours until an enemy stands alone in its zone"
                 : $"Place of power · stand alone within {place.RadiusMm/1000} m to take it",attack,
-            Burning: site is { FirePpm: > 0,Health: > 0 },Weapons:weapons);
+            Burning: site is { FirePpm: > 0,Health: > 0 },Weapons:weapons,
+            GarrisonCapacity: site != null ? world.GarrisonCapacityOf(site) : 0,
+            Garrison: site == null ? null : [.. world.GarrisonOf(site).Select(u => new GarrisonSlot(u.Id,UnitName(u.Id),
+                CommandPanel.PortraitName(u.Definition.DisplayName),u.Health,u.MaxHealth))]);
     }
 
     private void PresentStructureSelection(float dt)

@@ -240,7 +240,8 @@ Every battle gear of the five Evil heroes is simulated now (`-EvilSmoke -Sandbox
 * The Obelisk and Ringsight are implemented in build-164 below; the thirteen research effects in build-144. The source gives the
   ordinary Warg Rider, Uruk-Hai, Orc Slasher, Goblin and troll units no battle gear of their own (build-164 audit).
 * The Evil start (Hovel, four workers, one Slavemaster) and the 25 m corruption radius are adapters; a capture of the original would settle them.
-* Evil Tower garrisons (like the Good ones, not simulated), the minimap's corruption and the Evil menu frame. Setup deliberately plays the neutral Hobbit menu cue; matches play the commanded faction's music.
+* Tower garrisons arrived in build-173 (both sides). The minimap shows no corruption (the compendium's minimap captures show none either) and the Evil menu frame is not used. Setup deliberately plays the neutral Hobbit menu cue; matches play the commanded faction's music.
+* From the compendium still to measure in the original: the health-colour thresholds, the poisoned bar's colour (reported, not captured), splash and `MaxTargets`, Obelisk decay against redirected damage, and the fresh Evil start.
 * Slaughterhouse and Smelter reuse the map's Mill and Foundry footprints.
 * Hero gear still to verify against the original: the freeze's stun immunity, the direction of Sneak's damage multiplier, how Dark Tracking's reveal looks without fog, Mystic Blades' chain damage,
   the satchel's fire and its attackability.
@@ -441,3 +442,64 @@ most likely switches on his own detector for the Frodo type, which no enemy unit
 Checks: `--frodo-checks` (20, with six Ringsight checks), `--global-power-checks` (Obelisk rules and two bot checks),
 `tools/test_skirmish_evil.py` (the Obelisk row, its model and the detector types), and two new `-EvilSmoke -Sandbox` checks:
 the Obelisk shows its idle model, and the Goblin Slave beside it shows the protection.
+
+## Build-171: the compendium's open source rules
+
+The [Evil compendium](../references/original-game/EVIL-COMPENDIUM.md) (6 November 2026) lists what the checkpoint and the
+tables show. Read against the code, four source rules were still missing.
+
+| Rule | Source | What the game does |
+|---|---|---|
+| **Knockback Arrows** (Dark Arsenal, Fortress 4) | weapon 52: `AlwaysKnockbackTarget` 1, `KnockbackStrength` 6, angle 25, the same 14 DPS | a researched Uruk-Hai's arrow throws the unit it strikes (6 m/s at 25 degrees, the Blessed Wind mechanism); knockback-immune units (the Warg Rider) stand. Before, the swap changed nothing |
+| **Unstoppable Force** (Breeding Pit, Fortress 4) | weapon 73: `AreaOfEffectRange` 5, `AreaOfEffectDamage` 0.05, projectile 35 | the Stonehurler throws the larger boulder (`projectile-35` style) and splashes 5 m around its victim at the source's 0.05 a second, which is next to nothing |
+| **Firesword** (Balrog) | weapon 119: `AreaOfEffectRange` 6, `AreaOfEffectDamage` 25, `FireDamagePerSecond` 2 | every other enemy within 6 m of the Balrog's victim takes 25 a second (less its armour) over the blow; a blow on a building sets it alight (the compendium's burning Camps and Citadel). The Giant Ent's boulder (weapon 10, 5 m / 15) splashes the same way |
+| **Fate targets** | `GlobalSpells.CanCastInFOW` 0 on all ten rows; `CanCastOverBuildings` 0 on the Balrog, the Giant Ent and the Obelisk | a power cannot be aimed at ground the team does not see ("Cannot be cast into the fog of war"), and those three not at a building's footprint. Refused casts cost nothing; bots skip such points |
+
+Splash adapter: `AreaOfEffectDamage` is read as a rate per second like `CuttingDamagePerSecond` (the rows hold 25 beside 65, 15
+beside 50, 9 beside 30), so a victim takes it over the blow's share of the attack, with its own matchup and armour. `MaxTargets`
+(16, 1, 5) is not used as a cap: the Ent's 1 would forbid the 15 its row asks for. Splash victims take no on-hit weapon effects.
+`Simulation/WeaponEffects.cs`; `--compendium-checks` (20 checks); `tools/test_skirmish_evil.py` (three more).
+
+## Build-172: health colours, the Balrog's lifetime, fallen heroes and the Obelisk's panel
+
+* **Health bars.** The console's bars (single unit, mixed selection, building) are green at high health, yellow at moderate and red
+  at low health for anyone's units, as the original's are (an enemy at full health was red before). A burning building's bars are
+  burnt orange whatever its health (`Presentation/HealthTint.cs`). The thresholds, above 50% and above 25%, are an adapter that fits
+  the compendium's samples (Grishnakh yellow at 270/620, red at 153/620); green and orange are sampled from captures 10 and 16.
+  World bars keep the team colour while Settings has *player-coloured bars* on (the default since build-93), except that a burning
+  building's bar turns orange; with that setting off they follow the same colours.
+* **Summons.** The hero strip's SPECIAL slot (y .1546 of the source layout, empty until now) holds a living Balrog or Giant Ent with
+  its health and a turquoise remaining-life bar (captures 13-14). The selected summon's console shows "Lifetime" with the seconds left
+  in the experience bar's place.
+* **Fallen heroes** keep a darkened portrait in the strip until summoned again, as Gollum's was in the checkpoint.
+* **The Obelisk** can be selected by clicking its column: portrait, "Obelisk", "Sentinel" (the source symbol
+  `GLOBAL_SPELL_SENTINEL`; the Russian panel reads "Монумент-страж") and its health out of 5000, with an empty action grid (capture 29).
+* `run.ps1 -Mute` starts any run with Godot's dummy audio driver (`-Headless` was silent already).
+
+Checks: `--compendium-checks` (nine more), and the Evil Sandbox smoke checks the summon slot, the console lifetime, clicking the
+Obelisk into its panel and the burning orange of a building's console and world bars.
+
+## Build-173: tower garrisons
+
+Both sides' towers take a garrison now. Rings.exe's garrison test (0x51bdfc) asks the building's `IsGarrisonable`, its
+`MaxGarrisonedUnits` (4), the same owner, and the unit's own `CanEnterWatchtower` (exported as `CanGarrison`). It does not read
+`GarrisonProfiles`, whose lists disagree with the flag (they name trolls and the Nazgul King, and leave out the Spearman and
+the Wraith).
+
+* **Who may enter.** Evil: Goblin Spearman, Slavemaster, Orc Bowman and Slasher, Uruk-Hai, Wraith, Haradrim Slayer, and Gollum,
+  Saleme, Grishnakh and Saruman (not the Goblin Slave, Warg Rider, Giant Spider, trolls or the Nazgul King). Good: Gondor Swordsmen, Elven
+  Archers, Knights and Lightbearers, both Dwarves, the Ranger, the Beorning and the five heroes (not workers or the Rider of Rohan). The source also flags the Giant Ent.
+* **Orders.** Right-click your finished tower with them selected: as many as it has room for walk there and go inside ("Garrison";
+  the rest move to it). Inside they are out of the battle (no target, no sight, no healing) and count towards population.
+* **Rate of fire.** The tower fires at its `BuildingDefenses` rate for the number inside: 1, 1.2, 1.4, 1.6, 1.75 arrows a
+  second for zero to four, each arrow as strong as before. The Ballista's bolt keeps its own pace (the guide).
+* **Leaving.** The tower's panel shows four outlined boxes beside its portrait (capture 24) with the occupants' portraits; clicking one
+  sends that unit out. A tower that falls, or that Gimli captures, ejects everyone inside alive (two "eject all" loops in Rings.exe,
+  0x519f68 and 0x51aa68; Capture's at 0x54f600).
+* **Bots.** When an enemy comes within a tower's range, idle ranged soldiers of the base within 15 m go inside (heroes stay out);
+  15 s after the last enemy left the range they come out. The Evil bot observer report shows each bot's `garrison_peak`.
+
+Adapters: the original's entry animation, whether occupants heal, and `WatchtowerDamageMult` (the damage a tower does to a unit, 1.0
+on every skirmish unit) are not simulated. Checks: `--compendium-checks` (fourteen more: entry, capacity, ineligible units, the rate of
+fire with three and four inside, leaving, ejection, and the bot going in and out), `tools/test_skirmish_evil.py`, and the Evil Sandbox smoke garrisons two Orc
+Slashers by right-click, reads the tower's boxes and sends one out with a click.

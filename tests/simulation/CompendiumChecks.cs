@@ -129,6 +129,7 @@ static class CompendiumChecks
             "the Obelisk is refused over a building and allowed beside it");
         check(open.ValidGlobalTarget(0,bog with { BlockedOverBuildings = false },Node(60,20),60_500,20_500),"the Bog (CanCastOverBuildings 1) may cover a building");
         RunHud(check);
+        RunGarrisons(check);
     }
 
     /// <summary>Build-172: the health bar tints and a summon's remaining life.</summary>
@@ -155,5 +156,72 @@ static class CompendiumChecks
         check(w.SummonLifeLeft(w.Spawn(0,Cell(10),Dummy)) == 0,"an ordinary unit has no lifetime");
         Step(w,1300);
         check(w.SummonLifeLeft(raised) == 0,"an expired summon has none left");
+    }
+
+    /// <summary>Build-173: tower garrisons.</summary>
+    private static void RunGarrisons(Action<bool,string> check)
+    {
+        const int Tower = 30000;
+        int[] footprint = [.. from z in Enumerable.Range(14,3) from x in Enumerable.Range(9,3) select Cell(x,z)];
+        var soldier = UnitDefinition.Probe with { Name="slasher",CanGarrison=true,MaxHealth=500,Passive=true };
+        var rider = soldier with { Name="warg",CanGarrison=false };
+        SimWorld Fixture()
+        {
+            var nav = new GridNavigation(W,H,1000,Enumerable.Repeat(true,W*H).ToArray(),new int[(W+1)*(H+1)],obstacles: [new NavigationObstacle(Tower,footprint,[])]);
+            var rules = new CombatRules(); foreach (var d in new[] {soldier,rider,Dummy}) rules.Units[d.Name] = d;
+            var w = new SimWorld(nav,rules);
+            w.BuildingRules.Add("tower",new("tower","Tower",null,0,100,60,500,750000,750000,100000,50000,[],4000));
+            w.Defenses.Add("tower",new(14000,0,19000,[1000,1200,1400,1600,1750],94,3434,159));
+            w.GarrisonCapacity["tower"] = 4;
+            w.ConstructionSites.Add(Tower,new(Tower,Tower,2000,"tower",10500,15500) { Team = 0,Health = 500,Complete = true });
+            return w;
+        }
+        var w = Fixture(); var site = w.ConstructionSites[Tower];
+        var five = Enumerable.Range(0,5).Select(i => w.Spawn(0,Cell(16+i,20),soldier)).ToArray(); var warg = w.Spawn(0,Cell(16,24),rider);
+        w.Enqueue(0,[.. five.Select(u => u.Id),warg.Id],OrderKind.ApproachStructure,target: Tower);
+        Step(w,200);
+        check(w.GarrisonCount(site) == 4 && five.Count(u => u.Garrisoned && u.InsideSite == Tower && !u.Present) == 4,"four soldiers walk to their tower and go inside");
+        check(five.Count(u => u.Present && !u.Garrisoned) == 1 && warg.Present && !warg.Garrisoned,"a fifth finds it full and a Warg Rider (no CanEnterWatchtower) stays out");
+        check(w.GarrisonOf(site).Select(u => u.GarrisonSerial).SequenceEqual(w.GarrisonOf(site).Select(u => u.GarrisonSerial).Order()),"the boxes list them in the order they entered");
+        var enemy = w.Spawn(1,Cell(22,15),Dummy); enemy.Order = OrderKind.HoldGround;
+        var releases = new List<int>();
+        for (int i = 0; i < 60; i++) { w.Step(); releases.AddRange(w.CombatEvents.Where(e => e.Kind == CombatEventKind.Release && e.Site == Tower).Select(e => e.Tick)); }
+        check(releases.Count >= 3 && releases.Zip(releases.Skip(1),(a,b) => b-a).All(gap => gap == 11),"four inside fire 1.75 arrows a second (every 11 ticks)");
+        var first = five.First(u => u.Garrisoned);
+        w.EnqueueUngarrison(0,Tower,first.Id); w.Step();
+        check(first.Present && !first.Garrisoned && first.InsideSite < 0 && w.GarrisonCount(site) == 3,"the player sends one unit out by its box");
+        check(w.GarrisonEvents.Any(e => e.Unit == first.Id && !e.Entered),"leaving is announced");
+        releases.Clear();
+        for (int i = 0; i < 60; i++) { w.Step(); releases.AddRange(w.CombatEvents.Where(e => e.Kind == CombatEventKind.Release && e.Site == Tower).Select(e => e.Tick)); }
+        check(releases.Zip(releases.Skip(1),(a,b) => b-a).All(gap => gap == 13),"three inside fire 1.6 a second (every 13 ticks)");
+        w.EnqueueUngarrison(1,Tower); w.Step();
+        check(w.GarrisonCount(site) == 3,"another side cannot empty the tower");
+        var empty = Fixture(); var lone = empty.Spawn(1,Cell(22,15),Dummy); lone.Order = OrderKind.HoldGround; var gaps = new List<int>();
+        for (int i = 0; i < 60; i++) { empty.Step(); gaps.AddRange(empty.CombatEvents.Where(e => e.Kind == CombatEventKind.Release).Select(e => e.Tick)); }
+        check(gaps.Zip(gaps.Skip(1),(a,b) => b-a).All(gap => gap == 20),"an empty tower keeps its base second");
+        // The tower falls: everyone inside steps out beside it.
+        var breaker = w.Spawn(1,Cell(8,15),Firesword with { Name="breaker",DpsMilli=900000,SplashRadiusMm=0,FirePpmPerSecond=0,Passive=false });
+        w.Enqueue(1,[breaker.Id],OrderKind.AttackStructure,target: Tower);
+        for (int i = 0; i < 200 && w.ConstructionSites.ContainsKey(Tower); i++) w.Step();
+        check(!w.ConstructionSites.ContainsKey(Tower) && five.All(u => !u.Garrisoned && u.InsideSite < 0) && five.Count(u => u.Present) == 5,
+            "a fallen tower ejects its garrison alive");
+        var upgrading = Fixture(); upgrading.ConstructionSites[Tower].Complete = false;
+        var late = upgrading.Spawn(0,Cell(16,20),soldier); upgrading.Enqueue(0,[late.Id],OrderKind.ApproachStructure,target: Tower); Step(upgrading,120);
+        check(!late.Garrisoned && late.Present,"an unfinished tower takes nobody in");
+        // Bots: archers idle by a tower go inside when an enemy comes within its range, and come out 15 s after it leaves.
+        var bot = Fixture(); var archer = soldier with { Name="archer",ProjectileSpeedMmPerSecond=25000,ReachMm=14000,MinimumRangeMm=1000,
+            Attacks=[new("shoot",1,40,[new(10,1000000)])] };
+        bot.Rules.Units[archer.Name] = archer; bot.Economies[0] = new(0,0); bot.Economies[1] = new(0,0);
+        var ai = new AiPlayer(0,new("test","Test",1,50,50,50,50,true,true),AiStyle.Balanced,[]);
+        ai.Profile = ai.Profile with { Workers=0,AssaultFromTicks=100000,UpgradeTicks=100000 }; bot.AiPlayers.Add(0,ai);
+        bot.StartStructures.Add(new(0,"tower",10500,15500));
+        var archers = Enumerable.Range(0,3).Select(i => bot.Spawn(0,Cell(18+i,22),archer)).ToArray();
+        Step(bot,100);
+        check(archers.All(u => !u.Garrisoned),"with no enemy near, the bot's archers stay outside");
+        var raider = bot.Spawn(1,Cell(26,15),Dummy); raider.Order = OrderKind.HoldGround;
+        for (int i = 0; i < 400 && bot.GarrisonCount(bot.ConstructionSites[Tower]) < 3; i++) bot.Step();
+        check(archers.All(u => u.Garrisoned),"an enemy within the tower's range sends the idle archers inside");
+        raider.HealthMilli = 0; Step(bot,15*SimWorld.TicksPerSecond+80);
+        check(archers.All(u => !u.Garrisoned && u.Present),"15 s after the enemy is gone they come out");
     }
 }

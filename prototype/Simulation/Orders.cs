@@ -1,6 +1,6 @@
 namespace Reforged.Simulation;
 
-public enum OrderKind { Idle, Move, Attack, AttackMove, Stop, HoldGround, Guard, Patrol, ForceAttack, ToggleWalkRun, UseAbility, Gather, Build, CancelConstruction, Train, CancelTraining, SetRallyPoint, PlaceBuilding, AttackStructure, SetRallyResource, Upgrade, CancelUpgrade, Research, CancelResearch, ApproachStructure, ReturnCargo, SetHerbsTargeting, PurchaseAbility, UseGlobalPower, UsePlacePower }
+public enum OrderKind { Idle, Move, Attack, AttackMove, Stop, HoldGround, Guard, Patrol, ForceAttack, ToggleWalkRun, UseAbility, Gather, Build, CancelConstruction, Train, CancelTraining, SetRallyPoint, PlaceBuilding, AttackStructure, SetRallyResource, Upgrade, CancelUpgrade, Research, CancelResearch, ApproachStructure, ReturnCargo, SetHerbsTargeting, PurchaseAbility, UseGlobalPower, UsePlacePower, Ungarrison }
 public sealed record PendingOrder(OrderKind Kind,int Cell,int Target,int Sequence,int AbilitySlot = 0,int? TargetX = null,int? TargetZ = null)
 {
     public static PendingOrder From(SimCommand command)
