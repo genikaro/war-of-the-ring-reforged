@@ -16,9 +16,14 @@ public sealed partial class SimWorld
         int reserve = emergency || !ai.Personality.UsesHeroes ? 0 : allies.Any(u => u.Definition.Hero) ? 2 : 4;
         bool Ready(GlobalPowerDefinition p) => CanUseGlobalPower(ai.Team,p.Slot,out _) && bank.Fate-p.FateCost >= reserve;
         bool Near(SimUnit a,SimUnit b,int range) => SeparationSquared(a,b) <= (long)range*range;
-        void Cast(GlobalPowerDefinition p,SimUnit center,int target = -1)
-            => Dispatch(new(Tick,_sequence++,ai.Team,[],center.Node,target,OrderKind.UseGlobalPower,
+        // Build-171: a point the bot cannot target (in its fog, on a building) is skipped rather than spent on a refused command.
+        bool Cast(GlobalPowerDefinition p,SimUnit center,int target = -1)
+        {
+            if (!ValidGlobalTarget(ai.Team,p,center.Node,center.X,center.Z,target)) return false;
+            Dispatch(new(Tick,_sequence++,ai.Team,[],center.Node,target,OrderKind.UseGlobalPower,
                 AbilitySlot:p.Slot,TargetX:center.X,TargetZ:center.Z));
+            return true;
+        }
 
         foreach (var power in powers.OrderBy(p => p.Kind switch {
                      GlobalPowerKind.GiantEnt or GlobalPowerKind.SummonBalrog => 0,GlobalPowerKind.Blind or GlobalPowerKind.MurderOfCrows => 1,
@@ -32,14 +37,14 @@ public sealed partial class SimWorld
                 var spot = enemies.Select(e => (Unit:e,Score:enemies.Count(v => Near(e,v,power.RadiusMm)
                         && (power.Kind == GlobalPowerKind.Marshlands || v.Definition.IsRanged && v.CrowsUntil <= Tick))))
                     .Where(e => allies.Any(a => Near(a,e.Unit,20000)) || emergency).OrderByDescending(e => e.Score).ThenBy(e => e.Unit.Id).FirstOrDefault();
-                if (spot.Unit != null && spot.Score >= (power.Kind == GlobalPowerKind.Marshlands ? 4 : 3)) { Cast(power,spot.Unit); return; }
+                if (spot.Unit != null && spot.Score >= (power.Kind == GlobalPowerKind.Marshlands ? 4 : 3)) { if (Cast(power,spot.Unit)) return; }
                 continue;
             }
             if (power.Kind == GlobalPowerKind.RainOfBlood)
             {
                 var spot = allies.Select(a => (Unit:a,Score:allies.Count(v => Near(a,v,power.RadiusMm) && v.HealthMilli*100 < (long)v.MaxHealth*1000*60)))
                     .Where(a => enemies.Any(e => Near(a.Unit,e,25000))).OrderByDescending(a => a.Score).ThenBy(a => a.Unit.Id).FirstOrDefault();
-                if (spot.Unit != null && spot.Score >= 4) { Cast(power,spot.Unit); return; }
+                if (spot.Unit != null && spot.Score >= 4) { if (Cast(power,spot.Unit)) return; }
                 continue;
             }
             if (power.Kind == GlobalPowerKind.Obelisk)
@@ -48,7 +53,7 @@ public sealed partial class SimWorld
                 var engaged = allies.Where(a => enemies.Any(e => Near(a,e,8000))).ToArray();
                 var spot = engaged.Select(a => (Unit:a,Score:engaged.Count(v => Near(a,v,power.RadiusMm))))
                     .OrderByDescending(a => a.Score).ThenBy(a => a.Unit.Id).FirstOrDefault();
-                if (spot.Unit != null && spot.Score >= 5) { Cast(power,spot.Unit); return; }
+                if (spot.Unit != null && spot.Score >= 5) { if (Cast(power,spot.Unit)) return; }
                 continue;
             }
             if (power.Kind is GlobalPowerKind.GiantEnt or GlobalPowerKind.SummonBalrog)
@@ -85,14 +90,14 @@ public sealed partial class SimWorld
                             && v.Definition.DpsMilli > 0 : v.Moving || v.Goal >= 0))))
                     .Where(e => allies.Any(a => Near(a,e.Unit,20000)) || emergency)
                     .OrderByDescending(e => e.Score).ThenBy(e => e.Unit.Id).FirstOrDefault();
-                if (center.Unit != null && center.Score >= 3) { Cast(power,center.Unit); return; }
+                if (center.Unit != null && center.Score >= 3) { if (Cast(power,center.Unit)) return; }
             }
             if (power.Kind == GlobalPowerKind.BlessedWind)
             {
                 var center = allies.Where(a => a.Definition.IsRanged).Select(a => (Unit:a,Score:allies.Count(v => v.Definition.IsRanged
                     && v.BlessedWindUntil <= Tick && Near(a,v,power.RadiusMm))))
                     .Where(a => enemies.Any(e => Near(a.Unit,e,20000))).OrderByDescending(a => a.Score).ThenBy(a => a.Unit.Id).FirstOrDefault();
-                if (center.Unit != null && center.Score >= 3) { Cast(power,center.Unit); return; }
+                if (center.Unit != null && center.Score >= 3) { if (Cast(power,center.Unit)) return; }
             }
             if (power.Kind == GlobalPowerKind.HeroicLegacy)
             {
@@ -101,7 +106,7 @@ public sealed partial class SimWorld
                         && h.HealthMilli*100 >= (long)h.MaxHealth*1000*75 && !ai.RecoveringHeroes.Contains(h.Id)
                         && enemies.Any(e => Near(h,e,18000)))
                     .OrderByDescending(h => h.HeroLevel).ThenBy(h => h.Id).FirstOrDefault();
-                if (hero != null) { Cast(power,hero,hero.Id); return; }
+                if (hero != null) { if (Cast(power,hero,hero.Id)) return; }
             }
         }
     }

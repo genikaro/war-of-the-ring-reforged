@@ -47,6 +47,16 @@ public sealed partial class SimUnit(int id, int team, int x, int z)
     /// the missile DPS (Razored Edge, Flaming Axe).</summary>
     public int TechniqueRangePpm { get; internal set; } = 1_000_000;
     public int TechniqueMissileDpsMilli { get; internal set; }
+    /// <summary>Build-171: a researched replacement missile weapon's knockback (Knockback Arrows), splash (Unstoppable Force)
+    /// and source projectile id (-1: the unit's own).</summary>
+    public int TechniqueKnockbackSpeedMm { get; internal set; }
+    public int TechniqueKnockbackAngle { get; internal set; }
+    public int TechniqueSplashRadiusMm { get; internal set; }
+    public int TechniqueSplashDpsMilli { get; internal set; }
+    public int TechniqueProjectile { get; internal set; } = -1;
+    /// <summary>The splash of the weapon behind a hit: a researched missile weapon's, else the unit's own main weapon's.</summary>
+    public (int RadiusMm,int DpsMilli) Splash(bool missile) => missile && TechniqueSplashRadiusMm > 0 ? (TechniqueSplashRadiusMm,TechniqueSplashDpsMilli)
+        : missile == Definition.IsRanged ? (Definition.SplashRadiusMm,Definition.SplashDpsMilli) : (0,0);
     /// <summary>Attack reach: a ranged unit's missile range with its research.</summary>
     public int ReachMm => Definition.IsRanged ? (int)((long)Definition.ReachMm*TechniqueRangePpm/1_000_000)
         : Definition.ReachMm+(ParalyzeSuppressedUntil<0 && Negated==null ? ParalyzeRangeMm : 0);

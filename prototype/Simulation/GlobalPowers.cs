@@ -8,8 +8,11 @@ public sealed record GlobalPowerDefinition(int Id,int Slot,string Name,string Ic
     int DurationTicks,int RechargeTicks,string Description,int[] SoundEvents,int DpsMilli = 0,int DamagePpm = 1_000_000,
     int HealthPpm = 1_000_000,int ArmorMilli = 0,int KnockbackSpeedMm = 0,int KnockbackAngle = 60,string? SummonUnit = null,
     string Faction = "good",int HealMilli = 0,int TimeScalePpm = 1_000_000,int MissilePpm = 1_000_000,
-    int ObjectHealth = 0,int DegenerationPpm = 0,int DamageUnitPpm = 1_000_000,int DamageObeliskPpm = 0)
+    int ObjectHealth = 0,int DegenerationPpm = 0,int DamageUnitPpm = 1_000_000,int DamageObeliskPpm = 0,
+    bool BlockedInFog = false,bool BlockedOverBuildings = false)
 {
+    // Build-171: the row's CanCastInFOW 0 (every power) refuses a point the team cannot see; CanCastOverBuildings 0 (the Balrog, the
+    // Giant Ent, the Obelisk) refuses a point on a building's footprint.
     public GlobalPowerKind Kind => (GlobalPowerKind)Id;
     public AbilityDefinition StatusAbility => new(10000+Id,0,Name,Icon,true,AbilityKind.Unsimulated,
         DurationTicks:DurationTicks,Description:Description,KnockbackSpeedMm:KnockbackSpeedMm,KnockbackAngle:KnockbackAngle);
@@ -74,18 +77,30 @@ public sealed partial class SimWorld
     }
 
     public bool ValidGlobalTarget(int team,GlobalPowerDefinition power,int node,int x,int z,int target = -1)
+        => GlobalTargetRefusal(team,power,node,x,z,target) == "";
+
+    /// <summary>Why a target is refused (empty when it is valid).</summary>
+    public string GlobalTargetRefusal(int team,GlobalPowerDefinition power,int node,int x,int z,int target = -1)
     {
         if (power.Kind == GlobalPowerKind.HeroicLegacy)
-            return target >= 0 && target < Units.Count && Units[target] is { Present:true,Definition.Hero:true,HeroicLegacy:null } hero && hero.Team == team;
+            return target >= 0 && target < Units.Count && Units[target] is { Present:true,Definition.Hero:true,HeroicLegacy:null } hero && hero.Team == team
+                ? "" : "Choose a living friendly hero without Heroic Legacy";
         if (node < 0 || node >= Navigation.NodeCount || x < 0 || z < 0 || x >= Navigation.Width*Navigation.CellSize
-            || z >= Navigation.Height*Navigation.CellSize) return false;
+            || z >= Navigation.Height*Navigation.CellSize) return "Choose a point on the battlefield";
         // Preserve the picked navigation layer; never snap an obstructed summon to nearby ground.
         var center = Navigation.Center(node);
-        if (DistanceSquared(x,z,center.X,center.Z) > 2L*Navigation.CellSize*Navigation.CellSize) return false;
-        if (power.SummonUnit == null) return true;
-        if (!Rules.Units.TryGetValue(power.SummonUnit,out var definition) || !Navigation.ForBody(definition.BodyRadiusMm,definition.BodyHeightMm).CanStand(node)) return false;
-        return CanPlace(SpawnCandidate(team,node,definition));
+        if (DistanceSquared(x,z,center.X,center.Z) > 2L*Navigation.CellSize*Navigation.CellSize) return "Choose a point on the battlefield";
+        if (power.BlockedInFog && !InSight(team,x,z)) return "Cannot be cast into the fog of war";
+        if (power.BlockedOverBuildings && OverBuilding(x,z)) return "Cannot be cast over a building";
+        if (power.SummonUnit == null) return "";
+        if (!Rules.Units.TryGetValue(power.SummonUnit,out var definition) || !Navigation.ForBody(definition.BodyRadiusMm,definition.BodyHeightMm).CanStand(node)
+            || !CanPlace(SpawnCandidate(team,node,definition))) return "Choose clear ground for this summon";
+        return "";
     }
+
+    /// <summary>Whether a point lies on a standing building's footprint (or a foundation's).</summary>
+    public bool OverBuilding(int x,int z) => ConstructionSites.Values.Any(s => s.Building != null && s.Health > 0
+        && DistanceSquared(s.X,s.Z,x,z) <= (long)(s.RadiusMm+2000)*(s.RadiusMm+2000) && Navigation.ObstacleCoversGroundBody(s.Obstacle,x,z));
 
     public void EnqueueGlobalPower(int team,int slot,int node = -1,int? x = null,int? z = null,int target = -1)
         => Commands.Add(new(Tick,_sequence++,team,[],node,target,OrderKind.UseGlobalPower,AbilitySlot:slot,TargetX:x,TargetZ:z));

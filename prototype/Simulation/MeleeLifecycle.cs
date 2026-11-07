@@ -79,7 +79,11 @@ public sealed partial class SimWorld
             long damage = pair.Invincible ? 0 : unit.Definition.HitDamage(attack,index,rate);
             damage = PlaceDamage(unit,damage,unit.Definition.FiresProjectile(unit.AttackVariant),building: false);
             if (unit.Definition.FiresProjectile(unit.AttackVariant)) ReleaseProjectile(unit,target,index,damage);
-            else ApplyHit(unit,target,unit.AttackVariant,index,damage,unit.AttackStartTick);
+            else
+            {
+                ApplyHit(unit,target,unit.AttackVariant,index,damage,unit.AttackStartTick);
+                ApplySplash(unit,target,unit.AttackVariant,index,unit.AttackStartTick,missile: false);
+            }
         }
     }
 }

@@ -25,12 +25,20 @@ public partial class Main
                 Effect("range_ppm"),Effect("missile_dps_milli"),
                 rules.TryGetProperty("building_health_ppm",out var health) ? health.GetInt32() : 1_000_000,
                 rules.TryGetProperty("description",out var description) ? description.GetString()! : "",Effect("sight_ppm"),Effect("time_scale_ppm"),
-                rules.TryGetProperty("building_weapon",out var weapon) ? weapon.Deserialize<BuildingWeaponUpgrade>() : null));
+                rules.TryGetProperty("building_weapon",out var weapon) ? weapon.Deserialize<BuildingWeaponUpgrade>() : null,
+                // Build-171: the replacement missile weapon's knockback, splash and projectile.
+                Pair("missile_knockback_mm","missile_knockback_angle"),Pair("missile_splash_radius_mm","missile_splash_dps_milli"),Effect("missile_projectile")));
             _techniquePortraits[item.Name] = rules.GetProperty("portrait").GetString()!;
             Dictionary<string,int>? Effect(string key)
             {
                 var found = rules.GetProperty("bonuses").EnumerateObject().Where(b => b.Value.TryGetProperty(key,out _))
                     .ToDictionary(b => b.Name,b => b.Value.GetProperty(key).GetInt32());
+                return found.Count > 0 ? found : null;
+            }
+            Dictionary<string,(int,int)>? Pair(string first,string second)
+            {
+                var found = rules.GetProperty("bonuses").EnumerateObject().Where(b => b.Value.TryGetProperty(first,out _))
+                    .ToDictionary(b => b.Name,b => (b.Value.GetProperty(first).GetInt32(),b.Value.TryGetProperty(second,out var v) ? v.GetInt32() : 0));
                 return found.Count > 0 ? found : null;
             }
         }

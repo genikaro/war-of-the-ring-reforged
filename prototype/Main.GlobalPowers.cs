@@ -31,8 +31,7 @@ public partial class Main
         if (!_world.CanUseGlobalPower(PlayerTeam,power.Slot,out string reason)) { Notify(reason); CancelTargeting(); return; }
         var ground = GlobalGroundAt(point); var target = power.Kind == GlobalPowerKind.HeroicLegacy ? UnitAt(point) : null;
         int node = ground?.Node ?? -1,x = (int)((ground?.Position.X ?? 0)*1000),z = (int)((ground?.Position.Z ?? 0)*1000);
-        if (!_world.ValidGlobalTarget(PlayerTeam,power,node,x,z,target?.Id ?? -1))
-        { Notify(power.Kind == GlobalPowerKind.HeroicLegacy ? "Choose a living friendly hero without Heroic Legacy" : "Choose clear ground for this summon"); return; }
+        if (_world.GlobalTargetRefusal(PlayerTeam,power,node,x,z,target?.Id ?? -1) is { Length: > 0 } refusal) { Notify(refusal); return; }
         _world.EnqueueGlobalPower(PlayerTeam,power.Slot,node,x,z,target?.Id ?? -1);
         CancelTargeting();
         _status.Text = power.Name+(_paused ? " queued (paused)" : " cast");

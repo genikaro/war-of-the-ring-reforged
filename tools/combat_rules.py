@@ -344,6 +344,11 @@ def export(output, resolver=None, roster=None):
             'DetectionMask': sum(1 << detector for detector in {unit['DetectorType1'], unit['DetectorType2']} if detector >= 0),
             # Source IsSiege weapons (the Huorn's) multiply their damage against buildings by SiegeMultiplier.
             'SiegePpm': quantize(weapon['SiegeMultiplier'],1_000_000) if weapon['IsSiege'] else 1_000_000,
+            # Build-171: the main weapon's AreaOfEffectRange / AreaOfEffectDamage (the Balrog's Firesword 6 m / 25, the Giant
+            # Ent's boulder 5 m / 15), read as a per-second rate like CuttingDamagePerSecond, and a melee weapon's fire input
+            # (the Firesword's 2 a second) for the buildings it strikes.
+            'SplashRadiusMm': quantize(weapon['AreaOfEffectRange']),'SplashDpsMilli': quantize(weapon['AreaOfEffectDamage']),
+            'FirePpmPerSecond': 0 if ranged else quantize(melee_weapon['FireDamagePerSecond'],1_000_000),
             **demo_body_tuning(name, radius, body_height),
             'AttackGapMm': 0 if ranged else quantize(weapon['MaximumRange']),
             'Source': {'Unit': unit.name,'ModelId': model['id'],'ModelFile': model['file'],
@@ -395,6 +400,10 @@ def export(output, resolver=None, roster=None):
     if 'UNIT_E_HARADRIM_ASSASSIN' in roster:
         dart = resolver.db['Weapons'].get(45)
         projectiles['evil-poison-dart'] = projectile_presentation(output,resolver,'UNIT_E_HARADRIM_ASSASSIN',trace,dart['AssociatedProjectile'],include_sprite_effects=True)
+    if 'UNIT_E_TROLL_STONEHURLER' in roster:
+        # Build-171: Unstoppable Force's weapon 73 throws the larger boulder (projectile 35); the research names it by id.
+        boulder = resolver.db['Weapons'].get(resolver.db['Techniques'].get('TECHNIQUE_UNSTOPPABLE_FORCE')['MissileWeapon'])['AssociatedProjectile']
+        projectiles['projectile-%d' % boulder] = projectile_presentation(output,resolver,'UNIT_E_TROLL_STONEHURLER',trace,boulder)
     for key, weapon_id in [('evil-flame-arrows',30),('evil-poison-arrows',46)]:
         if 'UNIT_E_ORC_BOWMAN' in roster:
             weapon=resolver.db['Weapons'].get(weapon_id)

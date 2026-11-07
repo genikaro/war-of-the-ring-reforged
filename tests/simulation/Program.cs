@@ -107,6 +107,11 @@ if (args.Contains("--evil-upgrade-checks"))
     if(upgradeCache>=0)EvilUpgradeChecks.Cached(Check,args[upgradeCache+1]);
     Console.WriteLine($"{passed} Evil upgrade checks passed");return;
 }
+if (args.Contains("--compendium-checks"))
+{
+    CompendiumChecks.Run(Check);
+    Console.WriteLine($"{passed} Evil compendium rule checks passed"); return;
+}
 if (args.Contains("--evil-checks"))
 {
     EvilChecks.Run(Check);
@@ -409,6 +414,7 @@ GlobalPowerChecks.Run(Check);
 FateChecks.Run(Check);
 EvilChecks.Run(Check); EvilAbilityChecks.Run(Check);
 EvilUpgradeChecks.Run(Check);
+CompendiumChecks.Run(Check);
 EvilAiChecks.Run(Check);
 SandboxDummyChecks.Run(Check);
 SiegeChecks.Run(Check);

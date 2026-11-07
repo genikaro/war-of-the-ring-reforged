@@ -7,7 +7,9 @@ namespace Reforged.Simulation;
 public sealed record TechniqueDefinition(string Name,string DisplayName,string Building,int Slot,int FoodCost,int OreCost,int DurationTicks,
     string? Prerequisite,string? Previous,IReadOnlyDictionary<string,(int DpsMilli,int ArmorMilli)> Bonuses,
     IReadOnlyDictionary<string,int>? RangePpm = null,IReadOnlyDictionary<string,int>? MissileDpsMilli = null,int BuildingHealthPpm = 1_000_000,string Description = "",
-    IReadOnlyDictionary<string,int>? SightPpm = null,IReadOnlyDictionary<string,int>? TimeScalePpm = null,BuildingWeaponUpgrade? BuildingWeapon = null)
+    IReadOnlyDictionary<string,int>? SightPpm = null,IReadOnlyDictionary<string,int>? TimeScalePpm = null,BuildingWeaponUpgrade? BuildingWeapon = null,
+    IReadOnlyDictionary<string,(int SpeedMm,int Angle)>? MissileKnockback = null,IReadOnlyDictionary<string,(int RadiusMm,int DpsMilli)>? MissileSplash = null,
+    IReadOnlyDictionary<string,int>? MissileProjectile = null)
 {
     public override string ToString() => $"{Name},{Building},{Slot},{FoodCost},{OreCost},{DurationTicks},{Prerequisite},{Previous},"
         +string.Join('/',Bonuses.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => $"{p.Key}={p.Value.DpsMilli}:{p.Value.ArmorMilli}"))
@@ -16,6 +18,9 @@ public sealed record TechniqueDefinition(string Name,string DisplayName,string B
         +(SightPpm is { Count: > 0 } ? ",sight:"+string.Join('/',SightPpm.OrderBy(p => p.Key,StringComparer.Ordinal).Select(p => $"{p.Key}={p.Value}")) : "")
         +(TimeScalePpm is { Count: > 0 } ? ",time:"+string.Join('/',TimeScalePpm.OrderBy(p=>p.Key,StringComparer.Ordinal).Select(p=>$"{p.Key}={p.Value}")) : "")
         +(BuildingWeapon != null ? ",building-weapon:"+BuildingWeapon : "")
+        +(MissileKnockback is { Count: > 0 } ? ",knockback:"+string.Join('/',MissileKnockback.OrderBy(p=>p.Key,StringComparer.Ordinal).Select(p=>$"{p.Key}={p.Value.SpeedMm}:{p.Value.Angle}")) : "")
+        +(MissileSplash is { Count: > 0 } ? ",splash:"+string.Join('/',MissileSplash.OrderBy(p=>p.Key,StringComparer.Ordinal).Select(p=>$"{p.Key}={p.Value.RadiusMm}:{p.Value.DpsMilli}")) : "")
+        +(MissileProjectile is { Count: > 0 } ? ",projectile:"+string.Join('/',MissileProjectile.OrderBy(p=>p.Key,StringComparer.Ordinal).Select(p=>$"{p.Key}={p.Value}")) : "")
         +(BuildingHealthPpm != 1_000_000 ? ",buildings:"+BuildingHealthPpm : "")+",description:"+Description;
 }
 
@@ -119,6 +124,7 @@ public sealed partial class SimWorld
         unit.AbilityResearch.Clear();
         if (Researched.TryGetValue(unit.Team,out var researched)) unit.AbilityResearch.UnionWith(researched);
         unit.TechniqueDpsMilli = unit.TechniqueArmorMilli = unit.TechniqueMissileDpsMilli = 0; unit.TechniqueRangePpm = unit.TechniqueSightPpm = unit.TechniqueTimeScalePpm = 1_000_000;
+        unit.TechniqueKnockbackSpeedMm = unit.TechniqueSplashRadiusMm = unit.TechniqueSplashDpsMilli = 0; unit.TechniqueKnockbackAngle = 0; unit.TechniqueProjectile = -1;
         foreach (var technique in Techniques.Where(t => TechniqueApplies(unit.Team,t)))
         {
             if (technique.TimeScalePpm?.TryGetValue(unit.Definition.Name,out int time) == true)
@@ -132,7 +138,15 @@ public sealed partial class SimWorld
             // A replaced missile weapon (Razored Edge, then Flaming Axe) changes the missile DPS, not the melee weapon's.
             if (unit.Definition.IsRanged && technique.MissileDpsMilli?.TryGetValue(unit.Definition.Name,out int missile) == true)
                 unit.TechniqueMissileDpsMilli = missile-unit.Definition.DpsMilli;
+            // Build-171: what the replacement missile weapon carries besides its DPS (Knockback Arrows, Unstoppable Force).
+            if (unit.Definition.IsRanged && technique.MissileKnockback?.TryGetValue(unit.Definition.Name,out var knock) == true)
+            { unit.TechniqueKnockbackSpeedMm = knock.SpeedMm; unit.TechniqueKnockbackAngle = knock.Angle; }
+            if (unit.Definition.IsRanged && technique.MissileSplash?.TryGetValue(unit.Definition.Name,out var splash) == true)
+            { unit.TechniqueSplashRadiusMm = splash.RadiusMm; unit.TechniqueSplashDpsMilli = splash.DpsMilli; }
+            if (unit.Definition.IsRanged && technique.MissileProjectile?.TryGetValue(unit.Definition.Name,out int projectile) == true)
+                unit.TechniqueProjectile = projectile;
         }
+        unit.WeaponKnockback = KnockbackWeapon(unit);
         unit.ParalyzeRangeMm=unit.Definition.Abilities?.FirstOrDefault(a=>a.Kind==AbilityKind.Paralyze
             && (a.RequiredTechnique==null || unit.AbilityResearch.Contains(a.RequiredTechnique)))?.RangeMm ?? 0;
         unit.Grid?.MeasureReach(unit.ReachMm);
@@ -142,5 +156,7 @@ public sealed partial class SimWorld
         + ":researched:"+string.Join(';',Researched.OrderBy(p => p.Key).Select(p => p.Key+"="+string.Join(',',p.Value.Order(StringComparer.Ordinal))))
         + ":ability-research:"+string.Join(';',Units.Select(u => string.Join(',',u.AbilityResearch.Order(StringComparer.Ordinal))))
         + ":technique-bonuses:"+string.Join(';',Units.Select(u => $"{u.TechniqueDpsMilli},{u.TechniqueArmorMilli}"
-            +(u.TechniqueRangePpm != 1_000_000 || u.TechniqueMissileDpsMilli != 0 ? $",{u.TechniqueRangePpm},{u.TechniqueMissileDpsMilli}" : "")));
+            +(u.TechniqueRangePpm != 1_000_000 || u.TechniqueMissileDpsMilli != 0 ? $",{u.TechniqueRangePpm},{u.TechniqueMissileDpsMilli}" : "")
+            +(u.TechniqueKnockbackSpeedMm != 0 || u.TechniqueSplashRadiusMm != 0 || u.TechniqueProjectile >= 0
+                ? $",{u.TechniqueKnockbackSpeedMm}:{u.TechniqueKnockbackAngle},{u.TechniqueSplashRadiusMm}:{u.TechniqueSplashDpsMilli},{u.TechniqueProjectile}" : "")));
 }

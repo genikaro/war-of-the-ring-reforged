@@ -16,8 +16,12 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
     int DamagePerHitMilli = 0,bool KnockbackImmune = false,string DazedClip = "",string KnockbackClip = "",
     HeroExperienceDefinition? Experience = null,int WeaponExperiencePpm = 1_000_000,int MeleeWeaponExperiencePpm = 1_000_000,StatusProtection NativeImmunities = StatusProtection.None,
     int KnockbackTicks = 0,string GetUpClip = "",int GetUpTicks = 0,
-    bool CriticallyKillable = false,bool CriticalWeapon = false,bool CriticalMeleeWeapon = false)
+    bool CriticallyKillable = false,bool CriticalWeapon = false,bool CriticalMeleeWeapon = false,
+    int SplashRadiusMm = 0,int SplashDpsMilli = 0,int FirePpmPerSecond = 0)
 {
+    // Build-171: SplashRadiusMm / SplashDpsMilli are the main weapon's source AreaOfEffectRange / AreaOfEffectDamage (a rate
+    // per second like DpsMilli, so a hit's splash is that rate over the hit's share of the attack); FirePpmPerSecond is a melee
+    // weapon's FireDamagePerSecond, the fire it puts into the buildings it strikes.
     // Passive: never picks a fight nor answers one (the Sandbox's training dummies, build-59).
     public bool IsRanged => ProjectileSpeedMmPerSecond > 0;
     public bool HasMelee => IsRanged && Attacks.Any(a => a.Melee);
@@ -87,6 +91,7 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
             || BodyRadiusMm is < 100 or > 5000 || BodyHeightMm is < 100 or > 15000 || SelectionRadiusMm is < 100 or > 6000
             || AttackGapMm is < 0 or > 10000 || RegenerationPpm is < 0 or > 10_000_000 || SiegePpm is <= 0 or > 10_000_000
             || FriendlyCompressionPpm is < 500_000 or > 1_000_000 || ModelScalePpm is < 500_000 or > 2_000_000
+            || SplashRadiusMm is < 0 or > 20000 || SplashDpsMilli is < 0 or > 1_000_000 || FirePpmPerSecond is < 0 or > 100_000_000
             || Attacks == null || Attacks.Length == 0 || string.IsNullOrEmpty(Name)) throw new ArgumentException("Invalid unit definition");
         if (IsRanged && Attacks.All(a => a.Melee)) throw new ArgumentException("Ranged unit has no missile attack");
         foreach (var attack in Attacks)

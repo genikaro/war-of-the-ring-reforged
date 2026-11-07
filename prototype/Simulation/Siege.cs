@@ -198,7 +198,7 @@ public sealed partial class SimWorld
             // A source siege weapon (the Huorn's, x3) and Gimli's Siege Aura (x1.5) multiply damage against buildings.
             damage = damage*unit.Definition.SiegePpm/1_000_000*unit.SiegeAuraPpm/1_000_000;
             if (unit.Definition.FiresProjectile(unit.AttackVariant)) ReleaseSiegeProjectile(unit,site,index,damage);
-            else DamageSite(unit,site,unit.AttackVariant,index,damage,unit.AttackStartTick);
+            else { IgniteByMelee(unit,site,index); DamageSite(unit,site,unit.AttackVariant,index,damage,unit.AttackStartTick); }
         }
     }
 
@@ -258,7 +258,8 @@ public sealed partial class SimWorld
             /(TicksPerSecond*attack.Hits.Sum(h => (long)h.Scale)));
         Projectiles.Add(new(_projectileSequence++,unit.Id,-1,unit.AttackVariant,hit,damage,unit.AttackStartTick,
             Tick,Tick+travel,unit.X,y,unit.Z,x,targetY,z,site.Id,FirePpm: fire,
-            Style: unit.FlameArrow!=null ? "evil-flame-arrows" : axe?.Kind == AbilityKind.FlamingAxe ? "dwarf-flaming-axe" : ""));
+            Style: unit.FlameArrow!=null ? "evil-flame-arrows" : axe?.Kind == AbilityKind.FlamingAxe ? "dwarf-flaming-axe"
+                : unit.TechniqueProjectile >= 0 ? $"projectile-{unit.TechniqueProjectile}" : ""));
         CombatEvents.Add(new(Tick,CombatEventKind.Release,unit.Id,-1,unit.AttackVariant,hit,0,unit.AttackStartTick,unit.X,y,unit.Z));
     }
 

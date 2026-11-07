@@ -200,6 +200,33 @@ class EvilImportTests(unittest.TestCase):
                          (5000, 15_000, 500_000, 500_000))
         self.assertEqual((obelisk['RadiusMm'], obelisk['DurationTicks']), (15_000, 1334))
 
+    def test_fate_powers_keep_out_of_fog_and_buildings(self):
+        # Build-171: CanCastInFOW is 0 on every row; CanCastOverBuildings 0 on the Balrog, the Giant Ent and the Obelisk.
+        import global_powers
+        powers = {p['Id']: p for p in global_powers.export(self.resolver)}
+        self.assertTrue(all(p['BlockedInFog'] for p in powers.values()))
+        self.assertEqual(sorted(i for i, p in powers.items() if p['BlockedOverBuildings']), [0, 1, 9])
+
+    def test_researched_missile_weapons_bring_their_effects(self):
+        # Build-171: Knockback Arrows (weapon 52) always throws its target; Unstoppable Force (weapon 73) splashes 5 m
+        # (AreaOfEffectDamage 0.05) and throws projectile 35, the larger boulder.
+        data = skirmish_research.research_data(self.resolver, ('evil',))['techniques']
+        uruk = data['TECHNIQUE_KNOCKBACK_ARROWS']['bonuses']['UNIT_E_URUK_HAI']
+        self.assertEqual((uruk['missile_knockback_mm'], uruk['missile_knockback_angle'], uruk['missile_dps_milli']), (6000, 25, 14000))
+        self.assertNotIn('missile_projectile', uruk)
+        troll = data['TECHNIQUE_UNSTOPPABLE_FORCE']['bonuses']['UNIT_E_TROLL_STONEHURLER']
+        self.assertEqual((troll['missile_splash_radius_mm'], troll['missile_splash_dps_milli'], troll['missile_projectile']), (5000, 50, 35))
+        self.assertNotIn('missile_knockback_mm', troll)
+
+    def test_firesword_splashes_and_burns(self):
+        # Build-171: the Balrog's Firesword (weapon 119) splashes 25 a second within 6 m and puts 2 fire a second into buildings;
+        # the Giant Ent's boulder (weapon 10) splashes 15 within 5 m.
+        weapons = self.resolver.db['Weapons']
+        firesword = weapons.get(self.resolver.db['Units'].get('UNIT_E_HERO_BALROG')['MeleeWeapon'])
+        self.assertEqual((firesword['AreaOfEffectRange'], firesword['AreaOfEffectDamage'], firesword['FireDamagePerSecond']), (6.0, 25.0, 2.0))
+        boulder = weapons.get(combat_rules.missile_weapon_id(self.resolver, 'UNIT_G_GIANT_ENT'))
+        self.assertEqual((boulder['AreaOfEffectRange'], boulder['AreaOfEffectDamage']), (5.0, 15.0))
+
     def test_obelisk_model_comes_from_its_object(self):
         import tempfile
         from pathlib import Path

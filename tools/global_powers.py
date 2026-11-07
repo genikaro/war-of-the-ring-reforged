@@ -53,6 +53,8 @@ def one(db, faction, slot, ident, descriptions):
                     DurationTicks=round((timers[0]['Float_01'] if timers else row['Duration'])*20),
                     RechargeTicks=row['RechargeTime']*20, Description=descriptions[ident],
                     SoundEvents=sorted({a['SoundEventType'] for a in typed('_PLAY_SOUND_EVENT')}),
+                    # Build-171: the row's CanCastInFOW / CanCastOverBuildings (0 on every power but Blind and Bog over buildings).
+                    BlockedInFog=not row['CanCastInFOW'], BlockedOverBuildings=not row['CanCastOverBuildings'],
                     Source={'Global': row.values, 'Spell': spell.values if spell else None,
                             'Actions': [{'Event': e.name, 'Type': db['SpellActions'].get(a['SpellActionType']).name, 'Values': a.values}
                                         for e, a in actions]})

@@ -27,8 +27,8 @@ public sealed partial class SimWorld
         int chain = chaining != null && squared <= (long)chaining.ChainStartRangeMm*chaining.ChainStartRangeMm ? chaining.ChainTargets : 0;
         Projectiles.Add(new(_projectileSequence++,unit.Id,target.Id,unit.AttackVariant,hit,damage,unit.AttackStartTick,
             Tick,Tick+travel,unit.X,y,unit.Z,target.X,targetY,target.Z,ChainTargets: chain,ChainRangeMm: chaining?.RangeMm ?? 0,
-            ChainScalePpm: chaining?.BonusScale ?? 1_000_000,Seeking: blades != null,Visited: blades != null ? target.Id.ToString() : "",RawDamageMilli: raw,ArmorDurationPpm: armorDuration,Wind: unit.BlessedWindUntil > Tick ? unit.BlessedWindPower?.StatusAbility : null,
-            Style:unit.FlameArrow!=null ? "evil-flame-arrows" : ""));
+            ChainScalePpm: chaining?.BonusScale ?? 1_000_000,Seeking: blades != null,Visited: blades != null ? target.Id.ToString() : "",RawDamageMilli: raw,ArmorDurationPpm: armorDuration,Wind: unit.BlessedWindUntil > Tick ? unit.BlessedWindPower?.StatusAbility : unit.WeaponKnockback,
+            Style:unit.FlameArrow!=null ? "evil-flame-arrows" : unit.TechniqueProjectile >= 0 ? $"projectile-{unit.TechniqueProjectile}" : ""));
         CombatEvents.Add(new(Tick,CombatEventKind.Release,unit.Id,target.Id,unit.AttackVariant,hit,0,
             unit.AttackStartTick,unit.X,y,unit.Z));
     }
@@ -55,6 +55,9 @@ public sealed partial class SimWorld
                     victim.MissileWardUntil > Tick ? arrow.DamageMilli*victim.MissileWardPpm/1_000_000 : arrow.DamageMilli,arrow.StartTick,arrow.Source,spell:arrow.HeroAbility != null || arrow.Poison?.Kind==AbilityKind.PoisonDart,
                     experiencePpm:arrow.HeroAbility?.ExperiencePpm);
                 if (arrow.Poison is {} poison) InflictWeaponPoison(arrow.Unit,arrow.Source,victim,poison);
+                // Build-171: a splashing missile weapon (the Giant Ent's boulder, Unstoppable Force) strikes around its victim.
+                if (arrow.Unit >= 0 && arrow.HeroAbility == null && arrow.Poison?.Kind != AbilityKind.PoisonDart)
+                    ApplySplash(Units[arrow.Unit],victim,arrow.Attack,arrow.Hit,arrow.StartTick,missile: true);
                 if (arrow.HeroAbility is { } skill)
                 {
                     ApplyHeroKnockback(Units[arrow.Unit],victim,skill);
@@ -76,7 +79,7 @@ public sealed partial class SimWorld
         : ConstructionSites.TryGetValue(source,out var tower) && DefenseWeapon(tower,attack)?.CriticalKill == true;
 
     /// <summary>A hit from a unit, or from a defending building (no unit, <paramref name="source"/> the site).</summary>
-    private void ApplyHit(SimUnit? unit,SimUnit target,int attack,int hit,long damage,int startTick,int source = -1,bool spell = false,int? experiencePpm = null,int? fatePpm = null)
+    private void ApplyHit(SimUnit? unit,SimUnit target,int attack,int hit,long damage,int startTick,int source = -1,bool spell = false,int? experiencePpm = null,int? fatePpm = null,bool splash = false)
     {
         // Build-141: a sneaking Gollum takes the spell's damage multiplier, and his first blow starts the second that ends the sneak.
         if (target.Sneaking) damage = damage*target.DamageTakenPpm/1_000_000;
@@ -98,7 +101,7 @@ public sealed partial class SimWorld
         if (target.Health <= 0 && damage > 0 && !spell && target.Definition.CriticallyKillable && CriticalBlow(unit,attack,source))
             target.CriticalDeath = true;
         if (!spell) CombatEvents.Add(new(Tick,CombatEventKind.Hit,unit?.Id ?? -1,target.Id,attack,hit,damage,startTick,target.X,target.Y,target.Z,source));
-        if (unit != null && !spell) { ApplyShieldBreak(unit,target,attack); ApplyEvilWeaponHit(unit,target,attack,damage); }
+        if (unit != null && !spell && !splash) { ApplyShieldBreak(unit,target,attack); ApplyEvilWeaponHit(unit,target,attack,damage); }
         if (target.Health <= 0)
         {
             CancelAbility(target);

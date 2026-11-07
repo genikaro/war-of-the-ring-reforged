@@ -83,6 +83,17 @@ def unit_bonuses(resolver, technique):
             weapon = resolver.db['Weapons'].get(record['MissileWeapon'])
             bonuses[unit.name]['missile_dps_milli'] = round((weapon['CuttingDamagePerSecond']+weapon['FireDamagePerSecond'])*1000)
             bonuses[unit.name]['missile_weapon'] = weapon.name
+            # Build-171: what the replacement weapon adds besides its DPS. Knockback Arrows (weapon 52) always throws its
+            # target (AlwaysKnockbackTarget, KnockbackStrength 6, angle 25); Unstoppable Force (weapon 73) splashes 5 m.
+            if weapon['AlwaysKnockbackTarget'] and weapon['KnockbackStrength'] > 0:
+                bonuses[unit.name]['missile_knockback_mm'] = weapon['KnockbackStrength']*1000
+                bonuses[unit.name]['missile_knockback_angle'] = round(weapon['KnockbackAngle'])
+            if weapon['AreaOfEffectRange'] > 0:
+                bonuses[unit.name]['missile_splash_radius_mm'] = round(weapon['AreaOfEffectRange']*1000)
+                bonuses[unit.name]['missile_splash_dps_milli'] = round(weapon['AreaOfEffectDamage']*1000)
+            projectile = weapon['AssociatedProjectile']
+            if projectile >= 0 and projectile != resolver.db['Weapons'].get(unit['MissileWeapon'])['AssociatedProjectile']:
+                bonuses[unit.name]['missile_projectile'] = projectile
     return bonuses
 
 
