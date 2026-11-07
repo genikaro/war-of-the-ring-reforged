@@ -142,6 +142,8 @@ static class CompendiumChecks
         check(HealthTints.Of(Max(153),Max(620)) == HealthTint.Critical && HealthTints.Of(Max(1),Max(620)) == HealthTint.Critical,"his 153/620 is red");
         check(HealthTints.Of(Max(1698),Max(1750),burning: true) == HealthTint.Burning && HealthTints.Of(Max(100),Max(1750),burning: true) == HealthTint.Burning,
             "a burning building is orange at 97% and at 6%");
+        check(HealthTints.Of(Max(600),Max(620),poisoned: true) == HealthTint.Poisoned && HealthTints.Of(Max(100),Max(620),poisoned: true) == HealthTint.Poisoned
+            && HealthTints.Hex(HealthTint.Poisoned) == "8e3fc0","a poisoned unit's bar is purple at any health (build-174)");
         check(HealthTints.Hex(HealthTint.Burning) != HealthTints.Hex(HealthTint.Wounded) && HealthTints.Hex(HealthTint.Healthy,console: false) == "3fbb35",
             "the world bar keeps its green and each tint has its own colour");
         var balrog = Dummy with { Name="UNIT_E_HERO_BALROG",MaxHealth=2200 };

@@ -241,7 +241,7 @@ Every battle gear of the five Evil heroes is simulated now (`-EvilSmoke -Sandbox
   ordinary Warg Rider, Uruk-Hai, Orc Slasher, Goblin and troll units no battle gear of their own (build-164 audit).
 * The Evil start (Hovel, four workers, one Slavemaster) and the 25 m corruption radius are adapters; a capture of the original would settle them.
 * Tower garrisons arrived in build-173 (both sides). The minimap shows no corruption (the compendium's minimap captures show none either) and the Evil menu frame is not used. Setup deliberately plays the neutral Hobbit menu cue; matches play the commanded faction's music.
-* From the compendium still to measure in the original: the health-colour thresholds, the poisoned bar's colour (reported, not captured), splash and `MaxTargets`, Obelisk decay against redirected damage, and the fresh Evil start.
+* From the compendium still to measure in the original: the health-colour thresholds (the poisoned bar is purple since build-174), splash and `MaxTargets`, Obelisk decay against redirected damage, and the fresh Evil start.
 * Slaughterhouse and Smelter reuse the map's Mill and Foundry footprints.
 * Hero gear still to verify against the original: the freeze's stun immunity, the direction of Sneak's damage multiplier, how Dark Tracking's reveal looks without fog, Mystic Blades' chain damage,
   the satchel's fire and its attackability.
@@ -503,3 +503,11 @@ Adapters: the original's entry animation, whether occupants heal, and `Watchtowe
 on every skirmish unit) are not simulated. Checks: `--compendium-checks` (fourteen more: entry, capacity, ineligible units, the rate of
 fire with three and four inside, leaving, ejection, and the bot going in and out), `tools/test_skirmish_evil.py`, and the Evil Sandbox smoke garrisons two Orc
 Slashers by right-click, reads the tower's boxes and sends one out with a click.
+
+## Build-174: poisoned health bars are purple
+
+A poisoned unit's bars (world, console, mixed-selection portraits and the hero strip) are purple, #8E3FC0, whatever its health:
+the owner's account of the original, which the compendium's captures could not settle. Every poison counts (Pestilence, the Poison
+Trap, Poison Dart, Morgul Blade, the Evil Tower's Poison Arrows). Like a burning building's orange it is a status, so it shows
+even with Settings' team-coloured bars on. `--compendium-checks` (one more) and the Evil Sandbox smoke (the Pestilence victims'
+world bars) check it.

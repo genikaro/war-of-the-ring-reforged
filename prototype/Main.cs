@@ -1069,9 +1069,11 @@ public partial class Main : Node3D
                     ? _world.Navigation.GroundHeight((int)(-point.X*1000),(int)(point.Z*1000))/1000f : view.Root.GlobalPosition.Y);
             if (view.Drawn)
             {
-                // Build-172: the original's green / yellow / red by health, unless the Reforged team-coloured bars are on.
-                view.Health?.SetStyle(_playerColoredBars ? TeamColor(unit.Team)
-                    : HealthBar.Tinted(HealthTints.Of(unit.HealthMilli,unit.MaxHealth*1000L)),_overheadBars ? UnitBarHeight(unit) : .12f);
+                // Build-172: the original's green / yellow / red by health, unless the Reforged team-coloured bars are on;
+                // build-174: a poisoned unit's bar is purple either way (a status, like a burning building's orange).
+                var tint = HealthTints.Of(unit.HealthMilli,unit.MaxHealth*1000L,poisoned: unit.Poisons.Count > 0);
+                view.Health?.SetStyle(tint == HealthTint.Poisoned || !_playerColoredBars ? HealthBar.Tinted(tint) : TeamColor(unit.Team),
+                    _overheadBars ? UnitBarHeight(unit) : .12f);
                 view.Health?.Refresh(unit.Present ? unit.Health : 0,unit.MaxHealth);
             }
             PresentCommandRing(unit,view,dt);

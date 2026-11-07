@@ -287,6 +287,10 @@ public partial class Main
                 if (!Wait(100)) break;
                 _evilChecks["pestilence_poisons_the_cluster"] = _evilCluster.Count(id => world.Units[id].Poisons.Count > 0 || !world.Units[id].Present) >= 1
                     && world.StatusesOf(world.Units[_evilCluster.First(id => world.Units[id].Poisons.Count > 0)]).Any(st => st.Kind == StatusKind.Poisoned);
+                // Build-174: the poisoned Swordsmen's bars are purple, the console's too once one is selected.
+                var poisoned = _evilCluster.Where(id => world.Units[id].Present && world.Units[id].Poisons.Count > 0).ToArray();
+                _evilChecks["poisoned_bars_turn_purple"] = poisoned.Length > 0 && poisoned.All(id => _views[id].Health is { } bar
+                    && bar.FillColor.IsEqualApprox(HealthBar.Tinted(HealthTint.Poisoned)));
                 if (_capture != "") _ = CaptureFrame(false,Shot("pestilence"));
                 PushKey(Key.R); Next(); break;
             case 19:

@@ -80,7 +80,7 @@ public partial class HeroBar : Control
             slot.Portrait.SelfModulate = fallen ? new Color(.35f,.35f,.35f) : Colors.White;
             slot.Bars.Position = new(X(Left),top+BarTop*768*scale); slot.Bars.Size = new Vector2(Width*1024,BarsHeight*768)*scale;
             float health = Math.Clamp(hero.HealthMilli/(float)(hero.MaxHealth*1000L),0,1);
-            slot.Health.Modulate = new Color(HealthTints.Hex(HealthTints.Of(hero.HealthMilli,hero.MaxHealth*1000L)));
+            slot.Health.Modulate = new Color(HealthTints.Hex(HealthTints.Of(hero.HealthMilli,hero.MaxHealth*1000L,poisoned: hero.Poisons.Count > 0)));
             slot.Health.Position = new(X(FillLeft),top+HealthFill*768*scale); slot.Health.Size = new Vector2(FillWidth*1024*health,FillHeight*768)*scale;
             slot.Level.Size=new(19*scale,20*scale);slot.Level.AddThemeFontSizeOverride("font_size",Math.Max(10,(int)(14*scale)));
             slot.Level.Position=new(Width*1024*scale-23*scale,PortraitHeight*768*scale-22*scale);

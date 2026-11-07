@@ -4,13 +4,14 @@ namespace Reforged.Presentation;
 /// health, for friends and enemies alike (the Evil compendium: Grishnakh's 620 was yellow at 270 and red at 153); a burning building
 /// is burnt orange whatever its health (the same level-five Citadel turned from green at 1737/1750 to orange at 1698/1750). The 50%
 /// and 25% thresholds are an adapter that fits those samples; the original's own were not measured. A summoned unit's second meter
-/// (the Balrog's remaining life) is turquoise.</summary>
-public enum HealthTint { Healthy, Wounded, Critical, Burning }
+/// (the Balrog's remaining life) is turquoise. Build-174: a poisoned unit's bar is purple whatever its health (the owner's
+/// account of the original; the compendium's captures missed the selected frame).</summary>
+public enum HealthTint { Healthy, Wounded, Critical, Burning, Poisoned }
 
 public static class HealthTints
 {
-    public static HealthTint Of(long healthMilli,long maxHealthMilli,bool burning = false)
-        => burning ? HealthTint.Burning
+    public static HealthTint Of(long healthMilli,long maxHealthMilli,bool burning = false,bool poisoned = false)
+        => burning ? HealthTint.Burning : poisoned ? HealthTint.Poisoned
             : maxHealthMilli <= 0 || healthMilli*2 > maxHealthMilli ? HealthTint.Healthy
             : healthMilli*4 > maxHealthMilli ? HealthTint.Wounded : HealthTint.Critical;
 
@@ -19,6 +20,7 @@ public static class HealthTints
         HealthTint.Wounded => "c8aa1e",
         HealthTint.Critical => "b83428",
         HealthTint.Burning => "b0600a",
+        HealthTint.Poisoned => "8e3fc0",
         _ => console ? "48972e" : "3fbb35" };
 
     public const string Lifetime = "02c3b7";
