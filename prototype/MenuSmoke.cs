@@ -61,7 +61,8 @@ public partial class Main
                     && menu.CampaignButton.Disabled && Enumerable.Range(1,4).All(i => !menu.ItemButton(i).Disabled);
                 var art = FrontEndArt.Shared;
                 MenuChecks["menu_uses_original_art_and_font"] = art.Available && art.Art("parchment_button_01") != null && art.Art("lotr_wotr_logo") != null
-                    && art.Art("menu_bullet_left") != null && art.Immortal(24) is FontFile { FixedSize: 24 } && art.Immortal(13) is FontFile { FixedSize: 16 };
+                    && art.Art("menu_bullet_left") != null && art.Immortal(24) is FontFile { FixedSize: 24 } && art.Immortal(13) is FontFile { FixedSize: 16 }
+                    && menu.GetNode<Label>("ReforgedSubtitle") is { Text: "Reforged",Visible: true };
                 MenuChecks["menu_plays_menu_music"] = _audio.MusicPlaying && _audio.MusicContext == Reforged.Presentation.MusicContext.Menu;
                 break;
             case 4: Hover(menu.SkirmishButton.GetGlobalRect().GetCenter()); break;

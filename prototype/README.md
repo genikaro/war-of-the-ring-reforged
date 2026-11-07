@@ -1,5 +1,9 @@
 # Godot C# skirmish sandbox
 
+**build-170** restores the original gold frame for ready abilities and the faction Fate emblem for unlearned hero gear.
+Click the idle-worker button beside the minimap or press **I** to cycle through and center on idle workers.
+The main menu logo now has a Reforged subtitle. Run `python tools/content_pack.py` to refresh the shared HUD art.
+
 **build-169:** The game's own code runs about three times faster in `run.ps1` and editor builds, with the same results
 and pictures: they now compile the C# with optimizations, as exported games always were. In the 8-bot MP08_Rift late game a tick takes 3.3
 instead of 10.1 ms, the late-game play benchmark draws 105 instead of 91 FPS (frame p99 17 instead of 32 ms), and the

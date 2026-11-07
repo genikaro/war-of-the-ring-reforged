@@ -49,6 +49,8 @@ def export(output, resolver=None):
     paths += [source / 'Console/Main/console_frameportrait.uva']
     paths += list((source / 'Console/Counter Markers').glob('*.uva'))
     paths += list((source / 'Console/Unit Abilities/Borderless').glob('*.uva'))
+    paths += [source / ('Console/Unit Abilities/Misc/' + name + '.uva')
+              for name in ['Clickable_Border', 'Good_Purchase_Overlay', 'Evil_Purchase_Overlay']]
     paths += list((source / 'Console/SpellButtons/Good').glob('Global_Spell_G_*_Bordered.uva'))
     paths += [source / 'Console/UnitPortraits/Evil/Portrait_E_Uruk_Hai.uva']
     paths += list((source / 'Console/UnitPortraits/Good').glob('*.uva'))

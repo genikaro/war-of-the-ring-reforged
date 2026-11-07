@@ -32,7 +32,7 @@ public partial class Main
         hud.RefreshSandboxTabs(_sandboxMap);
         var selected = _world!.Units.Where(u => _selected.Contains(u.Id) && u.Health > 0).ToList();
         hud.Refresh(selected,UnitName,_orders.Pending,_paused,Enumerable.Range(0,10).Select(slot => _controlGroups.Recall(slot,LivingFriendly)).ToArray(),
-            _world.Units.Count(u => u.Team == PlayerTeam && u.Health > 0),VisibleEnemies(),_world.IsWalking(PlayerTeam),_world.Tick,_pendingAbilitySlot);
+            _world.Units.Count(u => u.Team == PlayerTeam && u.Health > 0),VisibleEnemies(),_world.IsWalking(PlayerTeam),_world.Tick,_pendingAbilitySlot,HasIdleWorker());
         if (_observing)
         {
             hud.RefreshMatch(_mapName,_world.Tick,Speeds,_speed,_paused,MatchState(_world),_actualSpeed);

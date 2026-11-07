@@ -8,6 +8,7 @@ public partial class Main
     private readonly Dictionary<string,bool> _minimapChecks = [];
     private Vector3 _minimapSmokeFocus;
     private (int X,int Z) _minimapOrderTarget;
+    private SimUnit[] _minimapIdleWorkers = [];
 
     private Vector2 MinimapSmokePoint(float u,float v)
     {
@@ -32,8 +33,7 @@ public partial class Main
     }
 
     private void MinimapRightClick(Vector2 point,bool ctrl = false,bool shift = false)
-        => GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right,Pressed = true,
-            Position = point,GlobalPosition = point,CtrlPressed = ctrl,ShiftPressed = shift },true);
+        => Click(point,MouseButton.Right,ctrl,shift);
 
     private void Move(Vector2 point,bool leftHeld = false) => GetViewport().PushInput(new InputEventMouseMotion { Position = point,GlobalPosition = point,
         ButtonMask = leftHeld ? MouseButtonMask.Left : 0 },true);
@@ -126,7 +126,35 @@ public partial class Main
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-waypoints.png");
                 break;
             case 36:
-                var report = new { build = BuildInfo.Label,checks = _minimapChecks,passed = _minimapChecks.Count == 17 && _minimapChecks.Values.All(v => v),
+                var workers = world.ActiveUnits.Where(u => u.Team == PlayerTeam && world.Workers.ContainsKey(u.Definition.Name)).ToArray();
+                _minimapIdleWorkers = [workers[0],workers[^1]];
+                world.Enqueue(PlayerTeam,_minimapIdleWorkers.Select(u => u.Id),OrderKind.Stop);
+                world.Enqueue(PlayerTeam,workers.Except(_minimapIdleWorkers).Select(u => u.Id),OrderKind.HoldGround);
+                break;
+            case 37: Move(_commands.IdleWorkerButton.GetGlobalRect().GetCenter()); break;
+            case 38:
+                var idle = _commands.IdleWorkerButton;
+                Click(idle.GetGlobalRect().GetCenter());
+                _minimapChecks["idle_worker_button_selects_and_centers"] = idle.Visible && !idle.Disabled
+                    && idle.TextureNormal == _commands.Art("console_g_idlepeasant") && idle.TextureHover != null
+                    && _selected.SetEquals([_minimapIdleWorkers[0].Id]) && _focus.DistanceTo(UnitPosition(_minimapIdleWorkers[0])) < .01f;
+                break;
+            case 39:
+                PushKey(Key.I);
+                _minimapChecks["idle_worker_key_skips_workers_with_orders"] = _selected.SetEquals([_minimapIdleWorkers[1].Id])
+                    && _focus.DistanceTo(UnitPosition(_minimapIdleWorkers[1])) < .01f;
+                break;
+            case 40:
+                PushKey(Key.I);
+                _minimapChecks["idle_worker_cycle_wraps"] = _selected.SetEquals([_minimapIdleWorkers[0].Id]);
+                world.Enqueue(PlayerTeam,_minimapIdleWorkers.Select(u => u.Id),OrderKind.HoldGround);
+                break;
+            case 42:
+                var before = _focus;
+                PushKey(Key.I);
+                _minimapChecks["idle_worker_unavailable_without_idle_workers"] = _commands.IdleWorkerButton.Disabled
+                    && _selected.SetEquals([_minimapIdleWorkers[0].Id]) && _focus == before;
+                var report = new { build = BuildInfo.Label,checks = _minimapChecks,passed = _minimapChecks.Count == 21 && _minimapChecks.Values.All(v => v),
                     markers = _minimapMarkers.Select(m => new { m.Type,m.X,m.Z }),view = _commands.Minimap.View.Select(p => new[] { p.X,p.Y }),
                     focus = new[] { _focus.X,_focus.Y,_focus.Z },yaw = _yaw,distance = _distance };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"minimap-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));

@@ -72,7 +72,7 @@ public partial class Main
         // Each side's own console (build-133): the Evil console for an Evil player, the Good one for a Good player.
         if (_commands.EvilSkin != EvilTeam(team)) { _commands.UseSkin(EvilTeam(team)); _heroBar.LoadArtwork(_commands); }
         _controlGroups = _sandboxMapGroups.GetValueOrDefault(team) ?? new();
-        _selected.Clear(); _selectedStructure = null; _lastGroup = -1;
+        _selected.Clear(); _selectedStructure = null; _lastGroup = -1; _lastIdleWorker = -1;
         // Banners and flags mark the commanded player's orders in its colour.
         if (_rallyBanner != null && _waypointFlagFile != null)
         {

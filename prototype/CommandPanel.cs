@@ -16,8 +16,10 @@ public partial class CommandPanel : Control
     public event Action<Vector2,bool,bool>? MapOrdered;
     public event Action? MenuChosen;
     public event Action? WalkRunChosen;
+    public event Action? IdleWorkerChosen;
     public event Action<int>? AbilityChosen;
     private readonly Button[] _abilities = new Button[4];
+    private readonly TextureRect[] _abilityOverlays = new TextureRect[4];
     private readonly Label[] _abilityLabels = new Label[4];
     private readonly Label[] _abilityHotkeys = new Label[4];
     private readonly ColorRect[] _abilityRecharge = new ColorRect[4];
@@ -47,6 +49,7 @@ public partial class CommandPanel : Control
     private Label _populationText = null!, _foodText = null!, _oreText = null!, _fateText = null!;
     private TextureButton _menu = null!;
     private TextureButton _walkRun = null!;
+    private TextureButton _idleWorker = null!;
     private BattleMinimap _map = null!;
     private string _rosterKey = "";
     public string? DisplayedCursorName { get; private set; }
@@ -97,6 +100,10 @@ public partial class CommandPanel : Control
         _walkRun = new TextureButton { Position = new(198,147),Size = new(34,27),FocusMode = FocusModeEnum.None,
             IgnoreTextureSize = true,StretchMode = TextureButton.StretchModeEnum.KeepAspectCentered,ToggleMode = true };
         _walkRun.Pressed += () => WalkRunChosen?.Invoke(); _content.AddChild(_walkRun);
+        _idleWorker = new TextureButton { Name = "IdleWorker",Position = new(198,176),Size = new(34,27),FocusMode = FocusModeEnum.None,
+            IgnoreTextureSize = true,StretchMode = TextureButton.StretchModeEnum.KeepAspectCentered,
+            Disabled = true,TooltipText = "Idle Worker [I]\nSelect and center the next idle worker." };
+        _idleWorker.Pressed += () => IdleWorkerChosen?.Invoke(); _content.AddChild(_idleWorker);
         _title = Text("",new(265,59),new(505,22),17); _content.AddChild(_title);
         _order = Text("",new(265,192),new(505,18),12); _content.AddChild(_order);
         _armies = Text("",new(787,8),new(229,18),12); _content.AddChild(_armies);
@@ -156,6 +163,9 @@ public partial class CommandPanel : Control
             Skin(button); button.Pressed += () => AbilityChosen?.Invoke(chosen); _content.AddChild(button);
             var recharge = new ColorRect { Color = new Color(0,0,0,.6f),Size = new(54,0),MouseFilter = MouseFilterEnum.Ignore };
             button.AddChild(recharge);
+            var overlay = new TextureRect { Size = button.Size,ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.Scale,MouseFilter = MouseFilterEnum.Ignore };
+            button.AddChild(overlay); _abilityOverlays[slot] = overlay;
             var label = Text("",new(0,16),new(54,22),15); label.HorizontalAlignment = HorizontalAlignment.Center; button.AddChild(label);
             var key = Text("",new(35,34),new(16,18),13); key.HorizontalAlignment = HorizontalAlignment.Right; button.AddChild(key);
             _abilities[slot] = button; _abilityLabels[slot] = label; _abilityRecharge[slot] = recharge;
@@ -325,6 +335,8 @@ public partial class CommandPanel : Control
         // console_g_run_highlighted a running one (build-61; they were the wrong way round).
         _walkRun.TextureNormal = _art["console_g_run_highlighted"];
         _walkRun.TexturePressed = _art["console_g_run"];
+        _idleWorker.TextureNormal = _idleWorker.TextureDisabled = _art.GetValueOrDefault("console_g_idlepeasant");
+        _idleWorker.TextureHover = _idleWorker.TexturePressed = _art.GetValueOrDefault("console_g_idlepeasant_highlighted");
         _populationIcon.Texture = _art.GetValueOrDefault("console_g_resourcepopulation");
         _foodIcon.Texture = _art.GetValueOrDefault("console_g_resourcefood");
         _oreIcon.Texture = _art.GetValueOrDefault("console_g_resourcewater");
@@ -365,7 +377,7 @@ public partial class CommandPanel : Control
     private string _describedKey = "";
     private SimWorld? _describedWorld;
 
-    public void Refresh(IReadOnlyList<SimUnit> units,Func<int,string> name,OrderKind? pending,bool paused,IReadOnlyList<int[]>? groups = null,int allies = 0,int enemies = 0,bool walking = false,int tick = 0,int pendingAbilitySlot = -1)
+    public void Refresh(IReadOnlyList<SimUnit> units,Func<int,string> name,OrderKind? pending,bool paused,IReadOnlyList<int[]>? groups = null,int allies = 0,int enemies = 0,bool walking = false,int tick = 0,int pendingAbilitySlot = -1,bool idleWorkerAvailable = false)
     {
         _map.ViewerTeam = SightTeam ?? PlayerTeam; _map.HazeTeams = HazeTeams;
         bool available = units.Count > 0;
@@ -376,6 +388,9 @@ public partial class CommandPanel : Control
         // Observing: no groups or pace to set, and the action grid shows the match instead.
         bool observing = PlayerTeam < 0;
         _match.Visible = _matchMap.Visible = observing; _walkRun.Visible = !observing;
+        _idleWorker.Visible = !observing && _idleWorker.TextureNormal != null;
+        _idleWorker.Disabled = !idleWorkerAvailable;
+        _idleWorker.SelfModulate = idleWorkerAvailable ? Colors.White : new Color(.5f,.5f,.5f);
         RefreshAbilities(units,pending,tick,pendingAbilitySlot);
         _single.Visible = single; _rosterScroll.Visible = !single;
         _title.Position = single ? new(335,59) : new(265,59); _title.Size = single ? new(435,22) : new(505,22);
@@ -550,6 +565,7 @@ public partial class CommandPanel : Control
     }
     public Button ButtonFor(OrderKind kind) => _buttons[kind];
     public Button AbilityButton(int slot) => _abilities[slot];
+    public Texture2D? AbilityOverlay(int slot) => _abilityOverlays[slot].Texture;
     public string AbilityLabel(int slot) => _abilityLabels[slot].Text;
     public Label AbilityHotkey(int slot) => _abilityHotkeys[slot];
 
@@ -563,6 +579,8 @@ public partial class CommandPanel : Control
     private void RefreshAbilities(IReadOnlyList<SimUnit> units,OrderKind? pending,int tick,int pendingSlot)
     {
         var hero = AbilitySource(units,PlayerTeam);
+        var purchaseOverlay = _art.GetValueOrDefault(EvilSkin ? "Evil_Purchase_Overlay" : "Good_Purchase_Overlay");
+        var clickableBorder = _art.GetValueOrDefault("Clickable_Border");
         for (int slot = 0; slot < 4; slot++)
         {
             var button = _abilities[slot]; var ability = hero?.Ability(slot);
@@ -580,10 +598,13 @@ public partial class CommandPanel : Control
                     || _world != null && !_world.CanAffordAbility(hero,ability)
                     || ability.ActivateFateCost > 0 && !(_world != null && _world.Economies.TryGetValue(PlayerTeam,out var bank) && bank.Fate >= ability.ActivateFateCost);
             button.SetPressedNoSignal(ability.Kind == AbilityKind.Camouflage ? hero.Camouflaged : ability.Kind == AbilityKind.Sneak ? hero.Sneaking : ability.Kind == AbilityKind.Ring ? hero.RingActive : !ability.Passive && pending == OrderKind.UseAbility && pendingSlot == slot);
-            button.AddThemeColorOverride("icon_disabled_color",ability.Passive && researched && !unsimulated ? Colors.White : new Color(.35f,.35f,.35f,1));
-            button.AddThemeColorOverride("icon_normal_color",purchasing ? new Color(.55f,.55f,.55f,1) : Colors.White);
-            _abilityLabels[slot].Text = purchasing ? $"{ability.PurchaseFateCost} Fate" : remaining > 0 && !ability.Passive ? $"{remaining/20f:0.0}s" : "";
+            _abilityOverlays[slot].Texture = purchasing ? purchaseOverlay : button.Disabled ? null : clickableBorder;
+            bool purchaseArt = purchasing && purchaseOverlay != null;
+            button.AddThemeColorOverride("icon_disabled_color",purchaseArt || ability.Passive && researched && !unsimulated ? Colors.White : new Color(.35f,.35f,.35f,1));
+            button.AddThemeColorOverride("icon_normal_color",purchasing && !purchaseArt ? new Color(.55f,.55f,.55f,1) : Colors.White);
+            _abilityLabels[slot].Text = purchasing && !purchaseArt ? $"{ability.PurchaseFateCost} Fate" : remaining > 0 && !ability.Passive ? $"{remaining/20f:0.0}s" : "";
             _abilityHotkeys[slot].Text = ability.Passive && !purchasing || unsimulated ? "" : key;
+            _abilityHotkeys[slot].Position = new(35,purchaseArt ? 2 : 34);
             _abilityRecharge[slot].Size = new(54,ability.RechargeTicks > 0 ? 54*Math.Clamp(remaining/(float)ability.RechargeTicks,0,1) : 0);
             string effect = ability.Kind switch {
                 AbilityKind.Detection => $"Reveals invisible enemies within {hero.SightRangeMm/1000} m. Cannot reveal the One Ring.",
@@ -606,6 +627,7 @@ public partial class CommandPanel : Control
     public Button GroupButton(int slot) => _groups[slot];
     public Button PortraitButton(int id) => _portraits[id].Button;
     public TextureButton WalkRunButton => _walkRun;
+    public TextureButton IdleWorkerButton => _idleWorker;
     public TextureButton MenuButton => _menu;
     public bool CommandsAvailable => _buttons.Values.All(b => !b.Disabled);
     public bool CommandPaletteEmpty => !_buttons.Values.Concat(_abilities).Concat(_constructionButtons).Concat(_trainButtons)

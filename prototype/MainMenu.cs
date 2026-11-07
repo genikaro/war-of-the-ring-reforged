@@ -48,6 +48,12 @@ public partial class MainMenu : Control
         var art = FrontEndArt.Shared;
         Place(new TextureRect { Texture = art.Art("lotr_wotr_logo"),MouseFilter = MouseFilterEnum.Ignore,ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered },new(.5042f*1024,-.026f*768,.5566f*1024,.3861f*768));
+        var subtitle = new Label { Name = "ReforgedSubtitle",Text = "Reforged",HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,MouseFilter = MouseFilterEnum.Ignore };
+        subtitle.AddThemeColorOverride("font_color",Gold); subtitle.AddThemeColorOverride("font_shadow_color",Shadow);
+        subtitle.AddThemeConstantOverride("shadow_offset_x",2); subtitle.AddThemeConstantOverride("shadow_offset_y",2);
+        if (art.Immortal(27) is { } subtitleFont) subtitle.AddThemeFontOverride("font",subtitleFont);
+        Place(subtitle,new(ButtonX,238,ButtonWidth,32)); _fonts.Add((subtitle,27));
         for (int i = 0; i < Items.Length; i++)
         {
             int index = i; float top = FirstButton+i*ButtonHeight;

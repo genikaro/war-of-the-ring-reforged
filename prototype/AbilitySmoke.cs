@@ -41,7 +41,8 @@ public partial class Main
             case 3:
                 _abilityChecks["paid_passives_start_locked"] = hero.MeleeDamageRate==20000 && hero.Immunities==StatusProtection.None
                     && _commands.AbilityButton(1).Disabled && _commands.AbilityButton(2).Disabled
-                    && _commands.AbilityLabel(1)=="2 Fate" && _commands.AbilityHotkey(1).Text=="W";
+                    && _commands.Art("Good_Purchase_Overlay") is { } fate && _commands.AbilityOverlay(1) == fate && _commands.AbilityOverlay(2) == fate
+                    && _commands.AbilityLabel(1) == "" && _commands.AbilityHotkey(1).Text == "W";
                 HoverAbilityPoint(_commands.AbilityButton(1).GetGlobalRect().GetCenter());
                 if (_capture!="") _=CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-locked.png");
                 _abilityCommandCount=world.Commands.Count;PushKey(Key.W);break;
@@ -61,7 +62,9 @@ public partial class Main
             case 8:
                 _abilityChecks["source_ability_panel"] = _commands.AbilityButton(0).Visible && !_commands.AbilityButton(0).Disabled
                     && _commands.AbilityButton(1).Visible && _commands.AbilityButton(1).Disabled
-                    && _commands.AbilityButton(2).Visible && _commands.AbilityButton(2).Disabled && !_commands.AbilityButton(3).Visible;
+                    && _commands.AbilityButton(2).Visible && _commands.AbilityButton(2).Disabled && !_commands.AbilityButton(3).Visible
+                    && _commands.Art("Clickable_Border") is { } border && _commands.AbilityOverlay(0) == border
+                    && _commands.AbilityOverlay(1) == null && _commands.AbilityOverlay(2) == null;
                 _abilityChecks["passive_stats"] = hero.MeleeDamageRate == 30000 && hero.Immunities == (StatusProtection)15;
                 _abilityChecks["clean_skill_labels"] = _commands.AbilityLabel(1) == "" && _commands.AbilityLabel(2) == ""
                     && _commands.AbilityHotkey(1).Text == "" && _commands.AbilityHotkey(2).Text == "";
@@ -111,7 +114,8 @@ public partial class Main
                 _abilityChecks["original_healing_sprite_layers_visible"] = _healingLayers.Length == 5 && _healingEffects.Count == 1
                     && _healingEffects[0].VisibleSprites > 0;
                 _abilityChecks["original_heal_sound_loaded"] = _abilitySounds.Count > 0;
-                _abilityChecks["cooldown_displayed"] = _commands.AbilityButton(0).Disabled && _commands.AbilityLabel(0).EndsWith('s');
+                _abilityChecks["cooldown_displayed"] = _commands.AbilityButton(0).Disabled && _commands.AbilityLabel(0).EndsWith('s')
+                    && _commands.AbilityOverlay(0) == null;
                 _abilityCommandCount = world.Commands.Count; PushKey(Key.Q); Click(_commands.AbilityButton(0).GetGlobalRect().GetCenter()); break;
             case 38: PushKey(Key.Space); break;
             case 39:

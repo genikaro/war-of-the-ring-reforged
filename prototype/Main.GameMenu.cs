@@ -7,7 +7,7 @@ using Godot;
 /// from the defaults and save nothing.</summary>
 public partial class Main
 {
-    private const string ControlsReference = "Selection: click or drag; Shift-click adds/removes; Shift-drag adds.\nDouble-click or Ctrl-click selects all living units of the same type and team.\nGroups: Ctrl+number assigns, Shift+number adds, number recalls, double-tap centers.\nOrders: A Attack, M Move, S Stop, H Hold Position, G Guard, T Patrol. Shift-click queues.\nMovement: F2 toggles global Walk / Run for your army without replacing orders.\nRight-click: move / attack; Ctrl adds attack-move. Esc or right-click cancels targeting.\nCamera: arrows or middle-drag pan; wheel zooms.\nTesting: Space pauses, Alt+right-click toggles an obstacle, Ctrl+Alt+right-click targets terrain beneath a bridge. F4 opens the debug tools. F10 hides the interface.";
+    private const string ControlsReference = "Selection: click or drag; Shift-click adds/removes; Shift-drag adds.\nDouble-click or Ctrl-click selects all living units of the same type and team.\nI selects and centers the next idle worker.\nGroups: Ctrl+number assigns, Shift+number adds, number recalls, double-tap centers.\nOrders: A Attack, M Move, S Stop, H Hold Position, G Guard, T Patrol. Shift-click queues.\nMovement: F2 toggles global Walk / Run for your army without replacing orders.\nRight-click: move / attack; Ctrl adds attack-move. Esc or right-click cancels targeting.\nCamera: arrows or middle-drag pan; wheel zooms.\nTesting: Space pauses, Alt+right-click toggles an obstacle, Ctrl+Alt+right-click targets terrain beneath a bridge. F4 opens the debug tools. F10 hides the interface.";
     private GameMenu _gameMenu = null!;
     private GameSettings _settings = new();
     private GameAudio _audio = null!;

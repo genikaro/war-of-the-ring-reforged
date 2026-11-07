@@ -22,6 +22,7 @@ public partial class Main : Node3D
     private readonly OrderInput _orders = new();
     private ControlGroups _controlGroups = new();
     private int _lastGroup = -1;
+    private int _lastIdleWorker = -1;
     private ulong _lastGroupTime;
     private readonly HashSet<int> _selected = [];
     private readonly Dictionary<int, UnitView> _views = [];
@@ -478,6 +479,7 @@ public partial class Main : Node3D
         _commands.MenuChosen += OpenGameMenu;
         _commands.CommandChosen += ChooseCommand;
         _commands.WalkRunChosen += ToggleWalkRun;
+        _commands.IdleWorkerChosen += ChooseIdleWorker;
         _commands.GlobalAbilitiesChosen += () => { CancelTargeting(); OpenBuildMenu(false); };
         _commands.GlobalPowerChosen += ChooseGlobalPower;
         _commands.PlacePowerChosen += ChoosePlacePower;
@@ -558,6 +560,7 @@ public partial class Main : Node3D
             }
             if (_observing && (ObserverHotkey(key) || FogHotkey(key))) return;
             if (_sandboxMap && key.Keycode == Key.Tab && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed) { SwitchSandboxPlayer(); return; }
+            if (key.Keycode == Key.I && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed) { ChooseIdleWorker(); return; }
             // Grid hotkeys go by key position, so they follow QWER/ASDF/ZXCV on any keyboard layout.
             int gridSlot = CommandPanel.GridSlot(key.PhysicalKeycode);
             if (gridSlot >= 0 && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed && UseGridHotkey(gridSlot)) return;
@@ -580,6 +583,33 @@ public partial class Main : Node3D
 
     private bool LivingFriendly(int id) => _world != null && id >= 0 && id < _world.Units.Count && _world.Units[id].Team == PlayerTeam && _world.Units[id].Health > 0;
     private bool LivingUnit(int id) => _world != null && id >= 0 && id < _world.Units.Count && _world.Units[id].Present;
+
+    private bool IsIdleWorker(SimUnit unit) => unit.Team == PlayerTeam && unit.Present
+        && unit.Order == OrderKind.Idle && unit.OrderQueue.Count == 0 && unit.Target < 0
+        && _world!.Workers.ContainsKey(unit.Definition.Name);
+
+    private bool HasIdleWorker() => PlayerTeam >= 0 && _world!.ActiveUnits.Any(IsIdleWorker);
+
+    private void ChooseIdleWorker()
+    {
+        if (_world == null || _observing || _gameMenu.Visible || _outcome.Visible) return;
+        SimUnit? next = null;
+        // The active roster is in id order. Remember the last worker even if it has since received a job.
+        foreach (var unit in _world.ActiveUnits)
+        {
+            if (!IsIdleWorker(unit)) continue;
+            next ??= unit;
+            if (unit.Id > _lastIdleWorker) { next = unit; break; }
+        }
+        if (next == null) return;
+        _lastIdleWorker = next.Id;
+        if (_orders.Pending != null || _constructionTargeting) CancelTargeting();
+        _commands.CloseGlobalAbilities(); OpenBuildMenu(false);
+        _dragging = false; _hud.SelectionBox = null;
+        _selectedStructure = null; _selected.Clear(); _selected.Add(next.Id);
+        _focus = UnitPosition(next); UpdateCamera();
+        SelectionSpeech();
+    }
 
     private void UseGroup(int slot,bool assign,bool append)
     {
@@ -1074,7 +1104,7 @@ public partial class Main : Node3D
         using (SimProfiler.Time("hud console"))
         _commands.Refresh(units,UnitName,_orders.Pending,_paused,
             Enumerable.Range(0,10).Select(slot => _controlGroups.Recall(slot,LivingFriendly)).ToArray(),
-            _world.ActiveUnits.Count(u => u.Team == PlayerTeam && u.Health > 0),VisibleEnemies(),_world.IsWalking(PlayerTeam),_world.Tick,_pendingAbilitySlot);
+            _world.ActiveUnits.Count(u => u.Team == PlayerTeam && u.Health > 0),VisibleEnemies(),_world.IsWalking(PlayerTeam),_world.Tick,_pendingAbilitySlot,HasIdleWorker());
         UpdateAbilityCursor();
         _heroBar.Refresh(FriendlyHeroes(),_commands.Art,_commands.EffectiveScale);
         using (SimProfiler.Time("hud structures")) if (_skirmish)
