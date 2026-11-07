@@ -1,3 +1,4 @@
+using Reforged.Presentation;
 using Reforged.Simulation;
 
 /// <summary>Build-171: the Evil compendium's open source rules. Weapon splash (the Balrog's Firesword, the Giant Ent's boulder,
@@ -127,5 +128,32 @@ static class CompendiumChecks
         check(open.GlobalTargetRefusal(0,obelisk,Node(60,20),60_500,20_500).Contains("building") && open.ValidGlobalTarget(0,obelisk,Node(50,20),50_500,20_500),
             "the Obelisk is refused over a building and allowed beside it");
         check(open.ValidGlobalTarget(0,bog with { BlockedOverBuildings = false },Node(60,20),60_500,20_500),"the Bog (CanCastOverBuildings 1) may cover a building");
+        RunHud(check);
+    }
+
+    /// <summary>Build-172: the health bar tints and a summon's remaining life.</summary>
+    private static void RunHud(Action<bool,string> check)
+    {
+        long Max(int hp) => hp*1000L;
+        check(HealthTints.Of(Max(620),Max(620)) == HealthTint.Healthy && HealthTints.Of(Max(311),Max(620)) == HealthTint.Healthy,"above half health the bar is green");
+        check(HealthTints.Of(Max(270),Max(620)) == HealthTint.Wounded && HealthTints.Of(Max(310),Max(620)) == HealthTint.Wounded,
+            "Grishnakh's 270/620 is yellow, as in the original");
+        check(HealthTints.Of(Max(153),Max(620)) == HealthTint.Critical && HealthTints.Of(Max(1),Max(620)) == HealthTint.Critical,"his 153/620 is red");
+        check(HealthTints.Of(Max(1698),Max(1750),burning: true) == HealthTint.Burning && HealthTints.Of(Max(100),Max(1750),burning: true) == HealthTint.Burning,
+            "a burning building is orange at 97% and at 6%");
+        check(HealthTints.Hex(HealthTint.Burning) != HealthTints.Hex(HealthTint.Wounded) && HealthTints.Hex(HealthTint.Healthy,console: false) == "3fbb35",
+            "the world bar keeps its green and each tint has its own colour");
+        var balrog = Dummy with { Name="UNIT_E_HERO_BALROG",MaxHealth=2200 };
+        var summon = new GlobalPowerDefinition(0,4,"Summon Balrog","balrog","move",7,2000,2400,200,"Balrog",[],SummonUnit:balrog.Name,Faction:"evil");
+        var rules = new CombatRules(); rules.Units[balrog.Name] = balrog; rules.GlobalPowers.Add(summon);
+        var w = Open(rules); w.TeamFactions[0] = SimWorld.Evil;
+        w.EnqueueGlobalPower(0,4,Cell(40),40_500,20_500); w.Step();
+        var raised = w.Units.Single(u => u.Definition.Name == balrog.Name);
+        check(w.SummonLifeLeft(raised) > .99f,"a fresh Balrog has all its life left");
+        Step(w,1200);
+        check(Math.Abs(w.SummonLifeLeft(raised)-.5f) < .01f,"half its 120 s later half is left");
+        check(w.SummonLifeLeft(w.Spawn(0,Cell(10),Dummy)) == 0,"an ordinary unit has no lifetime");
+        Step(w,1300);
+        check(w.SummonLifeLeft(raised) == 0,"an expired summon has none left");
     }
 }

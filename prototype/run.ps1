@@ -10,6 +10,7 @@ param(
     [switch]$AbilitySmoke,
     [switch]$AudioSmoke,
     [switch]$Unmuted,
+    [switch]$Mute,
     [switch]$ElvenSmoke,
     [switch]$NatureSmoke,
     [switch]$BloodSmoke,
@@ -95,10 +96,10 @@ if (-not $GodotPath) {
     else { $GodotPath = (Get-Command godot -ErrorAction Stop).Source }
 }
 # -Skirmish with nothing else that chooses the match opens the setup screen; -Setup always does.
-$launchOnly = @('Skirmish','GodotPath','DotnetPath','Resolution','HideHud','DebugMenu','View','Unmuted')
+$launchOnly = @('Skirmish','GodotPath','DotnetPath','Resolution','HideHud','DebugMenu','View','Unmuted','Mute')
 $setupMode = $Setup -or $SetupSmoke -or ($Skirmish -and -not ($PSBoundParameters.Keys | Where-Object { $_ -notin $launchOnly }))
 # Build-147: nothing that chooses a scene (or -Menu) opens the main menu; -View, -CapturePath and the like keep Helm's Deep.
-$menuMode = $Menu -or $MenuSmoke -or -not ($PSBoundParameters.Keys | Where-Object { $_ -notin @('GodotPath','DotnetPath','Resolution','Unmuted','DebugMenu') })
+$menuMode = $Menu -or $MenuSmoke -or -not ($PSBoundParameters.Keys | Where-Object { $_ -notin @('GodotPath','DotnetPath','Resolution','Unmuted','Mute','DebugMenu') })
 $env:DOTNET_ROOT = Split-Path -Parent $DotnetPath
 $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
@@ -132,6 +133,8 @@ if ($AudioSmoke) {
 if ($StressBenchmark) { $arguments += @('--fixed-fps','60') }
 # Build-160: a match without a window (e.g. -Observe -Speed 16 -Profile -ProfileUntil 14 -Headless), for simulation timing.
 if ($Headless -and -not ($arguments -contains '--headless')) { $arguments += '--headless' }
+# Build-172: -Mute runs any session or smoke silently (Godot's dummy audio driver; -Headless is silent already).
+if ($Mute) { $arguments += @('--audio-driver','Dummy') }
 $arguments += '--'
 if ($AudioSmoke) { $arguments += '--audio-smoke' }
 $arguments += "--view=$View"

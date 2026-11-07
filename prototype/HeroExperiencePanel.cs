@@ -10,6 +10,7 @@ public partial class CommandPanel
     private TextureRect _singleExperienceFrame = null!;
     private Control _singleExperienceClip = null!;
     private TextureRect _singleExperience = null!;
+    private ColorRect _singleLifetime = null!;
 
     private void CreateHeroExperience()
     {
@@ -24,13 +25,25 @@ public partial class CommandPanel
         _singleExperience=new TextureRect {Size=new(SelectedBarWidth,12),ExpandMode=TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode=TextureRect.StretchModeEnum.Scale,MouseFilter=MouseFilterEnum.Ignore};
         _singleExperienceClip.AddChild(_singleExperience);
+        // Build-172: a summon's remaining life fills the same frame in turquoise (the Balrog's "Lifetime" meter, capture 14).
+        _singleLifetime=new ColorRect {Size=new(SelectedBarWidth,12),Color=new Color(HealthTints.Lifetime),MouseFilter=MouseFilterEnum.Ignore,Visible=false};
+        _singleExperienceClip.AddChild(_singleLifetime);
         _singleExperienceText=Counter("",new(3,3),new(SelectedBarWidth,12),11,HorizontalAlignment.Center);
         _singleExperienceFrame.AddChild(_singleExperienceText);
     }
 
     private void RefreshHeroExperience(SimUnit unit)
     {
-        _singleLevel.Visible=_singleExperienceFrame.Visible=unit.Definition.Hero;
+        bool summoned = _world != null && unit.SummonedUntil > _world.Tick;
+        _singleLevel.Visible=_singleExperienceFrame.Visible=unit.Definition.Hero || summoned;
+        _singleLifetime.Visible=summoned; _singleExperience.Visible=!summoned;
+        if (summoned)
+        {
+            float life=_world!.SummonLifeLeft(unit); int seconds=(unit.SummonedUntil-_world.Tick+SimWorld.TicksPerSecond-1)/SimWorld.TicksPerSecond;
+            _singleLevel.Text="Lifetime"; _singleLevel.TooltipText=_singleExperienceFrame.TooltipText=$"Remaining life: {seconds} s";
+            _singleExperienceText.Text=$"{seconds} s"; _singleExperienceClip.Size=new(SelectedBarWidth*life,12);
+            return;
+        }
         if (!unit.Definition.Hero) return;
         var xp=HeroExperienceText.From(unit);
         _singleLevel.Text=xp.Level; _singleLevel.TooltipText=_singleExperienceFrame.TooltipText=xp.Tooltip;
@@ -43,6 +56,7 @@ public partial class CommandPanel
     public string DisplayedHeroExperienceText => _single.Visible && _singleExperienceFrame.Visible ? _singleExperienceText.Text : "";
     public bool HeroExperienceCounterCentered => Math.Abs(_singleExperienceText.GetRect().GetCenter().Y-9)<.01f;
     public string HeroExperienceTooltip => _singleExperienceFrame.TooltipText;
+    public float DisplayedLifetime => _single.Visible && _singleLifetime.IsVisibleInTree() ? _singleExperienceClip.Size.X/SelectedBarWidth : 0;
 }
 
 public partial class Main

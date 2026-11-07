@@ -59,6 +59,15 @@ public sealed partial class SimWorld
     public int GlobalCooldown(int team,int id) => Math.Max(0,GlobalReadyAt.GetValueOrDefault((team,id))-Tick);
     public bool GlobalActive(int team,int id) => GlobalAreas.Any(a => a.Team == team && a.Power.Id == id && a.Until > Tick
         && (a.Summon < 0 || Units[a.Summon].Health > 0));
+    /// <summary>Build-172: the share (0-1) of a summon's lifetime still to run, from the area its power raised (else its power's duration).</summary>
+    public float SummonLifeLeft(SimUnit unit)
+    {
+        if (unit.SummonedUntil <= Tick) return 0;
+        int total = GlobalAreas.FirstOrDefault(a => a.Summon == unit.Id) is { } area ? area.Until-area.Start
+            : Rules.GlobalPowers.FirstOrDefault(p => p.SummonUnit == unit.Definition.Name)?.DurationTicks ?? 0;
+        return total <= 0 ? 1 : Math.Clamp((unit.SummonedUntil-Tick)/(float)total,0,1);
+    }
+
     public bool HeroLostToLegacy(int team,string type) => Units.Any(u => u.Team == team && u.Definition.Name == type
         && u.HeroicLegacy != null && u.Health <= 0);
 

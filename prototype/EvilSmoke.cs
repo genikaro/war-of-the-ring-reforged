@@ -1,6 +1,8 @@
 using Godot;
 using Reforged.Simulation;
 using System.Text.Json;
+using Reforged.Presentation;
+using Reforged.Rendering;
 
 /// <summary>The Evil side end to end (build-133), Player 1 Evil against a passive Good base on Bilbo's Bluffs: the Goblin
 /// Hovel start with four Goblin Slaves and a Slavemaster, 12 population from the Slavemaster, the Hovel's own footprint, gathering to
@@ -58,7 +60,7 @@ public partial class Main
     private int[] _evilCluster = [],_evilFoes = [];
     private int _evilSaleme = -1,_evilPatient = -1,_evilGrishnakh = -1,_evilTarget = -1,_evilSatchelFoe = -1;
     private long _evilFoeHealth;
-    private int _evilTargetHealth,_evilGollum = -1,_evilMarked = -1;
+    private int _evilTargetHealth,_evilGollum = -1,_evilMarked = -1,_evilHudStep,_evilBurnSite = -1;
     private long _evilClusterHealth;
 
     /// <summary>The Evil Sandbox (--factions=evil,good on the Sandbox map): every Evil building stands and is promoted to the end of
@@ -207,6 +209,8 @@ public partial class Main
                 // Build-164: the Obelisk rises beside the same Goblin Slave and protects it.
                 world.EnqueueGlobalPower(0,3,slave.Node,slave.X,slave.Z);
                 Next(); break;
+            case 10 when _evilHudStep > 0:
+                EvilSandboxHud(world,Wait); break;
             case 10:
                 if (!Wait(4)) break;
                 _evilChecks["vile_surge_heals_a_goblin"] = Unit(EvilGoblin).Health >= 200 || world.Units.Where(u => u.Team == 0 && u.Definition.Name == EvilGoblin).Any(u => u.Health >= 90);
@@ -221,7 +225,12 @@ public partial class Main
                 _evilChecks["obelisk_protects_the_goblin"] = world.Units.Where(u => u.Team == 0 && u.Definition.Name == EvilGoblin)
                     .Any(u => world.StatusesOf(u).Any(st => st.Kind == StatusKind.Obelisk));
                 if (_capture != "") _ = CaptureFrame(false,Shot("balrog"));
-                Next(); break;
+                // Build-172: the Balrog takes the hero strip's SPECIAL slot with its remaining life, then the console's lifetime meter,
+                // the Obelisk's own panel and the burning orange of a building's bar are checked through the HUD.
+                _evilChecks["summon_takes_the_special_hero_slot"] = balrog != null && _heroBar.HeroIn(HeroBar.SummonSlot) == balrog.Id
+                    && _heroBar.LifeFraction is > .9f and <= 1f && _heroBar.Portrait(HeroBar.SummonSlot).IsVisibleInTree();
+                if (balrog != null) { _selected.Clear(); _selectedStructure = null; _selected.Add(balrog.Id); }
+                _evilHudStep = 1; _evilSandboxMark = _frames; break;
             case 11:
                 if (!Wait(4)) break;
                 // Saruman's four (build-137) through the HUD: Prison of Ice on one Gondor Swordsman, Invisible Force and Pestilence on a
@@ -744,5 +753,48 @@ public partial class Main
             System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"evil-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
             GD.Print("EVIL_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1);
         }
+    }
+}
+
+public partial class Main
+{
+    /// <summary>Build-172 sub-steps of the Evil Sandbox smoke's tenth step (the Balrog and the Obelisk are standing).</summary>
+    private void EvilSandboxHud(SimWorld world,Func<int,bool> wait)
+    {
+        if (!wait(4)) return;
+        var obelisk = world.GlobalAreas.FirstOrDefault(a => a.Power.Kind == GlobalPowerKind.Obelisk && a.Team == 0 && a.Until > world.Tick);
+        Vector2 Point() => _camera.UnprojectPosition(new Vector3(-obelisk!.X/1000f,obelisk.Y/1000f+3,obelisk.Z/1000f));
+        switch (_evilHudStep)
+        {
+            case 1:
+                _evilChecks["selected_summon_shows_its_lifetime"] = _commands.DisplayedLifetime is > .9f and <= 1f
+                    && _commands.HeroExperienceTooltip.StartsWith("Remaining life") && _commands.DisplayedHeroLevel == "Lifetime";
+                if (obelisk != null) { _focus = new(-obelisk.X/1000f,obelisk.Y/1000f,obelisk.Z/1000f); _distance = 42; UpdateCamera(); }
+                _evilHudStep = 2; break;
+            case 2:
+                _evilChecks["obelisk_is_found_under_the_pointer"] = obelisk != null && ObeliskAt(Point()) == 0;
+                if (obelisk != null) Click(Point());
+                _evilHudStep = 3; break;
+            case 3:
+                _evilChecks["obelisk_selects_into_its_own_panel"] = _selectedObelisk == 0 && _commands.StructureDetailsVisible
+                    && _commands.DisplayedTitle == "Obelisk" && _commands.DisplayedHealth.EndsWith("/5000") && !_commands.StructureStatsVisible;
+                _evilNotes["obelisk_panel"] = $"{_commands.DisplayedTitle} {_commands.DisplayedHealth} selected={_selectedObelisk}";
+                if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-obelisk-panel.png");
+                // A Good building set alight: its console and world bars turn burnt orange.
+                var site = world.ConstructionSites.Values.Where(s => s.Team == 1 && s.Complete && s.Health > 0).OrderBy(s => s.Id).First();
+                _evilBurnSite = site.Id; site.FirePpm = 600_000;
+                _selectedObelisk = -1; _selected.Clear(); _selectedStructure = site.Obstacle; FocusStructure(site.Obstacle);
+                _evilHudStep = 4; break;
+            default:
+                var burning = world.ConstructionSites[_evilBurnSite];
+                var orange = new Color(HealthTints.Hex(HealthTint.Burning));
+                _evilChecks["burning_building_bars_turn_orange"] = burning.FirePpm > 0 && _commands.StructureHealthColor.IsEqualApprox(orange)
+                    && _constructionViews.TryGetValue(burning.Id,out var view) && view.Bar.FillColor.IsEqualApprox(HealthBar.Tinted(HealthTint.Burning));
+                _evilNotes["burning_bars"] = $"fire={burning.FirePpm} console={_commands.StructureHealthColor.ToHtml(false)} details={_commands.StructureDetailsVisible}"
+                    +$" world={(_constructionViews.TryGetValue(burning.Id,out var shown) ? shown.Bar.FillColor.ToHtml(false) : "none")} building={burning.Building}";
+                burning.FirePpm = 0; burning.FireSource = -1; _selectedStructure = null;
+                _evilHudStep = 0; _evilSandboxStep++; break;
+        }
+        _evilSandboxMark = _frames;
     }
 }

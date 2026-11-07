@@ -2,26 +2,28 @@ using Godot;
 using Reforged.Simulation;
 using Reforged.Presentation;
 
-/// <summary>Right-edge hero portraits from the source GameConsole_Hero_Portraits.lsr: one slot per living hero,
-/// with a health bar and an experience bar beneath the portrait.</summary>
+/// <summary>Right-edge hero portraits from the source GameConsole_Hero_Portraits.lsr: one slot per hero, with a health bar and an
+/// experience bar beneath the portrait. Build-172: a fallen hero keeps a darkened portrait (the original shows one until he is
+/// summoned again), health fills take the green / yellow / red of the other bars, and the SPECIAL slot above holds a summoned
+/// Balrog or Giant Ent with its turquoise remaining life in the experience bar's place.</summary>
 public partial class HeroBar : Control
 {
     /// <summary>Hero unit id, double click (select and center) and Shift (add to the selection).</summary>
     public event Action<int,bool,bool>? HeroChosen;
-    // Source rectangles as fractions of a 1024x768 screen. HERO_PORTRAIT_0..4 stack down from y .2481;
-    // the separate SPECIAL slot above them (y .1546) has no recovered use and stays empty.
-    private const float Left = .9467f,Width = .0474f,Top = .2481f,Step = .0909f,PortraitHeight = .0633f;
+    // Source rectangles as fractions of a 1024x768 screen. HERO_PORTRAIT_0..4 stack down from y .2481; the separate SPECIAL slot
+    // above them (y .1546) holds a summon (the Evil compendium's captures 13-14 show the Balrog there).
+    private const float Left = .9467f,Width = .0474f,Top = .2481f,Step = .0909f,PortraitHeight = .0633f,SpecialTop = .1546f;
     private const float BarTop = .0652f,BarsHeight = .0182f,FillLeft = .9485f,FillWidth = .0437f,FillHeight = .005f,HealthFill = .0668f,ExperienceFill = .0761f;
-    public const int Slots = 5;
-    private readonly (Button Portrait,TextureRect Frame,TextureRect Bars,TextureRect Health,TextureRect Experience,Label Level)[] _slots = new (Button,TextureRect,TextureRect,TextureRect,TextureRect,Label)[Slots];
-    private readonly int[] _ids = Enumerable.Repeat(-1,Slots).ToArray();
+    public const int Slots = 5,SummonSlot = Slots;
+    private readonly (Button Portrait,TextureRect Frame,TextureRect Bars,TextureRect Health,TextureRect Experience,Label Level)[] _slots = new (Button,TextureRect,TextureRect,TextureRect,TextureRect,Label)[Slots+1];
+    private readonly int[] _ids = Enumerable.Repeat(-1,Slots+1).ToArray();
     private float _scale = 1;
 
     public override void _Ready()
     {
         Name = "HeroBar"; MouseFilter = MouseFilterEnum.Ignore;
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        for (int slot = 0; slot < Slots; slot++)
+        for (int slot = 0; slot <= Slots; slot++)
         {
             int index = slot;
             var portrait = new Button { Name = "Hero"+slot,FocusMode = FocusModeEnum.None,ExpandIcon = true,Visible = false };
@@ -52,32 +54,49 @@ public partial class HeroBar : Control
             slot.Health.Texture = art.Art("console_g_healthbarsmall"); slot.Experience.Texture = art.Art("console_g_staminabarsmall");
             slot.Health.Modulate = new Color("5bd03f");
         }
+        // The summon's second bar is its remaining life: the health texture tinted turquoise (capture 14).
+        _slots[SummonSlot].Experience.Texture = art.Art("console_g_healthbarsmall");
+        _slots[SummonSlot].Experience.Modulate = new Color(HealthTints.Lifetime);
     }
 
-    /// <summary>Lays out the slots for the console scale (1 = the original 1024x768 screen) and shows the living heroes in order.</summary>
-    public void Refresh(IReadOnlyList<SimUnit> heroes,Func<string,Texture2D?> portrait,float scale)
+    /// <summary>Lays out the slots for the console scale (1 = the original 1024x768 screen): the heroes in order (a fallen one
+    /// darkened, its bars empty), and above them the summon with its remaining life (0-1).</summary>
+    public void Refresh(IReadOnlyList<SimUnit> heroes,Func<string,Texture2D?> portrait,float scale,SimUnit? summon = null,float life = 0)
     {
         _scale = scale; var viewport = GetViewportRect().Size;
         float X(float fraction) => viewport.X-(1-fraction)*1024*scale;
-        for (int index = 0; index < Slots; index++)
+        for (int index = 0; index <= Slots; index++)
         {
-            var slot = _slots[index]; var hero = index < heroes.Count ? heroes[index] : null;
-            _ids[index] = hero?.Id ?? -1;
-            slot.Portrait.Visible = slot.Bars.Visible = slot.Health.Visible = slot.Experience.Visible = hero != null;
+            var slot = _slots[index]; var hero = index == SummonSlot ? summon : index < heroes.Count ? heroes[index] : null;
+            bool fallen = hero is { Health: <= 0 };
+            _ids[index] = hero == null || fallen ? -1 : hero.Id;
+            slot.Portrait.Visible = slot.Bars.Visible = hero != null;
+            slot.Health.Visible = slot.Experience.Visible = hero != null && !fallen;
             if (hero == null) continue;
-            float top = (Top+index*Step)*768*scale;
+            float top = (index == SummonSlot ? SpecialTop : Top+index*Step)*768*scale;
             slot.Portrait.Position = new(X(Left),top); slot.Portrait.Size = new Vector2(Width*1024,PortraitHeight*768)*scale;
             slot.Frame.Size = slot.Portrait.Size;
             slot.Portrait.Icon = portrait(CommandPanel.PortraitName(hero.Definition.DisplayName));
+            slot.Portrait.SelfModulate = fallen ? new Color(.35f,.35f,.35f) : Colors.White;
             slot.Bars.Position = new(X(Left),top+BarTop*768*scale); slot.Bars.Size = new Vector2(Width*1024,BarsHeight*768)*scale;
             float health = Math.Clamp(hero.HealthMilli/(float)(hero.MaxHealth*1000L),0,1);
-            var xp=HeroExperienceText.From(hero);
+            slot.Health.Modulate = new Color(HealthTints.Hex(HealthTints.Of(hero.HealthMilli,hero.MaxHealth*1000L)));
             slot.Health.Position = new(X(FillLeft),top+HealthFill*768*scale); slot.Health.Size = new Vector2(FillWidth*1024*health,FillHeight*768)*scale;
-            slot.Experience.Position = new(X(FillLeft),top+ExperienceFill*768*scale); slot.Experience.Size = new Vector2(FillWidth*1024*xp.Progress,FillHeight*768)*scale;
-            slot.Level.Text=hero.HeroLevel.ToString();slot.Level.Position=new(Width*1024*scale-23*scale,PortraitHeight*768*scale-22*scale);
             slot.Level.Size=new(19*scale,20*scale);slot.Level.AddThemeFontSizeOverride("font_size",Math.Max(10,(int)(14*scale)));
-            slot.Portrait.TooltipText = $"{hero.Definition.DisplayName} · {hero.Health}/{hero.MaxHealth} HP\n"+xp.Tooltip
-                + (hero.RingActive ? "\nWearing the One Ring" : "");
+            slot.Level.Position=new(Width*1024*scale-23*scale,PortraitHeight*768*scale-22*scale);
+            if (index == SummonSlot)
+            {
+                slot.Experience.Position = new(X(FillLeft),top+ExperienceFill*768*scale);
+                slot.Experience.Size = new Vector2(FillWidth*1024*Math.Clamp(life,0,1),FillHeight*768)*scale;
+                slot.Level.Text = "";
+                slot.Portrait.TooltipText = $"{hero.Definition.DisplayName} · {hero.Health}/{hero.MaxHealth} HP\nRemaining life {Math.Clamp(life,0,1):P0}";
+                continue;
+            }
+            var xp=HeroExperienceText.From(hero);
+            slot.Experience.Position = new(X(FillLeft),top+ExperienceFill*768*scale); slot.Experience.Size = new Vector2(FillWidth*1024*xp.Progress,FillHeight*768)*scale;
+            slot.Level.Text=hero.HeroLevel.ToString();
+            slot.Portrait.TooltipText = fallen ? $"{hero.Definition.DisplayName} · fallen\n"+xp.Tooltip
+                : $"{hero.Definition.DisplayName} · {hero.Health}/{hero.MaxHealth} HP\n"+xp.Tooltip+(hero.RingActive ? "\nWearing the One Ring" : "");
         }
     }
 
@@ -87,4 +106,6 @@ public partial class HeroBar : Control
     public float ExperienceFraction(int slot) => _slots[slot].Experience.Size.X/(_scale*FillWidth*1024);
     public string DisplayedLevel(int slot) => _slots[slot].Level.Text;
     public bool Contains(Vector2 point) => _slots.Any(s => s.Portrait.Visible && s.Portrait.GetGlobalRect().HasPoint(point));
+    public bool Fallen(int slot) => _slots[slot].Portrait.Visible && _ids[slot] < 0;
+    public float LifeFraction => _slots[SummonSlot].Experience.Visible ? _slots[SummonSlot].Experience.Size.X/(_scale*FillWidth*1024) : 0;
 }

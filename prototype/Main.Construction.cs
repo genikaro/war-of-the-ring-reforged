@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 using Reforged.Rendering;
 using Reforged.Simulation;
 using System.Text.Json;
@@ -461,7 +462,11 @@ public partial class Main
             // Health includes damage taken during construction; completion percentage is shown separately in the console.
             view.Bar.Refresh(site.Health,maxHealth);
             var barPosition = _overheadBars && view.Bar.Visible ? BuildingBarPosition(_structureViews[site.Obstacle],view) : new Vector3(0,.14f,0);
-            view.Bar.SetStyle(_playerColoredBars ? TeamColor(site.Team) : null,barPosition);
+            // Build-172: a burning building's bar is burnt orange, even with team-coloured bars (a status, as in the original);
+            // otherwise green / yellow / red by health, and a foundation's climbing health keeps the plain fill.
+            var tint = site.Complete ? HealthTints.Of(site.Health*1000L,maxHealth*1000L,site.FirePpm > 0) : HealthTint.Healthy;
+            view.Bar.SetStyle(tint == HealthTint.Burning ? HealthBar.Tinted(tint) : _playerColoredBars ? TeamColor(site.Team)
+                : !site.Complete ? null : HealthBar.Tinted(tint),barPosition);
             int fireIntensity = Math.Max(site.FirePpm,_world.FlameShieldSites.Contains(site.Id) ? 500000 : 0);
             if (fireIntensity > 0 && _buildingFireLayers.Length > 0) view.Fire ??= new BuildingFireEffect(view.Root,site.RadiusMm/1000f,_buildingFireLayers);
             view.Fire?.Refresh(fireIntensity,_world.Tick);

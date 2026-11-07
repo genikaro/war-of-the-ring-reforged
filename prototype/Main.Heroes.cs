@@ -46,7 +46,18 @@ public partial class Main
         }
     }
 
-    private List<SimUnit> FriendlyHeroes() => [.. _world!.ActiveUnits.Where(u => u.Team == PlayerTeam && u.Present && u.Definition.Hero).OrderBy(u => u.Id).Take(HeroBar.Slots)];
+    /// <summary>Build-172: one slot per hero type the player has fielded, in the order they first came: the living hero, or the
+    /// latest fallen one, darkened, until he is summoned again. A hero inside a building keeps his slot.</summary>
+    private List<SimUnit> FriendlyHeroes() => [.. _world!.Units.Where(u => u.Team == PlayerTeam && u.Definition.Hero)
+        .GroupBy(u => u.Definition.Name).Select(g => (First: g.Min(u => u.Id),Shown: g.Where(u => u.Health > 0).OrderBy(u => u.Id).FirstOrDefault() ?? g.MaxBy(u => u.Id)!))
+        .OrderBy(h => h.First).Select(h => h.Shown).Take(HeroBar.Slots)];
+
+    /// <summary>Build-172: the player's living summon (Balrog, Giant Ent) and the share of its life left.</summary>
+    private (SimUnit? Unit,float Life) FriendlySummon()
+    {
+        var summon = _world!.ActiveUnits.Where(u => u.Team == PlayerTeam && u.Health > 0 && u.SummonedUntil > _world.Tick).MaxBy(u => u.Id);
+        return summon == null ? (null,0) : (summon,_world.SummonLifeLeft(summon));
+    }
 
     /// <summary>Original portrait behavior: a click selects the hero, a double click also centers the camera on him.</summary>
     private void ChooseHero(int id,bool center,bool append)

@@ -197,6 +197,7 @@ public partial class Main
 
     private StructureDetails? SelectedStructureDetails()
     {
+        if (_selectedObelisk >= 0) return SelectedObeliskDetails();
         if (_selectedStructure is not int id || !_structureViews.TryGetValue(id,out var entry)) return null;
         if (!StructureVisible(entry)) { _selectedStructure = null; return null; }
         var world = _world!;
@@ -222,6 +223,7 @@ public partial class Main
 
     private void PresentStructureSelection(float dt)
     {
+        if (_selected.Count > 0 || _selectedStructure != null) _selectedObelisk = -1;
         var details = SelectedStructureDetails(); _commands.RefreshStructure(details);
         _commands.RefreshPlacePower(_world!,_selectedStructure is int selectedPlace ? PlaceAt(selectedPlace) : null,_observing);
         foreach (var entry in _structureViews.Values)

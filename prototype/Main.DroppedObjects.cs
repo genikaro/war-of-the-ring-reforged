@@ -79,3 +79,39 @@ public partial class Main
         { _droppedViews[key].QueueFree(); _droppedViews.Remove(key); }
     }
 }
+
+/// <summary>Build-172: a standing Obelisk can be selected, as in the original: its portrait, name, "Sentinel" and its health
+/// out of 5000 (the selected panel of the Evil compendium's capture 29), with an empty action grid.</summary>
+public partial class Main
+{
+    private int _selectedObelisk = -1;
+    private const float ObeliskPickHeight = 7f,ObeliskPickRadius = 1.6f;
+
+    private IEnumerable<GlobalArea> StandingObelisks() => _world == null ? []
+        : _world.GlobalAreas.Where(a => a.Power.Kind == GlobalPowerKind.Obelisk && a.Until > _world.Tick
+            && _world.ObeliskHealthMilli.GetValueOrDefault(a.Team) > 0
+            && (_observing || a.Team == PlayerTeam || _world.InSight(ViewTeam,a.X,a.Z)));
+
+    /// <summary>The team whose Obelisk lies under the pointer: its column, projected to the screen.</summary>
+    private int? ObeliskAt(Vector2 mouse)
+    {
+        foreach (var area in StandingObelisks().OrderBy(a => a.Team))
+        {
+            var bottom = new Vector3(-area.X/1000f,area.Y/1000f,area.Z/1000f); var top = bottom+Vector3.Up*ObeliskPickHeight;
+            if (_camera.IsPositionBehind(bottom) || _camera.IsPositionBehind(top)) continue;
+            Vector2 a = _camera.UnprojectPosition(bottom),b = _camera.UnprojectPosition(top);
+            float radius = Math.Max(10,a.DistanceTo(_camera.UnprojectPosition(bottom+_camera.GlobalBasis.X*ObeliskPickRadius)));
+            var along = b-a; float t = along.LengthSquared() < .01f ? 0 : Math.Clamp((mouse-a).Dot(along)/along.LengthSquared(),0,1);
+            if (mouse.DistanceTo(a+along*t) <= radius) return area.Team;
+        }
+        return null;
+    }
+
+    private Reforged.Presentation.StructureDetails? SelectedObeliskDetails()
+    {
+        if (StandingObelisks().FirstOrDefault(a => a.Team == _selectedObelisk) is not { } area) { _selectedObelisk = -1; return null; }
+        int health = (int)((_world!.ObeliskHealthMilli.GetValueOrDefault(area.Team)+999)/1000);
+        return new(Reforged.Presentation.StructureDetails.ObeliskId(area.Team),area.Team,area.Power.Name,area.Power.Icon,health,area.Power.ObjectHealth,
+            "",100,"Sentinel",-1,Obelisk: true);
+    }
+}

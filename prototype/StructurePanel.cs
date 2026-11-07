@@ -60,10 +60,13 @@ public partial class CommandPanel
         _structurePortrait.TooltipText = details.Name+(details.Place != "" ? "\n"+details.Resource : "");
         _structureBurning.Visible = details.HasHealth && details.Burning;
         _structureBurning.Texture = _art.GetValueOrDefault("console_g_firealert");
-        _structureHealthDetails.Visible = _structureStats.Visible = details.HasHealth;
+        // Build-172: the Obelisk's panel is a portrait, its name and its health, as the original shows it.
+        _structureHealthDetails.Visible = details.HasHealth; _structureStats.Visible = details.HasHealth && !details.Obelisk;
         _structureHealthText.Text = details.HasHealth ? $"{details.Health}/{details.MaxHealth}" : "";
         _structureHealthBar.Size = new(details.HasHealth ? 244*Math.Clamp(details.Health/(float)details.MaxHealth,0,1) : 0,12);
-        _structureHealthBar.Color = new Color(details.Team < 0 ? "b0a375" : details.Team == PlayerTeam ? "48972e" : "b84c3c");
+        // Build-172: green / yellow / red by health for anyone's building, burnt orange while it burns (a neutral structure keeps its own).
+        _structureHealthBar.Color = new Color(details.Team < 0 && !details.Obelisk ? "b0a375"
+            : HealthTints.Hex(HealthTints.Of(details.Health*1000L,details.MaxHealth*1000L,details.Burning && !details.UnderConstruction)));
         var weapons = details.Weapons ?? [];
         _structureStatsBackground.Texture = _statsBackground.Texture;
         _structureAttack = details.Attack; _structureAttackTip = string.Join("\n\n",weapons.Select(w => w.Tooltip));
@@ -91,5 +94,7 @@ public partial class CommandPanel
     public string[] DisplayedStructureAttacks => _structureStatRows.Where(r => r.Name.Visible && r.Name.Text != "Armor").Select(r => r.Value.Text).ToArray();
     public Label StructureAttackValue(int row) => _structureStatRows[row].Value;
     public TextureRect StructureBurningStatus => _structureBurning;
+    public Color StructureHealthColor => _structureHealthBar.Color;
+    public bool StructureStatsVisible => _structureStats.Visible;
     public bool StructureHealthCounterCentered => Math.Abs(_structureHealthText.GetRect().GetCenter().Y-_structureHealthBar.GetRect().GetCenter().Y) < .01f;
 }

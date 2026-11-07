@@ -15,6 +15,9 @@ public sealed partial class HealthBar : Node3D
     private int _filled = -1;
     private bool _shown;
     public static readonly Color DefaultColor = new("3fbb35");
+    private static readonly Color[] Tints = [.. Enum.GetValues<Reforged.Presentation.HealthTint>().Select(t => new Color(Reforged.Presentation.HealthTints.Hex(t,console: false)))];
+    /// <summary>Build-172: the world bar's fill for a health tint (healthy keeps the default green).</summary>
+    public static Color Tinted(Reforged.Presentation.HealthTint tint) => Tints[(int)tint];
     private static readonly Color Backing = new("08090a");
     public Color FillColor => ((StandardMaterial3D)_fill.MaterialOverride).AlbedoColor;
     private Color _color = DefaultColor;

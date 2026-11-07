@@ -25,7 +25,7 @@ public partial class Main
         var hud = new CommandPanel { ManageCursor = false,BuildMenuOpen = _buildMenu,PlayerTeam = PlayerTeam,SightTeam = ViewTeam,HazeTeams = HazeTeams }; root.AddChild(hud); hud.TeamColors = _teamColors; hud.LoadArtwork(_cacheFiles.Content,_world!,EvilTeam(PlayerTeam));
         hud.Visible = _hud.Visible;
         var heroes = new HeroBar { Visible = _hud.Visible }; root.AddChild(heroes); heroes.LoadArtwork(hud);
-        heroes.Refresh(FriendlyHeroes(),hud.Art,hud.EffectiveScale);
+        var (summon,life) = FriendlySummon(); heroes.Refresh(FriendlyHeroes(),hud.Art,hud.EffectiveScale,summon,life);
         hud.SetMinimapMarkers(_minimapMarkers);
         hud.SetMinimapView(ViewFootprint(camera,viewport.GetVisibleRect(),hud.Visible ? hud.GetGlobalRect().Position.Y : viewport.GetVisibleRect().End.Y));
         if (_skirmish) ApplySkirmishHud(hud);

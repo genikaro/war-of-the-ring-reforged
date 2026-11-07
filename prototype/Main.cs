@@ -555,7 +555,7 @@ public partial class Main : Node3D
                 else if (_commands.GlobalAbilitiesOpen) _commands.CloseGlobalAbilities();
                 else if (_orders.Pending != null || _constructionTargeting) CancelTargeting();
                 else if (_buildMenu) OpenBuildMenu(false);
-                else { _selected.Clear(); _selectedStructure = null; }
+                else { _selected.Clear(); _selectedStructure = null; _selectedObelisk = -1; }
                 _dragging = false; _hud.SelectionBox = null;
             }
             if (_observing && (ObserverHotkey(key) || FogHotkey(key))) return;
@@ -672,6 +672,8 @@ public partial class Main : Node3D
             // Small pointer jitter off a model still clicks the body where the press began.
             var structure = StructureAt(start);
             var unit = UnitAt(start,structure?.Distance);
+            _selectedObelisk = -1;
+            if (unit == null && structure == null && ObeliskAt(start) is int obelisk) { _selected.Clear(); _selectedStructure = null; _selectedObelisk = obelisk; return; }
             // On the Sandbox map, clicking the other player's unit or building takes command of that player.
             if (unit == null && structure is { } hit) { CommandSandboxPlayer(_structureViews[hit.Id].Team); SelectStructure(hit.Id,append); return; }
             if (unit != null) CommandSandboxPlayer(unit.Team);
@@ -682,7 +684,7 @@ public partial class Main : Node3D
         }
         if (_sandboxMap && SandboxPlayerInBox(rect) is int side) CommandSandboxPlayer(side);
         int? previousStructure = _selectedStructure;
-        _selectedStructure = null;
+        _selectedStructure = null; _selectedObelisk = -1;
         if (!append || !_selected.All(LivingFriendly)) _selected.Clear();
         foreach (var unit in _world!.Units.Where(u => (u.Team == PlayerTeam || _observing) && u.Present && _world.CanSeeUnit(ViewTeam,u)))
             if (InBox(rect,unit)) _selected.Add(unit.Id);
@@ -1062,7 +1064,9 @@ public partial class Main : Node3D
                     ? _world.Navigation.GroundHeight((int)(-point.X*1000),(int)(point.Z*1000))/1000f : view.Root.GlobalPosition.Y);
             if (view.Drawn)
             {
-                view.Health?.SetStyle(_playerColoredBars ? TeamColor(unit.Team) : null,_overheadBars ? UnitBarHeight(unit) : .12f);
+                // Build-172: the original's green / yellow / red by health, unless the Reforged team-coloured bars are on.
+                view.Health?.SetStyle(_playerColoredBars ? TeamColor(unit.Team)
+                    : HealthBar.Tinted(HealthTints.Of(unit.HealthMilli,unit.MaxHealth*1000L)),_overheadBars ? UnitBarHeight(unit) : .12f);
                 view.Health?.Refresh(unit.Present ? unit.Health : 0,unit.MaxHealth);
             }
             PresentCommandRing(unit,view,dt);
@@ -1106,7 +1110,8 @@ public partial class Main : Node3D
             Enumerable.Range(0,10).Select(slot => _controlGroups.Recall(slot,LivingFriendly)).ToArray(),
             _world.ActiveUnits.Count(u => u.Team == PlayerTeam && u.Health > 0),VisibleEnemies(),_world.IsWalking(PlayerTeam),_world.Tick,_pendingAbilitySlot,HasIdleWorker());
         UpdateAbilityCursor();
-        _heroBar.Refresh(FriendlyHeroes(),_commands.Art,_commands.EffectiveScale);
+        var (summon,life) = FriendlySummon();
+        _heroBar.Refresh(FriendlyHeroes(),_commands.Art,_commands.EffectiveScale,summon,life);
         using (SimProfiler.Time("hud structures")) if (_skirmish)
         {
             if (!SelectedBuilders().Any()) ClearConstructionTargeting();

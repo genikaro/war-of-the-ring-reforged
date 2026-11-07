@@ -441,7 +441,8 @@ public partial class CommandPanel : Control
         {
             var stats = UnitHudStats.From(unit,_rules);
             var portrait = _portraits[unit.Id]; portrait.Health.Size = new(46*Math.Clamp(unit.Health/(float)unit.MaxHealth,0,1),4);
-            portrait.Health.Color = new Color(unit.Team == PlayerTeam ? "69ae63" : "d05b4c");
+            // Build-172: friend or enemy, the original's green / yellow / red by health.
+            portrait.Health.Color = new Color(HealthTints.Hex(HealthTints.Of(unit.HealthMilli,unit.MaxHealth*1000L)));
             var readout = readouts.GetValueOrDefault(unit.Id);
             portrait.Button.TooltipText = $"{name(unit.Id)} #{unit.Id+1} · {unit.Health}/{unit.MaxHealth}"
                 + (unit.Definition.Hero ? "\n"+HeroExperienceText.From(unit).Tooltip : "")
@@ -461,7 +462,7 @@ public partial class CommandPanel : Control
                 RefreshStatusBar(unit,name);
                 RefreshHeroExperience(unit);
                 _singleHealthText.Text = stats.Health;
-                _singleHealth.Color = new Color(unit.Team == PlayerTeam ? "48972e" : "b84c3c");
+                _singleHealth.Color = new Color(HealthTints.Hex(HealthTints.Of(unit.HealthMilli,unit.MaxHealth*1000L)));
                 _singleHealth.Size = new(SelectedBarWidth*Math.Clamp(unit.HealthMilli/(float)(unit.MaxHealth*1000L),0,1),12);
             }
         }
@@ -567,6 +568,8 @@ public partial class CommandPanel : Control
     public Button AbilityButton(int slot) => _abilities[slot];
     public Texture2D? AbilityOverlay(int slot) => _abilityOverlays[slot].Texture;
     public string AbilityLabel(int slot) => _abilityLabels[slot].Text;
+    public string DisplayedTitle => _title.Text;
+    public Color SingleHealthColor => _singleHealth.Color;
     public Label AbilityHotkey(int slot) => _abilityHotkeys[slot];
 
     /// <summary>Numbers in tooltips read with a decimal point whatever the system's language.</summary>
