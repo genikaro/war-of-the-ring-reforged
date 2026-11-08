@@ -14,7 +14,8 @@ public sealed record UnitHudStats(string Type,string Icon,string Matchups,string
     public static UnitHudStats From(SimUnit unit,CombatRules rules)
     {
         int type = unit.Definition.DamageType;
-        string icon = type switch { 0 => "slashing",1 => "piercing",2 => "blunt",3 => "hero",_ => "" };
+        bool evil = SimWorld.FactionOfName(unit.Definition.Name) == SimWorld.Evil;
+        string icon = type switch { 0 => evil ? "slash" : "slashing",1 => "piercing",2 => "blunt",3 => "hero",_ => "" };
         string matchups = string.Join("\n",Enumerable.Range(0,4).Select(target =>
             $"{rules.TypeScale(type,target)/10_000m:0.##}% vs {TypeName(target)}"));
         decimal placeScale = unit.PlaceDamagePpm/1_000_000m*(unit.Definition.IsRanged ? unit.PlaceRangedPpm : unit.PlaceMeleePpm)/1_000_000m;
@@ -31,7 +32,7 @@ public sealed record UnitHudStats(string Type,string Icon,string Matchups,string
                 ("Shield Break",-unit.ShieldBreakArmorMilli)}
             .Where(s => s.Item2 != 0).Select(s => $"{Signed(s.Item2/1000m)} {s.Item1}");
         string armorTip = armor == baseArmor ? "" : string.Create(CultureInfo.InvariantCulture,$"Armor {armor:0.###}: {baseArmor:0.###} base\n")+string.Join("\n",sources);
-        return new(TypeName(type),icon == "" ? "" : "counter_marker_G_"+icon,matchups,dps <= 0 ? perHit : basePerHit,
+        return new(TypeName(type),icon == "" ? "" : $"counter_marker_{(evil ? 'E' : 'G')}_{icon}",matchups,dps <= 0 ? perHit : basePerHit,
             baseArmor.ToString("0.###",CultureInfo.InvariantCulture),
             unit.KillCount.ToString(CultureInfo.InvariantCulture),$"{unit.Health}/{unit.MaxHealth}",tip,
             dps <= 0 || hitBonus == 0 ? "" : Signed(hitBonus),armor == baseArmor ? "" : Signed(armor-baseArmor),armorTip);

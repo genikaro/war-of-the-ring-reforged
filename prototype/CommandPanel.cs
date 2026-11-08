@@ -123,7 +123,7 @@ public partial class CommandPanel : Control
         CreateHeroExperience();
         _singleOrder = Text("",new(70,24),new(196,40),14); _singleOrder.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _singleOrder.VerticalAlignment = VerticalAlignment.Top; _singleOrder.AddThemeConstantOverride("line_spacing",-3); _single.AddChild(_singleOrder);
-        _typeIcon = new TextureRect { Position = new(270,28),Size = new(47,48),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Stop }; _single.AddChild(_typeIcon);
+        _typeIcon = new TextureRect { Name = "AttackTypeIcon",Position = new(270,28),Size = new(47,48),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Stop }; _single.AddChild(_typeIcon);
         _statsBackground = new TextureRect { Position = new(333,28),Size = new(171,77),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Ignore }; _single.AddChild(_statsBackground);
         string[] statNames = ["Attack","Armor","Victories"];
         var statValues = new Label[3];
@@ -454,7 +454,10 @@ public partial class CommandPanel : Control
             {
                 _detailUnit = unit.Id; _singlePortrait.Icon = portrait.Button.Icon; _singlePortrait.TooltipText = portrait.Button.TooltipText;
                 _singleOrder.Text = readout?.Headline ?? "";
-                _typeIcon.Texture = _art.GetValueOrDefault(stats.Icon); _typeIcon.TooltipText = stats.Type+" damage\n"+stats.Matchups;
+                _typeIcon.Texture = _art.GetValueOrDefault(stats.Icon);
+                bool evil = SimWorld.FactionOfName(unit.Definition.Name) == SimWorld.Evil;
+                _tipAttackChart.Texture = stats.Icon == "" ? null : _art.GetValueOrDefault(evil ? "tooltip_E_right_counter_graph" : "tooltip_g_right_counter_graph");
+                _typeIcon.TooltipText = _tipAttackChart.Texture != null ? AttackTypeChartTitle : stats.Type+" damage\n"+stats.Matchups;
                 _attackValue.Text = stats.Attack; _armorValue.Text = stats.Armor; _victoriesValue.Text = stats.Victories;
                 _attackName.TooltipText = _attackValue.TooltipText = stats.AttackTip;
                 _armorName.TooltipText = _armorValue.TooltipText = stats.ArmorTip;

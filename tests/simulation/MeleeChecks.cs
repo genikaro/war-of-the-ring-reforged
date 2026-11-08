@@ -138,6 +138,9 @@ static class MeleeChecks
             var typedStats = UnitHudStats.From(unit,Rules());
             check(typedStats.Icon == "counter_marker_G_"+new[] {"slashing","piercing","blunt","hero"}[type]
                 && typedStats.Matchups.Contains("100% vs Hero"),"HUD uses original type art and neutral hero target: "+type);
+            var evilUnit = Fixture(Profile with { Name = "UNIT_E_PROBE",DamageType = type },rules:Rules()).Units[0];
+            check(UnitHudStats.From(evilUnit,Rules()).Icon == "counter_marker_E_"+new[] {"slash","piercing","blunt","hero"}[type],
+                "HUD uses original Evil type art: "+type);
         }
         foreach (var invalid in new[] { TypeRules.Skip(1).ToArray(),TypeRules.Append(TypeRules[0]).ToArray() })
         {

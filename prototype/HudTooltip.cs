@@ -10,10 +10,13 @@ using System.Text.RegularExpressions;
 public partial class CommandPanel
 {
     public const float TooltipWidth = 244;
+    // GameConsole.ltx text 8122 is the original counter chart heading.
+    private const string AttackTypeChartTitle = "Weapon Rating";
     private PanelContainer _tip = null!;
     private PanelContainer _tipTitleBand = null!, _tipDescriptionStrip = null!;
     private Label _tipTitle = null!, _tipBody = null!, _tipDescription = null!;
     private HBoxContainer _tipCosts = null!;
+    private TextureRect _tipAttackChart = null!;
     private string _tipText = "";
     private static readonly Regex CostPart = new(@"^(?:(\d+) (food|ore|Fate)|(population) (\d+))$");
     private static readonly Color TipInk = new("2e2110"),TipLight = new("fff3cb");
@@ -32,6 +35,9 @@ public partial class CommandPanel
         _tipDescriptionStrip = new PanelContainer { MouseFilter = MouseFilterEnum.Ignore }; rows.AddChild(_tipDescriptionStrip);
         _tipDescription = TipLabel(13,TipInk,"Description"); _tipDescriptionStrip.AddChild(_tipDescription);
         _tipBody = TipLabel(13,TipInk); _tipBody.AddThemeConstantOverride("line_spacing",-2); rows.AddChild(_tipBody);
+        _tipAttackChart = new TextureRect { Name = "AttackTypeChart",Visible = false,MouseFilter = MouseFilterEnum.Ignore,
+            SizeFlagsHorizontal = SizeFlags.ShrinkCenter };
+        rows.AddChild(_tipAttackChart);
         _tip.Resized += PlaceTooltip;
         _content.AddChild(_tip);
     }
@@ -126,6 +132,7 @@ public partial class CommandPanel
         _tipCosts.Visible = _tipCosts.GetChildCount() > 0;
         _tipBody.Text = string.Join("\n",lines);
         _tipDescriptionStrip.Visible = _tipBody.Visible = lines.Count > 0;
+        _tipAttackChart.Visible = text == AttackTypeChartTitle && _tipAttackChart.Texture != null;
         _tip.Size = new(TooltipWidth,0); PlaceTooltip();
     }
 

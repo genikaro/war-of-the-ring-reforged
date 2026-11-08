@@ -64,6 +64,7 @@ def export(output, resolver=None):
     # The parchment tooltip above the console's right section: backing, title band, cost cells and Description strip.
     paths += list((source / 'Console/Tooltips/Good').glob('console_tooltip_g_right_*.uva'))
     paths += [source / 'Console/Tooltips/Good/console_tooltip_global_icon_population.uva']
+    paths += list((source / 'Console/Tooltips').glob('*/*_right_counter_graph.uva'))
     paths += [p for p in (source / 'Cursors/Good').glob('*.uva')
               if any(word in p.stem for word in ['attack', 'move', 'guard', 'patrol', 'kingsfoil', 'negative', 'protection',
                                                'negate', 'dispel', 'light_of_lothlorien', 'trueshot', 'flame_shield',
