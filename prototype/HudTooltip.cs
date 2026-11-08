@@ -14,7 +14,7 @@ public partial class CommandPanel
     private static string AttackTypeChartTitle => GameText.T("tip.weapon_rating");
     private PanelContainer _tip = null!;
     private PanelContainer _tipTitleBand = null!, _tipDescriptionStrip = null!;
-    private Label _tipTitle = null!, _tipBody = null!, _tipDescription = null!;
+    private Label _tipTitle = null!, _tipBody = null!, _tipDescription = null!, _tipTime = null!;
     private HBoxContainer _tipCosts = null!;
     private TextureRect _tipAttackChart = null!;
     private string _tipText = "";
@@ -31,6 +31,8 @@ public partial class CommandPanel
         _tipTitleBand = new PanelContainer { MouseFilter = MouseFilterEnum.Ignore }; rows.AddChild(_tipTitleBand);
         _tipTitle = TipLabel(15,TipLight); _tipTitle.HorizontalAlignment = HorizontalAlignment.Center; _tipTitleBand.AddChild(_tipTitle);
         _tipCosts = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore }; _tipCosts.AddThemeConstantOverride("separation",4); rows.AddChild(_tipCosts);
+        // Build-185: the time stands apart from the description, between the cost cells and the Description strip.
+        _tipTime = TipLabel(13,TipInk); rows.AddChild(_tipTime);
         _tipDescriptionStrip = new PanelContainer { MouseFilter = MouseFilterEnum.Ignore }; rows.AddChild(_tipDescriptionStrip);
         _tipDescription = TipLabel(13,TipInk,GameText.T("tip.description")); _tipDescriptionStrip.AddChild(_tipDescription);
         _tipBody = TipLabel(13,TipInk); _tipBody.AddThemeConstantOverride("line_spacing",-2); rows.AddChild(_tipBody);
@@ -75,7 +77,7 @@ public partial class CommandPanel
         _tipTitleBand.AddThemeStyleboxOverride("panel",TipFrame("console_tooltip_g_right_title_inset",new Color("6e5e45"),4,6,3));
         _tipDescriptionStrip.AddThemeStyleboxOverride("panel",TipFrame("console_tooltip_g_right_text_separator_outset",new Color(EvilSkin ? "3a342e" : "c7b088"),4,7,1));
         // The Good parchment takes dark ink; Evil's stone needs light text over its textured surface.
-        foreach (var label in new[] {_tipDescription,_tipBody})
+        foreach (var label in new[] {_tipDescription,_tipBody,_tipTime})
         {
             label.AddThemeColorOverride("font_color",EvilSkin ? TipLight : TipInk);
             label.AddThemeColorOverride("font_shadow_color",EvilSkin ? new Color("15120f") : Colors.Transparent);
@@ -89,8 +91,9 @@ public partial class CommandPanel
         if (text != "") ShowTooltip(text);
     }
 
-    /// <summary>"Время: 22 Сек.": a catalog label, the seconds and the original's seconds label (GameConsole 8303).</summary>
-    public static string Seconds(string label,int ticks) => GameText.Labeled(label,SecondsValue(ticks));
+    /// <summary>"Время: 22 Сек.": a catalog label, the seconds and the original's seconds label (GameConsole 8303), as the
+    /// tooltip's time line (HudTip.Timed), which belongs right after the cost line.</summary>
+    public static string Seconds(string label,int ticks) => HudTip.Timed(GameText.Labeled(label,SecondsValue(ticks)));
     public static string SecondsValue(int ticks) => $"{GameText.Number(ticks/20m,"0.#")} {GameText.T("tip.seconds")}";
 
     /// <summary>Above the console's right section, flush with its right edge, growing upward with the text.</summary>
@@ -126,6 +129,9 @@ public partial class CommandPanel
             lines.RemoveAt(0);
         }
         _tipCosts.Visible = _tipCosts.GetChildCount() > 0;
+        _tipTime.Text = lines.Count > 0 && HudTip.ParseTime(lines[0]) is { } time ? time : "";
+        if (_tipTime.Text != "") lines.RemoveAt(0);
+        _tipTime.Visible = _tipTime.Text != "";
         _tipBody.Text = string.Join("\n",lines);
         _tipDescriptionStrip.Visible = _tipBody.Visible = lines.Count > 0;
         _tipAttackChart.Visible = text == AttackTypeChartTitle && _tipAttackChart.Texture != null;
@@ -151,6 +157,7 @@ public partial class CommandPanel
     public string DisplayedTooltip => _tip.Visible ? _tipText : "";
     public string DisplayedTooltipTitle => _tipTitle.Text;
     public string DisplayedTooltipBody => _tipBody.Visible ? _tipBody.Text : "";
+    public string DisplayedTooltipTime => _tipTime.Visible ? _tipTime.Text : "";
     public Color TooltipBodyInk => _tipBody.GetThemeColor("font_color");
     public Color TooltipDescriptionInk => _tipDescription.GetThemeColor("font_color");
     public string[] DisplayedTooltipCosts => [.. _tipCosts.GetChildren().Select(c => c.GetChild(0).GetChild<TextureRect>(0).Name+" "+c.GetChild(1).GetChild<Label>(0).Text)];

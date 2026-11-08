@@ -157,10 +157,12 @@ public partial class Main
                         && Math.Abs(box.End.X-console.End.X) < 1 && Math.Abs(box.End.Y-console.Position.Y) < 1
                         && Math.Abs(box.Size.X-CommandPanel.TooltipWidth*_commands.EffectiveScale) < 1 && _commands.DefaultTooltipsHidden;
                     // The source layout: the first line in the title band, food, ore and population as cells, the rest under Description.
+                    // Build-185: the training time stands on its own line above the Description strip, not in the body.
                     var rules = world.ProductionRules[SelectedProducer()!.Units[0]];
                     _sandboxMapChecks["train_tooltip_title_cost_cells_and_description"] = _commands.DisplayedTooltipTitle == HudTip.Keyed(rules.DisplayName,"Q")
                         && _commands.DisplayedTooltipCosts.SequenceEqual([$"food {rules.FoodCost}",$"ore {rules.OreCost}",$"population {rules.Population}"])
-                        && _commands.DisplayedTooltipBody.StartsWith(CommandPanel.Seconds("tip.time",rules.DurationTicks));
+                        && _commands.DisplayedTooltipTime == HudTip.ParseTime(CommandPanel.Seconds("tip.time",rules.DurationTicks))
+                        && !_commands.DisplayedTooltipBody.Contains(_commands.DisplayedTooltipTime);
                 }
                 var gandalf = world.Units.FirstOrDefault(u => u.Team == 0 && u.Present && u.Definition.Name == SandboxGandalf);
                 // Rendered frames and simulation ticks do not pair one to one: wait for him to step out.

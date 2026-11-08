@@ -151,7 +151,8 @@ are `CommandPanel.PortraitName(UNIT_…)`.
 **Tooltips (build-184)** are built by `Presentation/HudTip.cs`, as the original lays them out: the title with the
 button's hotkey (`HudTip.Keyed`), a cost line, then the body. The cost line is a marked list of numbers
 (`HudTip.Costs(food, ore, fate, population)`, `HudTip.FateCost`), which the tooltip box turns into the original's
-resource cells, so it no longer reads costs out of English words. Bodies use the record's own description from the
+resource cells, so it no longer reads costs out of English words. Since build-185 a marked time line
+(`CommandPanel.Seconds`, `HudTip.Timed`) follows it and shows on its own above the Description strip. Bodies use the record's own description from the
 install (`GameText.Record(symbol, "description")`, `GameNames.AbilityText`, `GameText.GlobalPower(id, "description")`),
 then the lines with the simulation's numbers from the catalog. Labels are the original's where it has them: Level,
 Description, Sec. and Cooldown (GameConsole 8300-8304), Armor, Attack, Health, Victories, Ballista and Lifetime
@@ -163,7 +164,7 @@ descriptions (8104-8115), Idle workers (8006-8007) and the attack chart's Weapon
 `ShownTip(name, key, HudTip.Costs(…), ticks)` is a construct, train, upgrade or research tooltip's head, and
 `ShownBefore`/`ShownAfter(key, …Slot…)` give the text on either side of an argument a check does not pin.
 
-Still English after build-184, for build-185: refusal reasons (they come from the simulation), the order readouts in
+Still English after build-184, for build-186: refusal reasons (they come from the simulation), the order readouts in
 the console and portrait tooltips, the group, walk/run and pause labels, notices, the observer HUD and the menus.
 
 ## What is localized
@@ -172,5 +173,5 @@ the console and portrait tooltips, the group, walk/run and pause labels, notices
 | --- | --- |
 | 183 | Names of units, heroes, buildings, upgrades and research, abilities, Fate powers, places of power and neutral objects, and maps. The AI personalities' names come from the install's `.rai` files |
 | 184 | Tooltips: construct, train, upgrade, research, queue, ability, Fate, place power, status effect, hero bar, garrison; the stat labels and the place-of-power summary |
-| 185 (next) | Menus, setup, settings, outcome, HUD labels, messages; refusal reasons become codes |
+| 186 (next) | Menus, setup, settings, outcome, HUD labels, messages; refusal reasons become codes |
 | Later | Campaign text, which the import already covers (briefings, objectives, hints, speakers, subtitles) |

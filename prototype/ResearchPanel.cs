@@ -41,20 +41,10 @@ public partial class CommandPanel
             if (technique == null) continue;
             button.Disabled = !world.CanResearch(PlayerTeam,site!.Id,world.Techniques.IndexOf(technique),out string reason);
             button.Icon = portrait(technique.Name) is { } name ? _art.GetValueOrDefault(name) : null;
-            string Unit(string type) => world.Rules.Units.TryGetValue(type,out var definition) ? definition.DisplayName : type;
-            // Build-184: "Gondor Swordsman: attack +1" in every language (a name followed by its changes, never declined).
-            var units = technique.Bonuses.Where(b => world.Rules.Units.ContainsKey(b.Key) && (b.Value.DpsMilli > 0 || b.Value.ArmorMilli > 0))
-                .Select(b => $"{Unit(b.Key)}: "+string.Join(", ",new[] {b.Value.DpsMilli > 0 ? GameText.T("research.attack",b.Value.DpsMilli/1000) : null,
-                    b.Value.ArmorMilli > 0 ? GameText.T("research.armor",b.Value.ArmorMilli/1000) : null}.OfType<string>()))
-                .Concat((technique.RangePpm ?? new Dictionary<string,int>()).Where(r => world.Rules.Units.ContainsKey(r.Key))
-                    .Select(r => $"{Unit(r.Key)}: "+GameText.T("research.missile_range",GameText.Number(r.Value/1_000_000m))))
-                .Concat((technique.MissileDpsMilli ?? new Dictionary<string,int>()).Where(r => world.Rules.Units.ContainsKey(r.Key))
-                    .Select(r => $"{Unit(r.Key)}: "+GameText.T("research.new_axe",GameText.Number(r.Value/1000m))))
-                .Concat(technique.BuildingHealthPpm != 1_000_000 ? [GameText.T("research.building_health",GameText.Number(technique.BuildingHealthPpm/1_000_000m))] : []).ToArray();
-            bool tier = technique.Previous != null || world.Techniques.Any(t => t.Previous == technique.Name);
+            // Build-185: the original's own description only, without our per-unit bonus numbers.
             button.TooltipText = HudTip.Make(HudTip.Keyed(technique.DisplayName,GridKeys[slot].ToString()),HudTip.Costs(technique.FoodCost,technique.OreCost),
-                [Seconds("tip.time",technique.DurationTicks),.. units,GameText.Record(technique.Name,"description") ?? technique.Description,
-                    tier ? GameText.T("research.tier_replaces") : null,GameText.T("research.applies_to_trained"),button.Disabled ? reason : null]);
+                Seconds("tip.time",technique.DurationTicks),GameText.Record(technique.Name,"description") ?? technique.Description,
+                button.Disabled ? reason : null);
         }
     }
 

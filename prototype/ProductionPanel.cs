@@ -70,12 +70,10 @@ public partial class CommandPanel
             button.Disabled = !world.CanTrain(PlayerTeam,producer.Id,slot,out string reason);
             button.Icon = _art.GetValueOrDefault(PortraitName(rules.Unit));
             // Build-184: as the original's recruitment tooltip, the unit's own name, cost cells and description (campaign-012).
-            string? heroes = rules.UniqueGroup < 0 ? null : GameText.T("tip.hero_limit",world.UniqueGroupLimit(PlayerTeam,rules.UniqueGroup),
-                string.Join(", ",world.ProductionRules.Values.Where(r => r.UniqueGroup == rules.UniqueGroup && SimWorld.FactionOfName(r.Unit) == SimWorld.FactionOfName(rules.Unit))
-                    .Select(r => r.DisplayName).Distinct()));
+            // Build-185: no hero-limit line; a hero over the limit is refused with its own reason.
             button.TooltipText = HudTip.Make(HudTip.Keyed(rules.DisplayName,GridKeys[slot].ToString()),
                 HudTip.Costs(rules.FoodCost,rules.OreCost,rules.FateCost,rules.Population),
-                Seconds("tip.time",rules.DurationTicks),heroes,GameText.Record(rules.Unit,"description"),button.Disabled ? reason : null);
+                Seconds("tip.time",rules.DurationTicks),GameText.Record(rules.Unit,"description"),button.Disabled ? reason : null);
         }
         _upgradeButton.Visible = upgrade != null;
         if (upgrade != null)

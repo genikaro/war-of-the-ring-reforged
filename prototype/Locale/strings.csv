@@ -29,7 +29,6 @@ tip.on_ore_pile,,On an ore pile.,Строится на залежи руды.,Wh
 tip.extra_worker,,Each extra worker adds {0}% build speed.,Каждый следующий работник: +{0}% к скорости строительства.,{0} = percent
 tip.near_buildings,,Must stand near your buildings.,Ставится рядом с вашими постройками.,Placement rule of some buildings
 tip.opens,,Opens,Открывает,"Label before the buildings and units an upgrade makes available"
-tip.hero_limit,,Hero: at most {0} at a time of {1},"Герой: одновременно не больше {0} из: {1}","{0} = count, {1} = hero names"
 tip.seconds_short,,s,с,Suffix of the recharge countdown on an ability button
 resource.food,GameConsole:8450,Food,,Food
 resource.ore,GameConsole:8451,Ore,,Ore
@@ -108,13 +107,6 @@ rally.gather_food,,Rally: gather food,Сборный пункт: добыча п
 rally.gather_ore,,Rally: gather ore,Сборный пункт: добыча руды,
 rally.set,,Rally point set,Сборный пункт назначен,
 rally.none,,No rally point,Сборный пункт не назначен,
-research.attack,,+{0} attack,атака +{0},"After a unit name: ""Swordsman: +1 attack"""
-research.armor,,+{0} armor,защита +{0},
-research.missile_range,,missile range x{0},дальность стрельбы x{0},
-research.new_axe,,throws a new axe: attack {0},новый метательный топор: атака {0},
-research.building_health,,Every building x{0} health,Здоровье всех построек x{0},
-research.tier_replaces,,Each tier of this line replaces the one before.,Каждая ступень этой линии заменяет предыдущую.,
-research.applies_to_trained,,Applies to units already trained.,Действует и на уже нанятых воинов.,
 research.not_simulated,,Not simulated yet: {0}.,Пока не моделируется: {0}.,{0} = developer reason (English)
 "# Build-184: abilities. The install's description leads; these lines give the numbers."
 ability.unlock,,Unlock,Открыть,Buying a hero ability with Fate

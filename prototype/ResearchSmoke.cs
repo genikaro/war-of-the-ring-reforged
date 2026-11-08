@@ -108,7 +108,7 @@ public partial class Main
             case 16:
                 _researchChecks["outpost_offers_ranger_techniques"] = SelectedStructureDetails() is {  } shown108 && shown108.Name == Shown("BUILDING_G_ARMORY","Wilderness Outpost")
                     && _commands.ResearchButton(0) is { Visible: true,Disabled: false,Icon: not null } && _commands.ResearchButton(0).TooltipText.StartsWith(HudTip.Keyed(Shown("TECHNIQUE_ETCHED_BLADES","Etched Blades"),"Q"))
-                    && _commands.ResearchButton(1).TooltipText.StartsWith(HudTip.Keyed(Shown("TECHNIQUE_IMPROVED_LEATHER","Improved Leather"),"W")) && _commands.ResearchButton(1).TooltipText.Contains($"{Shown("UNIT_G_RANGER","Ranger")}: "+GameText.T("research.armor",1));
+                    && _commands.ResearchButton(1).TooltipText.StartsWith(HudTip.Keyed(Shown("TECHNIQUE_IMPROVED_LEATHER","Improved Leather"),"W")) && _commands.ResearchButton(1).TooltipText.Contains(GameText.Record("TECHNIQUE_IMPROVED_LEATHER","description") ?? "");
                 Select(SmokeForge); break;
             case 18:
                 _researchChecks["forge_offers_iron_blades_and_plating"] = SelectedStructureDetails() is { Health: 590 } shown113 && shown113.Name == Shown("BUILDING_G_SKILLS_STRUCTURE","Forge")
@@ -116,8 +116,8 @@ public partial class Main
                     // Build-58: Razored Edge waits for Citadel 3 in slot E; Dwarven Engineering (A) needs nothing more.
                     && _commands.ResearchButton(2) is { Visible: true,Disabled: true } && _commands.ResearchButton(2).TooltipText.EndsWith($"Requires {Shown("BUILDING_G_TOWN_CENTER_LEVEL_3","Citadel 3")}")
                     && _commands.ResearchButton(4) is { Visible: true,Disabled: false } && _commands.ResearchButton(0).TooltipText.StartsWith(ShownTip(Shown("TECHNIQUE_IRON_BLADES","Iron Blades"),"Q",HudTip.Costs(75,75),1800))
-                    && _commands.ResearchButton(0).TooltipText.Contains($"{Shown("UNIT_G_GONDOR_SWORDSMAN","Gondor Swordsman")}: "+GameText.T("research.attack",1))
-                    && _commands.ResearchButton(1).TooltipText.StartsWith(HudTip.Keyed(Shown("TECHNIQUE_IRON_PLATING","Iron Plating"),"W")) && _commands.ResearchButton(1).TooltipText.Contains($"{Shown("UNIT_G_ROHAN_RIDER","Rohan Rider")}: "+GameText.T("research.armor",1));
+                    && _commands.ResearchButton(0).TooltipText.Contains(GameText.Record("TECHNIQUE_IRON_BLADES","description") ?? "")
+                    && _commands.ResearchButton(1).TooltipText.StartsWith(HudTip.Keyed(Shown("TECHNIQUE_IRON_PLATING","Iron Plating"),"W")) && _commands.ResearchButton(1).TooltipText.Contains(GameText.Record("TECHNIQUE_IRON_PLATING","description") ?? "");
                 _researchFood = bank.FoodMilli; _researchOre = bank.OreMilli;
                 PushGridKey(0); break;
             case 20:
