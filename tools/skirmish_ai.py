@@ -2,15 +2,19 @@
 
 python tools/skirmish_ai.py --cache converted/skirmish
 
-The .rai files are INI text (cp1251 names) whose 0-100 knobs Rings.exe turns into 0-1 profile alphas
+The .rai files are INI text whose 0-100 knobs Rings.exe turns into 0-1 profile alphas
 (BattleScriptInterface::AIProfileSetAggressivenessAlpha and friends). The decision code that consumes
 these numbers lives in Rings.exe and is not recovered; the runtime AI is an adapter built on them.
+The files name no encoding: the names are in the ANSI code page of the install's language (cp1251
+"Арагорн" in the Russian release, cp1252 "Grishnákh" in the English one; build-187).
 """
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 
+import game_text
 import wor
 
 AI_PLAYERS = 'TLOTR - War of the Ring/AIPlayers'
@@ -23,10 +27,11 @@ DEFAULT_PERSONALITY = {'id': 'Default', 'display_name': 'Default (medium)', 'fil
 BUILDING_CLASSES = ['MILITARY', 'DEFENSIVE', 'ECONOMY', 'UPGRADE', 'SPECIAL']
 
 
-def parse_rai(data):
-    """Key = value pairs of the [AIPlayerSettings] section; # lines are comments."""
+def parse_rai(data, code_page='cp1251'):
+    """Key = value pairs of the [AIPlayerSettings] section; # lines are comments. `code_page` is the install's
+    (game_text.code_page of its language)."""
     values = {}
-    for line in data.decode('cp1251').splitlines():
+    for line in data.decode(code_page).splitlines():
         line = line.strip()
         if '=' in line and not line.startswith('#'):
             key, value = (part.strip() for part in line.split('=', 1))
@@ -34,15 +39,23 @@ def parse_rai(data):
     return values
 
 
-def personalities(root=wor.ROOT):
+def personalities(install=None, language=None):
+    """The default personality and the install's .rai files (`install` defaults to the repository's
+    `TLOTR - War of the Ring`). `language` is the install's text language, detected from its text when not given."""
+    folder = Path(install) / 'AIPlayers' if install else wor.ROOT / AI_PLAYERS
+    paths = sorted(folder.glob('*.rai'))
+    if paths and language is None:
+        language = game_text.install_language(folder.parent)
     result = [dict(DEFAULT_PERSONALITY)]
-    for path in sorted((root / AI_PLAYERS).glob('*.rai')):
-        values = parse_rai(path.read_bytes())
+    for path in paths:
+        values = parse_rai(path.read_bytes(), game_text.code_page(language))
         missing = [k for k in KNOBS + ['Name'] if k not in values]
         if missing:
             raise ValueError('%s lacks %s' % (path.name, ', '.join(missing)))
+        source = Path(os.path.abspath(path))  # an install linked into the repository keeps its name there
         result.append({'id': path.stem.replace(' ', ''), 'display_name': values['Name'],
-                       'file': path.relative_to(root).as_posix(), 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
+                       'file': (source.relative_to(wor.ROOT) if source.is_relative_to(wor.ROOT) else Path(folder.name, path.name)).as_posix(),
+                       'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
                        'difficulty': int(values['Difficulty']), 'aggressiveness': int(values['Aggressiveness']),
                        'tactics': int(values['Tactics']), 'scouting': int(values['Scouting']),
                        'harassment': int(values['Harassment']),
@@ -77,8 +90,9 @@ def war_party(resolver, name):
     return {'min_size': record['MinSize'], 'max_size': record['MaxSize'], 'members': members}
 
 
-def export(resolver, buildings, units):
-    """AI columns for the given Tier 1 buildings and trainable units, plus the Assault war party."""
+def export(resolver, buildings, units, install=None, language=None):
+    """AI columns for the given Tier 1 buildings and trainable units, plus the Assault war party; the personalities come
+    from `install` in its `language` (personalities)."""
     building_rules = {}
     for name in buildings:
         record = resolver.db['Buildings'].get(name)
@@ -94,7 +108,7 @@ def export(resolver, buildings, units):
             'always_add': bool(record['AIAlwaysAddUnit']), 'assault': record['AIAssaultEffectiveness'],
             'raiding': record['AIRaidingEffectiveness'],
             'max_per_party': record['AIMaxUnitsOfTypePerWarParty'], 'max_per_party_easy': record['AIMaxUnitsOfTypePerWarPartyEasy']}
-    return {'format_version': 1, 'personalities': personalities(), 'default_personality': DEFAULT_PERSONALITY['id'],
+    return {'format_version': 1, 'personalities': personalities(install, language), 'default_personality': DEFAULT_PERSONALITY['id'],
             'buildings': building_rules, 'units': unit_rules,
             'war_parties': {'ASSAULT': war_party(resolver, 'AIWARPARTY_ASSAULT'), 'RAIDING': war_party(resolver, 'AIWARPARTY_RAIDING'),
                             'PLACEOFPOWERSCOUT': war_party(resolver, 'AIWARPARTY_PLACEOFPOWERSCOUT')},

@@ -1,5 +1,10 @@
 # Godot C# skirmish sandbox
 
+**build-187:** an English install now imports cleanly. AI player names are read in the install language's code page,
+so the English "Grishnákh" no longer turns into "Grishnбkh". The English release's unfinished entries ("Empty
+description", "Placeholder") count as missing text, as the Russian "Затычка" entries already did. A content pack built
+with `--install` takes the AI players from that install too.
+
 **build-186:** building tooltips match the others: the construction time reads "Time:" and the extra-worker and
 "Must stand near your buildings" lines are gone. The Build (Q) and Build advanced (W) buttons list the buildings each
 page holds for the selected workers, and B / Shift+B no longer open them.
@@ -13,7 +18,7 @@ opening the description text.
 **build-184:** tooltips follow: construct, train, upgrade, research, ability, Fate, place power and status tooltips use
 the install's own descriptions and labels (Level, Sec., Cooldown, Food, Ore, Attack, Armor...), with the numbers in
 catalog lines in English and Russian. Cost cells no longer depend on English words. Refusal reasons, order readouts and
-menus are still English until build-187.
+menus are still English until build-188.
 
 **build-183:** names now come from your own install's text, in its language: units, heroes, buildings, research,
 abilities, Fate powers, places of power and maps. A Russian install shows Russian names. Run

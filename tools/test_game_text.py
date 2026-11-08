@@ -40,9 +40,12 @@ class RuntimeTextTests(unittest.TestCase):
 
     def test_placeholders(self):
         for stub in ['', 'Затычка под описание', 'хххKeep level', 'xxxMake passive', '<Название заклинания>',
-                     '<Capture Benefit>', '<Decommission Description>', 'Place Of Power Buff 3']:
+                     '<Capture Benefit>', '<Decommission Description>', 'Place Of Power Buff 3',
+                     # Build-187: the English release's stubs.
+                     'Empty description', 'Placeholder', '<Placeholder Description>', 'xxxxx']:
             self.assertTrue(game_text.is_placeholder(stub), stub)
-        for text in ['<играет>', 'Гондорский мечник', 'Вы победили!']:
+        for text in ['<играет>', 'Гондорский мечник', 'Вы победили!', 'Make passive', 'Keep level', 'Gondor Swordsman',
+                     'Description', 'Placeholders are stubs.']:
             self.assertFalse(game_text.is_placeholder(text), text)
 
 
@@ -77,6 +80,11 @@ class LanguageTests(unittest.TestCase):
         self.assertEqual(self.detect('싱글 플레이', '곤도르 검사'), 'ko')
         self.assertEqual(self.detect('單人遊戲', '剛鐸劍士', ini='TCH'), 'zh-Hant')
         self.assertEqual(self.detect('Gra', 'xyz', ini='KOR'), 'ko')
+
+    def test_code_pages(self):
+        # Build-187: plain-text install files are read in the ANSI code page of the install's language.
+        self.assertEqual([game_text.code_page(language) for language in ['ru', 'uk', 'en', 'de', 'pl', 'ko', 'zh-Hant']],
+                         ['cp1251', 'cp1251', 'cp1252', 'cp1252', 'cp1250', 'cp949', 'cp950'])
 
 
 class RefTests(unittest.TestCase):

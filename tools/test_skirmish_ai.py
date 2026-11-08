@@ -1,15 +1,38 @@
 """Shipped AI personalities and the source AI columns of the Tier 1 roster."""
+import tempfile
 import unittest
+from pathlib import Path
+
 import skirmish_ai
 import skirmish_construction
 from resolve_model import Resolver
 import wor
+
+ENGLISH_INSTALL = wor.ROOT / 'Legacy/Game EN'
+RAI = ('[AIPlayerSettings]\r\nName = {}\r\nDifficulty = 2\r\nAggressiveness = 70\r\nTactics = 40\r\nScouting = 30\r\n'
+       'Harassment = 60\r\nUsesSpecialAbilities = 1\r\nUsesHeroes = 0\r\n')
 
 
 class SkirmishAiTests(unittest.TestCase):
     def test_rai_is_cp1251_ini(self):
         values = skirmish_ai.parse_rai('#comment\r\n[AIPlayerSettings]\r\nName = Гимли\r\nDifficulty = 1\r\n'.encode('cp1251'))
         self.assertEqual(values, {'Name': 'Гимли', 'Difficulty': '1'})
+
+    def test_names_follow_the_install_language(self):
+        # Build-187: the English release writes Grishnákh in cp1252, which cp1251 would read as "Grishnбkh".
+        with tempfile.TemporaryDirectory() as folder:
+            (Path(folder) / 'AIPlayers').mkdir()
+            (Path(folder) / 'AIPlayers/Grishnakh.rai').write_bytes(RAI.format('Grishnákh').encode('cp1252'))
+            people = {p['id']: p for p in skirmish_ai.personalities(folder, 'en')}
+            self.assertEqual((people['Grishnakh']['display_name'], people['Grishnakh']['file'], people['Grishnakh']['uses_heroes']),
+                             ('Grishnákh', 'AIPlayers/Grishnakh.rai', False))
+            (Path(folder) / 'AIPlayers/Grishnakh.rai').write_bytes(RAI.format('Гришнак').encode('cp1251'))
+            self.assertEqual(skirmish_ai.personalities(folder, 'ru')[1]['display_name'], 'Гришнак')
+
+    @unittest.skipUnless((ENGLISH_INSTALL / 'Archives/Text.H2O').exists(), 'English install not available')
+    def test_english_install_names(self):
+        people = {p['id']: p['display_name'] for p in skirmish_ai.personalities(ENGLISH_INSTALL)}
+        self.assertEqual((people['Grishnakh'], people['FarmerMaggot'], len(people)), ('Grishnákh', 'Farmer Maggot', 13))
 
     @unittest.skipUnless((wor.ROOT / skirmish_ai.AI_PLAYERS / 'Gimli.rai').exists(), 'owner install not available')
     def test_shipped_personalities(self):

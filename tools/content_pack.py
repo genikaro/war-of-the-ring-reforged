@@ -124,7 +124,8 @@ def build(output=PACK, install=None):
                          'research': skirmish_research.research_data(resolver),
                          'places_of_power': places,
                          'ai': skirmish_ai.export(resolver, skirmish_construction.CONSTRUCTION_ORDER + skirmish_construction.EVIL_CONSTRUCTION_ORDER
-                                                  + [skirmish_map.EVIL_WARPOST], list(production['units']))},
+                                                  + [skirmish_map.EVIL_WARPOST], list(production['units']),
+                                                  install=install, language=language)},
             'files': {p.relative_to(output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}}
     (output / 'content.json').write_text(json.dumps(pack, indent=2) + '\n')
     return pack

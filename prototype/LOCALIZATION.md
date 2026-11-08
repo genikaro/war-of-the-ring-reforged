@@ -74,8 +74,9 @@ name and description: MP02_Bilbos_Bluffs is 203/204, MP04_Wasteland is 415/416.
 **Pitfalls:**
 - Hero ability names come from BattleGear. The `Spells` names are stale placeholders: `SPELL_BOROMIR_HORNOFGONDOR`
   says "Лезвия с шипами" ("Barbed blades").
-- Some entries are stubs: empty, "Затычка", "xxx…", `<… Benefit>`, `<Название заклинания>`. The import lists them in
-  `placeholders`, and the game treats them as missing.
+- Some entries are stubs: empty, "Затычка", "xxx…", `<… Benefit>`, `<Название заклинания>`. The English release
+  writes "Empty description" and "Placeholder" instead (build-187). The import lists them in `placeholders`, and
+  the game treats them as missing.
 - 80 GameConsole ids belong to no table, because the exe uses them directly: 8410 Health, 8411 Kills, 8452 Magic power,
   8136 Level, and short speaker names. The catalog refers to them by id.
 
@@ -91,7 +92,12 @@ So the import reads the text itself:
 - Hangul is Korean, kana is Japanese, and Han is Chinese, with the script taken from Rings.ini.
 - Latin text is told apart by stop words among English, German, French, Spanish, Italian and Polish.
 
-The evidence is stored with the text. This install reads `ru` at 97.9% Cyrillic.
+The evidence is stored with the text. This install reads `ru` at 97.9% Cyrillic. The English release reads `en`:
+all Latin, with English stop words far ahead.
+
+**Plain-text files.** The AI players' `.rai` files name no encoding. Since build-187 their names are read in the ANSI
+code page of the detected language (`game_text.code_page`): cp1251 for Russian ("Арагорн"), cp1252 for English
+("Grishnákh", which cp1251 would show as "Grishnбkh").
 
 ## `text/original.json`
 
@@ -164,7 +170,7 @@ descriptions (8104-8115), Idle workers (8006-8007) and the attack chart's Weapon
 `ShownTip(name, key, HudTip.Costs(…), ticks)` is a construct, train, upgrade or research tooltip's head, and
 `ShownBefore`/`ShownAfter(key, …Slot…)` give the text on either side of an argument a check does not pin.
 
-Still English after build-184, for build-187: refusal reasons (they come from the simulation), the order readouts in
+Still English after build-184, for build-188: refusal reasons (they come from the simulation), the order readouts in
 the console and portrait tooltips, the group, walk/run and pause labels, notices, the observer HUD and the menus.
 
 ## What is localized
@@ -173,5 +179,5 @@ the console and portrait tooltips, the group, walk/run and pause labels, notices
 | --- | --- |
 | 183 | Names of units, heroes, buildings, upgrades and research, abilities, Fate powers, places of power and neutral objects, and maps. The AI personalities' names come from the install's `.rai` files |
 | 184 | Tooltips: construct, train, upgrade, research, queue, ability, Fate, place power, status effect, hero bar, garrison; the stat labels and the place-of-power summary |
-| 187 (next) | Menus, setup, settings, outcome, HUD labels, messages; refusal reasons become codes |
+| 188 (next) | Menus, setup, settings, outcome, HUD labels, messages; refusal reasons become codes |
 | Later | Campaign text, which the import already covers (briefings, objectives, hints, speakers, subtitles) |

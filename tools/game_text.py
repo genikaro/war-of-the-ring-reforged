@@ -71,14 +71,15 @@ def runtime_text(text):
     return PRINTF.sub(lambda m: '%' if m.group() == '%%' else '{%d}' % next(index), text)
 
 
-PLACEHOLDER = re.compile(r'^\s*$|^\s*(?:xxx|ххх)|Затычка|Place Of Power Buff|'
+PLACEHOLDER = re.compile(r'^\s*$|^\s*(?:xxx|ххх)|Затычка|Place Of Power Buff|^\s*(?:Empty description|Placeholder)\s*$|'
                          r'^<[^<>]*(?:Benefit|Description|Name|Название|Описание)[^<>]*>$', re.IGNORECASE)
 
 
 def is_placeholder(text):
     """Stub entries the shipped tables still carry: empty, "xxx"/"ххх" (obsolete), "Затычка" (stub), `<Spell name>` style
-    names in angle brackets, and the English "<... Benefit>" / "Place Of Power Buff N" leftovers. Real angle-bracket
-    text (the chat status tags `<играет>`) stays."""
+    names in angle brackets, and the English "<... Benefit>" / "Place Of Power Buff N" leftovers. The English release
+    writes its stubs as "Empty description" (where the Russian has "Затычка под описание") and "Placeholder" (build-187).
+    Real angle-bracket text (the chat status tags `<играет>`) stays."""
     return bool(PLACEHOLDER.search(text))
 
 
@@ -163,6 +164,18 @@ def detect_language(tables, ini_language=''):
     return (best if votes[best] > 0 else 'en'), evidence
 
 
+# The Windows ANSI code page each release was written in. Plain-text files of the install (the AI players' .rai) name no
+# encoding, so their bytes are read in the code page of the install's language (build-187).
+CODE_PAGES = {'ru': 'cp1251', 'uk': 'cp1251', 'pl': 'cp1250', 'ko': 'cp949', 'ja': 'cp932', 'zh-Hans': 'cp936',
+              'zh-Hant': 'cp950'}
+
+
+def code_page(language):
+    """The ANSI code page of an install in `language`: Western European (cp1252) for English, German, French, Spanish
+    and Italian."""
+    return CODE_PAGES.get(language, 'cp1252')
+
+
 # --- reading the install --------------------------------------------------------------------------------------------
 
 def read_tables(install=INSTALL):
@@ -201,6 +214,11 @@ def ini_language(install=INSTALL):
             if key.lower() == 'language':
                 return value
     return ''
+
+
+def install_language(install=INSTALL):
+    """The language an install's text tables are in (detect_language)."""
+    return detect_language(read_tables(install)[0], ini_language(install))[0]
 
 
 def symbol_refs(db):
