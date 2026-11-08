@@ -42,7 +42,7 @@ public partial class GameMenu : Control
     private readonly Label[] _volumeValues = new Label[4];
     private CheckBox _mute = null!;
     private Button _testVoice = null!;
-    private CheckBox _playerBars = null!,_overheadBars = null!,_blood = null!;
+    private CheckBox _playerBars = null!,_overheadBars = null!,_blood = null!,_playerSelectors = null!;
     private readonly CheckBox[] _editions = new CheckBox[GameSettings.Editions.Length];
     private readonly Dictionary<string,CheckBox> _options = [];
     private HSlider _interfaceScale = null!;
@@ -69,6 +69,7 @@ public partial class GameMenu : Control
     public CheckBox PlayerBarsBox => _playerBars;
     public CheckBox OverheadBarsBox => _overheadBars;
     public CheckBox BloodBox => _blood;
+    public CheckBox PlayerSelectorsBox => _playerSelectors;
     public CheckBox EditionBox(GameSettings.Edition edition) => _editions[(int)edition];
     public bool SettingsOpen => Visible && _page == Page.Settings;
     public bool ExitOpen => Visible && _page == Page.Exit;
@@ -117,6 +118,10 @@ public partial class GameMenu : Control
         Place(_gameTab,Caption("Violence",17,Ink),0,124,360,26);
         _blood = Place(_gameTab,Check("Blood","Show blood when units are hit or killed, blood pools and bloodied weapons.",
             on => _draft.Blood = on),0,156,360,34);
+        Place(_gameTab,Caption("Unit selection",17,Ink),0,198,360,26);
+        _playerSelectors = Place(_gameTab,Check("Player-colored unit selectors",
+            "Use each player's color for unit rings. Off uses gold for friendly and neutral units, and red for enemies.",
+            on => _draft.PlayerColoredUnitSelectors = on),0,230,360,34);
         Place(_gameTab,Caption("Interface size",17,Ink),400,0,357,26);
         _capLeft = Place(_gameTab,new TextureRect { MouseFilter = MouseFilterEnum.Ignore,StretchMode = TextureRect.StretchModeEnum.KeepCentered },400,38,14,24);
         _interfaceScale = Place(_gameTab,new HSlider { MinValue = 75,MaxValue = 150,Step = 5,Value = 100,FocusMode = FocusModeEnum.None },416,36,260,28);
@@ -237,6 +242,7 @@ public partial class GameMenu : Control
         _playerBars.SetPressedNoSignal(_draft.PlayerColoredBars);
         _overheadBars.SetPressedNoSignal(_draft.OverheadBars);
         _blood.SetPressedNoSignal(_draft.Blood);
+        _playerSelectors.SetPressedNoSignal(_draft.PlayerColoredUnitSelectors);
         _interfaceScale.SetValueNoSignal(_draftScale); _scaleValue.Text = $"{_draftScale:0}%";
         foreach (var (percent,button) in _cursorSizes) button.SetPressedNoSignal(_draft.CursorSizePercent == percent);
         double[] volumes = [_draft.MasterVolume,_draft.MusicVolume,_draft.EffectsVolume,_draft.VoiceVolume];
@@ -360,7 +366,7 @@ public partial class GameMenu : Control
                 button.AddThemeStyleboxOverride("hover_pressed",button.ToggleMode ? hover : pressed);
             }
         }
-        foreach (var box in _options.Values.Concat([_playerBars,_overheadBars,_mute]).Concat(_editions))
+        foreach (var box in _options.Values.Concat([_playerBars,_overheadBars,_blood,_playerSelectors,_mute]).Concat(_editions))
         {
             if (art("control_checkbox_checked") is { } check) { box.AddThemeIconOverride("checked",check); box.AddThemeIconOverride("checked_disabled",check); }
             if (art("control_checkbox_empty") is { } empty) { box.AddThemeIconOverride("unchecked",empty); box.AddThemeIconOverride("unchecked_disabled",empty); }

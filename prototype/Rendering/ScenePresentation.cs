@@ -101,6 +101,8 @@ public sealed class ScenePresentation
             foreach (var descendant in Descendants(child)) yield return descendant;
     }
 
+    public const float SelectionRingRadius = .65f;
+
     public static ArrayMesh SelectionRing(Func<Vector3, Vector3>? project = null, ArrayMesh? mesh = null)
     {
         var vertices = new List<Vector3>();
@@ -109,9 +111,9 @@ public sealed class ScenePresentation
         {
             float a = i * Mathf.Tau / segments, b = (i + 1) * Mathf.Tau / segments;
             Vector3 innerA = new(Mathf.Cos(a) * .55f, 0, Mathf.Sin(a) * .55f);
-            Vector3 outerA = new(Mathf.Cos(a) * .65f, 0, Mathf.Sin(a) * .65f);
+            Vector3 outerA = new(Mathf.Cos(a) * SelectionRingRadius, 0, Mathf.Sin(a) * SelectionRingRadius);
             Vector3 innerB = new(Mathf.Cos(b) * .55f, 0, Mathf.Sin(b) * .55f);
-            Vector3 outerB = new(Mathf.Cos(b) * .65f, 0, Mathf.Sin(b) * .65f);
+            Vector3 outerB = new(Mathf.Cos(b) * SelectionRingRadius, 0, Mathf.Sin(b) * SelectionRingRadius);
             vertices.AddRange([innerA, innerB, outerA, outerA, innerB, outerB]);
         }
         var arrays = new Godot.Collections.Array(); arrays.Resize((int)Mesh.ArrayType.Max);
@@ -119,5 +121,44 @@ public sealed class ScenePresentation
         mesh ??= new ArrayMesh(); mesh.ClearSurfaces();
         mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
         return mesh;
+    }
+
+    // A grid follows slopes and keeps the full texture, including the hero ring's corner ornaments.
+    private static readonly (Vector3[] Points, Vector2[] Uvs, int[] Indices) SelectionGrid = CreateSelectionGrid();
+
+    private static (Vector3[], Vector2[], int[]) CreateSelectionGrid()
+    {
+        const int subdivisions = 8, stride = subdivisions + 1;
+        var points = new Vector3[stride * stride];
+        var uvs = new Vector2[points.Length];
+        var indices = new int[subdivisions * subdivisions * 6];
+        int index = 0;
+        for (int z = 0; z < stride; z++)
+            for (int x = 0; x < stride; x++)
+            {
+                int top = z * stride + x;
+                var uv = new Vector2((float)x / subdivisions, (float)z / subdivisions);
+                uvs[top] = uv;
+                points[top] = new Vector3(2 * uv.X - 1, 0, 2 * uv.Y - 1) * SelectionRingRadius;
+                if (x == subdivisions || z == subdivisions) continue;
+                int bottom = top + stride;
+                indices[index++] = top;
+                indices[index++] = top + 1;
+                indices[index++] = bottom;
+                indices[index++] = top + 1;
+                indices[index++] = bottom + 1;
+                indices[index++] = bottom;
+            }
+        return (points, uvs, indices);
+    }
+
+    public static void TexturedSelectionRing(Func<Vector3, Vector3> project, ArrayMesh mesh)
+    {
+        var arrays = new Godot.Collections.Array(); arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = Array.ConvertAll(SelectionGrid.Points, point => project(point));
+        arrays[(int)Mesh.ArrayType.TexUV] = SelectionGrid.Uvs;
+        arrays[(int)Mesh.ArrayType.Index] = SelectionGrid.Indices;
+        mesh.ClearSurfaces();
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
     }
 }

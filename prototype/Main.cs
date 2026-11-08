@@ -98,6 +98,7 @@ public partial class Main : Node3D
         public float DesiredYaw;
         public Vector3 RingPosition = new(float.PositiveInfinity, 0, 0);
         public float RingYaw;
+        public bool RingOnGround;
         public int AttackSerial = -1;
         public int CastSerial = -1;
         public UnitAppearance? Appearance;
@@ -403,11 +404,7 @@ public partial class Main : Node3D
         }
         var modelSize = new Node3D { Name = "ModelSize", Scale = Vector3.One*(unit.Definition.ModelScalePpm/1_000_000f) };
         root.AddChild(modelSize); modelSize.AddChild(visual);
-        var ring = new MeshInstance3D { Mesh = ScenePresentation.SelectionRing(), Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            MaterialOverride = new StandardMaterial3D {
-                AlbedoColor = _observing || _sandboxMap ? TeamColor(team).Lightened(.25f) : new Color(team == PlayerTeam ? "e9c22d" : "e65045"), CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-                Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
+        var ring = CreateUnitRing(unit.Definition);
         root.AddChild(ring);
         var health = new HealthBar(Math.Max(1.1f,2.2f*unit.Definition.BodyRadiusMm/1000f),.16f) { Position = new(0,.12f,0) };
         root.AddChild(health);
@@ -1086,17 +1083,6 @@ public partial class Main : Node3D
                 view.Health?.Refresh(unit.Present ? unit.Health : 0,unit.MaxHealth);
             }
             PresentCommandRing(unit,view,dt);
-            if (!view.Drawn || !view.RingShown || (view.RingPosition == view.Root.Position && view.RingYaw == view.Yaw)) continue;
-            var transform = view.Root.GlobalTransform; var inverse = transform.AffineInverse();
-            ScenePresentation.SelectionRing(local => {
-                local *= unit.Definition.BodyRadiusMm/650f;
-                var point = transform * local;
-                if (unit.Node < _world.Navigation.GroundCount)
-                    point.Y = _world.Navigation.GroundHeight((int)(-point.X * 1000), (int)(point.Z * 1000)) / 1000f;
-                point.Y += .06f;
-                return inverse * point;
-            }, (ArrayMesh)view.Ring.Mesh!);
-            view.RingPosition = view.Root.Position; view.RingYaw = view.Yaw;
         }
         SimProfiler.Record("units loop B",loopB);
         PrunePresented();

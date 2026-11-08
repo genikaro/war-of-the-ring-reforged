@@ -44,7 +44,11 @@ def export(output, resolver=None):
         cursor_uva = resolver.db['UVAs'].get(struct.unpack_from('<i',raw_cursor,12)[0])
         cursor_descriptors[PureWindowsPath(cursor_uva['Filename']).stem] = (descriptor,raw_cursor)
     source = ROOT / 'extracted/UVAs/Interface'
+    # The faction atlases use the faded runes for troops and the solid ornaments for heroes.
+    selection_rings = {source / f'Selection_Ring_Gold_{faction}_{variant}.uva'
+                       for faction in ('Good', 'Evil') for variant in ('Faded', 'Solid')}
     paths = list((source / 'Console/Main/Good').glob('*.uva'))
+    paths += selection_rings
     paths += list((source / 'Console/ActionButtons/Good').glob('*.uva'))
     paths += [source / 'Console/Main/console_frameportrait.uva']
     paths += list((source / 'Console/Counter Markers').glob('*.uva'))
@@ -110,6 +114,11 @@ def export(output, resolver=None):
                     rect = (x + frame % uva['frames_per_row']*width, y + frame // uva['frames_per_row']*height, width, height)
                     tile = atlas.crop(crop_rect(rect, atlas.size)).convert('RGBA')
                     cropped.paste(tile, (frame*tile_size[0], 0))
+            if path in selection_rings:
+                # Keep the original silhouettes and alpha shading. The game supplies the player color.
+                alpha = cropped.getchannel('A')
+                cropped = Image.new('RGBA', cropped.size, 'white')
+                cropped.putalpha(alpha)
             filename = path.stem + '.png'; cropped.save(target / filename)
         index['assets'][path.stem] = {'file': 'interface/' + filename, 'size': list(cropped.size),
             'uva': path.relative_to(ROOT).as_posix(), 'uva_sha256': hashlib.sha256(raw).hexdigest(),

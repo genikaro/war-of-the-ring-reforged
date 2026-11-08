@@ -725,9 +725,9 @@ A unit or building below full health carries a black world health bar with its
 owner's color above the model. Building bars center just above the visible roof.
 Menu → Settings → Health bars can restore green fills or placement at the model's foot.
 A foundation's health climbs with the work done, so the same bar is its construction progress bar.
-Selection rings show the full body envelope: Aragorn **0.800 m**, Elven Knight
-**0.927 m**, Uruk-hai **0.693 m** radius. Aragorn's demo model is enlarged 12%,
-with a wider hitbox; raw source bounds remain recorded. Friendly personal space while
+Body radii are **0.800 m** for Aragorn, **0.927 m** for the Elven Knight and
+**0.693 m** for the Uruk-hai. Selection rings extend beyond those envelopes.
+Aragorn's demo model is enlarged 12% with a wider hitbox. Raw source bounds remain recorded. Friendly personal space while
 travelling can compress to half the combined envelope so units can squeeze between allies.
 Solid cores still prevent stacking; enemies and terrain retain full clearance.
 Resting formations keep full spacing. Large formations retain continuous movement and exchange

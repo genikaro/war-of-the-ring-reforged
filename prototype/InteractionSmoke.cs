@@ -244,7 +244,8 @@ public partial class Main
                 break;
             case 81:
                 checks["hover_shows_half_opacity_owner_ring_without_selecting"] = _hoveredUnit == _interactionTarget
-                    && _views[_interactionTarget].Ring.Visible && _views[_interactionTarget].RingColor == new Color(TeamColor(world.Units[_interactionTarget].Team),.5f)
+                    && _views[_interactionTarget].Ring.Visible
+                    && _views[_interactionTarget].RingColor == new Color(TeamColor(world.Units[_interactionTarget].Team).Lightened(HoverUnitRingLightening),.5f)
                     && _selected.Count == 0;
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,"hover.png"));
                 InteractionHover(InteractionGroundPoint());
@@ -256,7 +257,7 @@ public partial class Main
                 break;
             case 86:
                 checks["enemy_hover_uses_half_opacity_owner_color"] = _hoveredUnit == _interactionEnemy
-                    && _views[_interactionEnemy].RingColor == new Color(TeamColor(world.Units[_interactionEnemy].Team),.5f);
+                    && _views[_interactionEnemy].RingColor == new Color(TeamColor(world.Units[_interactionEnemy].Team).Lightened(HoverUnitRingLightening),.5f);
                 InteractionHover(_commands.Minimap.GetGlobalRect().GetCenter());
                 break;
             case 89:
@@ -267,7 +268,8 @@ public partial class Main
                 break;
             case 92:
                 checks["selected_hover_ring_stays_opaque"] = _hoveredUnit == _interactionTarget
-                    && _views[_interactionTarget].Ring.Visible && _views[_interactionTarget].RingColor.A == 1;
+                    && _views[_interactionTarget].Ring.Visible
+                    && _views[_interactionTarget].RingColor == TeamColor(world.Units[_interactionTarget].Team).Lightened(SelectedUnitRingLightening);
                 _selected.Clear(); GetWindow().EmitSignal(Window.SignalName.FocusExited);
                 break;
             case 95:

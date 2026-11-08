@@ -12,7 +12,35 @@ public partial class Main
     private const float GroundCommandScale = .8f, GroundCommandOpacity = .8f;
     private const float CommandBlipOnTime = .16f, CommandBlipGap = .04f, CommandBlipRestore = .08f;
     private const float CommandBlipDuration = 2*CommandBlipOnTime+CommandBlipGap+CommandBlipRestore;
+    private const float SelectedUnitRingLightening = .4f, HoverUnitRingLightening = .15f;
+    private static readonly Color LegacyFriendlyUnitRing = new("ffaa00"), LegacyEnemyUnitRing = new("ff0000");
     private int _hoveredUnit = -1, _hoveredStructure = -1;
+    private readonly Dictionary<(string Faction,bool Hero),Texture2D?> _unitRingTextures = [];
+
+    private MeshInstance3D CreateUnitRing(UnitDefinition unit)
+    {
+        var key = (Faction: SimWorld.FactionOfName(unit.Name),unit.Hero);
+        if (!_unitRingTextures.TryGetValue(key,out var texture))
+        {
+            string faction = key.Faction == SimWorld.Evil ? "Evil" : "Good";
+            string variant = unit.Hero ? "Solid" : "Faded";
+            string path = CachePath($"interface/Selection_Ring_Gold_{faction}_{variant}.png");
+            // Older local caches still work with the plain ring.
+            if (System.IO.File.Exists(path))
+            {
+                using var image = Image.LoadFromFile(path);
+                image.GenerateMipmaps();
+                texture = ImageTexture.CreateFromImage(image);
+            }
+            _unitRingTextures.Add(key,texture);
+        }
+        return new MeshInstance3D { Name = "SelectionRing",Mesh = new ArrayMesh(),Visible = false,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            MaterialOverride = new StandardMaterial3D { AlbedoTexture = texture,
+                TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmaps,TextureRepeat = false,
+                CullMode = BaseMaterial3D.CullModeEnum.Disabled,Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded } };
+    }
 
     private void ShowGroundCommandFeedback(Vector3 point,bool ground = true)
     {
@@ -42,7 +70,7 @@ public partial class Main
         float pulse = Mathf.Sin(t*Mathf.Tau);
         float radius = (.9f+.225f*pulse*pulse*(1-.3f*t))*GroundCommandScale;
         ((StandardMaterial3D)_groundCommandRing.MaterialOverride).AlbedoColor = new Color(new Color("e9c22d"),GroundCommandOpacity*(1-Mathf.SmoothStep(.75f,1,t)));
-        // Use the unit selection-ring mesh, projected onto the clicked ground or kept on its elevated surface.
+        // Project the destination marker onto the clicked ground or keep it on its elevated surface.
         ScenePresentation.SelectionRing(local => {
             var world = _commandDestination+local*(radius/.65f);
             world.Y = (_groundCommandOnTerrain ? _world!.Navigation.GroundHeight((int)(-world.X*1000),(int)(world.Z*1000))/1000f
@@ -72,10 +100,9 @@ public partial class Main
         if (_hoveredUnit < 0) _hoveredStructure = structure?.Id ?? -1;
     }
 
-    private Color CommandRingColor(float remaining,int owner,Color normal,bool normallyVisible)
+    private static Color CommandRingColor(float remaining,Color color,Color normal,bool normallyVisible)
     {
         if (remaining <= 0) return normal;
-        var color = TeamColor(owner);
         var baseline = normallyVisible ? normal : new Color(color,0);
         float elapsed = CommandBlipDuration-remaining, half = CommandBlipOnTime/2;
         // Ease from the current hover/selection into the first flash, then fade each flash to transparent.
@@ -89,23 +116,52 @@ public partial class Main
         return new Color(normal,baseline.A*Mathf.SmoothStep(0,CommandBlipRestore,second-CommandBlipOnTime));
     }
 
-    private static readonly Color OwnRingColor = new("e9c22d"),OtherRingColor = new("e65045");
+    private static Color LegacyUnitRingColor(int owner,int viewpoint)
+        => viewpoint >= 0 && owner >= 0 && owner != viewpoint ? LegacyEnemyUnitRing : LegacyFriendlyUnitRing;
 
     private void PresentCommandRing(SimUnit unit,UnitView view,float dt)
     {
         view.CommandBlip = Math.Max(0,view.CommandBlip-dt);
         bool flashing = view.CommandBlip > 0;
         bool selected = _selected.Contains(unit.Id), hovered = _hoveredUnit == unit.Id;
-        var color = _observing || _sandboxMap ? TeamColor(unit.Team).Lightened(.25f)
-            : unit.Team == PlayerTeam ? OwnRingColor : OtherRingColor;
-        if (hovered && !selected) color = new Color(TeamColor(unit.Team),.5f);
-        color = CommandRingColor(view.CommandBlip,unit.Team,color,selected || hovered);
+        bool hoverOnly = hovered && !selected, playerColors = _settings.PlayerColoredUnitSelectors;
+        var tint = playerColors ? TeamColor(unit.Team) : LegacyUnitRingColor(unit.Team,_observing ? _visionTeam : PlayerTeam);
+        var normal = playerColors ? tint.Lightened(hoverOnly ? HoverUnitRingLightening : SelectedUnitRingLightening) : tint;
+        var color = CommandRingColor(view.CommandBlip,tint,new Color(normal,hoverOnly ? .5f : 1),selected || hovered);
         bool ring = unit.Present && (flashing ? color.A > .001f : selected || hovered);
         if (ring != view.RingShown) { view.Ring.Visible = ring; view.RingShown = ring; }
+        if (!ring || !view.Drawn) return;
+        var material = (StandardMaterial3D)view.Ring.MaterialOverride;
         if (view.RingColor != color)
         {
-            ((StandardMaterial3D)view.Ring.MaterialOverride).AlbedoColor = color;
+            material.AlbedoColor = color;
             view.RingColor = color;
         }
+        // The texture stays aligned to the ground as the unit turns.
+        if (view.RingYaw != view.Yaw)
+        {
+            view.Ring.Rotation = new(0,-view.Yaw,0);
+            view.RingYaw = view.Yaw;
+        }
+        var position = view.Root.GlobalPosition;
+        var navigation = _world!.Navigation;
+        bool onGround = unit.Node < navigation.GroundCount;
+        if (view.RingPosition == position && view.RingOnGround == onGround) return;
+        view.RingPosition = position;
+        view.RingOnGround = onGround;
+        // Leave room for the textured band around the body. Some large units have a small source selection radius.
+        float radiusMm = Math.Max(unit.Definition.SelectionRadiusMm,unit.Definition.BodyRadiusMm*1.25f);
+        float scale = radiusMm / (1000f * ScenePresentation.SelectionRingRadius);
+        Vector3 Project(Vector3 local)
+        {
+            local *= scale;
+            var point = position + local;
+            if (onGround) local.Y = navigation.GroundHeight((int)(-point.X * 1000),(int)(point.Z * 1000)) / 1000f - position.Y;
+            local.Y += .06f;
+            return local;
+        }
+        var mesh = (ArrayMesh)view.Ring.Mesh!;
+        if (material.AlbedoTexture != null) ScenePresentation.TexturedSelectionRing(Project,mesh);
+        else ScenePresentation.SelectionRing(Project,mesh);
     }
 }

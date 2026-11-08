@@ -237,7 +237,7 @@ public partial class Main
             var color = (_observing || _sandboxMap) && owner >= 0 ? TeamColor(owner).Lightened(.25f)
                 : new Color(owner < 0 ? "ded2a5" : owner == PlayerTeam ? "e9c22d" : "e65045");
             if (hovered && !selected) color = new Color(TeamColor(owner),.5f);
-            color = CommandRingColor(entry.CommandBlip,owner,color,selected || hovered);
+            if (blip) color = CommandRingColor(entry.CommandBlip,TeamColor(owner),color,selected || hovered);
             entry.Ring.Visible = StructureVisible(entry) && (blip ? color.A > .001f : selected || hovered);
             if (entry.RingColor != color)
             {

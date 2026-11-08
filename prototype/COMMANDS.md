@@ -37,13 +37,16 @@ opposing teams. The top-right overlay shows the build number, local date and
 live FPS; build-1 introduces this numbering.
 
 Click a live enemy to inspect its portrait, health, type, Attack, Armor and
-Victories. Its ring and health bar are red; the action palette is empty while the global
-Walk/Run switch stays available. Enemy inspection replaces a friendly selection.
+Victories. Its ring uses the owner's color by default. Turn off **Player-colored
+unit selectors** in **Settings → Game** for the original gold rings on friendly
+and neutral units and red rings on enemies. The action palette is empty while
+the global Walk/Run switch stays available. Enemy inspection replaces a friendly selection.
 Drag selection prioritizes friendly units; when none are selected by the box,
 it can inspect a building or neutral structure. Picking intersects the nearest live body up to the terrain/deck
-hit, rather than a fixed screen-space foot marker. Selection rings match each
-unit's collision radius. Ctrl assignment while inspecting an enemy preserves
-stored friendly groups; recalling a friendly group restores command controls.
+hit, rather than a fixed screen-space foot marker. Selection rings use each unit's
+original display radius or 125% of its collision radius, whichever is larger.
+Ctrl assignment while inspecting an enemy preserves stored friendly groups;
+recalling a friendly group restores command controls.
 
 Skirmish buildings and neutral interactables select separately from units.
 Buildings show only their own available actions (Cancel for an owned foundation,

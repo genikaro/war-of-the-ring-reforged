@@ -115,6 +115,11 @@ public partial class Main
                 _globalChecks["ent_has_lifetime_bar_only"]=_commands.DisplayedLifetime > .9f && !_commands.DisplayedStatuses.Any(s=>s.Contains("Ent"));
                 _globalChecks["ent_uses_source_portrait"] = _commands.PortraitButton(_globalEnt).Icon == _commands.Art("Global_Spell_G_Giant_Ent_Bordered")
                     && _heroBar.Portrait(HeroBar.SummonSlot).Icon == _commands.PortraitButton(_globalEnt).Icon;
+                var entRing = _views[_globalEnt].Ring;
+                float entBodyDiameter = 2f * w.Units[_globalEnt].Definition.BodyRadiusMm / 1000f;
+                _globalChecks["ent_selection_ring_has_room_around_its_body"] = entRing.Visible
+                    && entRing.GetAabb().Size.X >= entBodyDiameter * 1.24f;
+                CaptureGlobal("ent-selected");
                 Click(_camera.UnprojectPosition(_globalClear+Vector3.Left*6000/1000),MouseButton.Right);SetPaused(false);break;
             case 70:
                 _globalChecks["summon_accepts_real_player_move_input"]=w.Commands.Any(c=>c.Kind==OrderKind.Move && c.Units.Contains(_globalEnt)) && w.Units[_globalEnt].X!=_globalEntX;

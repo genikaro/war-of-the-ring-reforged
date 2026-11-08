@@ -30,6 +30,7 @@ public sealed class GameSettings
     }
     public bool PlayerColoredBars { get; set; } = true;
     public bool OverheadBars { get; set; } = true;
+    public bool PlayerColoredUnitSelectors { get; set; } = true;
     /// <summary>Build-129: hit blood, death blood pools and bloody weapons, the effects and decals the source flags
     /// IsMature ("will not be seen if player turns off maturity in the options").</summary>
     public bool Blood { get; set; } = true;
@@ -48,7 +49,7 @@ public sealed class GameSettings
         Edition.Purist => false,Edition.Reforged => true,_ => CustomOn.Contains(key) };
 
     public GameSettings Copy() => new() { PlayerColoredBars = PlayerColoredBars,OverheadBars = OverheadBars,Blood = Blood,CursorSizePercent = CursorSizePercent,
-        ReforgedEdition = ReforgedEdition,CustomOn = [.. CustomOn],Muted = Muted,
+        PlayerColoredUnitSelectors = PlayerColoredUnitSelectors,ReforgedEdition = ReforgedEdition,CustomOn = [.. CustomOn],Muted = Muted,
         MasterVolume = MasterVolume,MusicVolume = MusicVolume,EffectsVolume = EffectsVolume,VoiceVolume = VoiceVolume };
 
     public static GameSettings Load(string path = DefaultPath)
@@ -57,6 +58,7 @@ public sealed class GameSettings
         if (config.Load(path) != Error.Ok) return settings;
         settings.PlayerColoredBars = config.GetValue("health_bars","player_colored",true).AsBool();
         settings.OverheadBars = config.GetValue("health_bars","overhead",true).AsBool();
+        settings.PlayerColoredUnitSelectors = config.GetValue("game","player_colored_unit_selectors",true).AsBool();
         settings.Blood = config.GetValue("game","blood",true).AsBool();
         settings.CursorSizePercent = config.GetValue("interface","cursor_size_percent",DefaultCursorSizePercent).AsInt32();
         settings.Muted = config.GetValue("audio","muted",false).AsBool();
@@ -75,6 +77,7 @@ public sealed class GameSettings
         var config = new ConfigFile();
         config.SetValue("health_bars","player_colored",PlayerColoredBars);
         config.SetValue("health_bars","overhead",OverheadBars);
+        config.SetValue("game","player_colored_unit_selectors",PlayerColoredUnitSelectors);
         config.SetValue("game","blood",Blood);
         config.SetValue("interface","cursor_size_percent",CursorSizePercent);
         config.SetValue("audio","muted",Muted);

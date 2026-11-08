@@ -14,7 +14,7 @@ public partial class Main
     private static readonly List<float> MenuLoadingProgress = [];
     private static bool _menuLoadingCaptured,_menuLoadingArt;
     private static string _menuLoadingTitle = "";
-    private const int MenuSmokeChecks = 22;
+    private const int MenuSmokeChecks = 26;
 
     private string MenuCapture(string name) => System.IO.Path.ChangeExtension(_capture,null)+"-"+name+".png";
     private void Hover(Vector2 point) => GetViewport().PushInput(new InputEventMouseMotion { Position = point,GlobalPosition = point },true);
@@ -83,6 +83,13 @@ public partial class Main
                 var options = _frontEndSettings!;
                 MenuChecks["menu_cursor_defaults_to_half_size"] = options.CursorSizeButton(50).ButtonPressed
                     && _commands.DisplayedCursorSize == new Vector2I(32,32) && _commands.DisplayedCursorHotspot == new Vector2(2,2);
+                MenuChecks["blood_and_selector_boxes_use_original_checkbox_art"] = new[] { "checked", "unchecked" }.All(icon =>
+                    options.PlayerBarsBox.HasThemeIconOverride(icon)
+                    && options.BloodBox.GetThemeIcon(icon) == options.PlayerBarsBox.GetThemeIcon(icon)
+                    && options.PlayerSelectorsBox.GetThemeIcon(icon) == options.PlayerBarsBox.GetThemeIcon(icon));
+                bool defaultSelectors = options.PlayerSelectorsBox.IsVisibleInTree() && options.PlayerSelectorsBox.ButtonPressed;
+                Click(options.PlayerSelectorsBox.GetGlobalRect().GetCenter());
+                bool deferredSelectors = !options.PlayerSelectorsBox.ButtonPressed && _settings.PlayerColoredUnitSelectors;
                 Click(options.CursorSizeButton(75).GetGlobalRect().GetCenter());
                 bool deferred = options.CursorSizeButton(75).ButtonPressed && _commands.DisplayedCursorSize == new Vector2I(32,32);
                 Click(options.ApplyButton.GetGlobalRect().GetCenter());
@@ -90,6 +97,8 @@ public partial class Main
                 _settings.Save(path); var saved = GameSettings.Load(path);
                 DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(path));
                 Click(options.ResetButton.GetGlobalRect().GetCenter());
+                MenuChecks["unit_selector_setting_applies_persists_and_resets"] = defaultSelectors && deferredSelectors
+                    && !saved.PlayerColoredUnitSelectors && options.PlayerSelectorsBox.ButtonPressed && !_settings.PlayerColoredUnitSelectors;
                 MenuChecks["cursor_change_waits_for_apply"] = deferred;
                 MenuChecks["cursor_apply_resizes_and_round_trips_through_settings"] = saved.CursorSizePercent == 75
                     && _commands.DisplayedCursorSize == new Vector2I(48,48) && _commands.DisplayedCursorHotspot == new Vector2(3,2);
@@ -143,6 +152,14 @@ public partial class Main
     private void MenuSmokeMatch()
     {
         var world = _world!;
+        void InspectUnit(int team)
+        {
+            var unit = world.Units.First(u => u.Team == team && u.Present);
+            _selected.Clear(); _selected.Add(unit.Id);
+            _focus = UnitPosition(unit); _distance = 26; UpdateCamera();
+        }
+        bool SelectedRingIs(Color color) => _views[_selected.Single()].Ring is { Visible: true, MaterialOverride: StandardMaterial3D material }
+            && material.AlbedoColor == color;
         switch (++_menuStep)
         {
             case 1:
@@ -160,16 +177,29 @@ public partial class Main
                 OpenGameMenu();
                 _gameMenu.ShowSettings();
                 Click(_gameMenu.CursorSizeButton(100).GetGlobalRect().GetCenter());
+                Click(_gameMenu.PlayerSelectorsBox.GetGlobalRect().GetCenter());
                 Click(_gameMenu.OkButton.GetGlobalRect().GetCenter());
                 CommandSandboxPlayer(1);
                 _commands.UpdateCursor(null);
                 MenuChecks["match_cursor_size_applies_to_both_factions"] = _settings.CursorSizePercent == 100 && _commands.EvilSkin
                     && _commands.DisplayedCursorSize == new Vector2I(64,64) && _commands.DisplayedCursorHotspot == new Vector2(2,1);
+                CloseGameMenu(); InspectUnit(PlayerTeam);
                 break;
-            case 5: PressButton(_gameMenu.ExitButton); break;
-            case 6: ReleaseButton(_gameMenu.ExitButton); break;
-            case 7: MenuChecks["exit_to_main_menu_enabled"] = _gameMenu.ExitOpen && !_gameMenu.ExitToMainMenuButton.Disabled; PressButton(_gameMenu.ExitToMainMenuButton); break;
-            case 8: _menuPhase = 2; _menuStep = 0; ReleaseButton(_gameMenu.ExitToMainMenuButton); break;
+            case 6:
+                MenuChecks["legacy_selectors_are_gold_for_friendly_and_neutral_units"] = !_settings.PlayerColoredUnitSelectors
+                    && SelectedRingIs(new Color("ffaa00")) && LegacyUnitRingColor(-1,PlayerTeam) == new Color("ffaa00");
+                if (_capture != "") _ = CaptureFrame(false,MenuCapture("legacy-friendly"));
+                break;
+            case 8: InspectUnit(0); break;
+            case 10:
+                MenuChecks["legacy_selectors_are_red_for_enemy_units"] = PlayerTeam == 1 && SelectedRingIs(new Color("ff0000"));
+                if (_capture != "") _ = CaptureFrame(false,MenuCapture("legacy-enemy"));
+                break;
+            case 12: OpenGameMenu(); break;
+            case 13: PressButton(_gameMenu.ExitButton); break;
+            case 14: ReleaseButton(_gameMenu.ExitButton); break;
+            case 15: MenuChecks["exit_to_main_menu_enabled"] = _gameMenu.ExitOpen && !_gameMenu.ExitToMainMenuButton.Disabled; PressButton(_gameMenu.ExitToMainMenuButton); break;
+            case 16: _menuPhase = 2; _menuStep = 0; ReleaseButton(_gameMenu.ExitToMainMenuButton); break;
         }
     }
 
