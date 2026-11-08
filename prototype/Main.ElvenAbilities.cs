@@ -37,11 +37,12 @@ public partial class Main
         _abilityAreaPreview.Visible = true;
     }
 
-    private void ElvenBurst(int effect,int target,Vector3 position,int tick)
+    private void ElvenBurst(int effect,int target,Vector3 position,int tick,float? summonRadius = null)
     {
         if (!_elvenVisuals.TryGetValue(effect,out var data)) return;
         var visual = new ElvenSpellEffect(data.Layers,area:effect is 75 or 402 or 145 or 142 or 186 or 182 or 388 or 197 or 202 or 364 or 365 or 183 or 184 or 163 or 403 or 130,
-            areaRadius:effect is 182 or 388 or 197 or 202 or 364 or 365 or 163 ? 10 : effect is 183 or 184 ? 12 : effect is 403 or 130 ? 4 : 5);
+            areaRadius:summonRadius ?? (effect is 182 or 388 or 197 or 202 or 364 or 365 or 163 ? 10 : effect is 183 or 184 ? 12 : effect is 403 or 130 ? 4 : 5));
+        visual.Root.Name = $"SpellEffect_{effect}";
         AddChild(visual.Root);
         _elvenBursts.Add((visual,target,position,tick/(double)SimWorld.TicksPerSecond,data.Duration));
     }

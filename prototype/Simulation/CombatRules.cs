@@ -17,7 +17,8 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
     HeroExperienceDefinition? Experience = null,int WeaponExperiencePpm = 1_000_000,int MeleeWeaponExperiencePpm = 1_000_000,StatusProtection NativeImmunities = StatusProtection.None,
     int KnockbackTicks = 0,string GetUpClip = "",int GetUpTicks = 0,
     bool CriticallyKillable = false,bool CriticalWeapon = false,bool CriticalMeleeWeapon = false,
-    int SplashRadiusMm = 0,int SplashDpsMilli = 0,int FirePpmPerSecond = 0,bool CanGarrison = false)
+    int SplashRadiusMm = 0,int SplashDpsMilli = 0,int FirePpmPerSecond = 0,bool CanGarrison = false,
+    bool SplashFallsOff = false,int WeaponFatePpm = 1_000_000)
 {
     // Build-173: CanGarrison is the unit's source CanEnterWatchtower, the flag Rings.exe's garrison test reads.
     // Build-171: SplashRadiusMm / SplashDpsMilli are the main weapon's source AreaOfEffectRange / AreaOfEffectDamage (a rate
@@ -27,6 +28,7 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
     public bool IsRanged => ProjectileSpeedMmPerSecond > 0;
     public bool HasMelee => IsRanged && Attacks.Any(a => a.Melee);
     public bool FiresProjectile(int attack) => IsRanged && !Attacks[attack].Melee;
+    public bool UsesHitIntervals => Name == "UNIT_E_HERO_BALROG";
     /// <summary>Mean time between hit events, using the source choice weights. A ranged unit's
     /// missile and contact attacks have separate cadences.</summary>
     public decimal SecondsPerHit(bool melee = false)
@@ -58,7 +60,17 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
     public int HitDurationPpm(bool melee = false)
         => (int)(BaseHitDamageMilli(melee)*1_000_000/Math.Max(1,IsRanged && melee ? MeleeDpsMilli : DpsMilli));
 
-    public long HitDamage(MeleeAttack attack,int hit,long rate) => HitDamageAtRate(rate,IsRanged && attack.Melee);
+    // Use the clip's recovery for its first hit and the gap between events for follow-ups.
+    // The windows sum to one attack cycle without banking damage during idle time.
+    public static int HitIntervalTicks(MeleeAttack attack,int hit)
+    {
+        int previous = hit == 0 ? attack.Hits[^1].Tick-attack.DurationTicks : attack.Hits[hit-1].Tick;
+        return attack.Hits[hit].Tick-previous;
+    }
+
+    public long HitDamage(MeleeAttack attack,int hit,long rate) => UsesHitIntervals
+        ? rate*HitIntervalTicks(attack,hit)/SimWorld.TicksPerSecond
+        : HitDamageAtRate(rate,IsRanged && attack.Melee);
 
     /// <summary>Build-95: one source punch every 1.5 s; also adapts existing content packs.</summary>
     public UnitDefinition WithWorkerCombat() => Name != "UNIT_G_HUMAN_WORKER" ? this : this with {
@@ -93,6 +105,7 @@ public sealed record UnitDefinition(int Id,string Name,string DisplayName,int Ma
             || AttackGapMm is < 0 or > 10000 || RegenerationPpm is < 0 or > 10_000_000 || SiegePpm is <= 0 or > 10_000_000
             || FriendlyCompressionPpm is < 500_000 or > 1_000_000 || ModelScalePpm is < 500_000 or > 2_000_000
             || SplashRadiusMm is < 0 or > 20000 || SplashDpsMilli is < 0 or > 1_000_000 || FirePpmPerSecond is < 0 or > 100_000_000
+            || WeaponFatePpm is < 0 or > 10_000_000
             || Attacks == null || Attacks.Length == 0 || string.IsNullOrEmpty(Name)) throw new ArgumentException("Invalid unit definition");
         if (IsRanged && Attacks.All(a => a.Melee)) throw new ArgumentException("Ranged unit has no missile attack");
         foreach (var attack in Attacks)
@@ -133,6 +146,14 @@ public sealed class CombatRules
         foreach (var item in root.GetProperty("Units").EnumerateArray())
         {
             var unit = (item.Deserialize<UnitDefinition>() ?? throw new ArgumentException("Missing unit definition")).WithWorkerCombat();
+            // Older exports already include the raw weapon rows.
+            if (item.TryGetProperty("Source",out var source) && source.TryGetProperty("Weapon",out var weapon))
+            {
+                if (weapon.TryGetProperty("DamageAppliedInverselyToDistance",out var falloff))
+                    unit = unit with { SplashFallsOff = falloff.GetInt32() != 0 };
+                if (unit.Name is "UNIT_G_GIANT_ENT" or "UNIT_E_HERO_BALROG" && weapon.TryGetProperty("FateModifier",out var fate))
+                    unit = unit with { WeaponFatePpm = (int)Math.Round(fate.GetDouble()*1_000_000) };
+            }
             unit.Validate(); rules.Units.Add(unit.Name,unit);
         }
         if (root.TryGetProperty("Regeneration",out var regeneration))

@@ -1,12 +1,14 @@
-# Global Fate abilities — build-125
+# Global Fate abilities
 
-Click the Fate orb to open the Good faction's five powers. Q/W/E/R select the
-top row; A selects Giant Ent. Click the battlefield to cast, or a living friendly
+Click the faction's Fate orb to show its five powers in the regular action grid.
+The orb plays its original nine-frame animation. Q/W/E/R select the top row and
+A selects Giant Ent or Balrog. Click the battlefield to cast, or a living friendly
 hero for Heroic Legacy. No unit selection is required. Right-click or Escape
-cancels targeting without payment. V/Back closes the page. Commands issued while
-paused take effect when simulation resumes; payment and validation happen then.
+cancels targeting without payment. Click the orb again or press V to close the
+page. Commands issued while paused take effect when simulation resumes, when
+payment and validation happen.
 
-| Key | Power | Fate | Effect |
+| Key | Good power | Fate | Effect |
 | --- | --- | --- | --- |
 | Q | Blind | 2 | Enemy units within 10 m cannot attack for 10 s. Movement and abilities remain available. Blind immunity is respected. |
 | W | Brambles | 3 | An 8 m patch lasts 25 s. Moving enemies lose 35 HP/s; standing still avoids damage. Allies are unharmed. |
@@ -14,7 +16,8 @@ paused take effect when simulation resumes; payment and validation happen then.
 | R | Blessed Wind | 2 | Friendly missile units within 10 m gain projectile knockback for 20 s. Released projectiles retain it after expiration or the shooter's death. |
 | A | Summon Giant Ent | 7 | Places a controllable 2,000 HP Giant Ent on clear ground for 120 s. Its source melee/missile attacks, collision and immunities are imported. No population cost. |
 
-Each power has a 10 s recharge. Blind, Brambles, Blessed Wind and Giant Ent cannot
+All ten original `GlobalSpells` rows specify a 10 s recharge. The prototype
+applies it per power from release. Blind, Brambles, Blessed Wind and Giant Ent cannot
 be recast by the same player while that power remains active. Invalid targets,
 occupied summon placements, insufficient Fate and duplicate Legacy blessings
 spend nothing. The HUD shows costs, recharge/active state, original targeting
@@ -39,16 +42,16 @@ live Good menu in `references/original-game/GOOD-LIVE-OBSERVATIONS-2026-10-23.md
 Blessed Wind uses its spell action's 20 s timer; the global row also contains an
 unused 30 field. Raw rows and actions remain in `combat/rules.json`.
 
-Global recharge is interpreted as seconds from release, independently per power,
-with an active-instance limit; exact legacy global blocking/recharge scheduling
-has not been verified against Rings.exe. Knockback uses the source nominal force
-and angle with the existing deterministic ballistic adapter, without random
+The [original Evil capture](../references/original-game/evil-gallery-2026-11-06.html#capture-13)
+shows the whole Fate grid dimmed immediately after summoning the Balrog. The
+capture does not establish when each slot becomes available again. Knockback uses
+the source nominal force and angle with the deterministic ballistic adapter, without random
 variance. Brambles samples motion and area membership once per tick and uses the
 strongest overlapping patch. Permanent Legacy's resurrection restriction follows
 the captured tooltip. Sprite emission is bounded and adapted; Blessed Wind's
-source hair atlas has a 1/64 edge overhang, clipped during export. Terrain fog is
-not simulated, consistent with the rest of the prototype. Only the currently
-playable Good faction's powers are implemented.
+source hair atlas has a 1/64 edge overhang, clipped during export. The two summons use
+the original entrance and idle clips, portraits and sprite art. Particle placement,
+counts and blending are adapted for the RTS camera.
 
 ## Validation
 

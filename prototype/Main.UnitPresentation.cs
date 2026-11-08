@@ -106,6 +106,7 @@ public partial class Main
         SeekAttack(unit,view,fraction);
         SeekAbility(unit,view,fraction);
         SeekNature(unit,view,fraction);
+        if (view.Summon != null) PoseSummon(unit,view,fraction);
         if (!SeekGather(unit,view,fraction) && !unit.StrikeActive && !unit.Casting && view.Player != null && !view.Player.CurrentAnimation.IsEmpty && view.Player.CurrentAnimationLength > 0)
             view.Appearance?.Apply(view.Clip,view.Player.CurrentAnimationPosition/view.Player.CurrentAnimationLength,view.State);
     }

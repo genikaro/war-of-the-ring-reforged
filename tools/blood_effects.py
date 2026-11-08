@@ -197,6 +197,9 @@ def export(output, resolver, roster, trace=lambda path: None):
     unit_data, effect_ids, decal_ids = {}, set(), set()
     for unit in units:
         decals = [d for d in (unit['DeathDecalType1'], unit['DeathDecalType2'], unit['DeathDecalType3']) if d >= 0]
+        # The summons have their own death effects. Their generic death decals are blood pools.
+        if unit.name in ('UNIT_G_GIANT_ENT', 'UNIT_E_HERO_BALROG'):
+            decals = []
         data = {'Blood': unit['BloodEffectType'] if unit['BloodEffectType'] >= 0 else None, 'DeathDecals': decals,
                 'MeleeImpacts': weapon_effects(resolver, unit['MeleeWeapon'], compositions),
                 'MissileImpacts': weapon_effects(resolver, unit['MissileWeapon'], compositions),

@@ -94,7 +94,7 @@ public sealed partial class SimWorld
         if (unit!=null) EarnHeroExperience(unit,target.Team,damage,building:false,experiencePpm ?? (spell ? 0 : WeaponExperiencePpm(unit,attack)));
         if (unit!=null && damage>0) RecordHostileDamage(unit,target.Team,target.X,target.Z,IsAiWorker(target));
         // Build-76: the damage earns the attacker's side Fate, measured where the unit or tower stands.
-        if (unit != null) EarnFate(unit.Team,target.Team,unit.X,unit.Z,damage,fatePpm ?? 1_000_000);
+        if (unit != null) EarnFate(unit.Team,target.Team,unit.X,unit.Z,damage,fatePpm ?? unit.Definition.WeaponFatePpm);
         else if (ConstructionSites.TryGetValue(source,out var tower) && DefenseWeapon(tower,attack) is { } weapon)
             EarnFate(tower.Team,target.Team,tower.X,tower.Z,damage,fatePpm ?? weapon.FatePpm);
         // Build-130: a critical weapon's killing blow bursts a critically killable unit (presentation reads the flag).

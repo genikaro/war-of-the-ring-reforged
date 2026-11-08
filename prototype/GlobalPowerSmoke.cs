@@ -6,7 +6,7 @@ public partial class Main
 {
     private bool _globalPowerSmoke;
     private int _globalHero,_globalEnemy,_globalArcher,_globalEnt,_globalBefore;
-    private int _globalEntX;
+    private int _globalEntX,_globalBloodPools;
     private Vector3 _globalClear;
     private readonly Dictionary<string,bool> _globalChecks = [];
 
@@ -21,6 +21,9 @@ public partial class Main
             if (_capture != "") _=CaptureFrame(false,System.IO.Path.Combine(System.IO.Path.GetDirectoryName(_capture)!,
                 System.IO.Path.GetFileNameWithoutExtension(_capture)+"-"+stage+".png"));
         }
+        if (_frames is > 4 and < 18 && _commands.FateButton.GetChild<TextureRect>(0).Texture is AtlasTexture frame
+            && frame.Region.Position.X > 0)
+            _globalChecks["palantir_plays_original_frames"] = true;
         switch (_frames)
         {
             case 2:
@@ -44,14 +47,21 @@ public partial class Main
                 _selected.Clear(); _selectedStructure=null;
                 _focus=PositionOf(cx,cz);_distance=48;UpdateCamera();
                 w.Economies[0].Fate=20;SetPaused(true);break;
-            case 4: Click(_commands.FateButton.GetGlobalRect().GetCenter());break;
+            case 4:
+                _globalChecks["palantir_plays_original_frames"] = false;
+                Click(_commands.FateButton.GetGlobalRect().GetCenter());break;
             case 6:
                 _globalChecks["all_five_source_portraits_visible"]=_commands.GlobalAbilitiesOpen && Enumerable.Range(0,5)
                     .All(i=>_commands.GlobalPowerButton(i).IsVisibleInTree() && _commands.GlobalPowerButton(i).Icon!=null);
                 _globalChecks["source_costs_in_tooltips"]=Enumerable.Range(0,5).All(i=>_commands.GlobalPowerButton(i).TooltipText.Contains(w.GlobalPower(i)!.FateCost+" Fate"));
-                CaptureGlobal("menu");_globalBefore=w.Commands.Count;GlobalKey(Key.Q);Hover(Point(_globalEnemy));break;
+                CaptureGlobal("menu");_globalBefore=w.Commands.Count;
+                // Separate mouse press and release across HUD refreshes, as with a real click.
+                Press(_commands.GlobalPowerButton(0).GetGlobalRect().GetCenter());break;
+            case 7:
+                Release(_commands.GlobalPowerButton(0).GetGlobalRect().GetCenter());
+                Hover(Point(_globalEnemy));break;
             case 8:
-                _globalChecks["global_hotkey_targets_without_selection"]=_pendingGlobalPower==0 && _orders.Pending==OrderKind.UseGlobalPower && _selected.Count==0;
+                _globalChecks["global_button_targets_without_selection"]=_pendingGlobalPower==0 && _orders.Pending==OrderKind.UseGlobalPower && _selected.Count==0;
                 _globalChecks["blind_original_cursor_and_area"]=_commands.DisplayedCursorName==w.GlobalPower(0)!.Cursor && _abilityAreaPreview?.Visible==true;
                 Click(Point(_globalEnemy));break;
             case 10:
@@ -60,6 +70,8 @@ public partial class Main
             case 14:
                 _globalChecks["blind_effect_cost_and_source_attachment"]=w.Units[_globalEnemy].BlindUntil>w.Tick && w.Economies[0].Fate==18
                     && _elvenAttachments.ContainsKey((_globalEnemy,226));
+                _globalChecks["recharging_power_dims_in_the_grid"] = _commands.GlobalPowerButton(0).Disabled
+                    && _commands.GlobalPowerButton(0).TooltipText.Contains("Recharging");
                 SetPaused(true);CaptureGlobal("blind");GlobalKey(Key.W);Hover(Point(_globalEnemy));break;
             case 16:
                 Click(Point(_globalEnemy),MouseButton.Right);
@@ -95,13 +107,27 @@ public partial class Main
                 var ent=w.Units.FirstOrDefault(u=>u.SummonedUntil>0);
                 _globalChecks["ent_spawn_payment_and_model"]=ent!=null && _views.ContainsKey(ent.Id) && w.Economies[0].Fate==3;
                 if(ent==null) throw new InvalidOperationException("Global smoke did not summon its Ent");
+                _globalChecks["ent_plays_summon_clip_and_particles"] = _views[ent.Id].Clip == "G_Treebeard_Summon"
+                    && _elvenBursts.Any(b => b.Effect.Root.Name == "SpellEffect_228" && b.Effect.VisibleSprites > 0);
                 _globalEnt=ent.Id;_globalEntX=ent.X;SetPaused(true);
                 CaptureGlobal("ent");_commands.CloseGlobalAbilities();_selected.Add(ent.Id);break;
             case 46:
-                _globalChecks["ent_has_lifetime_status"]=_commands.DisplayedStatuses.Any(s=>s.Contains("Ent"));
+                _globalChecks["ent_has_lifetime_bar_only"]=_commands.DisplayedLifetime > .9f && !_commands.DisplayedStatuses.Any(s=>s.Contains("Ent"));
+                _globalChecks["ent_uses_source_portrait"] = _commands.PortraitButton(_globalEnt).Icon == _commands.Art("Global_Spell_G_Giant_Ent_Bordered")
+                    && _heroBar.Portrait(HeroBar.SummonSlot).Icon == _commands.PortraitButton(_globalEnt).Icon;
                 Click(_camera.UnprojectPosition(_globalClear+Vector3.Left*6000/1000),MouseButton.Right);SetPaused(false);break;
             case 70:
                 _globalChecks["summon_accepts_real_player_move_input"]=w.Commands.Any(c=>c.Kind==OrderKind.Move && c.Units.Contains(_globalEnt)) && w.Units[_globalEnt].X!=_globalEntX;
+                w.Enqueue(0,[_globalEnt],OrderKind.Stop);break;
+            case 75:
+                var idle = _views[_globalEnt].Player!;
+                _globalChecks["ent_plays_source_idle_loop"] = _views[_globalEnt].Clip == "G_Treebeard_Attack_Ready"
+                    && idle.GetAnimation(idle.CurrentAnimation).LoopMode == Animation.LoopModeEnum.Linear && idle.CurrentAnimationPosition > 0;
+                _globalBloodPools = _bloodPools;
+                w.Units[_globalEnt].Health = 0;break;
+            case 80:
+                _globalChecks["ent_dies_with_particles_and_no_blood_pool"] = _bloodPools == _globalBloodPools
+                    && _elvenBursts.Any(b => b.Effect.Root.Name == "SpellEffect_227" && b.Effect.VisibleSprites > 0);
                 var report=new {build=BuildInfo.Label,checks=_globalChecks,passed=_globalChecks.Values.All(v=>v)};
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"global-power-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions{WriteIndented=true}));
                 GD.Print("GLOBAL_POWER_SMOKE "+JsonSerializer.Serialize(report));_=FinishCombatAudio(report.passed?0:1);break;

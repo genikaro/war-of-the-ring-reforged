@@ -19,10 +19,11 @@ public sealed class ElvenSpellEffect
         _areaRadius = areaRadius;
         foreach (var layer in layers)
         {
-            bool ground = !bolt && (layer.Name.Contains("Ground",StringComparison.OrdinalIgnoreCase)
+            bool ground = layer.Ground || !bolt && (layer.Name.Contains("Ground",StringComparison.OrdinalIgnoreCase)
                 || layer.Name.Contains("Decal",StringComparison.OrdinalIgnoreCase));
             // Protection's source Aura is an emitter (12 particles), not one nearly transparent billboard.
-            int count = protection ? 12 : ground ? 1 : area && layer.Name is "Light_Drops" or "Pfire" ? 24 : bolt && layer.Name == "Light_Trail" ? 6 : 1;
+            int count = layer.SpriteCount > 0 ? layer.SpriteCount
+                : protection ? 12 : ground ? 1 : area && layer.Name is "Light_Drops" or "Pfire" ? 24 : bolt && layer.Name == "Light_Trail" ? 6 : 1;
             for (int i = 0; i < count; i++)
             {
                 var sprite = new Sprite3D { Texture = layer.Frames[0],PixelSize = 1f/layer.Frames[0].GetWidth(),
@@ -39,17 +40,22 @@ public sealed class ElvenSpellEffect
         Root.Position = position;
         foreach (var (sprite,layer,index,count,ground) in _sprites)
         {
-            double progress = Math.Max(0,age)/Math.Max(.001,layer.Duration);
-            if (loop || _bolt) progress = (progress+index/(double)count)%1;
-            sprite.Visible = progress < 1;
+            bool emitted = layer.SpriteCount > 0 && !ground;
+            double phase = index/(double)count;
+            double layerAge = layer.SpriteCount > 0 ? age-layer.Delay : Math.Max(0,age);
+            double progress = layerAge/Math.Max(.001,layer.Duration);
+            if (emitted && !loop) progress -= phase*.45;
+            if (loop || _bolt) progress = (Math.Max(0,progress)+phase)%1;
+            sprite.Visible = progress is >= 0 and < 1;
             if (!sprite.Visible) continue;
             var key = HealingPlayback.Sample(layer.Keys,progress);
-            float phase = index/(float)count,angle = index*2.399963f;
+            float angle = index*2.399963f,particlePhase = (float)phase;
             var behind = direction.LengthSquared() > .0001f ? -direction.Normalized() : Vector3.Zero;
-            float orbit = phase*Mathf.Tau+(float)age*.6f;
+            float orbit = particlePhase*Mathf.Tau+(float)age*.6f;
             sprite.Position = _protection ? new(Mathf.Cos(orbit)*height*.23f,(float)key.Height*.5f,Mathf.Sin(orbit)*height*.23f)
                 : _bolt ? behind*(index*.12f) : ground ? new(0,.09f,0)
-                : _area && count > 1 ? new(Mathf.Cos(angle)*Mathf.Sqrt(phase)*_areaRadius,1+(float)(1-progress)*(_areaRadius>5 ? 10 : 3),Mathf.Sin(angle)*Mathf.Sqrt(phase)*_areaRadius)
+                : emitted ? ParticlePosition(angle,particlePhase,(float)progress,height)
+                : _area && count > 1 ? new(Mathf.Cos(angle)*Mathf.Sqrt(particlePhase)*_areaRadius,1+(float)(1-progress)*(_areaRadius>5 ? 10 : 3),Mathf.Sin(angle)*Mathf.Sqrt(particlePhase)*_areaRadius)
                 : new(0,_area || layer.Name is "Aura" or "Loth_Lite_Evil_Target" ? (float)key.Height*.5f : height*.55f,0);
             // PixelSize normalizes the width; compensate the atlas aspect so key Height is a world height.
             float aspect = layer.Frames[0].GetWidth()/(float)layer.Frames[0].GetHeight();
@@ -57,9 +63,16 @@ public sealed class ElvenSpellEffect
             // The legacy emitter's accumulated light must remain readable at RTS camera distances.
             float alpha = (float)key.Alpha*(_protection ? 3 : 1);
             sprite.Modulate = new((float)key.Red,(float)key.Green,(float)key.Blue,Math.Clamp(alpha,0,1));
-            int frame = (int)(progress*layer.Frames.Length)%layer.Frames.Length;
+            int frame = ((int)(progress*layer.Frames.Length)+(emitted ? index : 0))%layer.Frames.Length;
             sprite.Texture = layer.Frames[frame]; sprite.MaterialOverride = layer.Materials[frame];
         }
     }
+
+    private Vector3 ParticlePosition(float angle,float phase,float progress,float height)
+    {
+        float radius = _areaRadius*Mathf.Sqrt(phase)*(.2f+.8f*progress);
+        return new(Mathf.Cos(angle)*radius,.1f+height*progress,Mathf.Sin(angle)*radius);
+    }
+
     public void Free() => Root.QueueFree();
 }

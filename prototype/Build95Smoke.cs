@@ -24,12 +24,14 @@ public partial class Main
                 Click(_commands.FateButton.GetGlobalRect().GetCenter());
                 break;
             case 164:
-                checks["fate_click_opens_dummy_global_page"] = _commands.GlobalAbilitiesOpen && _commands.FateBackButton.IsVisibleInTree();
+                checks["fate_click_opens_regular_grid"] = _commands.GlobalAbilitiesOpen && Enumerable.Range(0,5)
+                    .All(i => _commands.GlobalPowerButton(i).IsVisibleInTree()
+                        && _commands.GlobalPowerButton(i).Position == new Vector2(788+i%4*56,34+i/4*56));
                 checks["global_page_hides_unit_commands"] = _commands.CommandPaletteEmpty;
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,"fate.png"));
                 break;
             case 165:
-                Click(_commands.FateBackButton.GetGlobalRect().GetCenter());
+                Click(_commands.FateButton.GetGlobalRect().GetCenter());
                 break;
             case 166:
                 checks["global_back_restores_worker_commands"] = !_commands.GlobalAbilitiesOpen && _commands.BuildButton.Visible;

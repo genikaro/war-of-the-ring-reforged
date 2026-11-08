@@ -214,7 +214,7 @@ public sealed partial class SimWorld
         if (unit != null)
         {
             if (before>site.Health) RecordHostileDamage(unit,site.Team,x,z,asset:true);
-            EarnFate(unit.Team,site.Team,unit.X,unit.Z,(before-site.Health)*1000L);
+            EarnFate(unit.Team,site.Team,unit.X,unit.Z,(before-site.Health)*1000L,unit.Definition.WeaponFatePpm);
         }
         else if (ConstructionSites.TryGetValue(source,out var tower) && DefenseWeapon(tower,attack) is { } weapon)
             EarnFate(tower.Team,site.Team,tower.X,tower.Z,(before-site.Health)*1000L,weapon.FatePpm);

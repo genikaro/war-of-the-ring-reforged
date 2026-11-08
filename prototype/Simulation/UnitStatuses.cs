@@ -60,8 +60,6 @@ public sealed partial class SimWorld
             statuses.Add(new(StatusKind.Brambles,patch.Power.StatusAbility,-1,patch.Power.DpsMilli,patch.Until));
         if (ObeliskOver(unit) is {} obelisk)
             statuses.Add(new(StatusKind.Obelisk,obelisk.Power.StatusAbility,-1,obelisk.Power.DamageUnitPpm,obelisk.Until));
-        if (unit.SummonedUntil > Tick && Rules.GlobalPowers.FirstOrDefault(p => p.SummonUnit == unit.Definition.Name) is {} summon)
-            statuses.Add(new(StatusKind.Summoned,summon.StatusAbility,-1,0,unit.SummonedUntil));
         foreach (var (effect,kind) in new[] {(unit.ElvenSpeed,StatusKind.ElvenSpeed),(unit.Negated,StatusKind.NegateAbility),(unit.FlameShield,StatusKind.FlameShield)})
             if (effect != null && effect.Until > Tick) statuses.Add(new(kind,effect.Ability,effect.Source,effect.Ability.BonusScale,effect.Until));
         foreach (var burn in unit.HeroBurns.Where(b => b.Until > Tick)) statuses.Add(new(StatusKind.RainOfFire,burn.Ability,burn.Source,burn.Ability.DpsMilli,burn.Until));

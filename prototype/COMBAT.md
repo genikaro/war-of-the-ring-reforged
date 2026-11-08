@@ -114,8 +114,8 @@ The damage policy is explicitly approximate. Since build-116, the displayed
 base damage is authoritative for every strike. Animation variants keep their
 source durations and hit-event timing; they do not change damage per strike.
 Aragorn's unupgraded attacks all deal 26 base damage, including each strike in
-his two-hit animation. Other units use the same rule; missile and contact
-weapons have separate cadences.
+his two-hit animation. Missile and contact weapons have separate cadences.
+The Balrog uses the interval policy below.
 
 ```
 scale = sourcePairScale if the pair has a source row, else typeScale
@@ -135,6 +135,24 @@ later hits on the dead victim cannot award it again. Friendly force kills do
 not award victories. This attribution is a prototype policy; the local capture
 confirms a victory counter but does not isolate the original attribution rule.
 Kill counts are part of the state digest.
+
+### Summoned giants
+
+The Balrog's source model has three attacks with weights 40, 40 and 20.
+`E_Balrog_Attack_Melee02` is the middle choice and contains two melee hit
+events, at 56.4% and 80.67% of the clip. Rings.exe reads the elapsed milliseconds
+since the previous weapon event at `0x4364a5` and uses that interval to turn a
+rate into damage at `0x436eaa`. Build-177 preserves both hits and uses the
+clip's event intervals for its 65 damage/s and 25 splash damage/s rates. The
+first hit includes the same clip's recovery, a bounded approximation that avoids
+banking damage while idle. The second hit uses the gap between the two events.
+
+The Giant Ent's shipped stats are 2,000 HP, 4 armour and 50 damage/s for both
+weapons. Its boulder reaches 20 m with a 1.5× siege multiplier and a splash rate
+of 15 within 5 m. The original radius test and falloff at `0x403632` use
+`1 - distance²/radius²` when the weapon's falloff flag is set. Reforged applies
+that curve to the boulder around the target's position before armour. Both
+giants' original weapons have `FateModifier = 0` and earn no Fate for damage.
 
 Single selection now shows the portrait, name, live health bar, original damage
 type icon and a framed Attack / Armor / Victories block, following `local-020`

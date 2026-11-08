@@ -23,7 +23,7 @@ def export(output, resolver, trace):
     return export_sprite_effect(output,resolver,trace,'EFFECT_ARAGORN_GREATER_KINGSFOIL_TARGET','healing')
 
 
-def export_sprite_effect(output, resolver, trace, effect_name, folder, clip_atlas_edges=False):
+def export_sprite_effect(output, resolver, trace, effect_name, folder, clip_atlas_edges=False, track_names=None):
     """Shared original atlas/key extraction for Kingsfoil and the building fire effect."""
     root = Path(__file__).resolve().parent.parent
     record = resolver.db['Effects'].get(effect_name)
@@ -33,6 +33,8 @@ def export_sprite_effect(output, resolver, trace, effect_name, folder, clip_atla
     target = output / 'combat' / folder; target.mkdir(parents=True, exist_ok=True)
     layers = []
     for track in effect['texture_tracks']:
+        if track_names is not None and track['name'] not in track_names:
+            continue
         key = track['keys'][0]
         # Texture-kind 1 binds a model (e.g. Huorn roots), not an atlas; its caller exports that mesh separately.
         if 'uva' not in key:

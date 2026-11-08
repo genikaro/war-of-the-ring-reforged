@@ -60,7 +60,8 @@ static class GlobalPowerChecks
         Cast(w,4,x:60,z:20,team:0); Step(w);
         var balrog = w.Units.FirstOrDefault(u => u.Definition.Name=="UNIT_E_HERO_BALROG");
         check(balrog is {Team:0} && w.PopulationUsed(0)==0 && balrog.SummonedUntil>w.Tick,"Summon Balrog raises a controllable Balrog for the Evil team at no population");
-        check(w.StatusesOf(balrog!).Any(s => s.Kind==StatusKind.Summoned),"the Balrog shows the summoned status of its own power");
+        check(w.SummonLifeLeft(balrog!) > .99f && !w.StatusesOf(balrog!).Any(s => s.Kind==StatusKind.Summoned),
+            "the Balrog exposes a lifetime meter without a duplicate status");
     }
 
     /// <summary>Build-164: Summon Obelisk from its GlobalSpells row: 5000 health (Object 561), 15 m, DamageUnit/DamageObelisk 0.5
@@ -264,7 +265,12 @@ static class GlobalPowerChecks
         check(evil[3] is {ObjectHealth:5000,DegenerationPpm:15_000,DamageUnitPpm:500_000,DamageObeliskPpm:500_000,RadiusMm:15_000},"the cached Obelisk carries its row's health, decay and damage split");
         check(evil[0].TimeScalePpm==500_000 && evil[1].MissilePpm==10_000 && evil[2].HealMilli==200_000 && evil[4].SummonUnit=="UNIT_E_HERO_BALROG","Evil powers carry their source child-spell values");
         check(rules.Units.TryGetValue("UNIT_E_HERO_BALROG",out var balrog) && balrog.MaxHealth==2200 && balrog.KnockbackImmune && balrog.BodyRadiusMm==2560,"shared content includes the source Balrog");
-        check(rules.Units[Ent.Name] is {MaxHealth:2000,KnockbackImmune:true,IsRanged:true},"shared content includes the source Giant Ent and its missile weapon");
+        check(balrog is {DpsMilli:65_000,WeaponFatePpm:0,SplashFallsOff:false}
+            && balrog.Attacks.Single(a => a.Hits.Length == 2) is {Weight:40,DurationTicks:79} doubleSwing
+            && doubleSwing.Hits.Select(h => h.Tick).SequenceEqual([45,64]),"the source Balrog has a 40-weight two-hit swing and earns no Fate");
+        check(rules.Units[Ent.Name] is {MaxHealth:2000,ArmorMilli:4000,DpsMilli:50_000,MeleeDpsMilli:50_000,KnockbackImmune:true,
+            ReachMm:20_000,SplashRadiusMm:5000,SplashDpsMilli:15_000,SplashFallsOff:true,WeaponFatePpm:0,SiegePpm:1_500_000},
+            "the Giant Ent imports source health, armour, weapon rates, range, splash falloff, Fate and siege multiplier");
         check(new[] {225,226,400,285,286,287,289,291}.All(id=>doc.RootElement.GetProperty("GlobalVisuals").TryGetProperty(id.ToString(),out var visual)
             && visual.GetProperty("Layers").GetArrayLength()>0),"all global powers retain bound original visual layers");
         using var art=JsonDocument.Parse(File.ReadAllText(files.Resolve("interface/index.json")));

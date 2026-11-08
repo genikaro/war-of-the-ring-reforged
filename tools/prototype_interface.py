@@ -94,18 +94,28 @@ def export(output, resolver=None):
     index = {'format_version': 1, 'assets': {}}
     for path in sorted(set(paths)):
         raw = path.read_bytes(); uva = parse_uva(raw)
-        if uva['frame_count'] != 1 and path.stem != 'console_g_powerbutton':
-            continue  # Animated Palantir/alerts remain outside this static HUD slice.
-        # The Fate orb uses the first original animation frame for the static console button.
+        animated_orb = path.stem in ('console_g_powerbutton', 'console_e_powerbutton')
+        if uva['frame_count'] != 1 and not animated_orb:
+            continue
         texture = resolver.texture(uva['texture'])
         texture_path = ROOT / texture['file']
         with Image.open(texture_path) as atlas:
             box = crop_rect(uva['rect'], atlas.size)
             cropped = atlas.crop(box).convert('RGBA')
+            if animated_orb:
+                x, y, width, height = uva['rect']
+                tile_size = cropped.size
+                cropped = Image.new('RGBA', (tile_size[0]*uva['frame_count'], tile_size[1]))
+                for frame in range(uva['frame_count']):
+                    rect = (x + frame % uva['frames_per_row']*width, y + frame // uva['frames_per_row']*height, width, height)
+                    tile = atlas.crop(crop_rect(rect, atlas.size)).convert('RGBA')
+                    cropped.paste(tile, (frame*tile_size[0], 0))
             filename = path.stem + '.png'; cropped.save(target / filename)
         index['assets'][path.stem] = {'file': 'interface/' + filename, 'size': list(cropped.size),
             'uva': path.relative_to(ROOT).as_posix(), 'uva_sha256': hashlib.sha256(raw).hexdigest(),
             'texture': texture, 'texture_sha256': hashlib.sha256(texture_path.read_bytes()).hexdigest(), 'crop': box}
+        if animated_orb:
+            index['assets'][path.stem].update(frame_count=uva['frame_count'], frame_ms=uva['frame_ms'])
         if path.stem in cursor_descriptors:
             descriptor,raw_cursor = cursor_descriptors[path.stem]
             index['assets'][path.stem]['cursor_hotspot'] = cursor_hotspot(raw_cursor, cropped.size)

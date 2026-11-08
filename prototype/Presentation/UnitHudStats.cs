@@ -23,10 +23,12 @@ public sealed record UnitHudStats(string Type,string Icon,string Matchups,string
         decimal baseDps = (unit.EnabledAbilities.FirstOrDefault(a => a.Passive && a.Kind == AbilityKind.Fury)?.DpsMilli ?? unit.Definition.DpsMilli)/1000m;
         decimal hitDamage = unit.Definition.HitDamageAtRate(unit.MeleeDamageRate)/1000m*placeScale;
         string perHit = Whole(hitDamage),basePerHit = Whole(unit.Definition.HitDamageAtRate((long)(baseDps*1000))/1000m);
-        decimal actualSeconds = seconds*1_000_000/unit.TimeScalePpm,actualDps = hitDamage/actualSeconds;
+        bool variableHit = unit.Definition.UsesHitIntervals;
+        decimal actualSeconds = seconds*1_000_000/unit.TimeScalePpm,actualDps = variableHit ? dps*unit.TimeScalePpm/1_000_000m : hitDamage/actualSeconds;
         decimal hitBonus = decimal.Parse(perHit,CultureInfo.InvariantCulture)-decimal.Parse(basePerHit,CultureInfo.InvariantCulture);
+        string hitLabel = variableHit ? "Average damage per hit" : "Damage per hit";
         string tip = dps <= 0 ? "No attack" : string.Create(CultureInfo.InvariantCulture,
-            $"Damage per hit: {perHit}{(dps != baseDps ? $" ({basePerHit} base {Signed(hitBonus)} bonus)" : "")}\nDamage per second: {actualDps:0.###}\nAttack speed: {SpeedName(actualSeconds)} (a hit every {actualSeconds:0.##} s)");
+            $"{hitLabel}: {perHit}{(dps != baseDps ? $" ({basePerHit} base {Signed(hitBonus)} bonus)" : "")}\nDamage per second: {actualDps:0.###}\nAttack speed: {SpeedName(actualSeconds)} (a hit every {actualSeconds:0.##} s)");
         decimal armor = unit.ArmorMilli/1000m,baseArmor = unit.Definition.ArmorMilli/1000m;
         var sources = new[] {("hero level",unit.ExperienceArmorMilli),("research",unit.TechniqueArmorMilli),("places of power",unit.PlaceArmorMilli),("dummy buttons",unit.BonusArmorMilli),
                 ("Shield Break",-unit.ShieldBreakArmorMilli)}

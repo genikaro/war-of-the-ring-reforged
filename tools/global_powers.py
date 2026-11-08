@@ -69,8 +69,10 @@ def one(db, faction, slot, ident, descriptions):
             item.update(KnockbackSpeedMm=knock['KnockbackForce']*1000, KnockbackAngle=round(knock['KnockbackAngle']))
         if ident == 1:
             item['SummonUnit'] = 'UNIT_G_GIANT_ENT'
+            item['SoundEvents'] = [400]  # G_Treebeard_Summon, time 0.
         if ident == 0:
             item['SummonUnit'] = 'UNIT_E_HERO_BALROG'
+            item['SoundEvents'] = [140]  # E_Balrog_Summon, time 0.
         if ident == 7:
             # Units that enter the 10 m radius get the child spell's timescale multiplier (0.5) until they leave or the 15 s timer ends.
             item.update(DurationTicks=round(typed('_START_TIMER')[0]['Float_01']*20),
@@ -131,4 +133,30 @@ def visuals(output, resolver, trace):
             trace(resolver.db.files['objects']); trace(resolver.db.files['modelevents'])
         if data['Layers']:
             result[str(ident)] = data
+    # Summon and death events and the Balrog's joint-bound fire and smoke.
+    # Counts, placement and blend adapt the legacy particle tracks to the RTS camera.
+    tracks = {
+        49: {'Flames': (7, 'add')},
+        52: {'flame': (5, 'add'), 'embers': (4, 'add')},
+        53: {'Flames': (4, 'mix')},
+        64: {'Summon_Circle': (1, 'ground'), 'Summon_Fire': (16, 'add')},
+        65: {'Wing_Smoke': (8, 'mix')},
+        67: {'Smoke': (3, 'mix'), 'embers': (4, 'add')},
+        227: {'leaves': (12, 'mix'), 'initialsmoke': (7, 'mix'), 'rocks': (5, 'mix')},
+        228: {'leaves': (16, 'mix'), 'moreleaves': (8, 'mix'), 'initialsmoke': (8, 'mix'),
+              'smoke3': (6, 'mix'), 'rocks': (6, 'mix'), 'dustring': (1, 'ground'), 'light': (4, 'add')},
+        306: {'fire': (10, 'add'), 'glowtwo': (1, 'ground'), 'smoke': (8, 'mix'), 'endfire': (4, 'add')},
+        391: {'ground': (1, 'ground'), 'ground2': (1, 'ground')},
+    }
+    for ident, selected in tracks.items():
+        record = resolver.db['Effects'].get(ident)
+        data = export_sprite_effect(output, resolver, trace, record.name, 'global-effects/'+str(ident), track_names=selected)
+        source = {track['name']: track for track in data['Source']['Data']['texture_tracks']}
+        for layer in data['Layers']:
+            count, style = selected[layer['Name']]
+            layer.update(SpriteCount=count, Ground=style == 'ground', Blend=style,
+                         # Looping body effects start with their model state. Keep source delays on bursts.
+                         DelayMs=source[layer['Name']]['delay_ms'] if ident in (64, 227, 228, 306, 391) else 0)
+        data['DurationMs'] = max(layer['DurationMs']+layer['DelayMs'] for layer in data['Layers'])
+        result[str(ident)] = data
     return result

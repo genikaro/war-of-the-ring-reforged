@@ -200,6 +200,8 @@ public partial class Main
                 _evilChecks["fate_orb_shows_the_five_evil_powers"] = _commands.GlobalAbilitiesOpen && menu.All(b => b.IsVisibleInTree() && b.Icon != null)
                     && new[] {"Summon Bog","Murder of Crows","Vile Surge","Obelisk","Summon Balrog"}.Select((name,i) => menu[i].TooltipText.StartsWith(name)).All(v => v)
                     && new[] {2,3,3,4,7}.Select((cost,i) => menu[i].TooltipText.Contains(cost+" Fate")).All(v => v);
+                _evilChecks["evil_palantir_uses_its_own_atlas"] = _commands.Art("console_e_powerbutton") is AtlasTexture evilOrb
+                    && _commands.FateButton.GetChild<TextureRect>(0).Texture is AtlasTexture currentOrb && currentOrb.Atlas == evilOrb.Atlas;
                 _evilChecks["obelisk_is_castable"] = !menu[3].Disabled && menu[3].TooltipText.Contains("soaks");
                 _evilNotes["fate_menu"] = string.Join(" | ",menu.Select(b => b.TooltipText.Split((char)10)[0]));
                 if (_capture != "") _ = CaptureFrame(false,Shot("fate"));
@@ -217,6 +219,10 @@ public partial class Main
                 _evilChecks["vile_surge_heals_a_goblin"] = Unit(EvilGoblin).Health >= 200 || world.Units.Where(u => u.Team == 0 && u.Definition.Name == EvilGoblin).Any(u => u.Health >= 90);
                 var balrog = world.Units.FirstOrDefault(u => u.Team == 0 && u.Definition.Name == "UNIT_E_HERO_BALROG");
                 _evilChecks["summon_balrog_raises_a_balrog"] = balrog is { Health: > 0 } && _views.ContainsKey(balrog.Id);
+                _evilChecks["balrog_emerges_with_source_animation_and_fire"] = balrog != null
+                    && _views[balrog.Id].Clip == "E_Balrog_Summon"
+                    && _views[balrog.Id].Summon?.Attachments.Any(a => a.Id == 65) == true
+                    && _elvenBursts.Any(b => b.Effect.Root.Name == "SpellEffect_64" && b.Effect.VisibleSprites > 0);
                 var obeliskView = _droppedViews.FirstOrDefault(p => p.Key.Kind == "obelisk").Value;
                 var meshes = obeliskView == null ? Array.Empty<MeshInstance3D>() : Descendants(obeliskView).OfType<MeshInstance3D>().ToArray();
                 _evilChecks["obelisk_rises_with_its_idle_model"] = world.GlobalActive(0,9) && world.ObeliskHealthMilli.GetValueOrDefault(0) > 0
@@ -229,7 +235,8 @@ public partial class Main
                 // Build-172: the Balrog takes the hero strip's SPECIAL slot with its remaining life, then the console's lifetime meter,
                 // the Obelisk's own panel and the burning orange of a building's bar are checked through the HUD.
                 _evilChecks["summon_takes_the_special_hero_slot"] = balrog != null && _heroBar.HeroIn(HeroBar.SummonSlot) == balrog.Id
-                    && _heroBar.LifeFraction is > .9f and <= 1f && _heroBar.Portrait(HeroBar.SummonSlot).IsVisibleInTree();
+                    && _heroBar.LifeFraction is > .9f and <= 1f && _heroBar.Portrait(HeroBar.SummonSlot).IsVisibleInTree()
+                    && _heroBar.Portrait(HeroBar.SummonSlot).Icon == _commands.Art("Global_Spell_E_Balrog_Bordered");
                 if (balrog != null) { _selected.Clear(); _selectedStructure = null; _selected.Add(balrog.Id); }
                 _evilHudStep = 1; _evilSandboxMark = _frames; break;
             case 11:
@@ -338,6 +345,8 @@ public partial class Main
                 var rider = world.Units[_evilWraith];
                 _evilChecks["shadow_bind_makes_a_black_rider"] = rider.Definition.Name == "UNIT_E_BONUS_BLACK_RIDER" && world.Economies[0].Fate <= _evilFateBefore && rider.PopulationUnit == "UNIT_E_WRAITH"
                     && _views[rider.Id].Model.GetProperty("unit").GetString() == "UNIT_E_BONUS_BLACK_RIDER" && _selected.Contains(_evilKing);
+                _evilChecks["black_rider_uses_source_portrait"] = _commands.Art(CommandPanel.PortraitName(rider.Definition.DisplayName))
+                    is { } portrait && portrait == _commands.Art("Portrait_E_Black_Rider");
                 if (_capture != "") _ = CaptureFrame(false,Shot("shadow-bind"));
                 PushKey(Key.W); Next(); break;
             case 25:

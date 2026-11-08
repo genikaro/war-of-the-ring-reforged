@@ -32,7 +32,7 @@ public partial class Main
         foreach (Node child in view.Root.GetChildren())
             if (child != view.Ring) child.QueueFree();
         view.Ring.Mesh = null; view.Ring.MaterialOverride = null;
-        view.Player = null; view.Appearance = null; view.Health = null; view.HeroGlow = null; view.Ghost = null;
+        view.Player = null; view.Appearance = null; view.Health = null; view.HeroGlow = null; view.Ghost = null; view.Summon = null;
         _corpsesBuried++;
         return true;
     }

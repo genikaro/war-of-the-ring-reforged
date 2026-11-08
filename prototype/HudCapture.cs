@@ -48,8 +48,7 @@ public partial class Main
                 SelectedOwnSite()?.Research is { } research ? _techniquePortraits.GetValueOrDefault(research) : null);
             hud.RefreshResearch(_world,SelectedOwnSite(),name => _techniquePortraits.GetValueOrDefault(name));
         }
-        hud.RefreshFatePage("",mirrorOpen: _commands.GlobalAbilitiesOpen);
-        hud.RefreshGlobalPowers(_pendingGlobalPower);
+        hud.RefreshFatePage("",_pendingGlobalPower,mirrorOpen: _commands.GlobalAbilitiesOpen);
         await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
         hud.SelectionScrollOffset = selectionScroll;
         hud.MirrorTooltip(_commands);

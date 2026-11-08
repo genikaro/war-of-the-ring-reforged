@@ -101,6 +101,7 @@ public partial class Main : Node3D
         public int AttackSerial = -1;
         public int CastSerial = -1;
         public UnitAppearance? Appearance;
+        public SummonPresentation? Summon;
         public HeadingPlayback Heading = new();
         public bool Translucent;
         public (MeshInstance3D Mesh,int Surface,Material? Faded)[]? Ghost;
@@ -448,8 +449,10 @@ public partial class Main : Node3D
         string file = modelKey.Item1;
         if (!_animationNames.TryGetValue(file,out var animationNames)) _animationNames[file] = animationNames = [];
         if (!_stateClips.TryGetValue(file,out var stateClips)) _stateClips[file] = stateClips = [];
-        _views[unit.Id] = new UnitView(root,ring,player,model) { DefinitionName = unit.Definition.Name,Team = unit.Team,Appearance = appearance,Health = health,HeroGlow = heroGlow,
+        var view = new UnitView(root,ring,player,model) { DefinitionName = unit.Definition.Name,Team = unit.Team,Appearance = appearance,Health = health,HeroGlow = heroGlow,
             SpeedScale = player.SpeedScale,AnimationNames = animationNames,StateClips = stateClips };
+        _views[unit.Id] = view;
+        ConfigureSummon(view,visual,_appearanceData[file],unit);
         AddPresented(unit.Id);
     }
 
@@ -947,6 +950,7 @@ public partial class Main : Node3D
             bool locomotion=unit.Moving && (unit.Target<0 || MovementPlayback.HasLocomotion(unit.Movement,unit.MovementBudget));
             var nature = unit.Present ? NatureAnimation(unit,_world.Tick) : null;
             string state = unit.Health <= 0 ? "death" : nature != null ? "nature" : unit.Camouflaged ? "camouflage" : unit.Casting ? "cast" : unit.StrikeActive ? "attack" : locomotion ? (unit.Walking ? "walk" : "run") : unit.Target >= 0 ? "ready" : "idle";
+            if (PlaySummon(view,state)) state = "summon";
             if (unit.Moving) _movingSeen++;
             if (unit.Moving && unit.FreeMovement) _freeMovementSeen++;
             if (unit.Attacking) _attackingSeen++;
@@ -955,6 +959,7 @@ public partial class Main : Node3D
                     if (_friendlySquads[squad].Contains(unit.Id)) _squadsFought.Add(squad);
             string clip = nature?.Clip ?? (state == "camouflage" ? unit.EnabledAbilities.First(a => a.Kind == AbilityKind.Camouflage).CastClip : state == "cast" ? unit.Ability(unit.AbilitySlot)!.CastClip : state == "attack" ? unit.Definition.Attacks[unit.AttackVariant].Clip
                 : state is "walk" or "run" ? (unit.Walking ? unit.Definition.WalkClip : unit.Definition.RunClip)
+                : state == "summon" ? view.Summon!.Clip
                 : state == "ready" ? unit.Definition.ReadyClip : StateClip(view,state));
             if ((state is "walk" or "run") && clip == "") clip = StateClip(view,"walk");
             var gather = WorkerAnimation(unit);
@@ -969,14 +974,14 @@ public partial class Main : Node3D
                 {
                     FlushAnimation(view);
                     var resource = view.Player.GetAnimation(animation);
-                    resource.LoopMode = state is "death" or "attack" or "cast" or "nature" || timed ? Animation.LoopModeEnum.None : Animation.LoopModeEnum.Linear;
+                    resource.LoopMode = state is "death" or "attack" or "cast" or "nature" or "summon" || timed ? Animation.LoopModeEnum.None : Animation.LoopModeEnum.Linear;
                     if (restartAttack || restartCast) view.Player.Stop();
                     // Simulation-seeked clips have SpeedScale=0: a timed blend would never advance.
-                    view.Player.Play(animation,state is "attack" or "cast" or "nature" || timed ? 0 : 0.12); view.Clip = clip;
+                    view.Player.Play(animation,state is "attack" or "cast" or "nature" or "summon" || timed ? 0 : 0.12); view.Clip = clip;
                 }
             }
             // The carrying clip is a walk; a running worker plays it faster so its steps keep pace.
-            SetAnimationSpeed(view,_paused || unit.StrikeActive || unit.Casting || timed || nature != null ? 0
+            SetAnimationSpeed(view,_paused || unit.StrikeActive || unit.Casting || timed || nature != null || state == "summon" ? 0
                 : gather != null && unit.Moving && !unit.Walking ? 1_000_000f/unit.Definition.WalkScale : 1);
             view.AttackSerial = unit.AttackSerial;
             view.CastSerial = unit.CastSerial;
@@ -984,7 +989,11 @@ public partial class Main : Node3D
             // A unit not drawn gets this again when it comes into view (PresentPose).
             view.AppearanceClip = clip;
             if (!unit.StrikeActive && !unit.Casting && view.Drawn) view.Appearance?.Apply(clip,0,view.State);
-            if (unit.Health <= 0) view.Died = true;
+            if (unit.Health <= 0 && !view.Died)
+            {
+                view.Died = true;
+                PresentSummonDeath(unit);
+            }
         }
         if (_combatSmoke)
             foreach (var unit in _world.Units.Where(u => u.Health > 0))
@@ -1130,8 +1139,7 @@ public partial class Main : Node3D
             using (SimProfiler.Time("hud production")) PresentProduction();
             UpdateConstructionPreview();
         }
-        _commands.RefreshFatePage($"{_selectedStructure}:{string.Join(',',_selected.Order())}");
-        _commands.RefreshGlobalPowers(_pendingGlobalPower);
+        _commands.RefreshFatePage($"{_selectedStructure}:{string.Join(',',_selected.Order())}",_pendingGlobalPower);
         _presentStep = false;
         if (_toolsPanel.Visible) RefreshDebugMenu();
         PresentWaypoints();

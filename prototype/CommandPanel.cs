@@ -186,7 +186,11 @@ public partial class CommandPanel : Control
         ResizeConsole(); GetViewport().SizeChanged += ResizeConsole;
     }
 
-    public override void _Process(double delta) => UpdateTooltip();
+    public override void _Process(double delta)
+    {
+        AnimateFateOrb(delta);
+        UpdateTooltip();
+    }
 
     private void ResizeConsole()
     {
@@ -313,7 +317,11 @@ public partial class CommandPanel : Control
         {
             string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(cache,asset.Value.GetProperty("file").GetString()!));
             if (!path.StartsWith(System.IO.Path.GetFullPath(cache)+System.IO.Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Interface asset escapes cache");
-            using var image = Image.LoadFromFile(path); _art[asset.Name] = ImageTexture.CreateFromImage(image);
+            using var image = Image.LoadFromFile(path);
+            var texture = ImageTexture.CreateFromImage(image);
+            _art[asset.Name] = asset.Value.TryGetProperty("frame_count",out var frames)
+                ? LoadFateOrb(asset.Name,texture,frames.GetInt32(),asset.Value.GetProperty("frame_ms").GetInt32())
+                : texture;
             if (asset.Value.TryGetProperty("cursor_hotspot",out var hotspot))
                 _cursorHotspots[asset.Name] = new(hotspot[0].GetSingle(),hotspot[1].GetSingle());
         }
@@ -340,7 +348,7 @@ public partial class CommandPanel : Control
         _populationIcon.Texture = _art.GetValueOrDefault("console_g_resourcepopulation");
         _foodIcon.Texture = _art.GetValueOrDefault("console_g_resourcefood");
         _oreIcon.Texture = _art.GetValueOrDefault("console_g_resourcewater");
-        _fateIcon.Texture = _art.GetValueOrDefault("console_g_powerbutton") ?? _art.GetValueOrDefault("console_g_powerchit");
+        ApplyFateSkin();
         foreach (var command in Commands) if (_buttons.TryGetValue(command.Kind,out var button) && _art.TryGetValue(command.Icon,out var icon)) button.Icon = icon;
         if (_world != null) LoadTooltipArt();
     }
@@ -371,6 +379,7 @@ public partial class CommandPanel : Control
         "Giant Spider" => "Portrait_E_Giant_Spider","Wraith" => "Portrait_E_Wraith","Haradrim Slayer" => "Portrait_E_Haradrim_Assassin",
         "Troll Stonehurler" => "Portrait_E_Troll_Stonehurler","Troll Bonecleaver" => "Portrait_E_Troll_Bonecleaver","Gollum" => "Portrait_E_Gollum",
         "Nazgul King" => "Portrait_E_Nazgul_King","Saleme" => "Portrait_E_Qamara","Grishnakh" => "Portrait_E_Grishnakh","Saruman" => "Portrait_E_Saruman",
+        "Giant Ent" => "Global_Spell_G_Giant_Ent_Bordered","Balrog" => "Global_Spell_E_Balrog_Bordered","Black Rider" => "Portrait_E_Black_Rider",
         _ => "Portrait_E_Uruk_Hai" };
 
     private int _describedTick = -1,_describedTeam;

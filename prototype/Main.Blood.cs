@@ -56,7 +56,7 @@ public partial class Main
         // A death is seen on the tick it happens, while the body is still on the active roster.
         foreach (var unit in _world.ActiveUnits)
         {
-            if (unit.Health > 0 || !_bloodDeaths.Add(unit.Id) || unit.InsideSite >= 0 || !_bloodShown) continue;
+            if (unit.Health > 0 || unit.SummonedUntil >= 0 || !_bloodDeaths.Add(unit.Id) || unit.InsideSite >= 0 || !_bloodShown) continue;
             if (_blood.Unit(unit.Definition.Name) is not { } source || !_world.CanSeeUnit(ViewTeam,unit)) continue;
             if (unit.CriticalDeath && source.CriticalDeath is int burst && BloodAllowed(burst) && Explode(unit,burst,now)) continue;
             if (source.DeathPools.Length == 0) continue;

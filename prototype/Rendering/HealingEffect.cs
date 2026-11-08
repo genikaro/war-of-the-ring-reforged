@@ -7,7 +7,8 @@ namespace Reforged.Rendering;
 /// <summary>Finite, seekable visual playback. Only simulation events create it.</summary>
 public sealed class HealingEffect
 {
-    public sealed record Layer(string Name,double Duration,Texture2D[] Frames,StandardMaterial3D[] Materials,HealingKey[] Keys);
+    public sealed record Layer(string Name,double Duration,Texture2D[] Frames,StandardMaterial3D[] Materials,HealingKey[] Keys,
+        int SpriteCount = 0,bool Ground = false,double Delay = 0);
     public Node3D Root { get; } = new() {Name = "GreaterKingsfoilEffect"};
     public int Target { get; }
     public double Start { get; }
@@ -29,15 +30,19 @@ public sealed class HealingEffect
             }).ToArray();
             var keys = layer.GetProperty("Keys").EnumerateArray().Select(key => new HealingKey(key.GetProperty("Time").GetDouble(),
                 key.GetProperty("Width").GetDouble(),key.GetProperty("Height").GetDouble(),key.GetProperty("ColorArgb").GetUInt32())).OrderBy(k => k.Time).ToArray();
+            bool sourceGround = layer.TryGetProperty("Ground",out var ground) && ground.GetBoolean();
+            bool blend = name == "leaves" || layer.TryGetProperty("Blend",out var mode) && mode.GetString() is "mix" or "ground";
             var materials = frames.Select(frame => new StandardMaterial3D {
                 AlbedoTexture = frame,ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
                 Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-                BlendMode = name == "leaves" ? BaseMaterial3D.BlendModeEnum.Mix : BaseMaterial3D.BlendModeEnum.Add,
+                BlendMode = blend ? BaseMaterial3D.BlendModeEnum.Mix : BaseMaterial3D.BlendModeEnum.Add,
                 VertexColorUseAsAlbedo = true,CullMode = BaseMaterial3D.CullModeEnum.Disabled,
                 DepthDrawMode = BaseMaterial3D.DepthDrawModeEnum.Disabled,
-                BillboardMode = name.Contains("ring") ? BaseMaterial3D.BillboardModeEnum.Disabled : BaseMaterial3D.BillboardModeEnum.Enabled,
+                BillboardMode = sourceGround || name.Contains("ring") ? BaseMaterial3D.BillboardModeEnum.Disabled : BaseMaterial3D.BillboardModeEnum.Enabled,
                 BillboardKeepScale = true }).ToArray();
-            return new Layer(name,layer.GetProperty("DurationMs").GetDouble()/1000,frames,materials,keys);
+            return new Layer(name,layer.GetProperty("DurationMs").GetDouble()/1000,frames,materials,keys,
+                layer.TryGetProperty("SpriteCount",out var count) ? count.GetInt32() : 0,sourceGround,
+                layer.TryGetProperty("DelayMs",out var delay) ? delay.GetDouble()/1000 : 0);
         }).ToArray();
         return (data.GetProperty("DurationMs").GetDouble()/1000,layers);
     }

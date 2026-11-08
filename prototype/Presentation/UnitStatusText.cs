@@ -29,7 +29,7 @@ public sealed record UnitStatusText(string Icon,string Title,string Tooltip)
             StatusKind.Obelisk => (status.Ability?.Icon,ability,new[] {$"Takes {Percent(status.Scale)} of every hit; the Obelisk soaks the rest.",
                 $"Obelisk health {world.ObeliskHealthMilli.GetValueOrDefault(unit.Team)/1000} · at most "+Left()}),
             StatusKind.Blind => (status.Ability?.Icon,"Blind",new[] {"Cannot attack; can still move and cast abilities.",Left()}),
-            StatusKind.BlessedWind or StatusKind.HeroicLegacy or StatusKind.Brambles or StatusKind.Summoned =>
+            StatusKind.BlessedWind or StatusKind.HeroicLegacy or StatusKind.Brambles =>
                 (status.Ability?.Icon,ability,new[] {status.Ability?.Description ?? "",Left()}),
             StatusKind.HeroicAura => (status.Ability?.Icon,ability,new[] {$"Abilities recharge {Percent(status.Scale)} as fast.",From()}),
             StatusKind.SiegeAura => (status.Ability?.Icon,ability,new[] {$"Deals {Percent(status.Scale)} damage to buildings.",From()}),

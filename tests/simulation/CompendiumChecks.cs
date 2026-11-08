@@ -15,6 +15,7 @@ static class CompendiumChecks
     private static readonly UnitDefinition Hurler = UnitDefinition.Probe with { Name="hurler",MaxHealth=10000,DpsMilli=15000,ReachMm=18000,
         MinimumRangeMm=1000,ProjectileSpeedMmPerSecond=25000,Attacks=[new("throw",1,40,[new(10,1000000)])] };
     private static readonly UnitDefinition Uruk = Hurler with { Name="uruk",DpsMilli=14000,ReachMm=13000 };
+    private static readonly FateRules BattleFate = new(500,800_000,1_100_000,1_450_000,1_000_000,[]);
 
     private static SimWorld Open(CombatRules? rules = null,bool hall = false)
     {
@@ -58,12 +59,35 @@ static class CompendiumChecks
         check(melee.CombatEvents.Count(e => e.Kind == CombatEventKind.Hit && e.Unit == balrog.Id) == 3,"each splash victim gets its own hit event");
         check(melee.StateDigest() != Open().StateDigest(),"splash damage reaches the state digest");
 
+        var combo = Open();
+        combo.FateRules = BattleFate;
+        combo.Economies[0].Fate = 0;
+        var doubleSwing = Firesword with { Name="UNIT_E_HERO_BALROG",WeaponFatePpm=0,
+            Attacks=[new("E_Balrog_Attack_Melee02",40,79,[new(45,1_000_000),new(64,1_000_000)])] };
+        var demon = combo.Spawn(0,Cell(20),doubleSwing);
+        var target = combo.Spawn(1,Cell(22),Dummy);
+        var secondary = combo.Spawn(1,Cell(25),Dummy);
+        combo.Enqueue(0,[demon.Id],OrderKind.Attack,target:target.Id);
+        var blows = new List<CombatEvent>();
+        for (int i = 0; i < 130 && blows.Count < 4; i++)
+        {
+            combo.Step();
+            blows.AddRange(combo.CombatEvents.Where(e => e.Kind == CombatEventKind.Hit && e.Unit == demon.Id));
+        }
+        check(blows.Where(e => e.Target == target.Id).Select(e => e.DamageMilli).SequenceEqual([195_000L,61_750L])
+            && blows.Where(e => e.Target == secondary.Id).Select(e => e.DamageMilli).SequenceEqual([75_000L,23_750L]),
+            "the Balrog's double swing lands both source strikes, with less damage and splash on the shorter second interval");
+        check(combo.Economies[0].Fate == 0 && combo.Economies[0].FateProgressMicro == 0,"the Firesword grants no Fate for direct or splash hits");
+
         // The Firesword's fire input (2 a second) sets an enemy building alight with its first blow.
-        var burn = Open(hall: true); var striker = burn.Spawn(0,Cell(56,20),Firesword);
+        var burn = Open(hall: true); var striker = burn.Spawn(0,Cell(56,20),doubleSwing);
+        burn.FateRules = BattleFate; burn.Economies[0].Fate = 0;
         burn.Enqueue(0,[striker.Id],OrderKind.AttackStructure,-1,Hall);
         for (int i = 0; i < 200 && burn.ConstructionSites[Hall].Health == 5000; i++) burn.Step();
         check(burn.ConstructionSites[Hall].Health < 5000 && burn.ConstructionSites[Hall].FirePpm > 0 && burn.ConstructionSites[Hall].FireSource == striker.Id,
             "a Firesword blow sets an enemy building alight");
+        Step(burn,40);
+        check(burn.Economies[0].FateProgressMicro == 0,"the Firesword's building hits and fire grant no Fate");
         var plain = Open(hall: true); var club = plain.Spawn(0,Cell(56,20),Firesword with { Name="club",FirePpmPerSecond=0 });
         plain.Enqueue(0,[club.Id],OrderKind.AttackStructure,-1,Hall);
         for (int i = 0; i < 200 && plain.ConstructionSites[Hall].Health == 5000; i++) plain.Step();
@@ -77,13 +101,15 @@ static class CompendiumChecks
         force.Enqueue(0,[],OrderKind.Research,0,Hall); Step(force,3);
         check(troll.TechniqueSplashRadiusMm == 5000 && troll.TechniqueSplashDpsMilli == 50 && troll.TechniqueProjectile == 35 && troll.Splash(true) == (5000,50),
             "Unstoppable Force gives the Stonehurler's missiles the weapon's splash and boulder");
-        var heavy = Hurler with { Name="heavy",SplashRadiusMm=5000,SplashDpsMilli=15000 };
+        var heavy = Hurler with { Name="heavy",SplashRadiusMm=5000,SplashDpsMilli=15000,SplashFallsOff=true,WeaponFatePpm=0 };
         var lob = Open(); var ent = lob.Spawn(0,Cell(20),heavy); var mark = lob.Spawn(1,Cell(32),Dummy); var bystander = lob.Spawn(1,Cell(35),Dummy);
-        var outside = lob.Spawn(1,Cell(38),Dummy);
+        var farther = lob.Spawn(1,Cell(36),Dummy); var edge = lob.Spawn(1,Cell(37),Dummy); var outside = lob.Spawn(1,Cell(38),Dummy);
+        lob.FateRules = BattleFate; lob.Economies[0].Fate = 0;
         lob.Enqueue(0,[ent.Id],OrderKind.Attack,-1,mark.Id);
         for (int i = 0; i < 80 && Taken(mark) == 0; i++) lob.Step();
-        check(Taken(mark) > 0 && Taken(bystander) == heavy.HitDamageAtRate(15000) && Taken(outside) == 0,
-            "a splashing boulder strikes the enemies within 5 m of its victim when it lands");
+        check(Taken(mark) > 0 && Taken(bystander) == heavy.HitDamageAtRate(9_600) && Taken(farther) == heavy.HitDamageAtRate(5_400)
+            && Taken(edge) == 0 && Taken(outside) == 0,"a boulder uses squared-distance falloff inside its 5 m splash radius");
+        check(lob.Economies[0].FateProgressMicro == 0,"the Giant Ent's boulder grants no Fate for either hit");
         var released = Open(rules); var thrower = released.Spawn(0,Cell(20),Hurler); var aim = released.Spawn(1,Cell(32),Dummy);
         thrower.TechniqueProjectile = 35; released.Enqueue(0,[thrower.Id],OrderKind.Attack,-1,aim.Id);
         for (int i = 0; i < 40 && released.Projectiles.Count == 0; i++) released.Step();

@@ -72,7 +72,7 @@ public sealed partial class SimWorld
     /// with the attacker at (x, z): the earned power, whole points banked as Fate.</summary>
     private void EarnFate(int team,int victimTeam,int x,int z,long damageMilli,int weaponPpm = 1_000_000)
     {
-        if (FateRules is not { } rules || damageMilli <= 0 || team < 0 || victimTeam < 0 || team == victimTeam
+        if (FateRules is not { } rules || damageMilli <= 0 || weaponPpm == 0 || team < 0 || victimTeam < 0 || team == victimTeam
             || !Economies.TryGetValue(team,out var bank) || bank.Fate >= MaxFate) return;
         bank.FateProgressMicro += damageMilli*FatePerDamagePpm(team,x,z,weaponPpm)/1000;
         long point = rules.LevelPerPoint*1_000_000L;
