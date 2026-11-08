@@ -29,9 +29,10 @@ import struct
 from pathlib import Path
 
 import h2o
+import lqr
 import wor
 
-INSTALL = wor.ROOT / 'TLOTR - War of the Ring'
+INSTALL = Path(lqr.INSTALL)
 FORMAT_VERSION = 1
 MAGIC = b'LIQDTEXT'
 SYMBOL_PREFIX = 'INTERFACE_TEXT_ID_'

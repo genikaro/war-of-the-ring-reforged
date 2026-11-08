@@ -1,5 +1,17 @@
 # Godot C# skirmish sandbox
 
+**build-188:** a launcher. The exported game (`build/WarOfTheRingReforged.exe`) now opens on it: pick the folder the
+original War of the Ring is installed in (Browse, or type it and press Enter) and the launcher checks that its database,
+archives, text and AI players parse, then shows the text language and counts. **Import game data** extracts every
+archive, builds the content pack and the menu art and imports every multiplayer map and the Sandbox, with a progress
+bar and a log. Maps import several at a time, largest first; a full import of the English install takes about 17
+minutes on a 16-thread machine, most of it the 8-player maps (`--jobs 1` imports them one by one). **Start Reforged** opens the main
+menu once a complete import is there (`converted/install.json`); data made earlier with the developer tools counts too.
+The launcher remembers the folder and says when the data came from an older build. Importing needs Python 3.13 with
+Pillow and NumPy (`converted/tooling/python` or on PATH). The same import runs without the game:
+`python tools/import_install.py "C:/Games/War of the Ring"` (`--check` only checks). `run.ps1 -Launcher` opens the
+launcher from the project. The tools now read the install named by `REFORGED_INSTALL` when given none.
+
 **build-187:** an English install now imports cleanly. AI player names are read in the install language's code page,
 so the English "Grishnákh" no longer turns into "Grishnбkh". The English release's unfinished entries ("Empty
 description", "Placeholder") count as missing text, as the Russian "Затычка" entries already did. A content pack built
@@ -811,7 +823,16 @@ From the repository root, with the current local cache and portable tools:
 With no scene-choosing parameters it opens the main menu (build-147,
 [MENUS.md](MENUS.md)); `-View squad` (or `-View fortress`, `-CapturePath`, the
 smokes) loads the Helm's Deep scene described below, as a bare run did before.
-`./prototype/export.ps1` builds the stand-alone `build/WarOfTheRingReforged.exe`.
+`./prototype/export.ps1` builds the stand-alone `build/WarOfTheRingReforged.exe`, which opens on the launcher
+(build-188): it imports the original install chosen there and then starts the main menu. `-Launcher` opens the
+launcher from the project; `-LauncherSmoke -LauncherFolder <install>` checks the folder, presses Start Reforged and
+waits for the main menu (`-LauncherImport` imports first, which replaces this checkout's game data).
+
+On a new machine, or for another install, the launcher's import replaces the steps below in one go:
+
+```powershell
+python tools/import_install.py "C:/Games/War of the Ring"
+```
 
 The launcher builds C# first. It uses portable tools in ignored
 `converted/tooling`, or accepts `-GodotPath` and `-DotnetPath` explicitly.

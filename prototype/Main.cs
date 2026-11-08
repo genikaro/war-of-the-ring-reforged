@@ -120,6 +120,13 @@ public partial class Main : Node3D
 
     public override void _Ready()
     {
+        // Build-188: the exported game opens on the launcher, which imports the original game; Start Reforged returns here.
+        if (Launcher.Wanted)
+        {
+            ProcessMode = ProcessModeEnum.Disabled;
+            Callable.From(() => GetTree().ChangeSceneToNode(new Launcher())).CallDeferred();
+            return;
+        }
         GetTree().AutoAcceptQuit = false;
         LoadGameText();
         CreateUi(); WatchPointer();
@@ -193,11 +200,11 @@ public partial class Main : Node3D
             if (arg == "--engagement-smoke") _engagementSmoke = true;
             if (arg == "--attack-move-engagement-smoke") _attackMoveEngagementSmoke=_engagementSmoke=true;
             if (arg == "--formation-smoke") _formationSmoke=_engagementSmoke=true;
-            if (arg == "--menu") _menuMode = true;
+            if (arg is "--menu" or "--launcher" or "--launcher-smoke") _menuMode = true;
             if (arg == "--menu-smoke") _menuSmoke = _menuMode = true;
         }
         // Started with nothing to choose a match (the exported game, the editor's Play button): the main menu.
-        if (OS.GetCmdlineUserArgs().Length == 0) _menuMode = true;
+        if (Launcher.NothingChosen) _menuMode = true;
         // Build-147: the main menu, or the setup screen a match returns to, until a match is chosen.
         if (_chosenSetup == null && (_nextScreen ?? (_menuMode ? FrontEndScreen.MainMenu : null)) is { } screen) { ShowFrontEnd(screen); return; }
         // The setup screen chooses the match; once chosen, its choice replaces the launch arguments.

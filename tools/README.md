@@ -59,6 +59,7 @@ assets, previews, validation reports and portable tools stay in ignored
 | `wor2gltf.py`, `verify_phase2.py` | Export Helm's Deep as one GLB; audit all 54 maps and the rendered scene. |
 | `verify_walker_masks.py` | Audit every map's ground bitsets against its original walker region graph (`converted/walker-mask-report.json`). |
 | `prepare_prototype.py` | Build a hashed local runtime cache for the Godot C# sandbox; optionally extract the owner's install. |
+| `import_install.py` | Build-188, the launcher's import: check an install parses (`--check`), then extract it, build the content pack, menu art and every map (in parallel) and record it in `converted/install.json`. Progress lines start with `@reforged `. |
 | `viewer.html` | three.js viewer with unit and clip pickers (`?clip=Name`, `?t=0.5` freezes a frame). |
 
 Extract the archives once:

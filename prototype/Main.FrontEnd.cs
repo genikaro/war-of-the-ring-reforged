@@ -73,6 +73,7 @@ public partial class Main
             _mainMenu.ExitChosen += () => _ = FinishCombatAudio(0);
         }
         _mainMenu.Show(); _mainMenu.FadeIn();
+        if (Launcher.SmokeRunning) Launcher.FinishSmoke(_mainMenu.Visible && _menuScene != null);
     }
 
     private void OpenSetupFromMenu(SetupScreen.SetupKind kind)

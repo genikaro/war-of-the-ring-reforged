@@ -43,6 +43,12 @@ param(
     [switch]$SetupSmoke,
     [switch]$Menu,
     [switch]$MenuSmoke,
+    # Build-188: the launcher (the exported game's first screen); -LauncherSmoke checks -LauncherFolder, imports it
+    # with -LauncherImport, presses Start Reforged and waits for the main menu.
+    [switch]$Launcher,
+    [switch]$LauncherSmoke,
+    [string]$LauncherFolder,
+    [switch]$LauncherImport,
     [switch]$Sandbox,
     [switch]$SandboxSmoke,
     [switch]$Observe,
@@ -99,7 +105,7 @@ if (-not $GodotPath) {
 $launchOnly = @('Skirmish','GodotPath','DotnetPath','Resolution','HideHud','DebugMenu','View','Unmuted','Mute')
 $setupMode = $Setup -or $SetupSmoke -or ($Skirmish -and -not ($PSBoundParameters.Keys | Where-Object { $_ -notin $launchOnly }))
 # Build-147: nothing that chooses a scene (or -Menu) opens the main menu; -View, -CapturePath and the like keep Helm's Deep.
-$menuMode = $Menu -or $MenuSmoke -or -not ($PSBoundParameters.Keys | Where-Object { $_ -notin @('GodotPath','DotnetPath','Resolution','Unmuted','Mute','DebugMenu') })
+$menuMode = $Menu -or $MenuSmoke -or $Launcher -or $LauncherSmoke -or -not ($PSBoundParameters.Keys | Where-Object { $_ -notin @('GodotPath','DotnetPath','Resolution','Unmuted','Mute','DebugMenu') })
 $env:DOTNET_ROOT = Split-Path -Parent $DotnetPath
 $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
@@ -131,6 +137,7 @@ if ($AudioSmoke) {
     $arguments += @('--fixed-fps','20')
 }
 if ($StressBenchmark) { $arguments += @('--fixed-fps','60') }
+if ($LauncherSmoke -and -not $CapturePath) { $arguments += '--headless' }
 # Build-160: a match without a window (e.g. -Observe -Speed 16 -Profile -ProfileUntil 14 -Headless), for simulation timing.
 if ($Headless -and -not ($arguments -contains '--headless')) { $arguments += '--headless' }
 # Build-172: -Mute runs any session or smoke silently (Godot's dummy audio driver; -Headless is silent already).
@@ -181,6 +188,11 @@ elseif ($Fog) { $arguments += '--fog' }
 if ($setupMode) { $arguments += '--setup' }
 if ($SetupSmoke) { $arguments += '--setup-smoke' }
 if ($menuMode) { $arguments += '--menu' }
+if ($Launcher -or $LauncherSmoke) { $arguments += '--launcher' }
+if ($LauncherSmoke) { $arguments += '--launcher-smoke' }
+if ($LauncherFolder) { $arguments += "--launcher-folder=$($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($LauncherFolder))" }
+if ($LauncherImport) { $arguments += '--launcher-import' }
+if ($LauncherSmoke -and $CapturePath) { $arguments += "--launcher-capture=$($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($CapturePath))"; $CapturePath = $null }
 if ($MenuSmoke) { $arguments += '--menu-smoke' }
 if ($SandboxSmoke) { $arguments += '--sandbox-smoke' }
 if ($Observe) { $arguments += '--observe' }

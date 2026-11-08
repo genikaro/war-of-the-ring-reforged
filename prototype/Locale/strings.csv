@@ -229,3 +229,46 @@ structure.armor_tip,,Reduces incoming weapon damage.,Снижает урон о�
 structure.garrison_empty,,Garrison: empty,Гарнизон: пусто,
 structure.leaves_tower,GameConsole:8131,Leaves the tower,,Clicking a garrisoned unit sends it out
 structure.construction,,Construction {0}%,Строительство: {0}%,
+"# Build-188: the launcher (Launcher.cs), shown before the install's text is imported; its language follows the last import."
+launcher.title,,War of the Ring,Война Кольца,
+launcher.subtitle,,Reforged,Reforged,
+launcher.folder,,Original game folder,Папка оригинальной игры,
+launcher.folder.hint,,The folder War of the Ring is installed in: it holds Database and Archives.,"Папка, в которую установлена Война Кольца: в ней лежат Database и Archives.",
+launcher.browse,,Browse...,Обзор...,
+launcher.choose_folder,,Choose the folder War of the Ring is installed in.,"Выберите папку, в которую установлена Война Кольца.",
+launcher.checking,,Checking the folder...,Проверка папки...,
+launcher.check.ok,,"The install reads correctly: {0} database tables, {1} archives ({2} files), {3} AI players. Text: {4}.","Установка читается: таблиц базы {0}, архивов {1} (файлов {2}), ИИ-игроков {3}. Текст: {4}.","{0}-{3} = counts, {4} = language"
+launcher.check.failed,,This folder cannot be imported:,Эту папку нельзя импортировать:,
+launcher.error.missing_folder,,The folder does not exist.,Папка не существует.,
+launcher.error.not_install,,"No Database or Archives folder here: choose the folder War of the Ring is installed in.","Здесь нет папок Database и Archives: выберите папку, в которую установлена игра.",
+launcher.error.no_database,,No Database\Models.lqr in this folder.,В этой папке нет Database\Models.lqr.,
+launcher.error.missing_archives,,Archives missing: {0},Не хватает архивов: {0},{0} = file names
+launcher.error.parse,,Cannot be read: {0},Не читается: {0},{0} = file and reason
+launcher.error.reforged_folder,,"Choose the original game folder, not the Reforged folder.","Выберите папку оригинальной игры, а не папку Reforged.",
+launcher.error.no_python,,Importing needs Python 3.13 with Pillow and NumPy: in converted/tooling/python or on PATH.,Для импорта нужен Python 3.13 с Pillow и NumPy: в converted/tooling/python или в PATH.,
+launcher.error.no_tools,,The Reforged tools are missing: {0},Нет инструментов Reforged: {0},{0} = path
+launcher.import,,Import game data,Импортировать данные,
+launcher.reimport,,Import again,Импортировать заново,
+launcher.step,,Step {0} of {1}: {2},Шаг {0} из {1}: {2},
+launcher.step.1,,Checking the install,Проверка установки,
+launcher.step.2,,Extracting archives,Распаковка архивов,
+launcher.step.3,,Building the game content,Сборка игровых данных,
+launcher.step.4,,Building the menu art,Подготовка графики меню,
+launcher.step.5,,Importing maps,Импорт карт,
+launcher.duration,,{0} min {1} s,{0} мин {1} с,
+launcher.import.done,,Import finished in {0}.,Импорт завершен за {0}.,
+launcher.import.failed,,Import failed: {0},Импорт не удался: {0},
+launcher.import.cancelled,,Import cancelled.,Импорт отменен.,
+launcher.log,,Log,Журнал,
+launcher.game_data,,Game data,Данные игры,
+launcher.data.ready,,"Imported from {0} ({1}) on {2}: {3} maps.","Импортировано из {0} ({1}) {2}: карт {3}.","{0} = folder, {1} = language, {2} = date, {3} = count"
+launcher.data.failed_maps,,Not imported: {0},Не импортированы: {0},
+launcher.data.old_build,,Imported by build-{0}; this is build-{1}. Import again to pick up this build's changes.,"Импортировано сборкой build-{0}; это build-{1}. Импортируйте заново, чтобы получить изменения этой сборки.",
+launcher.data.found,,Game data found (made with the developer tools).,Найдены данные игры (созданы инструментами разработчика).,
+launcher.data.incomplete,,The last import did not finish: import again.,Последний импорт не завершился: импортируйте заново.,
+launcher.data.importing,,Importing...,Идет импорт...,
+launcher.data.none,,No game data yet: choose the original game folder and import it.,"Данных игры еще нет: выберите папку оригинальной игры и импортируйте ее.",
+launcher.start,,Start Reforged,Запустить Reforged,
+launcher.exit,Menu:8006,Exit,,Leaves the launcher
+launcher.language.en,,English,английский,
+launcher.language.ru,,Russian,русский,

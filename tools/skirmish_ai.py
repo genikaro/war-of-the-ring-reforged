@@ -15,9 +15,10 @@ import os
 from pathlib import Path
 
 import game_text
+import lqr
 import wor
 
-AI_PLAYERS = 'TLOTR - War of the Ring/AIPlayers'
+AI_PLAYERS = Path(lqr.INSTALL) / 'AIPlayers'
 KNOBS = ['Difficulty', 'Aggressiveness', 'Tactics', 'Scouting', 'Harassment', 'UsesSpecialAbilities', 'UsesHeroes']
 # The captured session used the built-in "Default medium AI", whose values live in Rings.exe: medium
 # difficulty with every knob at the midpoint is an owner-approved adapter (2026-10-21).
@@ -40,9 +41,9 @@ def parse_rai(data, code_page='cp1251'):
 
 
 def personalities(install=None, language=None):
-    """The default personality and the install's .rai files (`install` defaults to the repository's
-    `TLOTR - War of the Ring`). `language` is the install's text language, detected from its text when not given."""
-    folder = Path(install) / 'AIPlayers' if install else wor.ROOT / AI_PLAYERS
+    """The default personality and the install's .rai files (`install` defaults to lqr.INSTALL). `language` is the
+    install's text language, detected from its text when not given."""
+    folder = Path(install) / 'AIPlayers' if install else AI_PLAYERS
     paths = sorted(folder.glob('*.rai'))
     if paths and language is None:
         language = game_text.install_language(folder.parent)

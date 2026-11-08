@@ -67,7 +67,10 @@ import tempfile
 from dataclasses import dataclass, field
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_DB = os.path.join(HERE, '..', 'TLOTR - War of the Ring', 'Database')
+# The original install the tools read when given none: REFORGED_INSTALL names it (the launcher's import sets it,
+# build-188), else the repository's `TLOTR - War of the Ring` folder.
+INSTALL = os.environ.get('REFORGED_INSTALL') or os.path.join(HERE, '..', 'TLOTR - War of the Ring')
+DEFAULT_DB = os.path.join(INSTALL, 'Database')
 
 T_INT, T_FLOAT, T_STRING, T_ID, T_FILENAME = range(5)
 TYPE_NAMES = {T_INT: 'int', T_FLOAT: 'float', T_STRING: 'string', T_ID: 'id',
