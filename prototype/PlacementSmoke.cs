@@ -91,7 +91,7 @@ public partial class Main
                 _placementChecks["queued_placements_show_lines_and_ghosts"] = _hud.Waypoints.Count == 2 && WaypointFlagsShown == 0
                     && _foundationGhosts.Keys.Any(k => k.Building == SmokeBarracks);
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-waypoints.png");
-                PushKey(Key.B); break;
+                PushGridKey(0); break; // Build-186: the Build page opens by its grid key (B is gone).
             case 20: Click(_commands.ConstructionButton(SmokeCamp).GetGlobalRect().GetCenter()); break;
             case 22: PushKey(Key.Escape); break;
             case 24:

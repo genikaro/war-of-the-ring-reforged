@@ -21,13 +21,10 @@ tip.description,GameConsole:8302,Description,,The tooltip's Description strip
 tip.seconds,GameConsole:8303,s,,"Seconds label after a number (""Sec."")"
 tip.cooldown,GameConsole:8304,Recharge,,Cooldown / recharge time label
 tip.weapon_rating,GameConsole:8122,Weapon Rating,,Heading of the attack type chart tooltip
-tip.time,,Time,Время,Label before a training or research time
-tip.build_time,,Build time with one worker,Время строительства (один работник),Label before a building's construction time
+tip.time,,Time,Время,"Label before a training, construction, upgrade or research time"
 tip.keys_either,,{0} or {1},{0} или {1},Two hotkeys for one button
 tip.on_food_well,,On a food well.,Строится на источнике пищи.,Where a farm-type resource building stands
 tip.on_ore_pile,,On an ore pile.,Строится на залежи руды.,Where a mine-type resource building stands
-tip.extra_worker,,Each extra worker adds {0}% build speed.,Каждый следующий работник: +{0}% к скорости строительства.,{0} = percent
-tip.near_buildings,,Must stand near your buildings.,Ставится рядом с вашими постройками.,Placement rule of some buildings
 tip.opens,,Opens,Открывает,"Label before the buildings and units an upgrade makes available"
 tip.seconds_short,,s,с,Suffix of the recharge countdown on an ability button
 resource.food,GameConsole:8450,Food,,Food

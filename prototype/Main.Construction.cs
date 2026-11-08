@@ -230,6 +230,13 @@ public partial class Main
         return _constructionChoices.Where(c => AdvancedBuilding(c.Building) == _advancedBuildPage && palette.Contains(c.Building)).ToArray();
     }
 
+    /// <summary>Build-186: the buildings a build page holds for the selected workers, in palette order (the Build buttons' tooltips).</summary>
+    private IEnumerable<string> BuildPage(bool advanced)
+    {
+        var palette = SelectedPalette();
+        return _constructionChoices.Where(c => AdvancedBuilding(c.Building) == advanced && palette.Contains(c.Building)).Select(c => c.Building);
+    }
+
     private bool AdvancedBuilding(string building) => _world!.BuildingRules.TryGetValue(building,out var rules) && rules.Prerequisites.Any(_world.Upgrades.ContainsValue);
 
     private void OpenBuildMenu(bool open) => OpenBuildMenu(open,advanced: false);

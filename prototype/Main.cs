@@ -583,7 +583,6 @@ public partial class Main : Node3D
             int groupSlot = key.Keycode == Key.Key0 ? 9 : key.Keycode is >= Key.Key1 and <= Key.Key9 ? (int)key.Keycode-(int)Key.Key1 : -1;
             if (groupSlot >= 0 && !key.AltPressed && !key.MetaPressed) UseGroup(groupSlot,key.CtrlPressed,key.ShiftPressed);
             if (key.Keycode == Key.Backspace) CancelTraining(-1);
-            if (key.Keycode == Key.B && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed && !_buildMenu) OpenBuildMenu(true,advanced: key.ShiftPressed);
             if (key.Keycode == Key.F4) ToggleDebugMenu();
             if (key.Keycode == Key.F2 && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed) ToggleWalkRun();
             if (key.Keycode == Key.F10) _hud.Visible = !_hud.Visible;
@@ -1121,7 +1120,7 @@ public partial class Main : Node3D
         using (SimProfiler.Time("hud structures")) if (_skirmish)
         {
             if (!SelectedBuilders().Any()) ClearConstructionTargeting();
-            using (SimProfiler.Time("hud build panel")) _commands.RefreshConstruction(_world,units,_constructionTargeting,_constructionBuilding,PageChoices(),SelectedStructureDetails());
+            using (SimProfiler.Time("hud build panel")) _commands.RefreshConstruction(_world,units,_constructionTargeting,_constructionBuilding,PageChoices(),SelectedStructureDetails(),BuildPage);
             using (SimProfiler.Time("hud sites")) PresentConstruction();
             using (SimProfiler.Time("hud ghosts")) PresentFoundationGhosts();
             using (SimProfiler.Time("hud corruption")) PresentCorruption();

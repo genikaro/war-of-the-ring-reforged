@@ -1,5 +1,9 @@
 # Godot C# skirmish sandbox
 
+**build-186:** building tooltips match the others: the construction time reads "Time:" and the extra-worker and
+"Must stand near your buildings" lines are gone. The Build (Q) and Build advanced (W) buttons list the buildings each
+page holds for the selected workers, and B / Shift+B no longer open them.
+
 **build-185:** research tooltips show only the original game's description after the costs and time: the per-unit
 bonus numbers, "Applies to units already trained" and "Each tier of this line replaces the one before" are gone, and
 hero recruitment tooltips no longer repeat how many heroes may be out at once. The
@@ -9,7 +13,7 @@ opening the description text.
 **build-184:** tooltips follow: construct, train, upgrade, research, ability, Fate, place power and status tooltips use
 the install's own descriptions and labels (Level, Sec., Cooldown, Food, Ore, Attack, Armor...), with the numbers in
 catalog lines in English and Russian. Cost cells no longer depend on English words. Refusal reasons, order readouts and
-menus are still English until build-186.
+menus are still English until build-187.
 
 **build-183:** names now come from your own install's text, in its language: units, heroes, buildings, research,
 abilities, Fate powers, places of power and maps. A Russian install shows Russian names. Run

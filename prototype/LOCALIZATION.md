@@ -164,7 +164,7 @@ descriptions (8104-8115), Idle workers (8006-8007) and the attack chart's Weapon
 `ShownTip(name, key, HudTip.Costs(…), ticks)` is a construct, train, upgrade or research tooltip's head, and
 `ShownBefore`/`ShownAfter(key, …Slot…)` give the text on either side of an argument a check does not pin.
 
-Still English after build-184, for build-186: refusal reasons (they come from the simulation), the order readouts in
+Still English after build-184, for build-187: refusal reasons (they come from the simulation), the order readouts in
 the console and portrait tooltips, the group, walk/run and pause labels, notices, the observer HUD and the menus.
 
 ## What is localized
@@ -173,5 +173,5 @@ the console and portrait tooltips, the group, walk/run and pause labels, notices
 | --- | --- |
 | 183 | Names of units, heroes, buildings, upgrades and research, abilities, Fate powers, places of power and neutral objects, and maps. The AI personalities' names come from the install's `.rai` files |
 | 184 | Tooltips: construct, train, upgrade, research, queue, ability, Fate, place power, status effect, hero bar, garrison; the stat labels and the place-of-power summary |
-| 186 (next) | Menus, setup, settings, outcome, HUD labels, messages; refusal reasons become codes |
+| 187 (next) | Menus, setup, settings, outcome, HUD labels, messages; refusal reasons become codes |
 | Later | Campaign text, which the import already covers (briefings, objectives, hints, speakers, subtitles) |
