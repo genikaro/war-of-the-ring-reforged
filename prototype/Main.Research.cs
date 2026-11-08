@@ -1,5 +1,6 @@
 using Reforged.Simulation;
 using System.Text.Json;
+using Reforged.Presentation;
 
 /// <summary>Forge and Wilderness Outpost research: source techniques, their purchase icons and the research command.</summary>
 public partial class Main
@@ -16,7 +17,7 @@ public partial class Main
         {
             var rules = item.Value;
             string? Optional(string key) => rules.GetProperty(key).ValueKind == JsonValueKind.Null ? null : rules.GetProperty(key).GetString();
-            _world!.Techniques.Add(new(item.Name,rules.GetProperty("display_name").GetString()!,rules.GetProperty("building").GetString()!,
+            _world!.Techniques.Add(new(item.Name,GameText.Name(item.Name,rules.GetProperty("display_name").GetString()!),rules.GetProperty("building").GetString()!,
                 rules.GetProperty("slot").GetInt32(),rules.GetProperty("food_cost").GetInt32(),rules.GetProperty("ore_cost").GetInt32(),
                 rules.GetProperty("duration_ticks").GetInt32(),Optional("prerequisite"),Optional("previous"),
                 rules.GetProperty("bonuses").EnumerateObject().ToDictionary(b => b.Name,
@@ -50,7 +51,7 @@ public partial class Main
             foreach (var item in unsimulated.EnumerateObject().Where(t => Loaded(t.Value.GetProperty("building").GetString()!)))
             {
                 var rules = item.Value;
-                _world!.UnsimulatedTechniques.Add(new(item.Name,rules.GetProperty("display_name").GetString()!,rules.GetProperty("building").GetString()!,
+                _world!.UnsimulatedTechniques.Add(new(item.Name,GameText.Name(item.Name,rules.GetProperty("display_name").GetString()!),rules.GetProperty("building").GetString()!,
                     rules.GetProperty("slot").GetInt32(),rules.GetProperty("food_cost").GetInt32(),rules.GetProperty("ore_cost").GetInt32(),
                     rules.GetProperty("previous").ValueKind == JsonValueKind.Null ? null : rules.GetProperty("previous").GetString(),
                     rules.GetProperty("reason").GetString()!));

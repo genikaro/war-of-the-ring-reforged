@@ -185,7 +185,7 @@ public partial class Main
                 if (_frames < 5) break;
                 SetupChecks["observer_match_as_chosen"] = _observing && PlayerTeam == ObserverTeam && _observerHud.Visible && _world.Contenders.SetEquals([0,1])
                     && _world.AiPlayers[0].Personality.Difficulty == 1 && _world.AiPlayers[1].Personality.Id == "Aragorn" && _speed == 16
-                    && _mapName == "Bilbo's Bluffs";
+                    && _mapName == SetupScreen.MapTitle("MP02_Bilbos_Bluffs","Bilbo's Bluffs");
                 SetupChecks["random_observer_bot_keeps_its_traits"] = _world.AiPlayers[0].Traits.SequenceEqual([AiTrait.Marksman])
                     && _lastSetup!.Bots[0]==AiBotOptions.RandomId(1)+"+Marksman";
                 _setupRolledBots=_world.AiPlayers.Values.Select(a=>new AiBotChoice(a.Personality.Id,a.Traits).ToString()).ToArray();

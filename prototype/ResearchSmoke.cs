@@ -105,23 +105,23 @@ public partial class Main
                 world.InstantBuildTeams.Remove(0);
                 Select(SmokeArmory); break;
             case 16:
-                _researchChecks["outpost_offers_ranger_techniques"] = SelectedStructureDetails() is { Name: "Wilderness Outpost" }
-                    && _commands.ResearchButton(0) is { Visible: true,Disabled: false,Icon: not null } && _commands.ResearchButton(0).TooltipText.StartsWith("Research Etched Blades [Q]")
-                    && _commands.ResearchButton(1).TooltipText.StartsWith("Research Improved Leather [W]") && _commands.ResearchButton(1).TooltipText.Contains("Ranger +1 armor");
+                _researchChecks["outpost_offers_ranger_techniques"] = SelectedStructureDetails() is {  } shown108 && shown108.Name == Shown("BUILDING_G_ARMORY","Wilderness Outpost")
+                    && _commands.ResearchButton(0) is { Visible: true,Disabled: false,Icon: not null } && _commands.ResearchButton(0).TooltipText.StartsWith($"Research {Shown("TECHNIQUE_ETCHED_BLADES","Etched Blades")} [Q]")
+                    && _commands.ResearchButton(1).TooltipText.StartsWith($"Research {Shown("TECHNIQUE_IMPROVED_LEATHER","Improved Leather")} [W]") && _commands.ResearchButton(1).TooltipText.Contains($"{Shown("UNIT_G_RANGER","Ranger")} +1 armor");
                 Select(SmokeForge); break;
             case 18:
-                _researchChecks["forge_offers_iron_blades_and_plating"] = SelectedStructureDetails() is { Name: "Forge",Health: 590 }
+                _researchChecks["forge_offers_iron_blades_and_plating"] = SelectedStructureDetails() is { Health: 590 } shown113 && shown113.Name == Shown("BUILDING_G_SKILLS_STRUCTURE","Forge")
                     && _commands.ResearchButton(0) is { Visible: true,Disabled: false,Icon: not null } && _commands.ResearchButton(1) is { Visible: true,Disabled: false,Icon: not null }
                     // Build-58: Razored Edge waits for Citadel 3 in slot E; Dwarven Engineering (A) needs nothing more.
-                    && _commands.ResearchButton(2) is { Visible: true,Disabled: true } && _commands.ResearchButton(2).TooltipText.EndsWith("Requires Citadel 3")
-                    && _commands.ResearchButton(4) is { Visible: true,Disabled: false } && _commands.ResearchButton(0).TooltipText.StartsWith("Research Iron Blades [Q]\n75 food · 75 ore · 90s")
-                    && _commands.ResearchButton(0).TooltipText.Contains("Gondor Swordsman +1 attack")
-                    && _commands.ResearchButton(1).TooltipText.StartsWith("Research Iron Plating [W]") && _commands.ResearchButton(1).TooltipText.Contains("Rohan Rider +1 armor");
+                    && _commands.ResearchButton(2) is { Visible: true,Disabled: true } && _commands.ResearchButton(2).TooltipText.EndsWith($"Requires {Shown("BUILDING_G_TOWN_CENTER_LEVEL_3","Citadel 3")}")
+                    && _commands.ResearchButton(4) is { Visible: true,Disabled: false } && _commands.ResearchButton(0).TooltipText.StartsWith($"Research {Shown("TECHNIQUE_IRON_BLADES","Iron Blades")} [Q]\n75 food · 75 ore · 90s")
+                    && _commands.ResearchButton(0).TooltipText.Contains($"{Shown("UNIT_G_GONDOR_SWORDSMAN","Gondor Swordsman")} +1 attack")
+                    && _commands.ResearchButton(1).TooltipText.StartsWith($"Research {Shown("TECHNIQUE_IRON_PLATING","Iron Plating")} [W]") && _commands.ResearchButton(1).TooltipText.Contains($"{Shown("UNIT_G_ROHAN_RIDER","Rohan Rider")} +1 armor");
                 _researchFood = bank.FoodMilli; _researchOre = bank.OreMilli;
                 PushGridKey(0); break;
             case 20:
                 _researchChecks["q_starts_research_and_pays"] = Site(SmokeForge) is { Research: SmokeIronBlades } && bank.FoodMilli == _researchFood-75_000 && bank.OreMilli == _researchOre-75_000
-                    && _commands.TrainingVisible && _commands.QueueButton(0) is { Visible: true,Icon: not null } && _commands.DisplayedOrder.StartsWith("Researching Iron Blades")
+                    && _commands.TrainingVisible && _commands.QueueButton(0) is { Visible: true,Icon: not null } && _commands.DisplayedOrder.StartsWith($"Researching {Shown("TECHNIQUE_IRON_BLADES","Iron Blades")}")
                     && _commands.ResearchButton(1) is { Visible: true,Disabled: true } && _commands.ResearchButton(1).TooltipText.EndsWith("Research in progress");
                 Press(_commands.QueueButton(0).GetGlobalRect().GetCenter()); break;
             case 21: Release(_commands.QueueButton(0).GetGlobalRect().GetCenter()); break;
@@ -135,14 +135,14 @@ public partial class Main
                 _researchChecks["iron_blades_completes_after_source_time"] = Site(SmokeForge) is { Research: null } && world.Tick-_researchTick is >= 1800 and <= 1803
                     && world.Units[_researchSwordsman] is { TechniqueDpsMilli: 1000,TechniqueArmorMilli: 0 }
                     // The chain's next tier takes the slot, locked until Citadel 3 (build-58).
-                    && _commands.ResearchButton(0) is { Visible: true,Disabled: true } && _commands.ResearchButton(0).TooltipText.StartsWith("Research Steel Blades [Q]")
-                    && _commands.ResearchButton(0).TooltipText.EndsWith("Requires Citadel 3") && _commands.ResearchButton(1).Visible;
+                    && _commands.ResearchButton(0) is { Visible: true,Disabled: true } && _commands.ResearchButton(0).TooltipText.StartsWith($"Research {Shown("TECHNIQUE_STEEL_BLADES","Steel Blades")} [Q]")
+                    && _commands.ResearchButton(0).TooltipText.EndsWith($"Requires {Shown("BUILDING_G_TOWN_CENTER_LEVEL_3","Citadel 3")}") && _commands.ResearchButton(1).Visible;
                 var swordsman = world.Units[_researchSwordsman]; _focus = UnitPosition(swordsman); UpdateCamera(); break;
             case 27: Click(_camera.UnprojectPosition(UnitPosition(world.Units[_researchSwordsman])+Vector3.Up)); break;
             case 29:
                 // Captured baseline Attack 10 (local skirmish-005); Iron Blades adds the source TechniqueUnitModifiers +1.
                 // Build-62: the panel shows that 11 per second as 11 per hit (10.6 rounded). Build-70: as the base 10 and a green +1.
-                _researchChecks["swordsman_panel_shows_attack_11"] = _selected.SetEquals([_researchSwordsman]) && _commands.DisplayedName == "Gondor Swordsman"
+                _researchChecks["swordsman_panel_shows_attack_11"] = _selected.SetEquals([_researchSwordsman]) && _commands.DisplayedName == Shown("UNIT_G_GONDOR_SWORDSMAN","Gondor Swordsman")
                     && _commands.DisplayedAttack == "10" && _commands.DisplayedAttackBonus == "+1" && _commands.DisplayedAttackTip.Contains("Damage per second: 11\n")
                     && _commands.DisplayedArmor == "0" && _commands.DisplayedArmorBonus == "";
                 if (_capture != "") _ = CaptureFrame(false);
@@ -171,7 +171,7 @@ public partial class Main
                 Select(SmokeForge); break;
             case 43:
                 _researchChecks["shield_break_offered_at_forge"] = _commands.ResearchButton(3) is { Visible: true,Disabled: false,Icon: not null }
-                    && _commands.ResearchButton(3).TooltipText.StartsWith("Research Shield Break [R]\n100 food · 100 ore · 90s")
+                    && _commands.ResearchButton(3).TooltipText.StartsWith($"Research {ShownAbility(26,"Shield Break")} [R]\n100 food · 100 ore · 90s")
                     && _commands.ResearchButton(3).TooltipText.Contains("Stacks up to 5");
                 world.InstantBuildTeams.Remove(0); PushGridKey(3); break;
             case 45: SelectUnit(_researchShield); break;
@@ -270,14 +270,14 @@ public partial class Main
             case 402:
                 _researchChecks["ranger_locked_tech_and_innate_detection_icons"] = _commands.AbilityButton(0) is { Visible:true,Disabled:true,Icon:not null }
                     && LockedPassive(2) && ResearchedPassive(3) && _commands.AbilityButton(3).TooltipText.Contains("20 m")
-                    && _commands.AbilityButton(0).TooltipText == "Camouflage\nHides the Ranger from enemies until he moves or attacks. Enemy detectors can reveal him.";
+                    && _commands.AbilityButton(0).TooltipText == $"{ShownAbility(14,"Camouflage")}\nHides the Ranger from enemies until he moves or attacks. Enemy detectors can reveal him.";
                 CaptureStage("ranger-locked"); break;
             case 404: Select(SmokeArmory); break;
             case 406:
                 _researchChecks["outpost_offers_both_ranger_techs"] = _commands.ResearchButton(2) is { Visible:true,Disabled:false,Icon:not null }
                     && _commands.ResearchButton(3) is { Visible:true,Disabled:false,Icon:not null }
-                    && _commands.ResearchButton(2).TooltipText.StartsWith("Research Camouflage [E]\n75 food · 75 ore · 90s")
-                    && _commands.ResearchButton(3).TooltipText.StartsWith("Research Eagle Eye [R]\n75 food · 75 ore · 90s");
+                    && _commands.ResearchButton(2).TooltipText.StartsWith($"Research {ShownAbility(14,"Camouflage")} [E]\n75 food · 75 ore · 90s")
+                    && _commands.ResearchButton(3).TooltipText.StartsWith($"Research {ShownAbility(-1020,"Eagle Eye")} [R]\n75 food · 75 ore · 90s");
                 PushGridKey(2); break;
             case 408:
                 _researchChecks["outpost_camouflage_research_completes"] = world.HasResearched(0,"TECHNIQUE_CAMOUFLAGE");
@@ -292,7 +292,7 @@ public partial class Main
             case 414:
                 _researchChecks["camouflage_has_pose_opacity_sound_and_status"] = world.Units[_researchRanger].Camouflaged
                     && _commands.AbilityButton(0).ButtonPressed && _views[_researchRanger] is { Translucent:true,Clip:"G_Ranger_Idle_03" }
-                    && _commands.DisplayedStatuses.Contains("Camouflage") && _commands.StatusIcon(0).Texture != null
+                    && _commands.DisplayedStatuses.Contains(ShownAbility(14,"Camouflage")) && _commands.StatusIcon(0).Texture != null
                     && _abilitySounds.Any(s => s.EventId == 375);
                 CaptureStage("ranger-camouflaged"); break;
             case 416:
@@ -300,7 +300,7 @@ public partial class Main
                 world.Enqueue(0,[scout.Id],OrderKind.Move,world.Navigation.Cell(scout.X+5000,scout.Z)); break;
             case 420:
                 _researchChecks["moving_ranger_reappears_with_cooldown"] = !world.Units[_researchRanger].Camouflaged
-                    && !_views[_researchRanger].Translucent && !_commands.DisplayedStatuses.Contains("Camouflage")
+                    && !_views[_researchRanger].Translucent && !_commands.DisplayedStatuses.Contains(ShownAbility(14,"Camouflage"))
                     && _commands.AbilityButton(0).Disabled && _commands.AbilityLabel(0).EndsWith("s");
                 world.Enqueue(0,[_researchRanger],OrderKind.Stop); break;
             case 430:

@@ -2,6 +2,7 @@ using Godot;
 using Reforged.Simulation;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Reforged.Presentation;
 
 /// <summary>The match chosen on the setup screen: the map's cache, the human's slot (-1 to watch), each slot's bot
 /// personality with its traits ("Gimli+Defender"; "" for the human and closed slots), the closed slots, the start speed,
@@ -400,7 +401,7 @@ public partial class SetupScreen : Control
             FogOfWar: !map.Sandbox && _fogOfWar.ButtonPressed));
     }
 
-    private const string SandboxStem = "Sandbox";
+    public const string SandboxStem = "Sandbox";
     private const string SandboxDescription = "An empty level field for trying units out. You command both players: every building "
         + "stands finished and fully upgraded, banks stay full, units gather in front of their base, "
         + "no bots play and nothing ends the match. "
@@ -432,10 +433,13 @@ public partial class SetupScreen : Control
             string cache = stem.Equals(bilbo,StringComparison.OrdinalIgnoreCase) ? Path.Combine(converted,"skirmish") : Path.Combine(imported,stem);
             try { if (File.Exists(Path.Combine(cache,"manifest.json"))) return Read(stem,cache); }
             catch (Exception error) when (error is JsonException or IOException or KeyNotFoundException or InvalidOperationException or FormatException) { GD.PushWarning($"Skipping {stem}: {error.Message}"); }
-            return stem == SandboxStem ? new MapEntry(stem,stem,null,2,[],[],0,0,[],[],"",Sandbox: true)
-                : new MapEntry(stem,Regex.Replace(stem,@"^MP\d\d_","").Replace('_',' '),null,Players(stem),[],[],0,0,[],[],"");
+            return stem == SandboxStem ? new MapEntry(stem,MapTitle(stem,stem),null,2,[],[],0,0,[],[],"",Sandbox: true)
+                : new MapEntry(stem,MapTitle(stem,Regex.Replace(stem,@"^MP\d\d_","").Replace('_',' ')),null,Players(stem),[],[],0,0,[],[],"");
         }).OrderByDescending(m => m.Sandbox).ThenBy(m => m.Players).ThenBy(m => m.Title,StringComparer.OrdinalIgnoreCase)];
     }
+
+    /// <summary>Build-183: the map's name in MultiPlayerMaps.ltx (its .wor header holds the id), the Sandbox's from the catalog.</summary>
+    public static string MapTitle(string stem,string english) => stem == SandboxStem ? GameText.T("sandbox.title") : GameText.Map(stem,"name") ?? english;
 
     private static int Players(string stem) => Regex.Match(stem,@"^MP(\d\d)") is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
 
@@ -460,7 +464,7 @@ public partial class SetupScreen : Control
         using var reader = new StreamReader(Path.Combine(cache,"navigation.json"));
         var head = new char[400]; string start = new(head,0,reader.Read(head,0,head.Length));
         int Field(string name) => int.Parse(Regex.Match(start,$"\"{name}\"\\s*:\\s*(\\d+)").Groups[1].Value);
-        string title = manifest.GetProperty("name").GetString()!.Split(" — ")[0];
+        string title = MapTitle(stem,manifest.GetProperty("name").GetString()!.Split(" — ")[0]);
         return new(stem,title,cache,bases.Length,bases,resources,Field("width")*Field("cell_size_mm"),Field("height")*Field("cell_size_mm"),colors,personalities,fallback,
             Sandbox: manifest.TryGetProperty("sandbox",out var sandbox) && sandbox.GetBoolean());
     }

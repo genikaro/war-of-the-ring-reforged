@@ -388,7 +388,7 @@ public partial class ObserverHud : Control
                 portrait.Visible = slot < types.Length;
                 if (!portrait.Visible) continue;
                 var definition = types[slot].First().Definition; int alive = types[slot].Count();
-                portrait.Texture = art(CommandPanel.PortraitName(definition.DisplayName));
+                portrait.Texture = art(CommandPanel.PortraitName(definition.Name));
                 portrait.GetChild<Label>(0).Text = alive.ToString();
                 portrait.TooltipText = $"{alive} {definition.DisplayName}";
             }

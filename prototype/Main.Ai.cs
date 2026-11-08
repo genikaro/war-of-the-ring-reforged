@@ -1,5 +1,6 @@
 using Reforged.Simulation;
 using System.Text.Json;
+using Reforged.Presentation;
 
 /// <summary>The skirmish bots: source rules and personalities from the cache, a bot on every start base but the
 /// player's (every base while observing). --bots=Gimli,Aragorn,... names each side's personality by player slot,
@@ -49,7 +50,9 @@ public partial class Main
             var chosen = ai.GetProperty("personalities").EnumerateArray()
                 .FirstOrDefault(p => string.Equals(p.GetProperty("id").GetString(),wanted,StringComparison.OrdinalIgnoreCase));
             if (chosen.ValueKind != JsonValueKind.Object) throw new InvalidOperationException("Unknown AI personality: "+wanted);
-            return new(chosen.GetProperty("id").GetString()!,chosen.GetProperty("display_name").GetString()!,
+            // The source .rai names are the install's own text (Арагорн, Мэггот); only the fallback personality is ours.
+            string id = chosen.GetProperty("id").GetString()!;
+            return new(id,id == "Default" ? GameText.T("ai.default") : chosen.GetProperty("display_name").GetString()!,
                 chosen.GetProperty("difficulty").GetInt32(),chosen.GetProperty("aggressiveness").GetInt32(),chosen.GetProperty("tactics").GetInt32(),
                 chosen.GetProperty("scouting").GetInt32(),chosen.GetProperty("harassment").GetInt32(),
                 chosen.GetProperty("uses_special_abilities").GetBoolean(),chosen.GetProperty("uses_heroes").GetBoolean());

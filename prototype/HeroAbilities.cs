@@ -72,7 +72,12 @@ public partial class Main
             _status = ability.Name+" unlocked"+(_paused ? " (queued while paused)" : ""); return;
         }
         if (caster.Negated != null) { Notify(ability.Name+": abilities are disabled by Negate Ability"); return; }
-        if (!caster.AbilityEnabled(ability)) { Notify(ability.Name+": research at the "+(ability.Kind is AbilityKind.Camouflage or AbilityKind.EagleEye or AbilityKind.ElvenCloak or AbilityKind.EagleFletching ? "Wilderness Outpost" : ability.Kind is AbilityKind.Dispel or AbilityKind.SearingLight or AbilityKind.Morph or AbilityKind.SavageBlow or AbilityKind.Treeform ? "House of Lore" : "Forge")+" first"); return; }
+        if (!caster.AbilityEnabled(ability))
+        {
+            var (building,english) = ability.Kind is AbilityKind.Camouflage or AbilityKind.EagleEye or AbilityKind.ElvenCloak or AbilityKind.EagleFletching ? ("BUILDING_G_ARMORY","Wilderness Outpost")
+                : ability.Kind is AbilityKind.Dispel or AbilityKind.SearingLight or AbilityKind.Morph or AbilityKind.SavageBlow or AbilityKind.Treeform ? ("BUILDING_G_HOSPITAL","House of Lore") : ("BUILDING_G_SKILLS_STRUCTURE","Forge");
+            Notify(Reforged.Presentation.GameText.T("ability.research_first",ability.Name,Reforged.Presentation.GameText.Name(building,english))); return;
+        }
         if (ability.Kind == AbilityKind.Unsimulated) { Notify(ability.Name+" is not simulated yet"); return; }
         if (ability.Instant || ability.Kind is AbilityKind.Camouflage or AbilityKind.Sneak)
         {

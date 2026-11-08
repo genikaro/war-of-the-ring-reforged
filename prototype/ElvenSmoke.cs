@@ -44,7 +44,7 @@ public partial class Main
                 _selected.Clear(); _selectedStructure=null; _selected.Add(_elvenArcher); break;
             case 5:
                 _elvenChecks["archer_range_passive_visible_before_research"]=_commands.AbilityButton(3) is { Visible:true,Disabled:true,Icon:not null }
-                    && _commands.AbilityButton(3).TooltipText.Contains("Eagle Fletching")
+                    && _commands.AbilityButton(3).TooltipText.Contains(ShownAbility(-1018,"Eagle Fletching"))
                     && _commands.AbilityButton(3).GetThemeColor("icon_disabled_color").R<.5f;
                 SelectBearer(); break;
             case 7:

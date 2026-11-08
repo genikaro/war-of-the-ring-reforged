@@ -72,7 +72,7 @@ public partial class Main
                 Click(_commands.PortraitButton(world.Units.First(u => u.Team == 0).Id).GetGlobalRect().GetCenter()); break;
             case 9:
                 _skirmishChecks["worker_panel"] = _selected.Count == 1 && _commands.SingleUnitDetailsVisible
-                    && _commands.DisplayedName == "Human Worker" && _commands.DisplayedHealth.StartsWith("90/90");
+                    && _commands.DisplayedName == Shown("UNIT_G_HUMAN_WORKER","Human Worker") && _commands.DisplayedHealth.StartsWith("90/90");
                 if (_capture != "") _ = CaptureFrame(false);
                 break;
             case 14:
@@ -85,7 +85,7 @@ public partial class Main
                 var foodPoint = _camera.UnprojectPosition(PositionOf(well.X,well.Z));
                 GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right,Pressed = true,Position = foodPoint,GlobalPosition = foodPoint },true);
                 _skirmishChecks["raw_food_requires_mill"] = !world.Commands.Any(c => c.Kind == OrderKind.Gather)
-                    && _status.Contains("Mill"); break;
+                    && _status.Contains(Shown("BUILDING_G_FOOD_STRUCTURE","Mill")); break;
             case 16:
                 PushKey(Key.Key1);
                 var ore = world.Resources.Values.Where(r => r.Kind == ResourceKind.Ore)

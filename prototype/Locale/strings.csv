@@ -1,0 +1,16 @@
+key,original,en,ru,note
+"# Build-183: every player-facing string goes through GameText (Presentation/GameText.cs, LOCALIZATION.md). Rows starting with # are comments."
+"# original set: the install's own text, as Table:id (Menu:12) or an InterfaceTextIDs symbol without INTERFACE_TEXT_ID_ (TOOLTIPS_LEVEL); en and ru stay empty, note glosses it."
+"# original empty: custom text; en and ru are both required. Russian: no letter yo (the menu font lacks it); prefer Label: value over sentences that decline a name."
+"# record.SYMBOL.field, ability.ID.field and map.STEM.field rows fill in for records whose original text is missing or a stub."
+sandbox.title,,Sandbox,Песочница,The Sandbox test map in the map list
+sandbox.dummy.cutting,,Cutting Dummy,Манекен (рубящий),Sandbox training dummy that takes cutting damage
+sandbox.dummy.piercing,,Piercing Dummy,Манекен (колющий),Sandbox training dummy that takes piercing damage
+sandbox.dummy.blunt,,Blunt Dummy,Манекен (дробящий),Sandbox training dummy that takes blunt damage
+sandbox.dummy.hero,,Hero Dummy,Манекен (герой),Sandbox training dummy that takes hero damage
+sandbox.dummy.armor_up,,Armor +1,Защита +1,Sandbox dummy button
+sandbox.dummy.armor_reset,,Armor 0,Защита 0,Sandbox dummy button
+sandbox.dummy.restore,,Restore health,Восстановить здоровье,Sandbox dummy button
+ai.default,,Default (medium),Стандартный (средний),Bot personality used when a map names none
+ability.research_first,,{0}: research at the {1} first,{0}: сначала изучите в здании «{1}»,"An upgrade ability not researched yet; {0} = ability, {1} = building"
+record.OBJECT_PLACE_OF_POWER_RANDOM.name,,Random place of power,Случайное место силы,The map's random landmark before the match picks one; the source names it nowhere

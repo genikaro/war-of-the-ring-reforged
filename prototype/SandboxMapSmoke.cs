@@ -1,6 +1,7 @@
 using Godot;
 using Reforged.Simulation;
 using System.Text.Json;
+using Reforged.Presentation;
 
 /// <summary>The Sandbox map through the UI (build-56): both bases standing in full and fully upgraded with room to walk
 /// between buildings, rally points facing the centre and marked by flags, full banks, the source population maximum,
@@ -210,7 +211,7 @@ public partial class Main
                         && SimWorld.DistanceSquared(d.X,d.Z,blue.X,blue.Z) <= 45000L*45000 && SimWorld.DistanceSquared(d.X,d.Z,blue.X,blue.Z) < SimWorld.DistanceSquared(d.X,d.Z,red.X,red.Z)
                         && SimWorld.DistanceSquared(d.X,d.Z,rx,rz) >= 8000L*8000 && d.Target < 0 && d.Order == OrderKind.Idle)
                     && dummies.Select(d => d.Definition.DamageTypeName).Distinct().Count() == 4 && dummies.Any(d => d.Definition.DamageTypeName == "DAMAGE_TYPE_HERO")
-                    && dummies.Select(d => d.Definition.DisplayName).SequenceEqual(["Cutting Dummy","Piercing Dummy","Blunt Dummy","Hero Dummy"])
+                    && dummies.Select(d => d.Definition.DisplayName).SequenceEqual(new[] {"cutting","piercing","blunt","hero"}.Select(t => GameText.T("sandbox.dummy."+t)))
                     && world.PopulationUsed(SandboxDummyTeam) == 4;
                 // Fixture: one dummy is hurt, to see it stay hurt (no regeneration) until its own button restores it.
                 dummies[1].HealthMilli = 400_000;
@@ -224,7 +225,7 @@ public partial class Main
                         && Descendants(_views[id].Root.GetNode("ModelSize")).OfType<MeshInstance3D>().Any(m => m.GetSurfaceOverrideMaterial(0) is BaseMaterial3D { EmissionEnabled: true }));
                 _sandboxMapChecks["group_0_selects_the_dummies_with_their_buttons"] = _selected.SetEquals(_sandboxDummies)
                     && Enumerable.Range(0,3).All(slot => _commands.AbilityButton(slot) is { Visible: true,Disabled: false,Icon: not null })
-                    && !_commands.AbilityButton(3).Visible && _commands.AbilityButton(0).TooltipText.StartsWith("Armor +1\n");
+                    && !_commands.AbilityButton(3).Visible && _commands.AbilityButton(0).TooltipText.StartsWith(GameText.T("sandbox.dummy.armor_up")+"\n");
                 PushKey(Key.Q); break;
             case 33: PushKey(Key.Q); break;
             case 35:
@@ -277,9 +278,10 @@ public partial class Main
                 break;
             }
             case 49:
-                _sandboxMapChecks["gimli_shows_his_siege_aura_on_the_status_bar"] = _commands.DisplayedStatuses.Contains("Siege Aura")
+                string siegeAura = GameText.Ability(10,"name") ?? "Siege Aura";
+                _sandboxMapChecks["gimli_shows_his_siege_aura_on_the_status_bar"] = _commands.DisplayedStatuses.Contains(siegeAura)
                     && _commands.StatusIcon(0) is { Visible: true,Texture: not null }
-                    && _commands.StatusIcon(0).TooltipText.StartsWith("Siege Aura\nDeals 150% damage to buildings.");
+                    && _commands.StatusIcon(0).TooltipText.StartsWith(siegeAura+"\nDeals 150% damage to buildings.");
                 HoverAbilityPoint(_commands.StatusIcon(0).GetGlobalRect().GetCenter()); _sandboxHoverFrame = _frames; break;
             case 51:
             {
@@ -295,7 +297,7 @@ public partial class Main
             }
             case 52:
                 _sandboxMapChecks["status_tooltip_in_the_box"] = _commands.DisplayedTooltip == _commands.StatusIcon(0).TooltipText
-                    && _commands.DisplayedTooltipTitle == "Siege Aura" && _commands.DisplayedTooltipCosts.Length == 0
+                    && _commands.DisplayedTooltipTitle == (GameText.Ability(10,"name") ?? "Siege Aura") && _commands.DisplayedTooltipCosts.Length == 0
                     && _commands.DisplayedTooltipBody.StartsWith("Deals 150% damage to buildings.");
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-status.png");
                 // The Hero Dummy alone, one armor up from its own 0.

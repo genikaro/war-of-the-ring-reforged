@@ -79,7 +79,7 @@ public partial class Main
                 _structureChecks["all_neutral_interactables_registered"] = world.Resources.Keys.All(id => _structureViews.TryGetValue(id,out var v) && v.Team == -1)
                     && _structureViews.Values.Count(v => v.Team < 0) == 9;
                 _structureChecks["citadel_selected_without_units"] = _selectedStructure == 10000 && _selected.Count == 0;
-                _structureChecks["citadel_source_details"] = _commands.StructureDetailsVisible && _commands.DisplayedName == "Citadel 1"
+                _structureChecks["citadel_source_details"] = _commands.StructureDetailsVisible && _commands.DisplayedName == Shown("BUILDING_G_TOWN_CENTER_LEVEL_1","Citadel 1")
                     && _commands.DisplayedHealth == "750/750" && _commands.StructurePortraitButton.Icon != null;
                 _structureChecks["footprint_outline_visible"] = _structureViews[10000].Ring.Visible;
                 _structureCommandsBefore = world.Commands.Count; PushKey(Key.M); PushKey(Key.S);
@@ -107,7 +107,7 @@ public partial class Main
             case 23: Choose(world.ConstructionSites[_structureFood].Obstacle); break;
             case 26:
                 _structureChecks["unfinished_building_selected"] = _selectedStructure == world.ConstructionSites[_structureFood].Obstacle
-                    && _commands.StructureDetailsVisible && _commands.DisplayedName == "Mill" && SelectedStructureDetails() is {UnderConstruction: true};
+                    && _commands.StructureDetailsVisible && _commands.DisplayedName == Shown("BUILDING_G_FOOD_STRUCTURE","Mill") && SelectedStructureDetails() is {UnderConstruction: true};
                 _structureChecks["selected_foundation_can_cancel"] = _commands.CancelConstructionButton.Visible && !_commands.CancelConstructionButton.Disabled;
                 _structureRefundBank = world.Economies[0].OreMilli; Press(_commands.CancelConstructionButton.GetGlobalRect().GetCenter()); break;
             case 27: Release(_commands.CancelConstructionButton.GetGlobalRect().GetCenter()); break;
@@ -118,7 +118,7 @@ public partial class Main
             case 619: Hold(!world.ConstructionSites[_structureFood].Complete); break;
             case 620: Choose(world.ConstructionSites[_structureFood].Obstacle); break;
             case 623:
-                _structureChecks["completed_mill_details"] = _commands.DisplayedName == "Mill" && _commands.DisplayedHealth == "570/570"
+                _structureChecks["completed_mill_details"] = _commands.DisplayedName == Shown("BUILDING_G_FOOD_STRUCTURE","Mill") && _commands.DisplayedHealth == "570/570"
                     && SelectedStructureDetails() is {UnderConstruction: false} && !_commands.CancelConstructionButton.Visible;
                 Choose(10001); break;
             case 626:
@@ -140,7 +140,7 @@ public partial class Main
             case 639: Hold(world.ConstructionSites[_structureOre].Team < 0); break;
             case 640: Choose(world.ConstructionSites[_structureOre].Obstacle); break;
             case 643:
-                _structureChecks["foundry_foundation_details"] = _commands.DisplayedName == "Foundry" && SelectedStructureDetails() is {UnderConstruction: true}; break;
+                _structureChecks["foundry_foundation_details"] = _commands.DisplayedName == Shown("BUILDING_G_BLACKSMITH","Foundry") && SelectedStructureDetails() is {UnderConstruction: true}; break;
             case 1449: Hold(!world.ConstructionSites[_structureOre].Complete); break;
             case 1450:
                 _structureChecks["foundry_complete"] = world.ConstructionSites[_structureOre].Complete;
@@ -165,7 +165,7 @@ public partial class Main
                 _structureChecks["gap_context_move_dispatched"] = world.Commands.Count == _structureCommandsBefore+1 && world.Commands[^1].Kind == OrderKind.Move && world.Commands[^1].Units.SequenceEqual([0]); break;
             case 1760: Click(StructureSmokePoint(world.ConstructionSites[_structureOre].Obstacle)); break;
             case 1763:
-                _structureChecks["completed_foundry_selected_while_worker_moves"] = _selected.Count == 0 && _commands.DisplayedName == "Foundry"
+                _structureChecks["completed_foundry_selected_while_worker_moves"] = _selected.Count == 0 && _commands.DisplayedName == Shown("BUILDING_G_BLACKSMITH","Foundry")
                     && _commands.DisplayedHealth == "750/750" && world.Units[0].Order == OrderKind.Move;
                 if (_capture != "") _ = CaptureFrame(false); break;
             case 1950:
@@ -175,7 +175,8 @@ public partial class Main
                 Choose(3); break;
             case 1953:
                 _structureChecks["neutral_well_selected_exclusively"] = _selected.Count == 0 && _selectedStructure == 3 && SelectedStructureDetails() is {Team: -1,ResourceId: 3};
-                _structureChecks["well_stock_and_original_portrait"] = SelectedStructureDetails() is {Name: "Food Well",Resource: "Food remaining: 4500",Portrait: "Object_Well_Border"}
+                _structureChecks["well_stock_and_original_portrait"] = SelectedStructureDetails() is {Resource: "Food remaining: 4500",Portrait: "Object_Well_Border"} well
+                    && well.Name == Shown("OBJECT_RESOURCE_FOOD_WELL","Food Well")
                     && _commands.StructurePortraitButton.Icon != null;
                 _structureChecks["neutral_resource_has_no_fake_hp"] = !_commands.StructureHealthVisible && _commands.DisplayedHealth == "";
                 _structureChecks["neutral_structure_palette_empty"] = _commands.CommandPaletteEmpty;
@@ -228,7 +229,7 @@ public partial class Main
                 Box(3); break;
             case 2042:
                 _structureChecks["box_selects_neutral_well"] = _selectedStructure == 3 && _selected.Count == 0
-                    && _commands.DisplayedName == "Food Well" && _commands.CommandPaletteEmpty;
+                    && _commands.DisplayedName == Shown("OBJECT_RESOURCE_FOOD_WELL","Food Well") && _commands.CommandPaletteEmpty;
                 Box(2,reverse: true); break;
             case 2045:
                 _structureChecks["reverse_box_selects_ore"] = _selectedStructure == 2 && _selected.Count == 0;

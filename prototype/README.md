@@ -1,5 +1,11 @@
 # Godot C# skirmish sandbox
 
+**build-183:** names now come from your own install's text, in its language: units, heroes, buildings, research,
+abilities, Fate powers, places of power and maps. A Russian install shows Russian names. Run
+`python tools/game_text.py --pack converted/content/good` once to import the text. Strings the original never had
+live in `Locale/strings.csv` in English and Russian. See [LOCALIZATION.md](LOCALIZATION.md); tooltips and menus follow
+in the next builds.
+
 **build-170** restores the original gold frame for ready abilities and the faction Fate emblem for unlearned hero gear.
 Click the idle-worker button beside the minimap or press **I** to cycle through and center on idle workers.
 The main menu logo now has a Reforged subtitle. Run `python tools/content_pack.py` to refresh the shared HUD art.

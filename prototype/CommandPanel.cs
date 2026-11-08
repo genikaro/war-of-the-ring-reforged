@@ -369,18 +369,20 @@ public partial class CommandPanel : Control
     public static string OrderName(OrderKind kind) => kind switch { OrderKind.AttackMove => "Attack-move",OrderKind.HoldGround => "Hold Position",OrderKind.ForceAttack => "Force Attack",OrderKind.ToggleWalkRun => "Walk / Run",OrderKind.UseAbility => "Greater Kingsfoil",OrderKind.PlaceBuilding => "Build",OrderKind.ApproachStructure => "Move to building",OrderKind.ReturnCargo => "Return resources",_ => kind.ToString() };
     /// <summary>Portraits of units the source does not name, such as the Sandbox's training dummies (their model's).</summary>
     public static readonly Dictionary<string,string> ExtraPortraits = [];
-    public static string PortraitName(string name) => ExtraPortraits.TryGetValue(name,out var extra) ? extra : name switch { "Aragorn" => "Portrait_G_Aragorn","Frodo" => "Portrait_G_Frodo","Elf Knight" or "Elven Knight" => "Portrait_G_Elven_Knight","Elven Archer" => "Portrait_G_Elven_Archer","Human Worker" => "Portrait_G_Human_Worker","Gondor Swordsman" => "Portrait_G_Gondor_Swordsman","Dwarf Axethrower" => "Portrait_G_Dwarven_Axethrower",
-        "Rohan Rider" => "Portrait_G_Rohan_Rider","Dwarf Shieldbreaker" => "Portrait_G_Dwarven_Shieldbreaker","Ranger" => "Portrait_G_Ranger",
+    /// <summary>A unit's portrait by its symbolic name (build-183: names shown are the install's language, so the lookup
+    /// no longer goes by the English display name).</summary>
+    public static string PortraitName(string unit) => ExtraPortraits.TryGetValue(unit,out var extra) ? extra : unit switch { "UNIT_G_HERO_ARAGORN" => "Portrait_G_Aragorn","UNIT_G_HERO_FRODO" => "Portrait_G_Frodo","UNIT_G_ELF_KNIGHT" => "Portrait_G_Elven_Knight","UNIT_G_ELVEN_ARCHER" => "Portrait_G_Elven_Archer","UNIT_G_HUMAN_WORKER" => "Portrait_G_Human_Worker","UNIT_G_GONDOR_SWORDSMAN" => "Portrait_G_Gondor_Swordsman","UNIT_G_DWARVEN_AXETHROWER" => "Portrait_G_Dwarven_Axethrower",
+        "UNIT_G_ROHAN_RIDER" => "Portrait_G_Rohan_Rider","UNIT_G_DWARVEN_SHIELDBREAKER" => "Portrait_G_Dwarven_Shieldbreaker","UNIT_G_RANGER" => "Portrait_G_Ranger",
         // Build-58: Tier 3-4 units and the Fate heroes (source Units Portrait records).
-        "Elven Lightbearer" => "Portrait_G_Elven_Lightbringer","Beorning" => "Portrait_G_Beorning","Bear" => "Portrait_G_Bear","Huorn" => "Portrait_G_Huorn",
-        "Gimli" => "Portrait_G_Gimli","Legolas" => "Portrait_G_Legolas","Gandalf the Grey" => "Portrait_G_Gandalf",
-        // Build-133, the Evil side (the source names the Haradrim unit Slayer and Qamara Saleme).
-        "Goblin Slave" => "Portrait_E_Goblin_Slave","Goblin Spearman" => "Portrait_E_Goblin_Spearman","Slave Master" => "Portrait_E_Slave_Master",
-        "Orc Slasher" => "Portrait_E_Orc_Slasher","Orc Bowman" => "Portrait_E_Orc_Bowman","Warg Rider" => "Portrait_E_Warg_Rider",
-        "Giant Spider" => "Portrait_E_Giant_Spider","Wraith" => "Portrait_E_Wraith","Haradrim Slayer" => "Portrait_E_Haradrim_Assassin",
-        "Troll Stonehurler" => "Portrait_E_Troll_Stonehurler","Troll Bonecleaver" => "Portrait_E_Troll_Bonecleaver","Gollum" => "Portrait_E_Gollum",
-        "Nazgul King" => "Portrait_E_Nazgul_King","Saleme" => "Portrait_E_Qamara","Grishnakh" => "Portrait_E_Grishnakh","Saruman" => "Portrait_E_Saruman",
-        "Giant Ent" => "Global_Spell_G_Giant_Ent_Bordered","Balrog" => "Global_Spell_E_Balrog_Bordered","Black Rider" => "Portrait_E_Black_Rider",
+        "UNIT_G_ELVEN_LIGHTBRINGER" => "Portrait_G_Elven_Lightbringer","UNIT_G_BEORNING" => "Portrait_G_Beorning","UNIT_G_BEAR" => "Portrait_G_Bear","UNIT_G_HUORN" => "Portrait_G_Huorn",
+        "UNIT_G_HERO_GIMLI" => "Portrait_G_Gimli","UNIT_G_HERO_LEGOLAS" => "Portrait_G_Legolas","UNIT_G_HERO_GANDALF" => "Portrait_G_Gandalf",
+        // Build-133, the Evil side.
+        "UNIT_E_GOBLIN_SLAVE" => "Portrait_E_Goblin_Slave","UNIT_E_GOBLIN_SPEARMAN" => "Portrait_E_Goblin_Spearman","UNIT_E_GOBLIN_SLAVE_MASTER" => "Portrait_E_Slave_Master",
+        "UNIT_E_ORC_SLASHER" => "Portrait_E_Orc_Slasher","UNIT_E_ORC_BOWMAN" => "Portrait_E_Orc_Bowman","UNIT_E_WARG_RIDER" => "Portrait_E_Warg_Rider",
+        "UNIT_E_GIANT_SPIDER" => "Portrait_E_Giant_Spider","UNIT_E_WRAITH" => "Portrait_E_Wraith","UNIT_E_HARADRIM_ASSASSIN" => "Portrait_E_Haradrim_Assassin",
+        "UNIT_E_TROLL_STONEHURLER" => "Portrait_E_Troll_Stonehurler","UNIT_E_TROLL_BONECLEAVER" => "Portrait_E_Troll_Bonecleaver","UNIT_E_HERO_GOLLUM" => "Portrait_E_Gollum",
+        "UNIT_E_HERO_NAZGUL_KING" => "Portrait_E_Nazgul_King","UNIT_E_HERO_QAMARA" => "Portrait_E_Qamara","UNIT_E_HERO_GRISHNAKH" => "Portrait_E_Grishnakh","UNIT_E_HERO_SARUMAN" => "Portrait_E_Saruman",
+        "UNIT_G_GIANT_ENT" => "Global_Spell_G_Giant_Ent_Bordered","UNIT_E_HERO_BALROG" => "Global_Spell_E_Balrog_Bordered","UNIT_E_BONUS_BLACK_RIDER" => "Portrait_E_Black_Rider",
         _ => "Portrait_E_Uruk_Hai" };
 
     private int _describedTick = -1,_describedTeam;
@@ -437,7 +439,7 @@ public partial class CommandPanel : Control
             {
                 var unit = units[index]; int id = unit.Id;
                 var portrait = new Button { Position = new(index%10*50,index/10*53),Size = new(46,46),ExpandIcon = true,
-                    FocusMode = FocusModeEnum.None,Icon = _art.GetValueOrDefault(PortraitName(name(id))) };
+                    FocusMode = FocusModeEnum.None,Icon = _art.GetValueOrDefault(PortraitName(unit.Definition.Name)) };
                 Skin(portrait); WirePortrait(portrait,() => id); _roster.AddChild(portrait);
                 var empty = new ColorRect { Position = portrait.Position+new Vector2(0,46),Size = new(46,4),Color = new Color("282418"),MouseFilter = MouseFilterEnum.Ignore };
                 _roster.AddChild(empty);

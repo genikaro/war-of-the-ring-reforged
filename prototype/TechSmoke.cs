@@ -31,7 +31,7 @@ public partial class Main
             case 6:
                 // Build-58: Tier 2 sits on the Advanced page (the placement smoke checks its locked buttons); the basic page lacks it.
                 _techChecks["tier2_buildings_locked_until_citadel_2"] = new[] {"BUILDING_G_ARMORY","BUILDING_G_RANGER_BARRACKS",SmokeForge}
-                    .All(b => !world.CanStartBuilding(0,b,out string reason) && reason == "Requires Citadel 2" && PageChoices().All(c => c.Building != b))
+                    .All(b => !world.CanStartBuilding(0,b,out string reason) && reason == $"Requires {Shown("BUILDING_G_TOWN_CENTER_LEVEL_2","Citadel 2")}" && PageChoices().All(c => c.Building != b))
                     && _commands.AdvancedBuildButton.Visible == false && _buildMenu;
                 _techCampCell = VisiblePlacementCells(SmokeCamp)[0];
                 Click(_commands.ConstructionButton(SmokeCamp).GetGlobalRect().GetCenter()); break;
@@ -40,22 +40,22 @@ public partial class Main
                 if (Hold(Site(SmokeCamp) == null)) break;
                 Click(StructureSmokePoint(10000)); break;
             case 12:
-                _techChecks["citadel_offers_upgrade_with_source_cost"] = SelectedStructureDetails() is { Name: "Citadel 1",Health: 750 }
+                _techChecks["citadel_offers_upgrade_with_source_cost"] = SelectedStructureDetails() is { Health: 750 } shown43 && shown43.Name == Shown("BUILDING_G_TOWN_CENTER_LEVEL_1","Citadel 1")
                     && _commands.UpgradeButton is { Visible: true,Disabled: false,Icon: not null }
-                    && _commands.UpgradeButton.TooltipText.StartsWith("Upgrade to Citadel 2 [Z]\n115 food · 105 ore · 50s · 1000 health")
-                    && _commands.UpgradeButton.TooltipText.Contains("Forge") && _commands.PaletteOnlyTraining;
+                    && _commands.UpgradeButton.TooltipText.StartsWith($"Upgrade to {Shown("BUILDING_G_TOWN_CENTER_LEVEL_2","Citadel 2")} [Z]\n115 food · 105 ore · 50s · 1000 health")
+                    && _commands.UpgradeButton.TooltipText.Contains(Shown("BUILDING_G_SKILLS_STRUCTURE","Forge")) && _commands.PaletteOnlyTraining;
                 _techFood = bank.FoodMilli; _techOre = bank.OreMilli;
                 PressButton(_commands.UpgradeButton); break;
             case 13: ReleaseButton(_commands.UpgradeButton); break;
             case 15:
                 _techChecks["upgrade_pays_and_heads_the_queue"] = citadel.Upgrading && bank.FoodMilli == _techFood-115_000 && bank.OreMilli == _techOre-105_000
-                    && _commands.TrainingVisible && _commands.QueueButton(0) is { Visible: true,Icon: not null } && _commands.DisplayedOrder.StartsWith("Upgrading to Citadel 2")
+                    && _commands.TrainingVisible && _commands.QueueButton(0) is { Visible: true,Icon: not null } && _commands.DisplayedOrder.StartsWith($"Upgrading to {Shown("BUILDING_G_TOWN_CENTER_LEVEL_2","Citadel 2")}")
                     && _commands.UpgradeButton.Disabled;
                 PressButton(_commands.TrainButton(0)); break;
             case 16: ReleaseButton(_commands.TrainButton(0)); break;
             case 18:
                 _techChecks["training_queues_behind_the_upgrade"] = producer.Queue.Count == 1 && producer.ProgressTicks == 0
-                    && _commands.QueueButton(1).Visible && _commands.QueueButton(0).TooltipText.StartsWith("Upgrading to Citadel 2");
+                    && _commands.QueueButton(1).Visible && _commands.QueueButton(0).TooltipText.StartsWith($"Upgrading to {Shown("BUILDING_G_TOWN_CENTER_LEVEL_2","Citadel 2")}");
                 _techFood = bank.FoodMilli; _techOre = bank.OreMilli;
                 PressButton(_commands.QueueButton(0)); break;
             case 19: ReleaseButton(_commands.QueueButton(0)); break;
@@ -75,9 +75,9 @@ public partial class Main
                 _techChecks["citadel_2_with_source_health"] = citadel is { Health: 1000,Upgrading: false } && world.StartBuildings[0].SetEquals([SmokeCitadel2])
                     && world.PopulationProvided[SmokeCitadel2] == 10 && producer.Units.SequenceEqual(world.ProducedUnits[SmokeCitadel2]);
                 _techChecks["upgraded_model_and_panel"] = _constructionViews[10000].Building == SmokeCitadel2 && _structureViews[10000].Type == SmokeCitadel2
-                    && SelectedStructureDetails() is { Name: "Citadel 2",Health: 1000,MaxHealth: 1000 } && _commands.DisplayedHealth == "1000/1000"
+                    && SelectedStructureDetails() is { Health: 1000,MaxHealth: 1000 } shown78 && shown78.Name == Shown("BUILDING_G_TOWN_CENTER_LEVEL_2","Citadel 2") && _commands.DisplayedHealth == "1000/1000"
                     // Build-58: Citadel 2 goes on to Citadel 3.
-                    && _commands.UpgradeButton.Visible && _commands.UpgradeButton.TooltipText.StartsWith("Upgrade to Citadel 3") && StructureAt(StructureSmokePoint(10000))?.Id == 10000;
+                    && _commands.UpgradeButton.Visible && _commands.UpgradeButton.TooltipText.StartsWith($"Upgrade to {Shown("BUILDING_G_TOWN_CENTER_LEVEL_3","Citadel 3")}") && StructureAt(StructureSmokePoint(10000))?.Id == 10000;
                 if (_capture != "") _ = CaptureFrame(false);
                 break;
             case 1035:
@@ -86,15 +86,15 @@ public partial class Main
                 if (Hold(Site(SmokeCamp) is not { Complete: true })) break;
                 var camp = Site(SmokeCamp)!; _focus = PositionOf(camp.X,camp.Z); UpdateCamera(); Click(StructureSmokePoint(camp.Obstacle)); break;
             case 1038:
-                _techChecks["camp_offers_war_camp"] = SelectedStructureDetails() is { Name: "Camp" } && _commands.UpgradeButton is { Visible: true,Disabled: false }
-                    && _commands.UpgradeButton.TooltipText.StartsWith("Upgrade to War Camp [Z]\n0 food · 55 ore · 40s · 500 health · +4 population")
+                _techChecks["camp_offers_war_camp"] = SelectedStructureDetails() is {  } shown89 && shown89.Name == Shown("BUILDING_G_WORKER_STRUCTURE","Camp") && _commands.UpgradeButton is { Visible: true,Disabled: false }
+                    && _commands.UpgradeButton.TooltipText.StartsWith($"Upgrade to {Shown("BUILDING_G_POPULATION_STRUCTURE_UPGRADE","War Camp")} [Z]\n0 food · 55 ore · 40s · 500 health · +4 population")
                     && world.PopulationCapacity(0) == 21;
                 PushGridKey(CommandPanel.UpgradeSlot); break;
             case 1040:
                 _techChecks["war_camp_upgrade_started"] = Site(SmokeCamp) is { Upgrading: true } && _commands.TrainingVisible; break;
             case 1845:
                 if (Hold(Site(SmokeWarCamp) == null)) break;
-                _techChecks["war_camp_adds_source_population"] = world.PopulationCapacity(0) == 25 && SelectedStructureDetails() is { Name: "War Camp",Health: 500 }
+                _techChecks["war_camp_adds_source_population"] = world.PopulationCapacity(0) == 25 && SelectedStructureDetails() is { Health: 500 } shown97 && shown97.Name == Shown("BUILDING_G_POPULATION_STRUCTURE_UPGRADE","War Camp")
                     && !_commands.UpgradeButton.Visible;
                 PushKey(Key.Key1); _focus = PositionOf(start.X,start.Z); UpdateCamera(); break;
             case 1847: Click(_commands.AdvancedBuildButton.GetGlobalRect().GetCenter()); break;

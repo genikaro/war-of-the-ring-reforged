@@ -63,12 +63,12 @@ public partial class Main
                 Select(SmokeBarracks); break;
             case 22:
                 _tier2Checks["rider_locked_until_citadel_2"] = world.Producers[Site(SmokeBarracks)!.Id].Units.SequenceEqual([SmokeSwordsman,SmokeRider])
-                    && _commands.TrainButton(1) is { Visible: true,Disabled: true,Icon: not null } && _commands.TrainButton(1).TooltipText.EndsWith("Requires Citadel 2")
+                    && _commands.TrainButton(1) is { Visible: true,Disabled: true,Icon: not null } && _commands.TrainButton(1).TooltipText.EndsWith($"Requires {Shown("BUILDING_G_TOWN_CENTER_LEVEL_2","Citadel 2")}")
                     && !_commands.TrainButton(0).Disabled;
                 Select(SmokeDwarfHall); break;
             case 24:
                 _tier2Checks["shieldbreaker_locked_until_forge"] = _commands.TrainButton(1) is { Visible: true,Disabled: true,Icon: not null }
-                    && _commands.TrainButton(1).TooltipText.EndsWith("Requires Forge");
+                    && _commands.TrainButton(1).TooltipText.EndsWith($"Requires {Shown("BUILDING_G_SKILLS_STRUCTURE","Forge")}");
                 FocusStructure(10000); Click(StructureSmokePoint(10000)); break;
             case 26: PushGridKey(CommandPanel.UpgradeSlot); break;
             case 28:
@@ -80,20 +80,20 @@ public partial class Main
                 Select(SmokeBarracks); break;
             case 42:
                 _tier2Checks["citadel_2_unlocks_the_rider"] = _commands.TrainButton(1) is { Visible: true,Disabled: false }
-                    && _commands.TrainButton(1).TooltipText.StartsWith("Train Rohan Rider [W]\n85 food · 30 ore · population 3 · 24s");
+                    && _commands.TrainButton(1).TooltipText.StartsWith($"Train {Shown("UNIT_G_ROHAN_RIDER","Rohan Rider")} [W]\n85 food · 30 ore · population 3 · 24s");
                 PressButton(_commands.TrainButton(1)); break;
             case 43: ReleaseButton(_commands.TrainButton(1)); Click(Rally(),MouseButton.Right); break;
             case 45: Select(SmokeDwarfHall); break;
             case 47:
                 _tier2Checks["forge_unlocks_the_shieldbreaker"] = _commands.TrainButton(1) is { Visible: true,Disabled: false }
-                    && _commands.TrainButton(1).TooltipText.StartsWith("Train Dwarf Shieldbreaker [W]\n90 food · 65 ore · population 3 · 24s");
+                    && _commands.TrainButton(1).TooltipText.StartsWith($"Train {Shown("UNIT_G_DWARVEN_SHIELDBREAKER","Dwarf Shieldbreaker")} [W]\n90 food · 65 ore · population 3 · 24s");
                 PressButton(_commands.TrainButton(1)); break;
             case 48: ReleaseButton(_commands.TrainButton(1)); Click(Rally(),MouseButton.Right); break;
             case 50: Select(SmokeRangerPost); break;
             case 52:
-                _tier2Checks["ranger_post_trains_the_ranger"] = SelectedStructureDetails() is { Name: "Ranger Post",Health: 675 }
+                _tier2Checks["ranger_post_trains_the_ranger"] = SelectedStructureDetails() is { Health: 675 } shown94 && shown94.Name == Shown("BUILDING_G_RANGER_BARRACKS","Ranger Post")
                     && _commands.TrainButton(0) is { Visible: true,Disabled: false,Icon: not null } && !_commands.TrainButton(1).Visible
-                    && _commands.TrainButton(0).TooltipText.StartsWith("Train Ranger [Q]\n50 food · 40 ore · population 2 · 22s");
+                    && _commands.TrainButton(0).TooltipText.StartsWith($"Train {Shown("UNIT_G_RANGER","Ranger")} [Q]\n50 food · 40 ore · population 2 · 22s");
                 PressButton(_commands.TrainButton(0)); break;
             case 53: ReleaseButton(_commands.TrainButton(0)); Click(Rally(),MouseButton.Right); break;
             case 55:
@@ -109,7 +109,7 @@ public partial class Main
                 _focus = UnitPosition(Trained(SmokeRider)!); UpdateCamera(); break;
             case 57: Click(UnitPoint(Trained(SmokeRider)!)); break;
             case 59:
-                _tier2Checks["rider_panel_shows_source_stats"] = _selected.SetEquals([Trained(SmokeRider)!.Id]) && _commands.DisplayedName == "Rohan Rider"
+                _tier2Checks["rider_panel_shows_source_stats"] = _selected.SetEquals([Trained(SmokeRider)!.Id]) && _commands.DisplayedName == Shown("UNIT_G_ROHAN_RIDER","Rohan Rider")
                     && _commands.DisplayedHealth == "235/235";
                 // Build-63: the Ranger ran to the rally point; his idle keys no hood or upper cape bone, so they are back at rest.
                 var ranger = _views[Trained(SmokeRanger)!.Id];

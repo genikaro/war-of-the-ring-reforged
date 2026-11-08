@@ -51,8 +51,10 @@ public partial class Main
                 if (!world.MatchOver && world.Tick < AiSmokeTickLimit) break;
                 var built = _aiTimeline.Keys.Where(k => k.StartsWith("built_")).ToArray();
                 _aiChecks["enemy_trains_workers"] = _aiMaxWorkers >= 8;
-                _aiChecks["enemy_builds_mill_and_foundry"] = built.Contains("built_Mill") && built.Contains("built_Foundry");
-                _aiChecks["enemy_builds_camp_and_military"] = built.Contains("built_Camp") && (built.Contains("built_Barracks") || built.Contains("built_Dwarf Hall"));
+                string Built(string building,string english) => "built_"+Shown(building,english);
+                _aiChecks["enemy_builds_mill_and_foundry"] = built.Contains(Built("BUILDING_G_FOOD_STRUCTURE","Mill")) && built.Contains(Built("BUILDING_G_BLACKSMITH","Foundry"));
+                _aiChecks["enemy_builds_camp_and_military"] = built.Contains(Built("BUILDING_G_WORKER_STRUCTURE","Camp"))
+                    && (built.Contains(Built("BUILDING_G_GONDORIAN_BARRACKS","Barracks")) || built.Contains(Built("BUILDING_G_DWARF_BARRACKS","Dwarf Hall")));
                 _aiChecks["enemy_trains_an_army_before_attacking"] = ai != null && _aiArmyAtLaunch >= world.AiPartySize(ai)
                     && _aiTimeline.GetValueOrDefault("assault_sent") >= ai.Profile.AssaultFromTicks;
                 _aiChecks["assault_reaches_the_player_base"] = _aiTimeline.ContainsKey("player_citadel_damaged");

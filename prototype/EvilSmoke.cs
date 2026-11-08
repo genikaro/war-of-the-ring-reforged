@@ -113,11 +113,11 @@ public partial class Main
                 _evilChecks["sandbox_returns_to_evil_music"] = _audio.MusicContext == Reforged.Presentation.MusicContext.Evil
                     && _audio.MusicPlaying && _audio.MusicTrackName.EndsWith("_EVIL") && _audio.MusicTransitions == musicTransitions+2;
                 string[] Abilities(string hero) => [.. _rules.Units[hero].Abilities!.Select(a => a.Name)];
-                _evilChecks["evil_heroes_carry_their_source_abilities"] = Abilities("UNIT_E_HERO_GOLLUM").SequenceEqual(["Sneak","Surprise Attack","Dark Tracking"])
-                    && Abilities("UNIT_E_HERO_NAZGUL_KING").SequenceEqual(["Shadow Bind","Shadow Walk","Aura of Terror"])
-                    && Abilities("UNIT_E_HERO_QAMARA").SequenceEqual(["Poison Trap","Blood Mark","Mystic Blades"])
-                    && Abilities("UNIT_E_HERO_GRISHNAKH").SequenceEqual(["Satchel Charge","Speed of the Wolf","Torch"])
-                    && Abilities("UNIT_E_HERO_SARUMAN").SequenceEqual(["Prison of Ice","Invisible Force","Pestilence","Twisting Influence"]);
+                _evilChecks["evil_heroes_carry_their_source_abilities"] = Abilities("UNIT_E_HERO_GOLLUM").SequenceEqual([ShownAbility(37,"Sneak"),ShownAbility(38,"Surprise Attack"),ShownAbility(20,"Dark Tracking")])
+                    && Abilities("UNIT_E_HERO_NAZGUL_KING").SequenceEqual([ShownAbility(36,"Shadow Bind"),ShownAbility(29,"Shadow Walk"),ShownAbility(8,"Aura of Terror")])
+                    && Abilities("UNIT_E_HERO_QAMARA").SequenceEqual([ShownAbility(35,"Poison Trap"),ShownAbility(21,"Blood Mark"),ShownAbility(39,"Mystic Blades")])
+                    && Abilities("UNIT_E_HERO_GRISHNAKH").SequenceEqual([ShownAbility(34,"Satchel Charge"),ShownAbility(13,"Speed of the Wolf"),ShownAbility(5,"Torch")])
+                    && Abilities("UNIT_E_HERO_SARUMAN").SequenceEqual([ShownAbility(46,"Prison of Ice"),ShownAbility(30,"Invisible Force"),ShownAbility(47,"Pestilence"),ShownAbility(18,"Twisting Influence")]);
                 _evilChecks["simulated_evil_abilities_are_real_and_the_rest_listed"] = _rules.Units["UNIT_E_HERO_GRISHNAKH"].Abilities!.Any(a => a.Kind == AbilityKind.ElvenSpeed && a.BonusScale == 1_500_000)
                     && _rules.Units["UNIT_E_HERO_NAZGUL_KING"].Abilities!.Any(a => a.Kind == AbilityKind.TerrorAura && a.ArmorReductionMilli == 2000)
                     && _rules.Units["UNIT_E_HERO_SARUMAN"].Abilities!.Select(a => a.Kind).SequenceEqual([AbilityKind.PrisonOfIce,AbilityKind.InvisibleForce,AbilityKind.Pestilence,AbilityKind.TwistingInfluence])
@@ -128,8 +128,8 @@ public partial class Main
                 // The Dark Arsenal offers the source's blade and fitting chains, each in its action-grid slot.
                 var arsenal = Site("BUILDING_E_ARMORY")!;
                 var offered = world.ResearchOptions(arsenal).ToArray();
-                _evilChecks["dark_arsenal_offers_its_research"] = SelectedStructureDetails() is { Name: "Dark Arsenal" } && offered.Length >= 4
-                    && offered.Any(t => t.DisplayName == "Curved Blades") && offered.Any(t => t.DisplayName == "Iron Fittings")
+                _evilChecks["dark_arsenal_offers_its_research"] = SelectedStructureDetails() is {  } shown131 && shown131.Name == Shown("BUILDING_E_ARMORY","Dark Arsenal") && offered.Length >= 4
+                    && offered.Any(t => t.Name == "TECHNIQUE_CURVED_BLADES") && offered.Any(t => t.Name == "TECHNIQUE_IRON_FITTINGS")
                     && offered.Any(t => _commands.ResearchButton(t.Slot).Visible);
                 _evilNotes["arsenal_techniques"] = string.Join(", ",offered.Select(t => $"{t.DisplayName}[{t.Slot}]"));
                 if (_capture != "") _ = CaptureFrame(false,Shot("arsenal"));
@@ -161,7 +161,7 @@ public partial class Main
                 }
                 if (_capture!="" && !_evilTooltipCaptured)
                 {
-                    _evilChecks["evil_tooltip_capture_shows_savage_influence"]=_commands.DisplayedTooltipTitle=="Savage Influence";
+                    _evilChecks["evil_tooltip_capture_shows_savage_influence"]=_commands.DisplayedTooltipTitle==ShownAbility(16,"Savage Influence");
                     _=CaptureFrame(false,Shot("tooltip"));_evilTooltipCaptured=true;_evilSandboxMark=_frames;break;
                 }
                 _evilChecks["slavemaster_selected_shows_the_build_button"] = _selected.Contains(Unit(EvilSlavemaster).Id) && _commands.BuildButton.Visible;
@@ -198,7 +198,7 @@ public partial class Main
                 if (!Wait(6)) break;
                 var menu = Enumerable.Range(0,5).Select(i => _commands.GlobalPowerButton(i)).ToArray();
                 _evilChecks["fate_orb_shows_the_five_evil_powers"] = _commands.GlobalAbilitiesOpen && menu.All(b => b.IsVisibleInTree() && b.Icon != null)
-                    && new[] {"Summon Bog","Murder of Crows","Vile Surge","Obelisk","Summon Balrog"}.Select((name,i) => menu[i].TooltipText.StartsWith(name)).All(v => v)
+                    && new[] {ShownPower(7,"Summon Bog"),ShownPower(8,"Murder of Crows"),ShownPower(2,"Vile Surge"),ShownPower(9,"Obelisk"),ShownPower(0,"Summon Balrog")}.Select((name,i) => menu[i].TooltipText.StartsWith(name)).All(v => v)
                     && new[] {2,3,3,4,7}.Select((cost,i) => menu[i].TooltipText.Contains(cost+" Fate")).All(v => v);
                 _evilChecks["evil_palantir_uses_its_own_atlas"] = _commands.Art("console_e_powerbutton") is AtlasTexture evilOrb
                     && _commands.FateButton.GetChild<TextureRect>(0).Texture is AtlasTexture currentOrb && currentOrb.Atlas == evilOrb.Atlas;
@@ -338,14 +338,14 @@ public partial class Main
                 PushKey(Key.Q); Next(); break;
             case 23:
                 if (!Wait(4)) break;
-                _evilChecks["shadow_bind_asks_for_a_wraith"] = _orders.Pending == OrderKind.UseAbility && _status.Contains("Wraith");
+                _evilChecks["shadow_bind_asks_for_a_wraith"] = _orders.Pending == OrderKind.UseAbility && _status.Contains(Shown("UNIT_E_WRAITH","Wraith"));
                 Click(_camera.UnprojectPosition(UnitPosition(world.Units[_evilWraith])+Vector3.Up)); Next(); break;
             case 24:
                 if (!Wait(110)) break;
                 var rider = world.Units[_evilWraith];
                 _evilChecks["shadow_bind_makes_a_black_rider"] = rider.Definition.Name == "UNIT_E_BONUS_BLACK_RIDER" && world.Economies[0].Fate <= _evilFateBefore && rider.PopulationUnit == "UNIT_E_WRAITH"
                     && _views[rider.Id].Model.GetProperty("unit").GetString() == "UNIT_E_BONUS_BLACK_RIDER" && _selected.Contains(_evilKing);
-                _evilChecks["black_rider_uses_source_portrait"] = _commands.Art(CommandPanel.PortraitName(rider.Definition.DisplayName))
+                _evilChecks["black_rider_uses_source_portrait"] = _commands.Art(CommandPanel.PortraitName(rider.Definition.Name))
                     is { } portrait && portrait == _commands.Art("Portrait_E_Black_Rider");
                 if (_capture != "") _ = CaptureFrame(false,Shot("shadow-bind"));
                 PushKey(Key.W); Next(); break;
@@ -391,7 +391,7 @@ public partial class Main
                 PushKey(Key.W); Next(); break;
             case 30:
                 if (!Wait(4)) break;
-                _evilChecks["blood_mark_asks_for_an_ally_or_a_war_post"] = _orders.Pending == OrderKind.UseAbility && _status.Contains("War Post");
+                _evilChecks["blood_mark_asks_for_an_ally_or_a_war_post"] = _orders.Pending == OrderKind.UseAbility && _status.Contains(Shown("BUILDING_E_TERRITORY_MARKER","War Post"));
                 Click(_camera.UnprojectPosition(UnitPosition(world.Units[_evilPatient])+Vector3.Up)); Next(); break;
             case 31:
                 if (!Wait(80)) break;
@@ -707,7 +707,7 @@ public partial class Main
                                         int slasher = Array.IndexOf(producer.Units,"UNIT_E_ORC_SLASHER");
                     _evilChecks["slasher_needs_the_fortress_and_trains"] = world.CanTrain(0,mound.Id,slasher,out _);
                     world.Enqueue(0,[],OrderKind.Train,slasher,mound.Id);
-                    _evilChecks["uruk_hai_locked_until_fortress_4"] = !world.CanTrain(0,mound.Id,Array.IndexOf(producer.Units,"UNIT_E_URUK_HAI"),out string locked) && locked.Contains("Fortress 4");
+                    _evilChecks["uruk_hai_locked_until_fortress_4"] = !world.CanTrain(0,mound.Id,Array.IndexOf(producer.Units,"UNIT_E_URUK_HAI"),out string locked) && locked.Contains(Shown("BUILDING_E_TOWN_CENTER_LEVEL_4","Fortress 4"));
                     _evilNotes["uruk_locked_reason"] = locked;
                     var home = world.Producers.Values.First(p => p.Team == 0 && p.Units.Contains(EvilSlavemaster));
                     world.Enqueue(0,[],OrderKind.Train,Array.IndexOf(home.Units,EvilSlavemaster),home.Id);
@@ -756,7 +756,7 @@ public partial class Main
             case 10:
                 if (world.Tick-_evilStepTick < 6) break;
                 _evilChecks["hovel_panel_offers_goblin_spearman_and_slavemaster"] = _commands.TrainButton(0) is { Visible: true,Icon: not null } && _commands.TrainButton(1) is { Visible: true }
-                    && _commands.TrainButton(2) is { Visible: true } && _commands.TrainButton(1).TooltipText.Contains("Goblin Spearman");
+                    && _commands.TrainButton(2) is { Visible: true } && _commands.TrainButton(1).TooltipText.Contains(Shown("UNIT_E_GOBLIN_SPEARMAN","Goblin Spearman"));
                 _evilNotes["hovel_buttons"] = string.Join(" | ",Enumerable.Range(0,3).Select(i => _commands.TrainButton(i).TooltipText.Replace('\n','/')));
                 if (_capture != "") _ = CaptureFrame(false);
                 Next(); break;
@@ -796,7 +796,7 @@ public partial class Main
                 _evilHudStep = 3; break;
             case 3:
                 _evilChecks["obelisk_selects_into_its_own_panel"] = _selectedObelisk == 0 && _commands.StructureDetailsVisible
-                    && _commands.DisplayedTitle == "Obelisk" && _commands.DisplayedHealth.EndsWith("/5000") && !_commands.StructureStatsVisible;
+                    && _commands.DisplayedTitle == (GameText.GlobalPower((int)GlobalPowerKind.Obelisk,"name") ?? "Obelisk") && _commands.DisplayedHealth.EndsWith("/5000") && !_commands.StructureStatsVisible;
                 _evilNotes["obelisk_panel"] = $"{_commands.DisplayedTitle} {_commands.DisplayedHealth} selected={_selectedObelisk}";
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-obelisk-panel.png");
                 // A Good building set alight: its console and world bars turn burnt orange.

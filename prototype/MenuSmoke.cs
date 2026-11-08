@@ -1,5 +1,6 @@
 using Godot;
 using System.Text.Json;
+using Reforged.Presentation;
 
 /// <summary>The front end end to end (build-147, run.ps1 -MenuSmoke): the main menu over the loaded menu scene with its
 /// five items (Campaign disabled), the bullets beside the hovered item, the Exit question and its Cancel, Settings and
@@ -167,7 +168,7 @@ public partial class Main
                 MenuChecks["loading_keeps_the_game_still"] = world.Tick <= 1 && _menuLoadingSteps >= 10;
                 break;
             case 4:
-                MenuChecks["loading_screen_shows_ring_progress"] = _menuLoadingArt && _menuLoadingTitle == "Sandbox" && MenuLoadingProgress.Count >= 10
+                MenuChecks["loading_screen_shows_ring_progress"] = _menuLoadingArt && _menuLoadingTitle == GameText.T("sandbox.title") && MenuLoadingProgress.Count >= 10
                     && MenuLoadingProgress.Zip(MenuLoadingProgress.Skip(1)).All(p => p.Second >= p.First) && MenuLoadingProgress[^1] == 1
                     && _lastLoadSteps.Contains("Loading the terrain") && _lastLoadSteps.Contains("Building the Sandbox bases") && _lastLoadMs > 0;
                 MenuChecks["sandbox_choices_reach_the_match"] = _sandboxMap && world.FactionOf(1) == Reforged.Simulation.SimWorld.Evil && world.FactionOf(0) == Reforged.Simulation.SimWorld.Good

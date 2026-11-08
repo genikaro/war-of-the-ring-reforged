@@ -67,7 +67,7 @@ public partial class CommandPanel
             if (!button.Visible) continue;
             var rules = world.TrainingCost(PlayerTeam,world.ProductionRules[producer!.Units[slot]]);
             button.Disabled = !world.CanTrain(PlayerTeam,producer.Id,slot,out string reason);
-            button.Icon = _art.GetValueOrDefault(PortraitName(rules.DisplayName));
+            button.Icon = _art.GetValueOrDefault(PortraitName(rules.Unit));
             button.TooltipText = $"Train {rules.DisplayName} [{GridKeys[slot]}]\n{rules.FoodCost} food · {rules.OreCost} ore"
                 + (rules.FateCost > 0 ? $" · {rules.FateCost} Fate" : "")+$" · population {rules.Population} · {rules.DurationTicks/20}s"
                 + (rules.UniqueGroup >= 0 ? world.FactionOf(PlayerTeam) == SimWorld.Evil
@@ -120,7 +120,7 @@ public partial class CommandPanel
             }
             var rules = world.ProductionRules[queue[index-offset].Unit];
             var paid = queue[index-offset];
-            button.Icon = _art.GetValueOrDefault(PortraitName(rules.DisplayName));
+            button.Icon = _art.GetValueOrDefault(PortraitName(rules.Unit));
             button.TooltipText = (index == 0 ? $"Training {rules.DisplayName} · {percent}%" : $"Queued {rules.DisplayName}")
                 + $"\nCancel refunds {(paid.FoodPaid < 0 ? rules.FoodCost : paid.FoodPaid)} food and {(paid.OrePaid < 0 ? rules.OreCost : paid.OrePaid)} ore"
                 + ((paid.FatePaid < 0 ? rules.FateCost : paid.FatePaid) is > 0 and var fate ? $" and {fate} Fate" : "");

@@ -100,6 +100,11 @@ if (Array.IndexOf(args,"--movement-benchmark") is int benchmark && benchmark >= 
 
 int passed = 0;
 void Check(bool value, string name) { if (!value) throw new Exception(name); passed++; }
+if (args.Contains("--game-text-checks"))
+{
+    GameTextChecks.Run(Check);
+    Console.WriteLine($"{passed} game text checks passed"); return;
+}
 if (args.Contains("--evil-upgrade-checks"))
 {
     EvilUpgradeChecks.Run(Check);
@@ -374,6 +379,7 @@ OrderChecks.Run(Check);
 ExtendedOrderChecks.Run(Check);
 MeleeChecks.Run(Check);
 BloodIntensityChecks.Run(Check);
+GameTextChecks.Run(Check);
 FogFadeChecks.Run(Check);
 RouteSearchChecks.Run(Check);
 ConsistentHitDamageChecks.Run(Check);

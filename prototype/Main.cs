@@ -121,6 +121,7 @@ public partial class Main : Node3D
     public override void _Ready()
     {
         GetTree().AutoAcceptQuit = false;
+        LoadGameText();
         CreateUi(); WatchPointer();
         foreach (string arg in OS.GetCmdlineUserArgs())
         {
@@ -259,7 +260,9 @@ public partial class Main : Node3D
         if (manifest.GetProperty("format_version").GetInt32() != 1) throw new InvalidOperationException("Unsupported cache format");
         _skirmish = manifest.TryGetProperty("mode",out var mode) && mode.GetString() == "skirmish";
         _sandboxMap = _skirmish && manifest.TryGetProperty("sandbox",out var sandbox) && sandbox.GetBoolean();
-        _mapName = manifest.GetProperty("name").GetString()!.Split(" — ")[0];
+        // Build-183: the map's own name in the install's language (MultiPlayerMaps.ltx), as the setup screen lists it.
+        _mapName = SetupScreen.MapTitle(_sandboxMap ? SetupScreen.SandboxStem : manifest.TryGetProperty("map_file",out var mapFile)
+            ? System.IO.Path.GetFileNameWithoutExtension(mapFile.GetString()!) : "",manifest.GetProperty("name").GetString()!.Split(" — ")[0]);
         if (_loadingScreen != null) _loadingScreen.Title = _mapName;
         await LoadingStep("Checking the map files",.03f);
         await Task.Run(_cacheFiles.Verify);
@@ -271,6 +274,7 @@ public partial class Main : Node3D
         string rulesPath = manifest.GetProperty("combat_rules").GetString()!;
         await LoadingStep("Reading the rules",.16f);
         (_rules,var rulesData) = await Task.Run(() => (CombatRules.Parse(System.IO.File.ReadAllText(CachePath(rulesPath))),ReadJson(rulesPath)));
+        GameNames.Localize(_rules);
         LoadCombatAudio(rulesData);
         LoadBlood();
         await LoadingStep("Building the ground",.22f);

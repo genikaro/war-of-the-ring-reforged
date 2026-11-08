@@ -96,7 +96,8 @@ public partial class Main
             if (definition.TryGetProperty("sight_mm",out var sight)) world.BuildingSightMm[name] = sight.GetInt32();
         int Armor(string name) => _structureDefinitions.TryGetValue(name,out var definition)
             ? (int)Math.Round(definition.GetProperty("armor").GetDouble()*1000) : 0;
-        ConstructionDefinition Rules(JsonElement rules,ResourceKind? kind) => new(rules.GetProperty("name").GetString()!,rules.GetProperty("display_name").GetString()!,kind,
+        ConstructionDefinition Rules(JsonElement rules,ResourceKind? kind) => new(rules.GetProperty("name").GetString()!,
+            GameText.Name(rules.GetProperty("name").GetString()!,rules.GetProperty("display_name").GetString()!),kind,
             rules.GetProperty("food_cost").GetInt32(),rules.GetProperty("ore_cost").GetInt32(),rules.GetProperty("duration_ticks").GetInt32(),
             rules.GetProperty("max_health").GetInt32(),rules.GetProperty("food_refund_ppm").GetInt32(),rules.GetProperty("ore_refund_ppm").GetInt32(),
             rules.GetProperty("extra_worker_ppm").GetInt32(),rules.GetProperty("initial_health_ppm").GetInt32(),

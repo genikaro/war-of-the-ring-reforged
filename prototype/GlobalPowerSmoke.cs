@@ -112,7 +112,7 @@ public partial class Main
                 _globalEnt=ent.Id;_globalEntX=ent.X;SetPaused(true);
                 CaptureGlobal("ent");_commands.CloseGlobalAbilities();_selected.Add(ent.Id);break;
             case 46:
-                _globalChecks["ent_has_lifetime_bar_only"]=_commands.DisplayedLifetime > .9f && !_commands.DisplayedStatuses.Any(s=>s.Contains("Ent"));
+                _globalChecks["ent_has_lifetime_bar_only"]=_commands.DisplayedLifetime > .9f && !_commands.DisplayedStatuses.Any(s=>s.Contains(ShownPower((int)GlobalPowerKind.GiantEnt,"Ent")));
                 _globalChecks["ent_uses_source_portrait"] = _commands.PortraitButton(_globalEnt).Icon == _commands.Art("Global_Spell_G_Giant_Ent_Bordered")
                     && _heroBar.Portrait(HeroBar.SummonSlot).Icon == _commands.PortraitButton(_globalEnt).Icon;
                 var entRing = _views[_globalEnt].Ring;

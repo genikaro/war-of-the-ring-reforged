@@ -213,7 +213,7 @@ public partial class Main
             .Concat(world.ExtraDefenses.GetValueOrDefault(building) ?? []).Select((defense,weapon) => DefenseHudStats.From(
                 _defenseLabels.TryGetValue(building,out var labels) && weapon < labels.Length ? labels[weapon] : "Attack",defense)).ToArray() : [];
         string attack = string.Join(" / ",weapons.Select(w => w.Attack));
-        return new(id,entry.Team,place?.Name ?? definition.GetProperty("display_name").GetString()!,definition.GetProperty("portrait").GetString()!,site != null ? ShownHealth(site) : max,max,
+        return new(id,entry.Team,place?.Name ?? GameText.Name(building,definition.GetProperty("display_name").GetString()!),definition.GetProperty("portrait").GetString()!,site != null ? ShownHealth(site) : max,max,
             definition.GetProperty("armor").GetDouble().ToString("0.##",System.Globalization.CultureInfo.InvariantCulture),progress,place == null ? resource : PlaceSummary(place),entry.Resource,
             !definition.TryGetProperty("has_health",out var hasHealth) || hasHealth.GetBoolean(),site?.Id ?? -1,
             place == null ? "" : place.Owner == PlayerTeam && !_observing ? "Place of power · yours until an enemy stands alone in its zone"
@@ -221,7 +221,7 @@ public partial class Main
             Burning: site is { FirePpm: > 0,Health: > 0 },Weapons:weapons,
             GarrisonCapacity: site != null ? world.GarrisonCapacityOf(site) : 0,
             Garrison: site == null ? null : [.. world.GarrisonOf(site).Select(u => new GarrisonSlot(u.Id,UnitName(u.Id),
-                CommandPanel.PortraitName(u.Definition.DisplayName),u.Health,u.MaxHealth))]);
+                CommandPanel.PortraitName(u.Definition.Name),u.Health,u.MaxHealth))]);
     }
 
     private void PresentStructureSelection(float dt)

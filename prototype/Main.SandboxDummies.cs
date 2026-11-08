@@ -1,5 +1,6 @@
 using Godot;
 using Reforged.Simulation;
+using Reforged.Presentation;
 
 /// <summary>The Sandbox's training dummies (build-59, owner request): one per damage type beside the blue base, so the
 /// type cycle can be tried against each. Each has 1000 health, no armor, no regeneration and no attack, never picks a
@@ -21,22 +22,22 @@ public partial class Main
 
     private List<UnitDefinition> SandboxDummyDefinitions()
     {
-        AbilityDefinition[] buttons = [new(-1,0,"Armor +1","Default_Protection_Borderless",false,AbilityKind.ArmorUp),
-            new(-2,1,"Armor 0","BattleGear_Shield_Break_Borderless",false,AbilityKind.ArmorReset),
-            new(-3,2,"Restore health","BattleGear_Healing_Herbs_Borderless",false,AbilityKind.Restore)];
+        AbilityDefinition[] buttons = [new(-1,0,GameText.T("sandbox.dummy.armor_up"),"Default_Protection_Borderless",false,AbilityKind.ArmorUp),
+            new(-2,1,GameText.T("sandbox.dummy.armor_reset"),"BattleGear_Shield_Break_Borderless",false,AbilityKind.ArmorReset),
+            new(-3,2,GameText.T("sandbox.dummy.restore"),"BattleGear_Healing_Herbs_Borderless",false,AbilityKind.Restore)];
         var definitions = new List<UnitDefinition>();
         foreach (var ((type,model),index) in SandboxDummyModels.Select((d,i) => (d,i)))
         {
             var source = _rules.Units[model]; string name = "SANDBOX_DUMMY_"+type.ToUpperInvariant();
             // The unit pair modifiers go by unit id: a dummy's own id keeps only the damage-type cycle. The body stays the
             // model unit's (navigation has a clearance profile for each source body); only the drawing grows.
-            var dummy = source with { Id = -10-index,Name = name,DisplayName = type+" Dummy",MaxHealth = SandboxDummyHealth,StartingHealthPercent = 100,
+            var dummy = source with { Id = -10-index,Name = name,DisplayName = GameText.T("sandbox.dummy."+type.ToLowerInvariant()),MaxHealth = SandboxDummyHealth,StartingHealthPercent = 100,
                 ArmorMilli = 0,DpsMilli = 0,MeleeDpsMilli = 0,RegenerationPpm = 0,SiegePpm = 1_000_000,Hero = false,Experience = null,Abilities = buttons,Passive = true,
                 ModelScalePpm = (int)Math.Min(2_000_000L,(long)source.ModelScalePpm*SandboxDummyScalePpm/1_000_000),
                 SelectionRadiusMm = Math.Min(6000,source.SelectionRadiusMm*SandboxDummyScalePpm/1_000_000) };
             dummy.Validate();
             _rules.Units[name] = dummy; _unitModels[name] = _unitModels[model];
-            CommandPanel.ExtraPortraits[dummy.DisplayName] = CommandPanel.PortraitName(source.DisplayName);
+            CommandPanel.ExtraPortraits[dummy.Name] = CommandPanel.PortraitName(source.Name);
             definitions.Add(dummy);
         }
         return definitions;

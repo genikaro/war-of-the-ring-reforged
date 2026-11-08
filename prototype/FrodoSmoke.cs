@@ -31,7 +31,7 @@ public partial class Main
             case 9:
                 _frodoChecks["frodo_training_pays_without_population"] = citadel.Queue.Count == 1 && citadel.Queue[0].Unit == SmokeFrodo
                     && world.Economies[0].Food == 265 && world.Economies[0].Ore == 525 && world.PopulationUsed(0) == 4;
-                _frodoChecks["unique_hero_button_disabled"] = _commands.TrainButton(1).Disabled && _commands.TrainButton(1).TooltipText.Contains("Frodo is already in play");
+                _frodoChecks["unique_hero_button_disabled"] = _commands.TrainButton(1).Disabled && _commands.TrainButton(1).TooltipText.Contains($"{Shown("UNIT_G_HERO_FRODO","Frodo")} is already in play");
                 Press(_commands.TrainButton(1).GetGlobalRect().GetCenter()); break;
             case 10: Release(_commands.TrainButton(1).GetGlobalRect().GetCenter()); break;
             case 12:
@@ -47,12 +47,12 @@ public partial class Main
                 _selected.Clear(); Press(Portrait()); break;
             case 761: Release(Portrait()); break;
             case 763:
-                _frodoChecks["portrait_click_selects_frodo"] = _selected.SetEquals([_frodoId]) && _commands.DisplayedName == "Frodo" && _commands.DisplayedHealth == "305/305";
+                _frodoChecks["portrait_click_selects_frodo"] = _selected.SetEquals([_frodoId]) && _commands.DisplayedName == Shown("UNIT_G_HERO_FRODO","Frodo") && _commands.DisplayedHealth == "305/305";
                 _frodoChecks["heroic_aura_shows_frodo_and_recipients"] = _auraEffects.ContainsKey((_frodoId,AuraEffect.Heroic,true))
                     && _auraEffects.Keys.Any(a => a.Unit != _frodoId && a.Effect == AuraEffect.Heroic && !a.Source);
                 _frodoChecks["source_abilities_in_qwe"] = _commands.AbilityButton(0) is { Visible: true,Disabled: false,ButtonPressed: false,Icon: not null }
                     && _commands.AbilityButton(1) is { Visible: true,Disabled: false,Icon: not null } && _commands.AbilityButton(2) is { Visible: true,Disabled: true,Icon: not null }
-                    && !_commands.AbilityButton(3).Visible && _commands.AbilityButton(0).TooltipText.StartsWith("The One Ring\n");
+                    && !_commands.AbilityButton(3).Visible && _commands.AbilityButton(0).TooltipText.StartsWith($"{ShownAbility(7,"The One Ring")}\n");
                 _focus = _structureViews[10000].Root.GlobalPosition+new Vector3(-40,0,30); UpdateCamera();
                 GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left,Pressed = true,DoubleClick = true,Position = Portrait(),GlobalPosition = Portrait() },true); break;
             case 764: Release(Portrait()); break;

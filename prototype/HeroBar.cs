@@ -76,7 +76,7 @@ public partial class HeroBar : Control
             float top = (index == SummonSlot ? SpecialTop : Top+index*Step)*768*scale;
             slot.Portrait.Position = new(X(Left),top); slot.Portrait.Size = new Vector2(Width*1024,PortraitHeight*768)*scale;
             slot.Frame.Size = slot.Portrait.Size;
-            slot.Portrait.Icon = portrait(CommandPanel.PortraitName(hero.Definition.DisplayName));
+            slot.Portrait.Icon = portrait(CommandPanel.PortraitName(hero.Definition.Name));
             slot.Portrait.SelfModulate = fallen ? new Color(.35f,.35f,.35f) : Colors.White;
             slot.Bars.Position = new(X(Left),top+BarTop*768*scale); slot.Bars.Size = new Vector2(Width*1024,BarsHeight*768)*scale;
             float health = Math.Clamp(hero.HealthMilli/(float)(hero.MaxHealth*1000L),0,1);

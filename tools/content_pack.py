@@ -15,6 +15,7 @@ from pathlib import Path
 import blood_effects
 import combat_rules
 import game_audio
+import game_text
 import lmd
 import lsk
 import prototype_interface
@@ -98,6 +99,9 @@ def build(output=PACK, install=None):
     combat_rules.export(output, resolver, roster=roster)
     blood_effects.export(output, resolver, roster)
     game_audio.export(output, resolver, roster=roster)
+    # Build-183: the install's own text tables, their language and the text refs of records and maps. The game reads the
+    # file by its fixed path and `game_text.py --pack` refreshes it alone, so it stays out of the hashed pack files.
+    text_file, language, _ = game_text.export(output, resolver, Path(install).resolve() if install else game_text.INSTALL)
     places = places_of_power.export(resolver)
     places_of_power.export_models(output, resolver, places)
     rules = json.loads((output / 'combat/rules.json').read_text())
@@ -110,6 +114,7 @@ def build(output=PACK, install=None):
     pack = {'format_version': FORMAT_VERSION, 'faction': 'good', 'factions': faction_data(resolver, workers),
             'team_colors': prepare_prototype.team_colors(resolver), 'models': models,
             'combat_rules': 'combat/rules.json', 'blood': 'combat/blood.json', 'interface': 'interface/index.json', 'audio': 'audio/index.json',
+            'text': text_file, 'language': language,
             'bodies': [{'BodyRadiusMm': r, 'BodyHeightMm': h} for r, h in sorted(bodies)],
             'rules': 'Imported combat stats, construction, upgrades, training and research of the Good faction.',
             'skirmish': {'start_state': {'food': variables['DefaultInitialFood'], 'ore': variables['DefaultInitialOre'], 'population': workers,
@@ -144,5 +149,6 @@ if __name__ == '__main__':
     parser.add_argument('--install', type=Path)
     args = parser.parse_args()
     pack = build(args.out, args.install)
+    print('Text language: %s (%s)' % (pack['language'], pack['text']))
     print('Content pack: %d units, %d buildings, %d techniques, %d bodies -> %s' % (len(pack['models']),
           len(set(pack['skirmish']['building_files'])), len(pack['skirmish']['research']['techniques']), len(pack['bodies']), args.out))

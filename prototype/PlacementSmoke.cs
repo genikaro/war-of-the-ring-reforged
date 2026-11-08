@@ -113,8 +113,8 @@ public partial class Main
                 _placementChecks["advanced_page_holds_tiers_2_and_3_in_palette_order"] = _buildMenu && PageChoices().Select(c => c.Building).SequenceEqual(
                         ["BUILDING_G_SKILLS_STRUCTURE","BUILDING_G_RANGER_BARRACKS","BUILDING_G_ARMORY","BUILDING_G_STABLES","BUILDING_G_ELF_BARRACKS","BUILDING_G_HOSPITAL"])
                     && PageChoices().All(c => _commands.ConstructionButton(c.Building) is { Visible: true,Icon: not null,Disabled: true })
-                    && _commands.ConstructionButton("BUILDING_G_SKILLS_STRUCTURE").TooltipText.Contains("Requires Citadel 2")
-                    && _commands.ConstructionButton("BUILDING_G_HOSPITAL").TooltipText.Contains("Requires Citadel 3");
+                    && _commands.ConstructionButton("BUILDING_G_SKILLS_STRUCTURE").TooltipText.Contains($"Requires {Shown("BUILDING_G_TOWN_CENTER_LEVEL_2","Citadel 2")}")
+                    && _commands.ConstructionButton("BUILDING_G_HOSPITAL").TooltipText.Contains($"Requires {Shown("BUILDING_G_TOWN_CENTER_LEVEL_3","Citadel 3")}");
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-advanced.png");
                 PushKey(Key.Escape); break;
             case 40:
@@ -137,7 +137,7 @@ public partial class Main
                 _placementChecks["barracks_complete_with_source_health"] = barracks is { Complete: true,Health: 700 } && _constructionViews[barracks.Id].Stage == 3;
                 _focus = PositionOf(barracks!.X,barracks.Z); UpdateCamera(); Click(StructureSmokePoint(barracks.Obstacle)); break;
             case 1502:
-                _placementChecks["barracks_offers_swordsman_training"] = SelectedStructureDetails() is { Name: "Barracks",Health: 700,UnderConstruction: false }
+                _placementChecks["barracks_offers_swordsman_training"] = SelectedStructureDetails() is { Health: 700,UnderConstruction: false } shown140 && shown140.Name == Shown("BUILDING_G_GONDORIAN_BARRACKS","Barracks")
                     && _commands.TrainButton(0) is { Visible: true,Disabled: false,Icon: not null }
                     // Build-45: the Rider waits, locked, until Citadel 2.
                     && _commands.TrainButton(1) is { Visible: true,Disabled: true } && !_commands.TrainButton(2).Visible
@@ -183,7 +183,7 @@ public partial class Main
                 var selected = world.Units.LastOrDefault(u => u.Team == 0 && u.Definition.Name == "UNIT_G_GONDOR_SWORDSMAN");
                 var stats = selected == null ? null : Reforged.Presentation.UnitHudStats.From(selected,_rules);
                 _placementChecks["swordsman_selectable_with_source_stats"] = selected != null && _selected.SetEquals([selected.Id]) && _commands.SingleUnitDetailsVisible
-                    && _commands.DisplayedName == "Gondor Swordsman" && _commands.DisplayedHealth == "155/155" && stats is { Attack: "10",Armor: "0" }
+                    && _commands.DisplayedName == Shown("UNIT_G_GONDOR_SWORDSMAN","Gondor Swordsman") && _commands.DisplayedHealth == "155/155" && stats is { Attack: "10",Armor: "0" }
                     // Build-62: Attack is damage per hit; the row's tooltip has the source 10 damage per second.
                     && _commands.DisplayedAttack == "10"
                     && _commands.DisplayedAttackTip == "Damage per hit: 10\nDamage per second: 10\nAttack speed: very fast (a hit every 0.96 s)"

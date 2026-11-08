@@ -2,6 +2,7 @@ using Godot;
 using Reforged.Simulation;
 using System.Globalization;
 using System.Text.Json;
+using Reforged.Presentation;
 
 /// <summary>Places of power in the game (build-54): the source places from the content pack, the map's place objects, the
 /// match seed that picks a random place (--seed=N; the setup screen draws one per match and Restart keeps it), the control
@@ -33,7 +34,7 @@ public partial class Main
         }
         foreach (var item in places.GetProperty("objects").EnumerateObject())
         {
-            world.PlaceObjects.Add(item.Name,(item.Value.GetProperty("display_name").GetString()!,
+            world.PlaceObjects.Add(item.Name,(GameText.Name(item.Name,item.Value.GetProperty("display_name").GetString()!),
                 [.. item.Value.GetProperty("places").EnumerateArray().Select(p => p.GetInt32())]));
             _placeModels.Add(item.Name,item.Value.GetProperty("file").GetString()!);
             var power = item.Value.GetProperty("power");

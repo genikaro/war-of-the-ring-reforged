@@ -1,6 +1,7 @@
 using Godot;
 using Reforged.Simulation;
 using System.Text.Json;
+using Reforged.Presentation;
 
 /// <summary>Building training controls, rally points and the source rally banner.</summary>
 public partial class Main
@@ -17,7 +18,7 @@ public partial class Main
         foreach (var unit in production.GetProperty("units").EnumerateObject().Where(u => Loaded(u.Name)))
         {
             var rules = unit.Value;
-            world.ProductionRules.Add(unit.Name,new(unit.Name,rules.GetProperty("display_name").GetString()!,rules.GetProperty("food_cost").GetInt32(),
+            world.ProductionRules.Add(unit.Name,new(unit.Name,GameText.Name(unit.Name,rules.GetProperty("display_name").GetString()!),rules.GetProperty("food_cost").GetInt32(),
                 rules.GetProperty("ore_cost").GetInt32(),rules.GetProperty("population").GetInt32(),rules.GetProperty("duration_ticks").GetInt32(),
                 rules.TryGetProperty("unique",out var unique) && unique.GetBoolean(),
                 // Build-44 exports each unit's source BuildingRequired list.

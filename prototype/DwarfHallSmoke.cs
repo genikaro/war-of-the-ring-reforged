@@ -48,7 +48,7 @@ public partial class Main
                 _dwarfChecks["dwarf_hall_complete_with_source_health"] = hall is { Complete: true,Health: 750 };
                 _focus = PositionOf(hall!.X,hall.Z); UpdateCamera(); Click(StructureSmokePoint(hall.Obstacle)); break;
             case 762:
-                _dwarfChecks["dwarf_hall_offers_axethrower"] = SelectedStructureDetails() is { Name: "Dwarf Hall",Health: 750 }
+                _dwarfChecks["dwarf_hall_offers_axethrower"] = SelectedStructureDetails() is { Health: 750 } shown51 && shown51.Name == Shown("BUILDING_G_DWARF_BARRACKS","Dwarf Hall")
                     && _commands.TrainButton(0) is { Visible: true,Disabled: false,Icon: not null } && world.Producers.ContainsKey(Hall()!.Id)
                     && world.Producers[Hall()!.Id].Units.SequenceEqual([SmokeAxethrower,"UNIT_G_DWARVEN_SHIELDBREAKER"]) && _commands.TrainButton(1).Disabled;
                 Click(_commands.TrainButton(0).GetGlobalRect().GetCenter()); break;
@@ -68,7 +68,7 @@ public partial class Main
                 var victim = world.Units.Where(u => u.Team == 0 && u.Health > 0 && world.Workers.ContainsKey(u.Definition.Name)
                     && UnitAt(_camera.UnprojectPosition(UnitPosition(u)+Vector3.Up))?.Id == u.Id)
                     .MinBy(u => SimWorld.DistanceSquared(u.X,u.Z,world.Units[_dwarfTrained].X,world.Units[_dwarfTrained].Z));
-                _dwarfChecks["axethrower_selected_with_source_stats"] = _selected.SetEquals([_dwarfTrained]) && _commands.DisplayedName == "Dwarf Axethrower"
+                _dwarfChecks["axethrower_selected_with_source_stats"] = _selected.SetEquals([_dwarfTrained]) && _commands.DisplayedName == Shown("UNIT_G_DWARVEN_AXETHROWER","Dwarf Axethrower")
                     && _commands.DisplayedHealth == "140/140" && victim != null;
                 _dwarfChecks["axe_passives_visible_but_locked"] = new[] {2,3}.All(slot => _commands.AbilityButton(slot) is { Visible: true,Disabled: true,Icon: not null }
                     && _commands.AbilityButton(slot).GetThemeColor("icon_disabled_color").R < .5f
