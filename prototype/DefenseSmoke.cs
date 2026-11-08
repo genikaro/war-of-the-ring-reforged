@@ -125,7 +125,7 @@ public partial class Main
                     fixture = "Bank top-up, instant construction, enemy swordsmen spawned beside the tower in two waves",
                     tower = _defenseTower,hits = _defenseHits,kills = _defenseKills,provoked = _defenseProvoked,origin_error_m = _defenseOriginError,
                     first_wave = _defenseSnapshot,ruin_tick = _defenseRuinTick,last_release = _defenseLastRelease,
-                    ticks = world.Tick,status = _status.Text,digest = world.StateDigest() };
+                    ticks = world.Tick,status = _status,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"defense-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("DEFENSE_SMOKE "+JsonSerializer.Serialize(report)); _defensePhase = 6;

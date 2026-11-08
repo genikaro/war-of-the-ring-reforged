@@ -47,7 +47,7 @@ public partial class Main
 
     private void Notify(string text)
     {
-        _status.Text = text; _commands.ShowNotice(text);
+        _status = text; _commands.ShowNotice(text);
         if (AudioSelection.FirstOrDefault() is { } speaker) _audio.Speak(speaker.Definition.Name,9);
     }
 

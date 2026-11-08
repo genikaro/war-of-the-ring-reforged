@@ -268,7 +268,7 @@ public partial class Main
                 PushKey(Key.Q); Next(); break;
             case 13:
                 if (!Wait(4)) break;
-                _evilChecks["prison_of_ice_asks_for_an_enemy"] = _orders.Pending == OrderKind.UseAbility && _status.Text.Contains("enemy");
+                _evilChecks["prison_of_ice_asks_for_an_enemy"] = _orders.Pending == OrderKind.UseAbility && _status.Contains("enemy");
                 Click(_camera.UnprojectPosition(UnitPosition(world.Units[_evilVictim])+Vector3.Up)); Next(); break;
             case 14:
                 if (!Wait(100)) break;
@@ -338,7 +338,7 @@ public partial class Main
                 PushKey(Key.Q); Next(); break;
             case 23:
                 if (!Wait(4)) break;
-                _evilChecks["shadow_bind_asks_for_a_wraith"] = _orders.Pending == OrderKind.UseAbility && _status.Text.Contains("Wraith");
+                _evilChecks["shadow_bind_asks_for_a_wraith"] = _orders.Pending == OrderKind.UseAbility && _status.Contains("Wraith");
                 Click(_camera.UnprojectPosition(UnitPosition(world.Units[_evilWraith])+Vector3.Up)); Next(); break;
             case 24:
                 if (!Wait(110)) break;
@@ -391,7 +391,7 @@ public partial class Main
                 PushKey(Key.W); Next(); break;
             case 30:
                 if (!Wait(4)) break;
-                _evilChecks["blood_mark_asks_for_an_ally_or_a_war_post"] = _orders.Pending == OrderKind.UseAbility && _status.Text.Contains("War Post");
+                _evilChecks["blood_mark_asks_for_an_ally_or_a_war_post"] = _orders.Pending == OrderKind.UseAbility && _status.Contains("War Post");
                 Click(_camera.UnprojectPosition(UnitPosition(world.Units[_evilPatient])+Vector3.Up)); Next(); break;
             case 31:
                 if (!Wait(80)) break;
@@ -467,7 +467,7 @@ public partial class Main
                 PushKey(Key.E); Next(); break;
             case 40:
                 if (!Wait(4)) break;
-                _evilChecks["torch_asks_for_an_enemy_building"] = _orders.Pending == OrderKind.UseAbility && _status.Text.Contains("building");
+                _evilChecks["torch_asks_for_an_enemy_building"] = _orders.Pending == OrderKind.UseAbility && _status.Contains("building");
                 _evilTargetHealth = world.ConstructionSites[_evilTarget].Health; Click(StructureSmokePoint(world.ConstructionSites[_evilTarget].Obstacle)); Next(); break;
             case 41:
                 if (!Wait(260)) break;
@@ -768,7 +768,7 @@ public partial class Main
         void Finish()
         {
             var report = new { build = BuildInfo.Label,checks = _evilChecks,passed = _evilChecks.Count >= 24 && _evilChecks.Values.All(v => v),notes = _evilNotes,
-                population = new { used = world.PopulationUsed(0),capacity = world.PopulationCapacity(0) },status = _status.Text,tick = world.Tick,digest = world.StateDigest() };
+                population = new { used = world.PopulationUsed(0),capacity = world.PopulationCapacity(0) },status = _status,tick = world.Tick,digest = world.StateDigest() };
             System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"evil-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
             GD.Print("EVIL_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1);
         }
@@ -818,7 +818,7 @@ public partial class Main
                 var bodyNav = world.Navigation.ForBody(slasher.BodyRadiusMm,slasher.BodyHeightMm);
                 _evilGarrison = [.. Enumerable.Range(0,2).Select(i => world.Spawn(0,bodyNav.Nearest(bodyNav.Cell(tower.X+6000+i*1500,tower.Z+5000)),slasher).Id)];
                 _selected.Clear(); _selected.UnionWith(_evilGarrison); FocusStructure(tower.Obstacle);
-                _evilChecks["tower_right_click_garrisons"] = TryOwnStructure(tower.Obstacle,false) && _status.Text.StartsWith("Garrison");
+                _evilChecks["tower_right_click_garrisons"] = TryOwnStructure(tower.Obstacle,false) && _status.StartsWith("Garrison");
                 _evilBurnSite = tower.Id; _evilHudStep = 5; break;
             case 5:
                 var garrisoned = world.ConstructionSites[_evilBurnSite];
@@ -830,7 +830,7 @@ public partial class Main
                 _evilChecks["tower_panel_shows_four_garrison_boxes"] = Enumerable.Range(0,4).All(i => _commands.GarrisonBox(i).IsVisibleInTree())
                     && _commands.GarrisonBox(0).Icon != null && _commands.GarrisonBox(1).Icon != null && _commands.GarrisonBox(2).Icon == null
                     && _evilGarrison.Contains(_commands.GarrisonBoxUnit(0));
-                _evilNotes["garrison"] = $"count={world.GarrisonCount(held)} boxes={string.Join(',',Enumerable.Range(0,4).Select(_commands.GarrisonBoxUnit))} status={_status.Text}";
+                _evilNotes["garrison"] = $"count={world.GarrisonCount(held)} boxes={string.Join(',',Enumerable.Range(0,4).Select(_commands.GarrisonBoxUnit))} status={_status}";
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-garrison.png");
                 _evilGarrisonLeaver = _commands.GarrisonBoxUnit(0);
                 Click(_commands.GarrisonBox(0).GetGlobalRect().GetCenter()); _evilHudStep = 7; break;

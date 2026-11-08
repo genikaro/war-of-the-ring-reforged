@@ -12,7 +12,7 @@ public partial class Main
         CancelTargeting(); OpenBuildMenu(false);
         _pendingPlacePower = id; _orders.Begin(OrderKind.UsePlacePower);
         _dragging = false; _hud.SelectionBox = null;
-        _status.Text = PlaceAt(id)!.Name+": choose a point on the battlefield";
+        _status = PlaceAt(id)!.Name+": choose a point on the battlefield";
     }
 
     private void TargetPlacePower(Vector2 point)
@@ -25,7 +25,7 @@ public partial class Main
         { Notify("Choose ground within range of this place"); return; }
         string name = PlaceAt(_pendingPlacePower)!.Name;
         _world.EnqueuePlacePower(PlayerTeam,_pendingPlacePower,ground.Node,x,z);
-        CancelTargeting(); _status.Text = name+(_paused ? " queued (paused)" : " cast");
+        CancelTargeting(); _status = name+(_paused ? " queued (paused)" : " cast");
     }
 
     private void UpdatePlacePowerCursor(bool overInterface)

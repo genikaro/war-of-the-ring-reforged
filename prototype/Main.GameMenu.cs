@@ -32,7 +32,7 @@ public partial class Main
         _gameMenu.SettingsApplied += (settings,interfaceScale) => {
             UseSettings(settings); _commands.SetScalePercent(interfaceScale);
             if (!AutomatedRun) settings.Save();
-            _status.Text = "Settings applied";
+            _status = "Settings applied";
         };
         UseSettings(AutomatedRun ? new() : GameSettings.Load());
         if (GameAudio.SessionMuted) GD.Print("Debug session: audio is muted (run.ps1 -Unmuted, or --unmuted, plays it).");

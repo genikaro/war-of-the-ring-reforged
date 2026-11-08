@@ -3,10 +3,10 @@ using Godot;
 public partial class Main
 {
     private PanelContainer _toolsPanel = null!;
-    private readonly Dictionary<string,Button> _cameraButtons = [];
-    private Label _debugSummary = null!, _debugSelection = null!;
-    private Button _debugPause = null!, _debugStep = null!, _debugFocus = null!, _debugGrant = null!, _setupButton = null!;
-    private CheckButton _debugInstant = null!,_debugReveal = null!;
+    private VBoxContainer _debugBody = null!;
+    private Label _debugSummary = null!;
+    private Button _debugPause = null!, _debugStep = null!, _debugGrant = null!, _setupButton = null!;
+    private CheckButton _debugInstant = null!,_debugReveal = null!,_debugUnitCurrentAction = null!;
     private DebugToggle _debugToggle = null!;
     private const int CheatGrant = 1000;
     /// <summary>Fate the cheat grants: enough for a Fate hero (3-4) twice over.</summary>
@@ -45,10 +45,9 @@ public partial class Main
         var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
         root.AddChild(scroll);
-        var body = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        var body = _debugBody = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         body.AddThemeConstantOverride("separation",8); scroll.AddChild(body);
         _debugSummary = DebugText(""); body.AddChild(_debugSummary);
-        _debugSelection = DebugText(""); body.AddChild(_debugSelection);
         var session = new HBoxContainer(); body.AddChild(session);
         _debugPause = DebugButton("Pause",() => SetPaused(!_paused)); session.AddChild(_debugPause);
         _debugStep = DebugButton("Step one tick",() => { if (_paused) _singleStepRequested = true; });
@@ -56,48 +55,30 @@ public partial class Main
         session.AddChild(DebugButton("Restart encounter",() => _ = ReloadWithAudio()));
         _setupButton = DebugButton("Skirmish setup",ReturnToSetup); _setupButton.TooltipText = "Back to the setup screen, keeping this match's choices.";
         session.AddChild(_setupButton);
-        body.AddChild(new HSeparator()); body.AddChild(DebugText("Camera"));
-        var views = new HBoxContainer(); body.AddChild(views);
-        foreach (var (view,label) in new[] { ("squad","All squads"),("fortress","Fortress"),("overview","Whole map") })
-        {
-            var button = DebugButton(label,() => SetCameraView(view));
-            _cameraButtons[view] = button; views.AddChild(button);
-        }
-        _debugFocus = DebugButton("Focus selection",() => {
-            var units = _world!.Units.Where(u => u.Health > 0 && _selected.Contains(u.Id)).ToArray();
-            if (units.Length == 0) return;
-            _focus = units.Select(UnitPosition).Aggregate(Vector3.Zero,(sum,p) => sum+p)/units.Length;
-            UpdateCamera();
-        });
-        views.AddChild(_debugFocus);
-        var rotation = new HBoxContainer(); body.AddChild(rotation);
-        foreach (var (name,label,step) in new[] { ("rotate-left","Rotate left",-.25f),("rotate-right","Rotate right",.25f) })
-        {
-            var button = DebugButton(label,() => { _yaw += step; UpdateCamera(); });
-            _cameraButtons[name] = button; rotation.AddChild(button);
-        }
+        _debugUnitCurrentAction = new CheckButton { Text = "Show unit current action", FocusMode = Control.FocusModeEnum.None,
+            TooltipText = "Show the selected unit's current order beside its portrait in the HUD." };
+        _debugUnitCurrentAction.Toggled += on => _commands.SetUnitCurrentActionVisible(on);
+        body.AddChild(_debugUnitCurrentAction);
         body.AddChild(new HSeparator()); body.AddChild(DebugText("Cheats"));
         var cheats = new HBoxContainer(); body.AddChild(cheats);
         _debugGrant = DebugButton($"+{CheatGrant} food and ore, +{CheatFate} Fate",() => {
             foreach (int team in CheatTeams) _world!.GrantResources(team,CheatGrant,CheatFate);
             if (_skirmish) ApplySkirmishHud(_commands);
-            _status.Text = $"Cheat: +{CheatGrant} food, +{CheatGrant} ore and +{CheatFate} Fate";
+            _status = $"Cheat: +{CheatGrant} food, +{CheatGrant} ore and +{CheatFate} Fate";
         });
         _debugGrant.TooltipText = "Credit your bank immediately, up to its storage limit."; cheats.AddChild(_debugGrant);
         _debugInstant = new CheckButton { Text = "Build and train instantly", FocusMode = Control.FocusModeEnum.None,
             TooltipText = "Your foundations complete as soon as a worker is assigned, and training finishes on the next tick." };
         _debugInstant.Toggled += on => {
             foreach (int team in CheatTeams) if (on) _world!.InstantBuildTeams.Add(team); else _world!.InstantBuildTeams.Remove(team);
-            _status.Text = on ? "Cheat: instant building and training on" : "Cheat: instant building and training off";
+            _status = on ? "Cheat: instant building and training on" : "Cheat: instant building and training off";
         };
         cheats.AddChild(_debugInstant);
         // Build-150: shows everything without changing what any side's simulation knows.
         _debugReveal = new CheckButton { Text = "Reveal map", FocusMode = Control.FocusModeEnum.None,
             TooltipText = "Show the whole map through the fog of war. Bots and your units still know only what they have seen." };
-        _debugReveal.Toggled += on => { _revealMap = on; _status.Text = on ? "Map revealed" : "Fog of war shown again"; };
+        _debugReveal.Toggled += on => { _revealMap = on; _status = on ? "Map revealed" : "Fog of war shown again"; };
         cheats.AddChild(_debugReveal);
-        body.AddChild(new HSeparator()); body.AddChild(DebugText("Last action"));
-        _status = DebugText("Loading assets…"); body.AddChild(_status);
     }
 
     private void ToggleDebugMenu()
@@ -122,26 +103,20 @@ public partial class Main
 
     private void RefreshDebugMenu()
     {
-        var viewport = GetViewport().GetVisibleRect().Size;
-        _toolsPanel.Size = new(Math.Max(160,Math.Min(600,viewport.X-32)),
-            Math.Max(120,viewport.Y-_commands.Size.Y-48));
         bool ready = _world != null && !_loadFailed;
-        foreach (var button in _cameraButtons.Values) button.Disabled = !ready;
+        var viewport = GetViewport().GetVisibleRect().Size;
+        float contentHeight = _toolsPanel.GetCombinedMinimumSize().Y + _debugBody.GetCombinedMinimumSize().Y;
+        float maxHeight = Math.Max(120,viewport.Y-_commands.Size.Y-48);
+        _toolsPanel.Size = new(Math.Max(160,Math.Min(600,viewport.X-32)),ready ? Math.Min(contentHeight,maxHeight) : maxHeight);
         _debugPause.Disabled = !ready;
         _debugStep.Disabled = !ready || !_paused;
-        _debugFocus.Disabled = !ready;
         bool economy = ready && CheatTeams.All(_world!.Economies.ContainsKey);
         _debugGrant.Disabled = _debugInstant.Disabled = !economy;
-        if (!ready) { _debugSummary.Text = "Encounter unavailable"; _debugSelection.Text = ""; return; }
+        if (!ready) { _debugSummary.Text = _status; return; }
         var world = _world!;
         _debugInstant.SetPressedNoSignal(CheatTeams.All(world.InstantBuildTeams.Contains));
         _debugReveal.Disabled = !world.FogOfWar || _observing; _debugReveal.SetPressedNoSignal(_revealMap);
         _debugSummary.Text = $"{(_paused ? "Paused" : "Running")} · Tick {world.Tick} · 20 ticks/s"+(_skirmish ? "\n"+AiSummary() : "");
-        var units = world.Units.Where(u => u.Health > 0 && _selected.Contains(u.Id)).ToArray();
-        _debugSelection.Text = units.Length == 0 ? "No units selected" :
-            $"{units.Length} selected · {units.Count(u => u.StrikeActive)} attacking · {units.Count(u => u.Walking)} walking · {units.Sum(u => u.OrderQueue.Count)} queued orders\n"+
-            string.Join(" · ",units.GroupBy(u => u.Order).Select(g => $"{CommandPanel.OrderName(g.Key)} ×{g.Count()}"));
         _debugPause.Text = _paused ? "Resume" : "Pause";
-        _debugFocus.Disabled = units.Length == 0;
     }
 }

@@ -69,7 +69,7 @@ public partial class Main
         {
             if (!_world.CanPurchaseAbility(PlayerTeam,caster.Id,slot,out string reason)) { Notify(reason); return; }
             _world.EnqueueAbilityPurchase(PlayerTeam,caster.Id,slot);
-            _status.Text = ability.Name+" unlocked"+(_paused ? " (queued while paused)" : ""); return;
+            _status = ability.Name+" unlocked"+(_paused ? " (queued while paused)" : ""); return;
         }
         if (caster.Negated != null) { Notify(ability.Name+": abilities are disabled by Negate Ability"); return; }
         if (!caster.AbilityEnabled(ability)) { Notify(ability.Name+": research at the "+(ability.Kind is AbilityKind.Camouflage or AbilityKind.EagleEye or AbilityKind.ElvenCloak or AbilityKind.EagleFletching ? "Wilderness Outpost" : ability.Kind is AbilityKind.Dispel or AbilityKind.SearingLight or AbilityKind.Morph or AbilityKind.SavageBlow or AbilityKind.Treeform ? "House of Lore" : "Forge")+" first"); return; }
@@ -79,19 +79,19 @@ public partial class Main
             CancelTargeting();
             // Source GroupActivate: Camouflage serves all selected Rangers, as dummy buttons serve all selected dummies.
             _world.EnqueueAbility(PlayerTeam,candidates.Where(u => u.Ability(slot)?.Kind == ability.Kind).Select(u => u.Id),slot,-1);
-            _status.Text = ability.Name+(_paused ? " queued (paused)" : ""); return;
+            _status = ability.Name+(_paused ? " queued (paused)" : ""); return;
         }
-        if (ability.Passive) { _status.Text = ability.Name+" is passive"; return; }
+        if (ability.Passive) { _status = ability.Name+" is passive"; return; }
         if (ability.Kind == AbilityKind.Ring)
         {
             CancelTargeting();
             _world.EnqueueAbility(PlayerTeam,[caster.Id],slot,-1);
-            _status.Text = ability.Name+(caster.RingActive ? " removed" : " worn")+(_paused ? " (paused)" : ""); return;
+            _status = ability.Name+(caster.RingActive ? " removed" : " worn")+(_paused ? " (paused)" : ""); return;
         }
         bool detonation = ability.Kind == AbilityKind.SatchelCharge && _world.Satchels.Any(b => b.Owner == caster.Id);
         if (!detonation && (caster.Casting && !(ability.Kind == AbilityKind.HealingHerbs && caster.RedirectableHerbs)
             || caster.NatureLocked(_world.Tick) || caster.AbilityReadyAt[slot] > _world.Tick))
-        { _status.Text = ability.Name+" is recharging"; return; }
+        { _status = ability.Name+" is recharging"; return; }
         if (ability.ActivateFateCost > 0 && !(_world.Economies.TryGetValue(PlayerTeam,out var bank) && bank.Fate >= ability.ActivateFateCost))
         { Notify(ability.Name+" needs "+ability.ActivateFateCost+" Fate"); return; }
         if (!_world.CanAffordAbility(caster,ability))
@@ -102,13 +102,13 @@ public partial class Main
             // Guardian Wind is cast on the spot: no target to choose.
             _world.EnqueueAbility(PlayerTeam,ability.Kind is AbilityKind.Morph or AbilityKind.Treeform
                 ? candidates.Where(u => u.Ability(slot)?.Id == ability.Id).Select(u => u.Id) : [caster.Id],slot,caster.Id);
-            _status.Text = ability.Name+(detonation ? " detonated" : "")+(_paused ? " queued (paused)" : ""); return;
+            _status = ability.Name+(detonation ? " detonated" : "")+(_paused ? " queued (paused)" : ""); return;
         }
         _pendingAbilityCaster = caster.Id; _pendingAbilitySlot = slot;
         ReserveHerbsTargeting(ability.Kind == AbilityKind.HealingHerbs ? caster.Id : -1);
         ClearConstructionTargeting();
         _orders.Begin(OrderKind.UseAbility); _dragging = false; _hud.SelectionBox = null;
-        _status.Text = ability.Name+AbilityTargetPrompt(ability);
+        _status = ability.Name+AbilityTargetPrompt(ability);
     }
 
     private void TargetAbility(Vector2 point)
@@ -118,39 +118,39 @@ public partial class Main
         if (ability?.BuildingTarget == true)
         {
             if (CaptureSiteAt(point) is not { } site || !_world.ValidCaptureTarget(caster,ability,site))
-            { _status.Text = ability.Name+AbilityTargetPrompt(ability); return; }
+            { _status = ability.Name+AbilityTargetPrompt(ability); return; }
             _world.EnqueueAbility(PlayerTeam,[caster.Id],ability.Slot,site); _orders.Cancel();
-            _status.Text = ability.Name+(_paused ? " queued (paused)" : ""); return;
+            _status = ability.Name+(_paused ? " queued (paused)" : ""); return;
         }
         if (ability?.GroundTarget == true)
         {
             if (AbilityGroundAt(point) is not { } ground || !_world.ValidGroundAbilityTarget(caster,ability,ground.Node))
-            { _status.Text = ability.Name+": choose a reachable point on the battlefield"; return; }
+            { _status = ability.Name+": choose a reachable point on the battlefield"; return; }
             if (caster.AbilityReadyAt[ability.Slot] > _world.Tick || caster.Casting) { CancelTargeting(); return; }
             _world.EnqueueGroundAbility(PlayerTeam,caster.Id,ability.Slot,ground.Node,(int)(ground.Position.X*1000),(int)(ground.Position.Z*1000));
             _orders.Cancel(); if (_abilityAreaPreview != null) _abilityAreaPreview.Visible = false;
-            _status.Text = ability.Name+(_paused ? " queued (paused)" : ""); return;
+            _status = ability.Name+(_paused ? " queued (paused)" : ""); return;
         }
         if (ability?.Kind == AbilityKind.BloodMark && UnitAt(point) == null)
         {
             // The post half of Blood Mark: one of the caster's own War Posts, cast as a ground order at the post.
-            if (BloodPostAt(point,caster) is not { } post) { _status.Text = ability.Name+AbilityTargetPrompt(ability); return; }
+            if (BloodPostAt(point,caster) is not { } post) { _status = ability.Name+AbilityTargetPrompt(ability); return; }
             if (caster.AbilityReadyAt[ability.Slot] > _world.Tick || caster.Casting) { CancelTargeting(); return; }
             var nav = _world.Navigation.ForBody(caster.Definition.BodyRadiusMm,caster.Definition.BodyHeightMm);
             int stand = nav.Nearest(_world.Navigation.Cell(post.X,post.Z),connectedTo: caster.Node);
-            if (stand < 0) { _status.Text = ability.Name+": the War Post cannot be reached"; return; }
+            if (stand < 0) { _status = ability.Name+": the War Post cannot be reached"; return; }
             _world.EnqueueGroundAbility(PlayerTeam,caster.Id,ability.Slot,stand,post.X,post.Z); _orders.Cancel();
-            _status.Text = ability.Name+(_paused ? " queued (paused)" : ""); return;
+            _status = ability.Name+(_paused ? " queued (paused)" : ""); return;
         }
         var target = UnitAt(point);
         if (ability == null || target == null || !_world.ValidAbilityTarget(caster,ability,target))
-        { _status.Text = ability?.Name+(ability == null ? "" : AbilityTargetPrompt(ability)); return; }
+        { _status = ability?.Name+(ability == null ? "" : AbilityTargetPrompt(ability)); return; }
         if (caster.AbilityReadyAt[ability.Slot] > _world.Tick || caster.Casting && !(ability.Kind == AbilityKind.HealingHerbs && caster.RedirectableHerbs)) { CancelTargeting(); return; }
         if (!_world.Navigation.ForBody(caster.Definition.BodyRadiusMm,caster.Definition.BodyHeightMm).IsConnected(caster.Node,target.Node))
-        { _status.Text = ability.Name+": target cannot be reached"; return; }
+        { _status = ability.Name+": target cannot be reached"; return; }
         _world.EnqueueAbility(PlayerTeam,[caster.Id],ability.Slot,target.Id); _orders.Cancel();
         ReserveHerbsTargeting(-1);
-        _status.Text = ability.Name+(_paused ? " queued (paused)" : "");
+        _status = ability.Name+(_paused ? " queued (paused)" : "");
     }
 
     private void PlayAbilitySound(int[]? events,int index,Vector3 position)

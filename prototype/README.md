@@ -985,7 +985,6 @@ caches and Helm's Deep.
 | Alt + right-click a placed obstacle | Remove it; click the same space again to restore it |
 | Arrow keys / screen edges / middle-drag | Pan the camera; rest the pointer on any window edge or corner |
 | Left-click or drag on the minimap | Move the camera there; the white outline shows the visible ground |
-| Menu: Rotate left / Rotate right | Rotate the camera |
 | Mouse wheel | Zoom |
 | Space | Pause/resume simulation and unit animation |
 | - / + | Game speed down / up (1x, 2x, 4x, 8x, 16x) |
@@ -998,7 +997,6 @@ caches and Helm's Deep.
 | Esc | Cancel targeting; then close the build page; otherwise clear selection. In the game menu: back out (Settings drops changes, Main Menu resumes) |
 | Right-click while targeting | Cancel targeting and retain the current order |
 | Restart sandbox | Reset the encounter |
-| Debug tools: All squads / Fortress / Whole map / Focus selection | Frame a comparison view or the current selection |
 | Console Menu button | Open the game menu (pauses play): Settings, Exit, Resume |
 | F4 / Debug button (top right) | Open/close debug tools |
 | F10 | Show/hide the debug UI |
@@ -1006,16 +1004,15 @@ caches and Helm's Deep.
 Control policy (user decision): **Q/W/E/R for abilities 1–4** and **F2 for
 walk/run**, retaining S Stop. These are intentional differences from the
 original game's bindings. Q/E rotation and F1/F2/F3 camera shortcuts have been
-removed; camera buttons and launch-time `-View` captures remain available. The
+removed. Launch-time `-View` captures remain available. The
 Aragorn's Q heal, W/E passives and global Walk/Run are implemented. See
 [command plans](COMMANDS.md#planned-corrections-from-the-local-original-game-session).
 
-The debug menu has live pause/tick and selected-order information, Pause/Resume,
-Step one tick (50 ms while paused), Restart encounter, camera view/rotation
-buttons and Focus selection. In a skirmish its Cheats section adds 1000 food and
-ore or makes your building and training instant. The last action is labeled
-separately from live state. The menu scrolls to fit above the console. Opening
-it does not pause play. The interface size, health bar options and shortcut guide
+Debug tools shows the live pause state and tick. It includes Pause/Resume, Step
+one tick (50 ms while paused), Restart encounter and the **Show unit current
+action** toggle. The Cheats section can grant food, ore and Fate, enable instant
+building and training, or reveal the map. The menu scrolls when needed to fit
+above the console. Opening it does not pause play. The interface size, health bar options and shortcut guide
 moved to the game menu's Settings in build-96.
 Use `./prototype/run.ps1 -DebugMenu` to start with it open, including when saving
 a normal viewport capture with `-CapturePath`.
@@ -1135,7 +1132,7 @@ The melee smoke test adds source stats, exact hit timing, animation seeks,
 equipment changes and impact playback. It writes `melee-smoke-report.json` and
 `melee-hit-trace.json`; source-unit duel evidence is in `melee-duels-report.json`.
 The command smoke test exercises actual panel buttons and hotkeys across all
-three blue squads. Its 34 checks cover enemy inspection and command protection,
+three blue squads. Its checks cover enemy inspection and command protection,
 the four bottom-row actions, target-dependent
 Attack/A, hidden Move/Stop controls, targeted and immediate orders, disabled
 commands, cancellation, mixed unit types, combat interruption, pause/resume,

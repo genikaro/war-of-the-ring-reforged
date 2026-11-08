@@ -88,7 +88,7 @@ public partial class Main
         CancelTargeting(); OpenBuildMenu(false);
         _pendingGlobalPower = slot;
         _orders.Begin(OrderKind.UseGlobalPower); _dragging = false; _hud.SelectionBox = null;
-        _status.Text = _world.GlobalPower(slot,PlayerTeam)!.Name+": choose "+(_world.GlobalPower(slot,PlayerTeam)!.Kind == GlobalPowerKind.HeroicLegacy ? "a friendly hero" : "a point on the battlefield");
+        _status = _world.GlobalPower(slot,PlayerTeam)!.Name+": choose "+(_world.GlobalPower(slot,PlayerTeam)!.Kind == GlobalPowerKind.HeroicLegacy ? "a friendly hero" : "a point on the battlefield");
     }
 
     private void TargetGlobalPower(Vector2 point)
@@ -100,7 +100,7 @@ public partial class Main
         if (_world.GlobalTargetRefusal(PlayerTeam,power,node,x,z,target?.Id ?? -1) is { Length: > 0 } refusal) { Notify(refusal); return; }
         _world.EnqueueGlobalPower(PlayerTeam,power.Slot,node,x,z,target?.Id ?? -1);
         CancelTargeting();
-        _status.Text = power.Name+(_paused ? " queued (paused)" : " cast");
+        _status = power.Name+(_paused ? " queued (paused)" : " cast");
     }
 
     private void UpdateGlobalPowerCursor(bool overInterface)

@@ -85,7 +85,7 @@ public partial class Main
                 var foodPoint = _camera.UnprojectPosition(PositionOf(well.X,well.Z));
                 GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right,Pressed = true,Position = foodPoint,GlobalPosition = foodPoint },true);
                 _skirmishChecks["raw_food_requires_mill"] = !world.Commands.Any(c => c.Kind == OrderKind.Gather)
-                    && _status.Text.Contains("Mill"); break;
+                    && _status.Contains("Mill"); break;
             case 16:
                 PushKey(Key.Key1);
                 var ore = world.Resources.Values.Where(r => r.Kind == ResourceKind.Ore)

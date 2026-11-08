@@ -16,7 +16,7 @@ public partial class Main : Node3D
     private readonly Dictionary<string,AppearanceTable> _appearanceTables = [];
     private NavigationPicker _picker = null!;
     private Camera3D _camera = null!;
-    private Label _status = null!;
+    private string _status = "Loading assets…";
     private SandboxHud _hud = null!;
     private CommandPanel _commands = null!;
     private readonly OrderInput _orders = new();
@@ -229,8 +229,8 @@ public partial class Main : Node3D
             _loadFailed = true;
             _hud.Visible = true;
             _toolsPanel.Visible = true;
+            _status = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             RefreshDebugMenu();
-            _status.Text = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
             GD.PushError(error.ToString());
             if (_placesSmoke || _economyRecoverySmoke || _performanceSmoke || _stressBenchmark || _audioSmoke || _smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _interactionSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _tier2Smoke || _evilSmoke || _researchSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke || _observerSmoke || _setupSmoke || _engagementSmoke || _sandboxMapSmoke || _menuSmoke || _capture != "") GetTree().Quit(1);
         }
@@ -495,7 +495,7 @@ public partial class Main : Node3D
         // Build-173: a garrison box sends its unit out of the tower.
         _commands.GarrisonSlotChosen += unit => {
             if (_world == null || _observing || SelectedOwnSite() is not { } tower) return;
-            _world.EnqueueUngarrison(PlayerTeam,tower.Id,unit); _status.Text = UnitName(unit)+" leaves the "+_world.SiteRules(tower).DisplayName;
+            _world.EnqueueUngarrison(PlayerTeam,tower.Id,unit); _status = UnitName(unit)+" leaves the "+_world.SiteRules(tower).DisplayName;
         };
         _commands.StructurePortraitChosen += () => {
             if (_selectedStructure is int id && _structureViews.TryGetValue(id,out var structure))
@@ -627,7 +627,7 @@ public partial class Main : Node3D
             if (_selected.Count > 0 && !_selected.Any(LivingFriendly)) return;
             _controlGroups.Assign(slot,_selected,LivingFriendly,append);
             _lastGroup = -1;
-            _status.Text = $"Group {(slot == 9 ? 0 : slot+1)} updated"; return;
+            _status = $"Group {(slot == 9 ? 0 : slot+1)} updated"; return;
         }
         // Workers inside a Mill or Foundry stay in their group but cannot be selected until they come out.
         var ids = _controlGroups.Recall(slot,LivingFriendly).Where(id => _world.Units[id].Present).ToArray();
@@ -733,28 +733,28 @@ public partial class Main : Node3D
         if (unit != null)
         {
             if (_orders.Pending == null && TryHerbOrder(unit,queued)) return;
-            if (_orders.Pending == OrderKind.Guard && unit.Team < 0) { _status.Text = "Guard requires a friendly unit or location"; return; }
+            if (_orders.Pending == OrderKind.Guard && unit.Team < 0) { _status = "Guard requires a friendly unit or location"; return; }
             bool enemy = unit.Team >= 0 && unit.Team != PlayerTeam;
             if (_orders.Resolve(unit.Node,enemy ? unit.Id : -1,out var targeted,enemy ? -1 : unit.Id,queued))
             {
                 SendOrder(targeted,queued);
                 ShowUnitCommandFeedback(unit);
             }
-            else _status.Text = "Guard requires a friendly unit or location";
+            else _status = "Guard requires a friendly unit or location";
             return;
         }
         Vector3 origin = _camera.ProjectRayOrigin(mouse), direction = _camera.ProjectRayNormal(mouse);
         var hit = _picker.Pick(new(-origin.X, origin.Y, origin.Z), new(-direction.X, direction.Y, direction.Z), groundOnly);
-        if (hit == null) { _status.Text = "Choose a point on the battlefield"; return; }
+        if (hit == null) { _status = "Choose a point on the battlefield"; return; }
         int goal = _world.Navigation.Nearest(hit.Node);
         if (goal >= 0)
         {
-            if (!_orders.Resolve(goal,-1,out var order,keepTargeting: queued)) { _status.Text = "Attack requires an enemy target"; return; }
+            if (!_orders.Resolve(goal,-1,out var order,keepTargeting: queued)) { _status = "Attack requires an enemy target"; return; }
             SendOrder(order,queued);
             if (structure is { } target) ShowStructureCommandFeedback(target.Id);
             else ShowGroundCommandFeedback(new(-hit.Position.X,hit.Position.Y,hit.Position.Z),hit.Ground);
         }
-        else _status.Text = "No walkable space at this point";
+        else _status = "No walkable space at this point";
     }
 
     private void ChooseCommand(OrderKind kind)
@@ -762,7 +762,7 @@ public partial class Main : Node3D
         if (_world == null || !_world.Units.Any(u => u.Team == PlayerTeam && u.Health > 0 && _selected.Contains(u.Id))) return;
         _dragging = false; _hud.SelectionBox = null;
         ClearConstructionTargeting(); _buildMenu = false;
-        if (_orders.Begin(kind)) _status.Text = CommandPanel.OrderName(kind)+": choose a target";
+        if (_orders.Begin(kind)) _status = CommandPanel.OrderName(kind)+": choose a target";
         else SendOrder(new(kind));
     }
 
@@ -781,7 +781,7 @@ public partial class Main : Node3D
         _pendingPlacePower = -1;
         ReserveHerbsTargeting(-1);
         ClearConstructionTargeting();
-        _orders.Cancel(); _status.Text = "Command targeting cancelled";
+        _orders.Cancel(); _status = "Command targeting cancelled";
         if (_abilityAreaPreview != null) _abilityAreaPreview.Visible = false;
     }
 
@@ -789,7 +789,7 @@ public partial class Main : Node3D
     {
         if (_world == null || _observing) return;
         _world.Enqueue(PlayerTeam,[],OrderKind.ToggleWalkRun);
-        _status.Text = _paused ? "Global Walk / Run queued (paused)" : "Global Walk / Run changed";
+        _status = _paused ? "Global Walk / Run queued (paused)" : "Global Walk / Run changed";
     }
 
     private void SendOrder(PlayerOrder order,bool queued = false)
@@ -797,7 +797,7 @@ public partial class Main : Node3D
         var living = _world!.Units.Where(u => u.Team == PlayerTeam && u.Health > 0 && _selected.Contains(u.Id)).Select(u => u.Id).ToArray();
         if (living.Length == 0) return;
         _world.Enqueue(PlayerTeam,living,order.Kind,order.Cell,order.Target,queued);
-        _status.Text = CommandPanel.OrderName(order.Kind)+(_paused ? " queued (paused)" : " order issued");
+        _status = CommandPanel.OrderName(order.Kind)+(_paused ? " queued (paused)" : " order issued");
     }
 
     /// <summary>A right-click on the minimap orders the selection to that point, as the original manual
@@ -807,14 +807,14 @@ public partial class Main : Node3D
         if (_world == null || _loadFailed) return;
         ClearConstructionTargeting();
         if (!_world.Units.Any(u => u.Team == PlayerTeam && u.Health > 0 && _selected.Contains(u.Id)))
-        { _status.Text = "Select your forces first"; return; }
+        { _status = "Select your forces first"; return; }
         var nav = _world.Navigation; var at = _commands.Minimap.MapPosition(point);
         int x = Math.Clamp((int)at.X,0,nav.Width*nav.CellSize-1);
         int z = Math.Clamp((int)at.Y,0,nav.Height*nav.CellSize-1);
         int goal = nav.Nearest(nav.Cell(x,z));
-        if (goal < 0) { _status.Text = "No walkable space at this point"; return; }
+        if (goal < 0) { _status = "No walkable space at this point"; return; }
         if (march) _orders.Begin(OrderKind.AttackMove);
-        if (!_orders.Resolve(goal,-1,out var order,keepTargeting: queued)) { _status.Text = "Attack requires an enemy target"; return; }
+        if (!_orders.Resolve(goal,-1,out var order,keepTargeting: queued)) { _status = "Attack requires an enemy target"; return; }
         SendOrder(order,queued);
         var (goalX,goalZ) = nav.Center(goal);
         ShowGroundCommandFeedback(PositionOf(goalX,goalZ));
@@ -824,12 +824,12 @@ public partial class Main : Node3D
     {
         int selected = PickObstacle(mouse);
         if (_world!.ConstructionSites.Values.Any(s => s.Obstacle == selected))
-        { _status.Text = "Resource building footprints follow construction"; return; }
+        { _status = "Resource building footprints follow construction"; return; }
         if (selected < 0) return;
         _pendingObstacle = selected;
         _pendingObstacleActive = !_world!.Navigation.IsObstacleActive(selected);
         _world.EnqueueObstacle(selected, _pendingObstacleActive);
-        _status.Text = "Obstacle change queued; restore requires free space";
+        _status = "Obstacle change queued; restore requires free space";
     }
 
     private int PickObstacle(Vector2 mouse)
@@ -902,7 +902,7 @@ public partial class Main : Node3D
         if (_pendingObstacle >= 0)
         {
             bool applied = _world.Navigation.IsObstacleActive(_pendingObstacle) == _pendingObstacleActive;
-            _status.Text = applied ? (_pendingObstacleActive ? "Obstacle restored" : "Obstacle removed")
+            _status = applied ? (_pendingObstacleActive ? "Obstacle restored" : "Obstacle removed")
                 : "Cannot restore here while a unit occupies the space";
             _pendingObstacle = -1;
         }
@@ -1265,7 +1265,7 @@ public partial class Main : Node3D
             default: throw new InvalidOperationException("Unknown camera view: " + view);
         }
         UpdateCamera();
-        _status.Text = "Camera centered on "+(view == "squad" ? "all squads" : view == "fortress" ? "the fortress" : "the whole map");
+        _status = "Camera centered on "+(view == "squad" ? "all squads" : view == "fortress" ? "the fortress" : "the whole map");
     }
 
     private bool _finishing;
@@ -1358,24 +1358,13 @@ public partial class Main : Node3D
                 _cameraShortcutsRemoved &= _focus == focus && _yaw == yaw && _distance == distance && _view == view;
                 if (key == Key.F2) PushKey(key); // Restore pace after verifying the former camera binding.
             }
-            ToggleDebugMenu();
         }
-        if (_frames is 140 or 144 or 148)
-            Click(_cameraButtons[_frames == 140 ? "fortress" : _frames == 144 ? "overview" : "squad"].GetGlobalRect().GetCenter());
+        if (_frames == 140) SetCameraView("fortress");
         if (_frames == 142) _fortressViewPassed = _view == "fortress" && _focus.DistanceTo(_fortressFocus) < 1;
+        if (_frames == 144) SetCameraView("overview");
         if (_frames == 146) _overviewPassed = _view == "overview" && _distance == 340;
-        if (_frames == 150)
-        {
-            _squadViewPassed = _view == "squad" && _focus.DistanceTo(_squadFocus) < 1;
-            Click(_cameraButtons["rotate-left"].GetGlobalRect().GetCenter());
-        }
-        if (_frames == 152) _inputCameraPassed &= Mathf.IsEqualApprox(_yaw,NorthYaw-.25f);
-        if (_frames == 154) Click(_cameraButtons["rotate-right"].GetGlobalRect().GetCenter());
-        if (_frames == 156)
-        {
-            _inputCameraPassed &= Mathf.IsEqualApprox(_yaw,NorthYaw);
-            _toolsPanel.Visible = false;
-        }
+        if (_frames == 148) SetCameraView("squad");
+        if (_frames == 150) _squadViewPassed = _view == "squad" && _focus.DistanceTo(_squadFocus) < 1;
     }
 
     private void FinishSmoke()

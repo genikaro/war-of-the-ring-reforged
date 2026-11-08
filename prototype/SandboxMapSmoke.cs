@@ -364,7 +364,7 @@ public partial class Main
                     bases = teams.Select(t => new { team = t,buildings = world.ConstructionSites.Values.Where(s => s.Team == t).Select(s => new { world.SiteRules(s).Name,s.X,s.Z,s.Health }),
                         population = new { used = world.PopulationUsed(t),capacity = world.PopulationCapacity(t) },food = world.Economies[t].Food,ore = world.Economies[t].Ore,
                         fate = world.Economies[t].Fate,heroes = world.Units.Where(u => u.Team == t && u.Present && u.Definition.Hero).Select(u => u.Definition.Name) }),
-                    status = _status.Text,digest = world.StateDigest() };
+                    status = _status,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"sandbox-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("SANDBOX_MAP_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(passed ? 0 : 1); break;
         }

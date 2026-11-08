@@ -139,7 +139,7 @@ public partial class Main
                     fixture = "Start bank credited 1500 food and 1500 ore and instant build/train for team 0 at frame 2",held_frames = _tier2Hold,
                     citadel_health = new { before = _tier2CitadelHealth,after = world.ConstructionSites[10000].Health },
                     attacks = new[] {SmokeRider,SmokeShieldbreaker,SmokeRanger}.Select(n => Trained(n)?.AttackSerial ?? -1).ToArray(),
-                    population = new { used = world.PopulationUsed(0),capacity = world.PopulationCapacity(0) },status = _status.Text,digest = world.StateDigest() };
+                    population = new { used = world.PopulationUsed(0),capacity = world.PopulationCapacity(0) },status = _status,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"tier2-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("TIER2_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
         }

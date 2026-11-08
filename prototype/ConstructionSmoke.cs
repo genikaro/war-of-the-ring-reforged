@@ -186,7 +186,7 @@ public partial class Main
                     mill_animation_loops = _smokeMillAnimationLoops,
                     mill,foundry,bank = new {world.Economies[0].FoodMilli,world.Economies[0].OreMilli},
                     workers = world.Units.Where(u => u.Team == 0).Select(u => new {u.Id,u.Order,u.Goal,u.X,u.Z,u.CargoMilli,u.ReturningCargo}),
-                    selected = _selected,status = _status.Text,commands = world.Commands,digest = world.StateDigest() };
+                    selected = _selected,status = _status,commands = world.Commands,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"construction-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("CONSTRUCTION_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
         }

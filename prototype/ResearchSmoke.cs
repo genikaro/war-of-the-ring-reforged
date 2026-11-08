@@ -336,7 +336,7 @@ public partial class Main
                     unit_axe = new { samples = _researchUnitAxeSamples,flames = _researchUnitAxeHasFlames,
                         shooter = world.Units[_researchFireShooter] is var source ? new { source.Order,source.Cooldown,source.Target,source.Health,source.X,source.Z } : null,
                         target = world.Units[_researchUnitAxeTarget] is var victim ? new { victim.Health,victim.X,victim.Z,victim.Present } : null },
-                    researched = world.Researched.GetValueOrDefault(0)?.ToArray(),attack = _commands.DisplayedAttack,status = _status.Text,digest = world.StateDigest() };
+                    researched = world.Researched.GetValueOrDefault(0)?.ToArray(),attack = _commands.DisplayedAttack,status = _status,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"research-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("RESEARCH_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
         }

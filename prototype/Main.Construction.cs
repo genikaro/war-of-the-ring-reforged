@@ -253,14 +253,14 @@ public partial class Main
         if (building == null)
         {
             if (SelectedStructureDetails() is { UnderConstruction: true,SiteId: >= 0 } selected && selected.Team == PlayerTeam)
-            { _world!.Enqueue(PlayerTeam,[],OrderKind.CancelConstruction,target: selected.SiteId); _status.Text = "Construction cancellation queued"; }
+            { _world!.Enqueue(PlayerTeam,[],OrderKind.CancelConstruction,target: selected.SiteId); _status = "Construction cancellation queued"; }
             return;
         }
         if (!_skirmish || !SelectedBuilders().Any()) return;
         ClearConstructionTargeting(); _orders.Cancel(); _dragging = false; _hud.SelectionBox = null;
         _constructionTargeting = true; _constructionBuilding = building;
         var rules = _world!.BuildingRules.GetValueOrDefault(building) ?? _world.ResourceRules(PlayerTeam,ResourceBuildingKind(building)!.Value)!;
-        _status.Text = "Build "+rules.DisplayName+(ResourceBuildingKind(building) != null ? ": choose a resource site" : ": choose open ground near your buildings");
+        _status = "Build "+rules.DisplayName+(ResourceBuildingKind(building) != null ? ": choose a resource site" : ": choose open ground near your buildings");
         _previewMaterial = GhostMaterial(new Color(.3f,1,.3f,.45f));
         _constructionPreview = BuildingGhost(building,_previewMaterial);
     }
@@ -330,7 +330,7 @@ public partial class Main
             int cell = PlacementCellAt(mouse);
             if (!_world!.CanPlaceBuilding(PlayerTeam,building,cell,out string blocked,ignoreUnits: true)) { Notify(blocked); return; }
             _world.Enqueue(PlayerTeam,SelectedBuilders().Where(id => _world.MayPlace(_world.Units[id],building)),OrderKind.PlaceBuilding,cell,_world.PlaceableBuildings.IndexOf(building),queued);
-            _status.Text = "Build "+_world.BuildingRules[building].DisplayName+(_paused ? " queued (paused)" : " order issued");
+            _status = "Build "+_world.BuildingRules[building].DisplayName+(_paused ? " queued (paused)" : " order issued");
             ClearConstructionTargeting(); _buildMenu = false; return;
         }
         var source = ResourceAt(mouse);
@@ -339,7 +339,7 @@ public partial class Main
         if (source.Kind != kind) { Notify($"A {_world!.ResourceRules(PlayerTeam,kind)!.DisplayName} requires {(kind == ResourceKind.Food ? "a food well" : "an ore pile")}"); return; }
         if (!_world!.CanStartConstruction(PlayerTeam,source.Id,out string reason) && reason != SimWorld.UnitBlocksFoundation) { Notify(reason); return; }
         _world.Enqueue(PlayerTeam,SelectedWorkers(),OrderKind.Build,target: source.Id,queued: queued);
-        _status.Text = "Build "+_world.ResourceRules(PlayerTeam,kind)!.DisplayName+(_paused ? " queued (paused)" : " order issued");
+        _status = "Build "+_world.ResourceRules(PlayerTeam,kind)!.DisplayName+(_paused ? " queued (paused)" : " order issued");
         ClearConstructionTargeting(); _buildMenu = false;
     }
 

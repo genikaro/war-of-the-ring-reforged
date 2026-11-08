@@ -122,7 +122,8 @@ public partial class CommandPanel : Control
         _singleHealthText = Counter("",new(4,69),new(SelectedBarWidth,12),11,HorizontalAlignment.Center); _single.AddChild(_singleHealthText);
         CreateHeroExperience();
         _singleOrder = Text("",new(70,24),new(196,40),14); _singleOrder.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        _singleOrder.VerticalAlignment = VerticalAlignment.Top; _singleOrder.AddThemeConstantOverride("line_spacing",-3); _single.AddChild(_singleOrder);
+        _singleOrder.VerticalAlignment = VerticalAlignment.Top; _singleOrder.AddThemeConstantOverride("line_spacing",-3);
+        _singleOrder.Hide(); _single.AddChild(_singleOrder);
         _typeIcon = new TextureRect { Name = "AttackTypeIcon",Position = new(270,28),Size = new(47,48),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Stop }; _single.AddChild(_typeIcon);
         _statsBackground = new TextureRect { Position = new(333,28),Size = new(171,77),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Ignore }; _single.AddChild(_statsBackground);
         string[] statNames = ["Attack","Armor","Victories"];
@@ -403,8 +404,7 @@ public partial class CommandPanel : Control
         RefreshAbilities(units,pending,tick,pendingAbilitySlot);
         _single.Visible = single; _rosterScroll.Visible = !single;
         _title.Position = single ? new(335,59) : new(265,59); _title.Size = single ? new(435,22) : new(505,22);
-        // Build-67: each unit's order readout. A single unit shows its order beside the portrait; a group's title stays
-        // empty. Portrait tooltips carry each full readout, what the unit is doing included.
+        // Debug tools can show a single unit's order beside its portrait. Portrait tooltips always carry the full readout.
         _title.Text = single ? name(units[0].Id) : "";
         string key = string.Join(',',units.Select(u => u.Id));
         // Build-159: what the console says about the selected units comes from the world, which only changes on a
@@ -657,6 +657,7 @@ public partial class CommandPanel : Control
     public string DisplayedArmor => _structureDetails.Visible ? _structureArmorText.Text : _armorValue.Text;
     public string DisplayedName => _title.Text;
     public string DisplayedOrder => _order.Text;
-    public string DisplayedUnitOrder => _singleOrder.Text;
+    public string DisplayedUnitOrder => _singleOrder.IsVisibleInTree() ? _singleOrder.Text : "";
+    public void SetUnitCurrentActionVisible(bool visible) => _singleOrder.Visible = visible;
     public string DisplayedHealth => _structureDetails.Visible ? _structureHealthText.Text : _singleHealthText.Text;
 }

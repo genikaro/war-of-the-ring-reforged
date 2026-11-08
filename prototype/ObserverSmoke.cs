@@ -229,7 +229,7 @@ public partial class Main
                     bots = world.AiPlayers.Values.Select(a => $"{a.Personality.Id}: {a.Status}").ToArray(),
                     journals = world.AiPlayers.Values.ToDictionary(BotKey,a => a.Journal.Entries.Select(e =>
                         $"{TimeSpan.FromSeconds(e.Tick/SimWorld.TicksPerSecond):mm\\:ss} {e.Kind} {e.Text}").ToArray()),
-                    ticks = world.Tick,status = _status.Text,digest = world.StateDigest() };
+                    ticks = world.Tick,status = _status,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"observer-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("OBSERVER_SMOKE "+JsonSerializer.Serialize(report)); _observerPhase = 6;

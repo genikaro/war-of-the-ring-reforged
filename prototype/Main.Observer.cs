@@ -30,7 +30,7 @@ public partial class Main
     private void SetSpeed(int speed)
     {
         _speed = Speeds.Contains(speed) ? speed : 1;
-        _status.Text = $"Game speed {_speed}x";
+        _status = $"Game speed {_speed}x";
         _actualSpeed = _speed; _speedSampleSeconds = 0; _speedSampleTick = _world?.Tick ?? 0;
     }
 

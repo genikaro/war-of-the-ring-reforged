@@ -154,12 +154,11 @@ cancels targeting. **Ctrl + right-click now issues Attack-move**, following the
 addendum's default Force-Move behavior. **Ctrl + Alt + right-click** picks terrain
 below bridges. Alt + right-click still toggles obstacles.
 
-Arrow keys and middle-drag pan the camera; debug tools buttons rotate and the wheel zooms.
-Camera preset buttons remain in the debug tools; F1/F2/F3 and Q/E camera shortcuts are removed.
-F4 or the top-right Debug button opens/closes debug tools: live selection/orders,
-Pause/Resume, a paused single-tick step, encounter restart and camera tools;
-last-action feedback is separate from live state. Opening them does not pause the
-simulation. The console's Menu button opens the game menu instead (build-96): it
+Arrow keys and middle-drag pan the camera. Use the mouse wheel to zoom.
+F4 or the top-right Debug button opens Debug tools, which includes Pause/Resume,
+a paused single-tick step, encounter restart, the unit current action toggle and
+cheats. Opening Debug tools does not pause the simulation. The console's Menu
+button opens the game menu (build-96): it
 pauses play, and its Settings hold the health bars, interface size and the controls
 guide. Reserving A/S/H for
 orders replaces the old WASD camera and H help bindings. The camera shifts the scene upward while the HUD is visible so
@@ -223,11 +222,12 @@ Victories beside the portrait and health bar. The type icon's tooltip lists
 the four damage percentages. Group portraits retain these stats in tooltips.
 
 Order readout (build-67, `Presentation/UnitOrderReadout.cs`), a testing aid that
-replaced the console's how-to hints. A single unit, of any side, shows beside its
-portrait the order and its target with the distance (`Attack → Uruk-Hai #19 · 8 m`,
-`Move · 14 m`, `Guard → post · 3 m`, `Repair → Mill · 2 m`); its portrait tooltip
-(under the health bar until build-70, which gave that row to the status bar) what it
-does this tick: a held bot order waiting for the swing, casting,
+replaced the console's how-to hints. In Debug tools (F4), **Show unit current
+action** is off by default. Turn it on to show a single selected unit's order,
+target and distance beside its portrait (`Attack → Uruk-Hai #19 · 8 m`,
+`Move · 14 m`, `Guard → post · 3 m`, `Repair → Mill · 2 m`). Its portrait tooltip
+describes what the unit is doing this tick, such as holding an order until a swing
+finishes, casting,
 striking / fighting / closing on / waiting for room at its combat target (marked
 "acquired" when it picked the target itself), walking or running and for how long
 it has been blocked, making way for another unit, returning to its spot or to the
@@ -338,10 +338,10 @@ the original timing and behavior comparison gate remains open.
   layout checks through 4K, ultrawide and narrow windows.
 - 56 additional real-cache checks retain map navigation, traffic and spawn safety,
   and cover imported definitions and four repeatable duels.
-- `-CommandSmoke`: 49 actual Godot panel/input checks, including enemy/neutral inspection and empty palettes,
-  ownership/control-group protection, single-unit
-  stats, live victory refresh, return to the group roster and the four-button
-  bottom-row layout and working hidden Move/Stop controls; report in
+- `-CommandSmoke`: 60 Godot panel and input checks, including enemy and neutral
+  inspection, control groups, single-unit stats, live victory refresh, the current
+  action toggle, the group roster, the four-button bottom row and hidden Move/Stop
+  controls. Report in
   `converted/prototype/command-smoke-report.json`.
 - `-OrdersSmoke`: 27 additional actual input checks for groups 1–0, additive
   assignment, double-tap centering, death pruning, HUD adjustment, queued squad

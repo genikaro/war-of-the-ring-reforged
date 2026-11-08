@@ -51,7 +51,7 @@ public partial class Main
         if (_sandboxInstantBuild) world.InstantBuildTeams.UnionWith(SandboxMapTeams);
         _commands.SandboxPlayerChosen += CommandSandboxPlayer;
         _commands.RefreshSandboxTabs(true);
-        _status.Text = _sandboxMapMissing.Count == 0 ? "Sandbox · you command Player 1 and Player 2 · Tab switches"
+        _status = _sandboxMapMissing.Count == 0 ? "Sandbox · you command Player 1 and Player 2 · Tab switches"
             : "Sandbox · no room for "+string.Join(", ",_sandboxMapMissing.Distinct().Select(b => world.BuildingRules.GetValueOrDefault(b)?.DisplayName ?? b));
     }
 
@@ -82,7 +82,7 @@ public partial class Main
         _waypointFlags.Clear();
         ApplySkirmishHud(_commands);
         _commands.RefreshSandboxTabs(true);
-        _status.Text = $"Commanding Player {team+1}";
+        _status = $"Commanding Player {team+1}";
     }
 
     /// <summary>A gather-point flag in its player's colour on every rally point of either player, ringed on the ground so

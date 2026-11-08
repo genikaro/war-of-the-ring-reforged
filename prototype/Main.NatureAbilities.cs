@@ -47,7 +47,7 @@ public partial class Main
             _world.EnqueueAbility(PlayerTeam,[healer.Id],healer.EnabledAbilities.First(a => a.Kind == AbilityKind.HealingHerbs).Slot,target.Id);
         var others = _selected.Where(id => !healers.Any(u => u.Id==id)).ToArray();
         if (others.Length > 0) _world.Enqueue(PlayerTeam,others,OrderKind.Guard,target:target.Id,cell:target.Node,queued:queued);
-        ShowUnitCommandFeedback(target); _status.Text="Healing Herbs"+(_paused ? " queued (paused)" : "");
+        ShowUnitCommandFeedback(target); _status="Healing Herbs"+(_paused ? " queued (paused)" : "");
         return true;
     }
 

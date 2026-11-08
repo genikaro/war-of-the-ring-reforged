@@ -200,10 +200,10 @@ public partial class Main
         var attackers = _world.Units.Where(u => u.Team == PlayerTeam && u.Present && _selected.Contains(u.Id)
             && u.Definition.DpsMilli > 0 && !u.RingActive).Select(u => u.Id).ToArray();
         _orders.Cancel();
-        if (attackers.Length == 0) { _status.Text = "Nothing in the selection can attack a building"; return true; }
+        if (attackers.Length == 0) { _status = "Nothing in the selection can attack a building"; return true; }
         _world.Enqueue(PlayerTeam,attackers,OrderKind.AttackStructure,cell: forced ? SimWorld.ForcedSiege : -1,target: site.Id,queued: queued);
         ShowStructureCommandFeedback(structure.Id);
-        _status.Text = (site.Team == PlayerTeam ? "Force-attack " : "Attack ")+_world.SiteRules(site).DisplayName
+        _status = (site.Team == PlayerTeam ? "Force-attack " : "Attack ")+_world.SiteRules(site).DisplayName
             +(_paused ? " queued (paused)" : " order issued");
         return true;
     }
@@ -217,7 +217,7 @@ public partial class Main
         {
             _world.Enqueue(PlayerTeam,SelectedWorkers(),OrderKind.Build,target: owned.Id,queued: queued);
             ShowStructureCommandFeedback(structure.Id);
-            _status.Text = owned.Complete ? "Repair "+_world.SiteRules(owned).DisplayName : "Resume construction";
+            _status = owned.Complete ? "Repair "+_world.SiteRules(owned).DisplayName : "Resume construction";
             return true;
         }
         var source = ResourceAt(mouse);
@@ -226,16 +226,16 @@ public partial class Main
         {
             _world.Enqueue(PlayerTeam,SelectedWorkers(),OrderKind.Build,target: source.Id,queued: queued);
             ShowStructureCommandFeedback(site.Obstacle);
-            _status.Text = "Resume construction"; return true;
+            _status = "Resume construction"; return true;
         }
         if (!_world.CanGather(PlayerTeam,source.Id) && !_world.Units.Any(u => u.Team == PlayerTeam && _selected.Contains(u.Id) && u.Health > 0 && u.CargoMilli > 0))
-        { _status.Text = site is { Team: > 0 } ? "Enemy resource building" : source.Kind == ResourceKind.Food ? $"Food gathering requires a {_world.ResourceRules(PlayerTeam,ResourceKind.Food)?.DisplayName ?? "Mill"}"
+        { _status = site is { Team: > 0 } ? "Enemy resource building" : source.Kind == ResourceKind.Food ? $"Food gathering requires a {_world.ResourceRules(PlayerTeam,ResourceKind.Food)?.DisplayName ?? "Mill"}"
             : $"No raw ore remains; a {_world.ResourceRules(PlayerTeam,ResourceKind.Ore)?.DisplayName ?? "Foundry"} is required"; return true; }
         var workers = _world.Units.Where(u => u.Team == PlayerTeam && u.Health > 0 && _selected.Contains(u.Id)
             && _world.Workers.ContainsKey(u.Definition.Name)).Select(u => u.Id);
         _world.Enqueue(PlayerTeam,workers,OrderKind.Gather,target: source.Id,queued: queued);
         if (StructureAt(mouse) is { } gathered) ShowStructureCommandFeedback(gathered.Id);
-        _status.Text = "Gather "+source.Kind.ToString().ToLowerInvariant()+(_paused ? " queued (paused)" : " order issued");
+        _status = "Gather "+source.Kind.ToString().ToLowerInvariant()+(_paused ? " queued (paused)" : " order issued");
         return true;
     }
 }

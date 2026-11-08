@@ -47,7 +47,7 @@ public partial class Main
                 {
                     _victoryPausedTick = world.Tick;
                     _victoryChecks["victory_panel_shows"] = _outcome.Visible && _outcomeTitle.Text == "You won!" && _paused
-                        && _status.Text.StartsWith("Victory");
+                        && _status.StartsWith("Victory");
                     if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-victory.png");
                     // A click on the battlefield behind the panel must not reach it.
                     _selected.Clear(); Click(_camera.UnprojectPosition(UnitPosition(world.Units[_victorySquad[0]])+Vector3.Up));
@@ -75,7 +75,7 @@ public partial class Main
                 _victoryPhase = 7; _victoryStep = 0; break;
             case 7:
                 if (++_victoryStep < 3) break;
-                _victoryChecks["defeat_panel_shows"] = _outcome.Visible && _outcomeTitle.Text == "You lost!" && _paused && _status.Text.StartsWith("Defeat");
+                _victoryChecks["defeat_panel_shows"] = _outcome.Visible && _outcomeTitle.Text == "You lost!" && _paused && _status.StartsWith("Defeat");
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-defeat.png");
                 _victoryPhase = 8; _victoryStep = 0; break;
             case 8:
@@ -93,7 +93,7 @@ public partial class Main
                     passed = _victoryChecks.Count == 9 && _victoryChecks.Values.All(v => v),
                     fixture = "Squads spawn beside the Citadel they raze; round two follows the Restart button",
                     round = _victoryRound,winner = world.Winner,defeated = world.DefeatedTeams.ToArray(),outcome_tick = world.OutcomeTick,
-                    ticks = world.Tick,status = _status.Text,digest = world.StateDigest() };
+                    ticks = world.Tick,status = _status,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"victory-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("VICTORY_SMOKE "+JsonSerializer.Serialize(report)); _victoryPhase = 11;

@@ -166,13 +166,22 @@ public partial class Main
             case 130: Click(_commands.PortraitButton(_primarySquad.Min()).GetGlobalRect().GetCenter()); break;
             case 133:
                 _commandChecks["portrait_selects_single_stats"] = _selected.Count == 1 && _commands.SingleUnitDetailsVisible && _commands.DisplayedVictories == "0";
+                _commandChecks["unit_current_action_hidden_by_default"] = !_debugUnitCurrentAction.ButtonPressed && _commands.DisplayedUnitOrder == "";
+                PushKey(Key.F4);
                 world.Units[_selected.Single()].KillCount = 2;
                 break;
+            case 134: Click(_debugUnitCurrentAction.GetGlobalRect().GetCenter()); break;
             case 136:
                 _commandChecks["single_victories_refresh"] = _commands.DisplayedVictories == "2";
+                _commandChecks["debug_toggle_shows_unit_current_action"] = _debugUnitCurrentAction.ButtonPressed && _commands.DisplayedUnitOrder != "";
                 world.Units[_selected.Single()].KillCount = 0;
                 break;
-            case 138: if (_capture != "") _ = CaptureFrame(false); break;
+            case 137: Click(_debugUnitCurrentAction.GetGlobalRect().GetCenter()); break;
+            case 138:
+                _commandChecks["debug_toggle_hides_unit_current_action"] = !_debugUnitCurrentAction.ButtonPressed && _commands.DisplayedUnitOrder == "";
+                PushKey(Key.F4);
+                if (_capture != "") _ = CaptureFrame(false);
+                break;
             case 142: PushKey(Key.Key1); break;
             case 145:
                 _commandChecks["group_restores_portrait_roster"] = _selected.Count == 5 && !_commands.SingleUnitDetailsVisible && _commands.CommandsAvailable;
@@ -296,7 +305,7 @@ public partial class Main
                 break;
             case 246:
                 var report = new { ticks = world.Tick, checks = _commandChecks, commands = world.Commands,
-                    final_digest = world.StateDigest(), passed = _commandChecks.Count == 57 && _commandChecks.Values.All(v => v) };
+                    final_digest = world.StateDigest(), passed = _commandChecks.Count == 60 && _commandChecks.Values.All(v => v) };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"command-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("COMMAND_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1);

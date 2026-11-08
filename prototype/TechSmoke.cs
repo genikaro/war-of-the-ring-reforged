@@ -112,7 +112,7 @@ public partial class Main
                 var report = new { build = BuildInfo.Label,checks = _techChecks,passed = _techChecks.Count == 15 && _techChecks.Values.All(v => v),
                     fixture = "Start bank credited 600 food and 600 ore at frame 2",held_frames = _techHold,
                     citadel = new { citadel.Building,citadel.Health,citadel.Upgrading },population = new { used = world.PopulationUsed(0),capacity = world.PopulationCapacity(0) },
-                    bank = new { bank.FoodMilli,bank.OreMilli },status = _status.Text,digest = world.StateDigest() };
+                    bank = new { bank.FoodMilli,bank.OreMilli },status = _status,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"tech-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("TECH_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
         }

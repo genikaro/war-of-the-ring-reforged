@@ -30,7 +30,7 @@ public partial class Main
         Send(OrderKind.ApproachStructure,units,site.Id,"Move to");
         if (assigned.Count == 0) return false;
         ShowStructureCommandFeedback(obstacle);
-        _status.Text = string.Join(" / ",actions)+" "+_world.SiteRules(site).DisplayName+(_paused ? " (paused)" : "");
+        _status = string.Join(" / ",actions)+" "+_world.SiteRules(site).DisplayName+(_paused ? " (paused)" : "");
         return true;
     }
 }

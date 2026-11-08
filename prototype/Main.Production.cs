@@ -75,7 +75,7 @@ public partial class Main
         if (SelectedOwnSite() is not { } site || _world!.UpgradeRules(site) is not { } rules) return;
         if (!_world.CanUpgrade(PlayerTeam,site.Id,out string reason)) { Notify(reason); return; }
         _world.Enqueue(PlayerTeam,[],OrderKind.Upgrade,target: site.Id);
-        _status.Text = "Upgrade to "+rules.DisplayName+(_paused ? " queued (paused)" : " order issued");
+        _status = "Upgrade to "+rules.DisplayName+(_paused ? " queued (paused)" : " order issued");
     }
 
     private void ChooseTraining(int slot)
@@ -83,7 +83,7 @@ public partial class Main
         if (SelectedProducer() is not { } producer) return;
         if (!_world!.CanTrain(PlayerTeam,producer.Id,slot,out string reason)) { Notify(reason); return; }
         _world.Enqueue(PlayerTeam,[],OrderKind.Train,slot,producer.Id);
-        _status.Text = "Train "+_world.ProductionRules[producer.Units[slot]].DisplayName+(_paused ? " queued (paused)" : " order issued");
+        _status = "Train "+_world.ProductionRules[producer.Units[slot]].DisplayName+(_paused ? " queued (paused)" : " order issued");
     }
 
     /// <summary>Queue index from the selection panel, or -1 for Backspace (the last queued unit). An upgrade in progress
@@ -96,13 +96,13 @@ public partial class Main
             if (index == 0 || index < 0 && SelectedProducer() is not { Queue.Count: > 0 })
             {
                 _world!.Enqueue(PlayerTeam,[],site.Upgrading ? OrderKind.CancelUpgrade : OrderKind.CancelResearch,target: site.Id);
-                _status.Text = (site.Upgrading ? "Upgrade" : "Research")+" cancellation queued"; return;
+                _status = (site.Upgrading ? "Upgrade" : "Research")+" cancellation queued"; return;
             }
             if (index > 0) index--;
         }
         if (SelectedProducer() is not { Queue.Count: > 0 } producer) return;
         _world!.Enqueue(PlayerTeam,[],OrderKind.CancelTraining,index,producer.Id);
-        _status.Text = "Training cancellation queued";
+        _status = "Training cancellation queued";
     }
 
     private bool TrySetRallyPoint(Vector2 mouse)
@@ -113,16 +113,16 @@ public partial class Main
         if (structure is { } target && _structureViews[target.Id].Resource is int resource and >= 0)
         {
             _world!.Enqueue(PlayerTeam,[],OrderKind.SetRallyResource,resource,producer.Id);
-            _status.Text = "Rally point set on "+_structureDefinitions[_structureViews[target.Id].Type].GetProperty("display_name").GetString()+(_paused ? " (paused)" : "");
+            _status = "Rally point set on "+_structureDefinitions[_structureViews[target.Id].Type].GetProperty("display_name").GetString()+(_paused ? " (paused)" : "");
             ShowStructureCommandFeedback(target.Id);
             return true;
         }
         Vector3 origin = _camera.ProjectRayOrigin(mouse),direction = _camera.ProjectRayNormal(mouse);
         var hit = _picker.Pick(new(-origin.X,origin.Y,origin.Z),new(-direction.X,direction.Y,direction.Z));
         int cell = hit == null ? -1 : _world!.Navigation.Nearest(hit.Node);
-        if (cell < 0) { _status.Text = "No walkable space at this point"; return true; }
+        if (cell < 0) { _status = "No walkable space at this point"; return true; }
         _world!.Enqueue(PlayerTeam,[],OrderKind.SetRallyPoint,cell,producer.Id);
-        _status.Text = "Rally point set"+(_paused ? " (paused)" : "");
+        _status = "Rally point set"+(_paused ? " (paused)" : "");
         if (structure is { } hitStructure) ShowStructureCommandFeedback(hitStructure.Id);
         else ShowGroundCommandFeedback(new(-hit!.Position.X,hit.Position.Y,hit.Position.Z),hit.Ground);
         return true;

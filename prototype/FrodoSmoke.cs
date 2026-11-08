@@ -85,7 +85,7 @@ public partial class Main
                     fixture = "Start bank credited 300 food and 300 ore at frame 2",
                     frodo = _frodoId < 0 ? null : new { world.Units[_frodoId].Id,world.Units[_frodoId].HealthMilli,world.Units[_frodoId].RingActive },
                     hero_portrait = _heroBar.Portrait(0).GetGlobalRect() is var r ? new[] { r.Position.X,r.Position.Y,r.Size.X,r.Size.Y } : null,
-                    bank = new { world.Economies[0].FoodMilli,world.Economies[0].OreMilli },status = _status.Text,digest = world.StateDigest() };
+                    bank = new { world.Economies[0].FoodMilli,world.Economies[0].OreMilli },status = _status,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"frodo-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("FRODO_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
         }

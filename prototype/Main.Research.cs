@@ -65,6 +65,6 @@ public partial class Main
         int index = _world.Techniques.IndexOf(technique);
         if (!_world.CanResearch(PlayerTeam,site.Id,index,out string reason)) { Notify(reason); return; }
         _world.Enqueue(PlayerTeam,[],OrderKind.Research,index,site.Id);
-        _status.Text = "Research "+technique.DisplayName+(_paused ? " queued (paused)" : " order issued");
+        _status = "Research "+technique.DisplayName+(_paused ? " queued (paused)" : " order issued");
     }
 }

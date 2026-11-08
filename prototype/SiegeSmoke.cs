@@ -79,14 +79,14 @@ public partial class Main
                     break;
                 }
                 if (_siegeStep == 6) { PushKey(Key.A); Click(StructureSmokePoint(SmokeOwnCitadel)); break; }
-                _siegeChecks["force_attack_takes_an_own_building"] = _status.Text.StartsWith("Force-attack")
+                _siegeChecks["force_attack_takes_an_own_building"] = _status.StartsWith("Force-attack")
                     && _selected.All(id => world.Units[id] is { Order: OrderKind.AttackStructure,SiegeForced: true,OrderTarget: SmokeOwnCitadel });
                 world.Enqueue(0,_selected,OrderKind.Stop);
                 _siegePhase = 3; _siegeStep = 0; break;
             case 3:
                 if (_siegeStep++ == 0) { RightClickStructure(SmokeOwnCitadel); break; }
                 if (_siegeStep == 2)
-                    _siegeChecks["right_click_orders_a_repair"] = _status.Text.StartsWith("Repair")
+                    _siegeChecks["right_click_orders_a_repair"] = _status.StartsWith("Repair")
                         && world.Units.Count(u => u.Order == OrderKind.Build && u.OrderTarget == SmokeOwnCitadel) >= 1;
                 if (!world.Units.Any(world.IsBuilding)) break;
                 var hammering = world.Units.First(world.IsBuilding);
@@ -108,14 +108,14 @@ public partial class Main
                 if (_siegeStep == 3) { PushKey(Key.A); Click(StructureSmokePoint(SmokeEnemyCitadel)); break; }
                 if (_siegeStep == 4)
                 {
-                    _siegeChecks["attack_command_targets_an_enemy_building"] = _status.Text.StartsWith("Attack ")
+                    _siegeChecks["attack_command_targets_an_enemy_building"] = _status.StartsWith("Attack ")
                         && _selected.All(id => world.Units[id] is { Order: OrderKind.AttackStructure,OrderTarget: SmokeEnemyCitadel });
                     world.Enqueue(0,_selected,OrderKind.Stop); break;
                 }
                 if (_siegeStep == 5) { RightClickStructure(SmokeEnemyCitadel); break; }
                 if (_siegeStep == 6)
                 {
-                    _siegeChecks["right_click_orders_a_siege"] = _status.Text.StartsWith("Attack ")
+                    _siegeChecks["right_click_orders_a_siege"] = _status.StartsWith("Attack ")
                         && _selected.All(id => world.Units[id].Order == OrderKind.AttackStructure && world.Units[id].OrderTarget == SmokeEnemyCitadel);
                     break;
                 }
@@ -162,7 +162,7 @@ public partial class Main
                     passed = _siegeChecks.Count == 20 && _siegeChecks.Values.All(v => v),
                     fixture = "Both squads spawn beside their target; the first wave is removed before the repair pass",
                     citadel = own == null ? null : new { own.Id,own.Team,own.Health,max = ownMax,own.Prebuilt },
-                    damaged_to = _siegeDamaged,facing_samples = _siegeFacingSamples,ticks = world.Tick,status = _status.Text,digest = world.StateDigest() };
+                    damaged_to = _siegeDamaged,facing_samples = _siegeFacingSamples,ticks = world.Tick,status = _status,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"siege-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("SIEGE_SMOKE "+JsonSerializer.Serialize(report)); _siegePhase = 7;
