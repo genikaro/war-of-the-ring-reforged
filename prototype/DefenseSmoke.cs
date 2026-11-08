@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 using Reforged.Simulation;
 using System.Text.Json;
 
@@ -74,7 +75,7 @@ public partial class Main
                     _defenseChecks["tower_holds_fire_without_enemies"] = !world.Projectiles.Any(p => p.Source == tower.Id) && tower.DefenseTarget < 0;
                     SelectStructure(tower.Obstacle);
                     _defenseChecks["tower_info_lists_its_attack"] = SelectedStructureDetails() is { Attack: "14",Weapons: [{ Tooltip: var tip }] }
-                        && tip.Contains("a hit every 1 s");
+                        && tip.Contains(ShownAfter("stat.attack_speed",Slot,GameText.Number(1m,"0.##")));
                     _focus = PositionOf(tower.X,tower.Z); UpdateCamera();
                     // Fixture: the builders, who laid the tower beside it, go home, so the swordsmen meet the tower rather than the crew.
                     double away = Math.Atan2(citadel.Z-tower.Z,citadel.X-tower.X);

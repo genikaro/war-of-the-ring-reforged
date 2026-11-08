@@ -41,17 +41,20 @@ public partial class CommandPanel
             _constructionButtons[index] = button;
         }
         _buildButton = ActionButton(0);
-        _buildButton.TooltipText = $"Build [{GridKeys[0]} or B]";
+        string Either(string a,string b) => GameText.T("tip.keys_either",a,b);
+        _buildButton.TooltipText = HudTip.Keyed(GameText.T("cmd.build"),Either(GridKeys[0].ToString(),"B"));
         _buildButton.Pressed += () => BuildMenuChosen?.Invoke(true);
         _advancedBuildButton = ActionButton(1);
-        _advancedBuildButton.TooltipText = $"Build advanced [{GridKeys[1]} or Shift+B]\nForge, Ranger Post, Wilderness Outpost, Nature's Haven, Elven Sanctuary and House of Lore.";
+        string[] advancedBuildings = ["BUILDING_G_SKILLS_STRUCTURE","BUILDING_G_RANGER_BARRACKS","BUILDING_G_ARMORY","BUILDING_G_STABLES","BUILDING_G_ELF_BARRACKS","BUILDING_G_HOSPITAL"];
+        _advancedBuildButton.TooltipText = HudTip.Make(HudTip.Keyed(GameText.T("cmd.build_advanced"),Either(GridKeys[1].ToString(),"Shift+B")),null,
+            string.Join(", ",advancedBuildings.Select(b => GameText.Name(b,b))));
         _advancedBuildButton.Pressed += () => AdvancedBuildMenuChosen?.Invoke();
         var advanced = Text("II",new(4,1),new(20,18),15); _advancedBuildButton.AddChild(advanced);
-        _backButton = ActionButton(BackSlot,"Back");
-        _backButton.TooltipText = $"Back [{GridKeys[BackSlot]} or Esc]";
+        _backButton = ActionButton(BackSlot,GameText.T("button.back"));
+        _backButton.TooltipText = HudTip.Keyed(GameText.T("button.back"),Either(GridKeys[BackSlot].ToString(),"Esc"));
         _backButton.Pressed += () => BuildMenuChosen?.Invoke(false);
-        _cancelConstructionButton = ActionButton(BackSlot,"Cancel");
-        _cancelConstructionButton.TooltipText = $"Cancel construction [{GridKeys[BackSlot]}]";
+        _cancelConstructionButton = ActionButton(BackSlot,GameText.T("button.cancel"));
+        _cancelConstructionButton.TooltipText = HudTip.Keyed(GameText.T("cmd.cancel_construction"),GridKeys[BackSlot].ToString());
         _cancelConstructionButton.Pressed += () => ConstructionChosen?.Invoke(null);
     }
 
@@ -83,16 +86,18 @@ public partial class CommandPanel
             {
                 _resourceSlots[kind] = index; var bank = world.Economies[PlayerTeam];
                 button.Disabled = bank.FoodMilli < resource.FoodCost*1000L || bank.OreMilli < resource.OreCost*1000L;
-                button.TooltipText = $"Build {resource.DisplayName} [{GridKeys[index]}]\n{resource.FoodCost} food · {resource.OreCost} ore · {resource.DurationTicks/20}s with one worker"
-                    + $"\nOn a {(kind == ResourceKind.Food ? "food well" : "ore pile")}. Each extra worker adds {resource.ExtraWorkerPpm/10000}% build speed.";
+                // Build-184: the building's own name, cost cells and description, as the original's tooltips (campaign-012).
+                button.TooltipText = HudTip.Make(HudTip.Keyed(resource.DisplayName,GridKeys[index].ToString()),HudTip.Costs(resource.FoodCost,resource.OreCost),
+                    Seconds("tip.build_time",resource.DurationTicks),GameText.T(kind == ResourceKind.Food ? "tip.on_food_well" : "tip.on_ore_pile"),
+                    GameText.T("tip.extra_worker",resource.ExtraWorkerPpm/10000),GameText.Record(resource.Name,"description"));
                 continue;
             }
             var rules = world.BuildingRules[building];
             button.Disabled = !world.CanStartBuilding(PlayerTeam,building,out string reason);
-            button.TooltipText = $"Build {rules.DisplayName} [{GridKeys[index]}]\n{rules.FoodCost} food · {rules.OreCost} ore · {rules.DurationTicks/20}s with one worker"
-                + (world.Placements[building].MustBeNear ? "\nMust stand near your buildings." : "")
-                + (world.PopulationProvided.GetValueOrDefault(building) is > 0 and var population ? $"\nAdds {population} population." : "")
-                + (button.Disabled ? "\n"+reason : "");
+            button.TooltipText = HudTip.Make(HudTip.Keyed(rules.DisplayName,GridKeys[index].ToString()),HudTip.Costs(rules.FoodCost,rules.OreCost),
+                Seconds("tip.build_time",rules.DurationTicks),world.Placements[building].MustBeNear ? GameText.T("tip.near_buildings") : null,
+                world.PopulationProvided.GetValueOrDefault(building) is > 0 and var population ? GameText.Labeled("resource.population","+"+population) : null,
+                GameText.Record(building,"description"),button.Disabled ? reason : null);
         }
     }
 }

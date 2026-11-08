@@ -1,6 +1,6 @@
 key,original,en,ru,note
 "# Build-183: every player-facing string goes through GameText (Presentation/GameText.cs, LOCALIZATION.md). Rows starting with # are comments."
-"# original set: the install's own text, as Table:id (Menu:12) or an InterfaceTextIDs symbol without INTERFACE_TEXT_ID_ (TOOLTIPS_LEVEL); en and ru stay empty, note glosses it."
+"# original set: the install's own text, as Table:id (Menu:12) or an InterfaceTextIDs symbol without INTERFACE_TEXT_ID_ (TOOLTIPS_LEVEL); note glosses it. en (and ru) is only the fallback for a game run without install text (tests/simulation, a missing entry)."
 "# original empty: custom text; en and ru are both required. Russian: no letter yo (the menu font lacks it); prefer Label: value over sentences that decline a name."
 "# record.SYMBOL.field, ability.ID.field and map.STEM.field rows fill in for records whose original text is missing or a stub."
 sandbox.title,,Sandbox,Песочница,The Sandbox test map in the map list
@@ -14,3 +14,229 @@ sandbox.dummy.restore,,Restore health,Восстановить здоровье,
 ai.default,,Default (medium),Стандартный (средний),Bot personality used when a map names none
 ability.research_first,,{0}: research at the {1} first,{0}: сначала изучите в здании «{1}»,"An upgrade ability not researched yet; {0} = ability, {1} = building"
 record.OBJECT_PLACE_OF_POWER_RANDOM.name,,Random place of power,Случайное место силы,The map's random landmark before the match picks one; the source names it nowhere
+"# Build-184: tooltip labels. The original's own labels first (GameConsole 8300-8304, 8404-8414, 8450-8453), then the lines it never had."
+tip.level,GameConsole:8300,Level,,Level (hero level line and tooltip)
+tip.requirements,GameConsole:8301,Requirements,,Requirements
+tip.description,GameConsole:8302,Description,,The tooltip's Description strip
+tip.seconds,GameConsole:8303,s,,"Seconds label after a number (""Sec."")"
+tip.cooldown,GameConsole:8304,Recharge,,Cooldown / recharge time label
+tip.weapon_rating,GameConsole:8122,Weapon Rating,,Heading of the attack type chart tooltip
+tip.time,,Time,Время,Label before a training or research time
+tip.build_time,,Build time with one worker,Время строительства (один работник),Label before a building's construction time
+tip.keys_either,,{0} or {1},{0} или {1},Two hotkeys for one button
+tip.on_food_well,,On a food well.,Строится на источнике пищи.,Where a farm-type resource building stands
+tip.on_ore_pile,,On an ore pile.,Строится на залежи руды.,Where a mine-type resource building stands
+tip.extra_worker,,Each extra worker adds {0}% build speed.,Каждый следующий работник: +{0}% к скорости строительства.,{0} = percent
+tip.near_buildings,,Must stand near your buildings.,Ставится рядом с вашими постройками.,Placement rule of some buildings
+tip.opens,,Opens,Открывает,"Label before the buildings and units an upgrade makes available"
+tip.hero_limit,,Hero: at most {0} at a time of {1},"Герой: одновременно не больше {0} из: {1}","{0} = count, {1} = hero names"
+tip.seconds_short,,s,с,Suffix of the recharge countdown on an ability button
+resource.food,GameConsole:8450,Food,,Food
+resource.ore,GameConsole:8451,Ore,,Ore
+resource.fate,GameConsole:8452,Fate,,"Fate (the original's ""magic power"")"
+resource.population,GameConsole:8453,Population,,Population
+resource.population_tip,,Population · units / capacity,Население · воины / предел,Tooltip of the population counter
+stat.armor,GameConsole:8404,Armor,,Armor stat label
+stat.attack,GameConsole:8407,Attack,,Attack stat label
+stat.health,GameConsole:8410,Health,,Health label
+stat.victories,GameConsole:8411,Victories,,Kills stat label
+stat.ballista,GameConsole:8412,Ballista,,A tower's ballista weapon
+stat.lifetime,GameConsole:8414,Lifetime,,A summon's remaining-life meter
+stat.arrows,,Arrows,Стрелы,A tower's arrow weapon
+stat.damage_per_hit,,Damage per hit,Урон за удар,
+stat.average_damage_per_hit,,Average damage per hit,Средний урон за удар,Units whose hits vary in length
+stat.damage_per_second,,Damage per second,Урон в секунду,
+stat.attack_speed,,Attack speed: {0} (a hit every {1} s),Скорость атаки: {0} (удар раз в {1} сек.),"{0} = stat.speed.*, {1} = seconds"
+stat.range,,Range: {0} m,Дальность: {0} м,{0} = metres or min-max
+stat.no_attack,,No attack,Не атакует,
+stat.hit_split,,({0} base {1} bonus),"(осн. {0}, доп. {1})","{0} = base damage, {1} = signed bonus"
+stat.matchup,,{0}% vs {1},{0}% против: {1},"{0} = percent, {1} = damage type"
+stat.type_damage,,{0} damage,Тип урона: {0},Attack type icon tooltip without the chart art
+stat.type.cutting,,Cutting,Рубящий,Damage type
+stat.type.piercing,,Piercing,Колющий,Damage type
+stat.type.blunt,,Blunt,Дробящий,Damage type
+stat.type.hero,,Hero,Герой,Damage type
+stat.type.none,,Unclassified,Без типа,Damage type
+stat.speed.very_fast,,very fast,очень быстрая,Attack speed band
+stat.speed.fast,,fast,быстрая,Attack speed band
+stat.speed.average,,average,средняя,Attack speed band
+stat.speed.slow,,slow,медленная,Attack speed band
+stat.speed.very_slow,,very slow,очень медленная,Attack speed band
+stat.armor_split,,Armor {0}: {1} base,Защита {0}: осн. {1},"{0} = armor now, {1} = base armor"
+stat.armor_source,,{0} {1},{1}: {0},"{0} = signed amount, {1} = stat.armor_from.*"
+stat.armor_from.level,,hero level,уровень героя,
+stat.armor_from.research,,research,исследования,
+stat.armor_from.places,,places of power,места силы,
+stat.armor_from.dummy,,dummy buttons,кнопки манекена,Sandbox
+stat.armor_from.shield_break,,Shield Break,Разбивание щита,Fallback when the install has no BattleGear 26 name
+stat.food_remaining,,Food remaining: {0},Осталось пищи: {0},A food well's stock
+stat.ore_remaining,,Ore remaining: {0},Осталось руды: {0},An ore pile's stock
+unit.under,,Under {0},Под действием: {0},Portrait tooltip line listing the unit's statuses
+hero.max,,MAX,МАКС.,Experience counter at the top level
+hero.max_level,,Maximum level,Максимальный уровень,
+hero.xp_to_level,,{0} / {1} XP to level {2},Опыт: {0} / {1} до уровня {2},
+hero.total_xp,,Total experience: {0} XP,Всего опыта: {0},
+hero.level_bonuses,,"Level bonuses: +{0} maximum health, +{1} armor, +{2}% attack.","Бонусы уровня: здоровье +{0}, защита +{1}, атака +{2}%.",
+hero.health_line,,{0} · {1}/{2} HP,{0} · здоровье {1}/{2},Hero bar portrait tooltip
+hero.fallen,,{0} · fallen,{0} · пал,Hero bar: a hero waiting to be revived
+hero.ring,,Wearing the One Ring,Надел Единое Кольцо,Hero bar: Frodo with the Ring on
+hero.remaining_life,,Remaining life {0},Осталось жизни: {0},Hero bar: a summon; {0} = percent
+hero.remaining_life_seconds,,Remaining life: {0} s,Осталось жизни: {0} сек.,Summon lifetime meter
+"# Build-184: command card, construction, training, upgrades and research."
+cmd.attack,,Attack,Атака,Attack command button
+cmd.hold,GameConsole:8114,Hold Position,,Hold position command
+cmd.hold.tip,GameConsole:8115,,,
+cmd.guard,GameConsole:8112,Guard,,Guard command
+cmd.guard.tip,GameConsole:8113,,,
+cmd.patrol,GameConsole:8104,Patrol,,Patrol command
+cmd.patrol.tip,GameConsole:8105,,,
+cmd.idle_workers,GameConsole:8006,Idle Worker,,Idle worker button
+cmd.idle_workers.tip,GameConsole:8007,Select and center the next idle worker.,,
+cmd.build,,Build,Строительство,Worker's build menu button
+cmd.build_advanced,,Build advanced,Особые постройки,Worker's advanced build menu button
+cmd.cancel_construction,,Cancel construction,Отменить строительство,
+button.back,Menu:9006,Back,,Back
+button.cancel,Menu:9000,Cancel,,Cancel
+queue.training,,Training {0},Обучение: {0},
+queue.queued,,Queued {0},В очереди: {0},
+queue.waiting,,{0} queued,В очереди: {0},{0} = count
+queue.upgrading,,Upgrading to {0},Улучшение: {0},
+queue.researching,,Researching {0},Исследование: {0},
+queue.refund,,Cancel refunds {0} food and {1} ore,"Отмена вернет: пища {0}, руда {1}",
+queue.refund_fate,,Cancel refunds {0} food and {1} ore and {2} Fate,"Отмена вернет: пища {0}, руда {1}, волшебная сила {2}",
+rally.gather_food,,Rally: gather food,Сборный пункт: добыча пищи,
+rally.gather_ore,,Rally: gather ore,Сборный пункт: добыча руды,
+rally.set,,Rally point set,Сборный пункт назначен,
+rally.none,,No rally point,Сборный пункт не назначен,
+research.attack,,+{0} attack,атака +{0},"After a unit name: ""Swordsman: +1 attack"""
+research.armor,,+{0} armor,защита +{0},
+research.missile_range,,missile range x{0},дальность стрельбы x{0},
+research.new_axe,,throws a new axe: attack {0},новый метательный топор: атака {0},
+research.building_health,,Every building x{0} health,Здоровье всех построек x{0},
+research.tier_replaces,,Each tier of this line replaces the one before.,Каждая ступень этой линии заменяет предыдущую.,
+research.applies_to_trained,,Applies to units already trained.,Действует и на уже нанятых воинов.,
+research.not_simulated,,Not simulated yet: {0}.,Пока не моделируется: {0}.,{0} = developer reason (English)
+"# Build-184: abilities. The install's description leads; these lines give the numbers."
+ability.unlock,,Unlock,Открыть,Buying a hero ability with Fate
+ability.fate_short,,{0} Fate,{0} ВС,On an ability button without purchase art
+ability.detection,,Reveals invisible enemies within {0} m. Cannot reveal the One Ring.,Обнаруживает невидимых врагов в радиусе {0} м. Не обнаруживает Единое Кольцо.,
+ability.ring,,"Turns Frodo invisible to enemies and prevents him from fighting. Drains {0} HP per second, stopping at 1 HP.","Фродо невидим для врагов и не сражается. Теряет {0} здоровья в секунду, но не меньше 1.",
+ability.bane,,"Deals {0}% damage against orcs, Uruk-Hai and goblins.","Урон против орков, урук-хаев и гоблинов: {0}%.",
+ability.aura,,Allies within {0} m recharge abilities {1}% as fast.,Союзники в радиусе {0} м: скорость восстановления умений {1}%.,
+ability.heal,,Restores up to {0} HP to a friendly unit within {1} m.,Восстанавливает до {0} здоровья дружественному воину в радиусе {1} м.,
+ability.fury,,Increases weapon damage by {0}%. Deals {1}% damage against Wraiths and Black Riders.,Урон от оружия +{0}%. Урон против призраков и Черных Всадников: {1}%.,
+ability.siege_aura,,"Allies within {0} m, including the bearer, deal {1}% damage to buildings.","Союзники в радиусе {0} м, включая владельца: урон по постройкам {1}%.",
+ability.ward,,Allies within {0} m take {1}% damage from missiles for {2}s.,Союзники в радиусе {0} м получают {1}% урона от метательного оружия в течение {2} сек.,
+ability.armor_up,,Adds 1 armor.,Защита +1.,Sandbox dummy button
+ability.armor_reset,,Sets armor to 0.,Защита становится 0.,Sandbox dummy button
+ability.restore,,Restores full health.,Полностью восстанавливает здоровье.,Sandbox dummy button
+ability.immunity,,"Protects against poison, stun, blind and slow.","Защищает от яда, оглушения, ослепления и замедления.",
+"# Build-184: Fate and its global abilities."
+fate.click,GameConsole:8401,Click for global abilities.,,Fate orb tooltip
+fate.not_earned,,Not earned in this match,В этой битве не накапливается,
+fate.max_reached,,Maximum Fate reached,Достигнут предел волшебной силы,
+fate.progress,,Progress to next point: {0}%,До следующего очка: {0}%,
+fate.earned,,"{0} earned in battle. Pays for heroes, ability unlocks and global abilities.","Получено в бою: {0}. Тратится на героев, открытие умений и чудеса.",
+fate.earned_evil,,"{0} earned in battle and from the ground its War Posts corrupt. Pays for heroes, ability unlocks and global abilities.","Получено в бою и с земли, оскверненной сторожевыми постами: {0}. Тратится на героев, открытие умений и чудеса.",
+fate.recharging,,Recharging ({0}s),Восстанавливается ({0} сек.),
+fate.choose_hero,,Choose a friendly hero.,Выберите дружественного героя.,
+fate.choose_point,,Choose a point on the battlefield.,Выберите место на поле боя.,
+"# Build-184: statuses (the status bar and the portrait tooltip)."
+status.left,,{0} s left,Осталось: {0} сек.,
+status.own_aura,,Its own aura,Собственная аура,
+status.from,,From {0} #{1} · {2},Источник: {0} #{1} · {2},"{0} = unit, {1} = number, {2} = distance"
+status.darkness,,Moves and attacks at {0} speed.,Скорость движения и атаки: {0}.,
+status.blinded,,Blinded: cannot attack.,Ослеплен: не может атаковать.,
+status.savage_influence,,Deals {0} normal attack damage.,Урон от атаки: {0} от обычного.,
+status.obelisk,,Takes {0} of every hit; the Obelisk soaks the rest.,"Получает {0} урона от каждого удара, остальное принимает Обелиск.",
+status.obelisk_health,,Obelisk health {0} · at most {1},Здоровье Обелиска: {0} · не дольше чем: {1},"{1} = status.left"
+status.blind.title,,Blind,Слепота,
+status.blind,,Cannot attack; can still move and cast abilities.,"Не может атаковать, но может двигаться и применять умения.",
+status.heroic_aura,,Abilities recharge {0} as fast.,Скорость восстановления умений: {0}.,
+status.siege_aura,,Deals {0} damage to buildings.,Урон по постройкам: {0}.,
+status.guardian_wind,,Takes {0} damage from missiles.,Урон от метательного оружия: {0}.,
+status.camouflage,,Hidden until moving or attacking; enemy detectors can reveal this unit.,"Невидим, пока не двигается и не атакует; вражеские разведчики могут его обнаружить.",
+status.elven_cloak,,Invisible to enemies without detection.,"Невидим для врагов, не умеющих обнаруживать невидимок.",
+status.sneak,,Hidden from enemies without detection.,"Скрыт от врагов, не умеющих обнаруживать невидимок.",
+status.protection,,Absorbs {0} more damage.,Поглотит еще {0} урона.,
+status.damage_per_second,,Takes {0} damage per second.,Получает {0} урона в секунду.,
+status.poisoned.title,GameConsole:8420,Poisoned,,Poisoned
+status.poisoned_pestilence,,"Takes {0} damage per second, but not the last point.","Получает {0} урона в секунду, но последнюю единицу здоровья не теряет.",
+status.treeform,,Rooted; restores {0} health per second.,Укоренился; восстанавливает {0} здоровья в секунду.,
+status.dazed.title,,Dazed,Оглушен,
+status.dazed,,"Cannot move, attack or cast abilities.","Не может двигаться, атаковать и применять умения.",
+status.frozen.title,,Frozen,Заморожен,
+status.frozen,,"Frozen solid: cannot move, attack or cast abilities.","Скован льдом: не может двигаться, атаковать и применять умения.",
+status.marked.title,,Marked,Помечен,
+status.marked,,Gollum's side sees this unit wherever it goes.,"Сторона Голлума видит этого воина, куда бы он ни шел.",
+status.healing,,Restores {0} health per second.,Восстанавливает {0} здоровья в секунду.,
+status.elven_speed,,Moves and attacks {0} faster.,Двигается и атакует быстрее на {0}.,
+status.willow,,Moves and attacks at {0}% speed.,Скорость движения и атаки: {0}%.,
+status.negate,,Active and passive abilities are disabled.,Активные и пассивные умения отключены.,
+status.flame_shield,,Burns nearby enemies.,Обжигает врагов поблизости.,
+status.burning.title,,Burning,Горит,
+status.one_ring,,"Invisible to enemies and does not fight. Gollum, the Nazgul King and Black Riders see through it (Ringsight).","Невидим для врагов и не сражается. Голлум, Король-Назгул и Черные Всадники видят его (Взор Кольца).",
+status.one_ring_drain,,Loses {0} HP per second (stops at 1 HP).,Теряет {0} здоровья в секунду (не меньше 1).,
+status.shield_break,,Armor reduced by {0} ({1} stacks).,Защита снижена на {0} (наложений: {1}).,
+"# Build-184: places of power (status lines, the structure panel's benefits and the place powers)."
+place.of_power,,Place of power,Место силы,
+place.yours_until,,yours until an enemy stands alone in its zone,"ваше, пока враг не останется в его зоне один",After place.of_power
+place.stand_alone,,stand alone within {0} m to take it,"чтобы захватить, останьтесь одни в радиусе {0} м",After place.of_power
+place.unclaimed,,Unclaimed,Ничье,
+place.held_by,,Held by {0},Владелец: {0},{0} = place.holder.*
+place.holder.you,,you,вы,
+place.holder.enemy,,the enemy,противник,
+place.holder.player,,Player {0},Игрок {0},
+place.contested,,contested,оспаривается,
+place.landmark,,Scenario landmark · no army bonus,Ориентир сценария · без бонуса войскам,
+place.held_by_player,,Place of power held by Player {0},Место силы удерживает игрок {0},Status tooltip
+place.who.heroes,,Heroes,Герои,Who a place's benefit is for
+place.who.all,,All units,Все воины,
+place.who.cavalry,,Cavalry,Конница,
+place.who.orcs,,Orcs,Орки,
+place.who.balrog,,Balrog,Балрог,
+place.who.affected,,Affected units,Воины под действием,
+place.benefit,,{0} {1},{0}: {1},"{0} = place.who.*, {1} = place_benefit.*"
+place.not_simulated,,{0} (not simulated yet),{0} (пока не моделируется),
+place.armor,,+{0} armor,защита +{0},
+place.attack,,+{0} attack,атака +{0},
+place.attack_vs_orcs,,+{0} attack against Orcs and Goblins,атака +{0} против орков и гоблинов,
+place.regeneration,,+{0} HP per second,восстановление здоровья +{0} в секунду,
+place.max_health,,Maximum health {0},максимальное здоровье {0},{0} = x1.25
+place.melee_damage,,Melee damage {0},урон в ближнем бою {0},
+place.ranged_damage,,Ranged damage {0},урон в дальнем бою {0},
+place.damage,,Damage {0},урон {0},
+place.siege_damage,,Damage to buildings {0},урон по постройкам {0},
+place.recharge_time,,Ability recharge time {0},время восстановления умений {0},
+place.experience,,Experience gained {0},получаемый опыт {0},
+place.running_speed,,Running speed {0},скорость бега {0},
+place.sight,,Sight range {0},дальность обзора {0},
+place.cost,,Recruitment food and ore cost {0},стоимость найма (пища и руда) {0},
+place.food_cost,,{0} food per recruitment,пища за найм: {0},
+place.ore_cost,,{0} ore per recruitment,руда за найм: {0},
+place.fate_cost,,{0} Fate per recruitment,волшебная сила за найм: {0},
+place.fate_earned,,Fate earned {0},получаемая волшебная сила {0},
+place_benefit.regeneration,,+{0} HP/s regeneration,восстановление здоровья +{0} в секунду,
+place_benefit.max_health,,{0} maximum health,максимальное здоровье {0},{0} = +25%
+place_benefit.melee_damage,,{0} melee damage,урон в ближнем бою {0},
+place_benefit.ranged_damage,,{0} ranged damage,урон в дальнем бою {0},
+place_benefit.damage,,{0} damage,урон {0},
+place_benefit.siege_damage,,{0} damage to buildings,урон по постройкам {0},
+place_benefit.recharge,,abilities recharge in {0}% of the time,умения восстанавливаются за {0}% времени,
+place_benefit.running_speed,,{0} running speed,скорость бега {0},
+place_benefit.sight,,{0} sight,дальность обзора {0},
+place_benefit.experience,,{0} experience,получаемый опыт {0},
+place_benefit.fate_gathering,,{0} Fate gathering,накопление волшебной силы {0},
+place_benefit.cost,,{0} cost,стоимость {0},
+place_benefit.fate_cost,,{0} Fate cost,стоимость в волшебной силе {0},
+place_benefit.food_cost,,{0} food cost,стоимость в пище {0},
+place_benefit.ore_cost,,{0} ore cost,стоимость в руде {0},
+place_benefit.special,,a special power,особая сила,
+placepower.willow,,Slow enemies in {0} m to {1}% speed for {2}s. Range {3} m.,Замедляет врагов в радиусе {0} м до {1}% скорости на {2} сек. Дальность: {3} м.,Enchanting Willow's power
+placepower.aviary,,"Scout a {0} m area for {1}s, revealing camouflaged units. The Ring stays hidden.","Разведывает область радиусом {0} м на {1} сек., обнаруживая замаскированных воинов. Кольцо остается скрытым.",Radagast's Aviary's power
+"# Build-184: the structure panel."
+structure.burning,,Takes damage over time until the fire goes out.,"Получает урон, пока не погаснет огонь.",
+structure.armor_tip,,Reduces incoming weapon damage.,Снижает урон от оружия.,
+structure.garrison_empty,,Garrison: empty,Гарнизон: пусто,
+structure.leaves_tower,GameConsole:8131,Leaves the tower,,Clicking a garrisoned unit sends it out
+structure.construction,,Construction {0}%,Строительство: {0}%,

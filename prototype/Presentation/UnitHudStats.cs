@@ -10,14 +10,15 @@ namespace Reforged.Presentation;
 public sealed record UnitHudStats(string Type,string Icon,string Matchups,string Attack,string Armor,string Victories,string Health,string AttackTip = "",
     string AttackBonus = "",string ArmorBonus = "",string ArmorTip = "")
 {
-    public static string TypeName(int type) => type switch { 0 => "Cutting",1 => "Piercing",2 => "Blunt",3 => "Hero",_ => "Unclassified" };
+    // Build-184: every word comes from GameText (the catalog keeps today's English as its English).
+    public static string TypeName(int type) => GameText.T(type switch { 0 => "stat.type.cutting",1 => "stat.type.piercing",2 => "stat.type.blunt",3 => "stat.type.hero",_ => "stat.type.none" });
     public static UnitHudStats From(SimUnit unit,CombatRules rules)
     {
         int type = unit.Definition.DamageType;
         bool evil = SimWorld.FactionOfName(unit.Definition.Name) == SimWorld.Evil;
         string icon = type switch { 0 => evil ? "slash" : "slashing",1 => "piercing",2 => "blunt",3 => "hero",_ => "" };
         string matchups = string.Join("\n",Enumerable.Range(0,4).Select(target =>
-            $"{rules.TypeScale(type,target)/10_000m:0.##}% vs {TypeName(target)}"));
+            GameText.T("stat.matchup",GameText.Number(rules.TypeScale(type,target)/10_000m),TypeName(target))));
         decimal placeScale = unit.PlaceDamagePpm/1_000_000m*(unit.Definition.IsRanged ? unit.PlaceRangedPpm : unit.PlaceMeleePpm)/1_000_000m;
         decimal dps = unit.MeleeDamageRate/1000m*placeScale,seconds = SecondsPerHit(unit.Definition);
         decimal baseDps = (unit.EnabledAbilities.FirstOrDefault(a => a.Passive && a.Kind == AbilityKind.Fury)?.DpsMilli ?? unit.Definition.DpsMilli)/1000m;
@@ -26,19 +27,25 @@ public sealed record UnitHudStats(string Type,string Icon,string Matchups,string
         bool variableHit = unit.Definition.UsesHitIntervals;
         decimal actualSeconds = seconds*1_000_000/unit.TimeScalePpm,actualDps = variableHit ? dps*unit.TimeScalePpm/1_000_000m : hitDamage/actualSeconds;
         decimal hitBonus = decimal.Parse(perHit,CultureInfo.InvariantCulture)-decimal.Parse(basePerHit,CultureInfo.InvariantCulture);
-        string hitLabel = variableHit ? "Average damage per hit" : "Damage per hit";
-        string tip = dps <= 0 ? "No attack" : string.Create(CultureInfo.InvariantCulture,
-            $"{hitLabel}: {perHit}{(dps != baseDps ? $" ({basePerHit} base {Signed(hitBonus)} bonus)" : "")}\nDamage per second: {actualDps:0.###}\nAttack speed: {SpeedName(actualSeconds)} (a hit every {actualSeconds:0.##} s)");
+        string hitLabel = GameText.T(variableHit ? "stat.average_damage_per_hit" : "stat.damage_per_hit");
+        string tip = dps <= 0 ? GameText.T("stat.no_attack") : string.Join("\n",
+            $"{hitLabel}: {perHit}"+(dps != baseDps ? " "+GameText.T("stat.hit_split",basePerHit,Signed(hitBonus)) : ""),
+            GameText.Labeled("stat.damage_per_second",GameText.Number(actualDps,"0.###")),
+            GameText.T("stat.attack_speed",SpeedName(actualSeconds),GameText.Number(actualSeconds,"0.##")));
         decimal armor = unit.ArmorMilli/1000m,baseArmor = unit.Definition.ArmorMilli/1000m;
-        var sources = new[] {("hero level",unit.ExperienceArmorMilli),("research",unit.TechniqueArmorMilli),("places of power",unit.PlaceArmorMilli),("dummy buttons",unit.BonusArmorMilli),
-                ("Shield Break",-unit.ShieldBreakArmorMilli)}
-            .Where(s => s.Item2 != 0).Select(s => $"{Signed(s.Item2/1000m)} {s.Item1}");
-        string armorTip = armor == baseArmor ? "" : string.Create(CultureInfo.InvariantCulture,$"Armor {armor:0.###}: {baseArmor:0.###} base\n")+string.Join("\n",sources);
+        var sources = new[] {("stat.armor_from.level",unit.ExperienceArmorMilli),("stat.armor_from.research",unit.TechniqueArmorMilli),
+                ("stat.armor_from.places",unit.PlaceArmorMilli),("stat.armor_from.dummy",unit.BonusArmorMilli),("stat.armor_from.shield_break",-unit.ShieldBreakArmorMilli)}
+            .Where(s => s.Item2 != 0).Select(s => GameText.T("stat.armor_source",Signed(s.Item2/1000m),
+                s.Item1 == "stat.armor_from.shield_break" ? GameText.Ability(ShieldBreakGear,"name") ?? GameText.T(s.Item1) : GameText.T(s.Item1)));
+        string armorTip = armor == baseArmor ? "" : GameText.T("stat.armor_split",GameText.Number(armor,"0.###"),GameText.Number(baseArmor,"0.###"))+"\n"+string.Join("\n",sources);
         return new(TypeName(type),icon == "" ? "" : $"counter_marker_{(evil ? 'E' : 'G')}_{icon}",matchups,dps <= 0 ? perHit : basePerHit,
             baseArmor.ToString("0.###",CultureInfo.InvariantCulture),
             unit.KillCount.ToString(CultureInfo.InvariantCulture),$"{unit.Health}/{unit.MaxHealth}",tip,
             dps <= 0 || hitBonus == 0 ? "" : Signed(hitBonus),armor == baseArmor ? "" : Signed(armor-baseArmor),armorTip);
     }
+
+    /// <summary>The Dwarf Shieldbreaker's Shield Break gear (BattleGear 26), whose name the armor tooltip shows.</summary>
+    public const int ShieldBreakGear = 26;
 
     /// <summary>A bonus as the console's green column reads it: "+1", "-3".</summary>
     public static string Signed(decimal value) => (value >= 0 ? "+" : "")+value.ToString("0.###",CultureInfo.InvariantCulture);
@@ -56,8 +63,8 @@ public sealed record UnitHudStats(string Type,string Icon,string Matchups,string
 
     /// <summary>Bands over the Good roster's 0.77-2.2 s between hits: the Gondor Swordsman is very fast, the Worker average,
     /// Aragorn fast, the Uruk-Hai average, the Rohan Rider slow, the Elven Archer very slow.</summary>
-    public static string SpeedName(decimal secondsPerHit) => secondsPerHit switch
+    public static string SpeedName(decimal secondsPerHit) => GameText.T(secondsPerHit switch
     {
-        < 1.0m => "very fast",< 1.3m => "fast",< 1.6m => "average",< 1.9m => "slow",_ => "very slow"
-    };
+        < 1.0m => "stat.speed.very_fast",< 1.3m => "stat.speed.fast",< 1.6m => "stat.speed.average",< 1.9m => "stat.speed.slow",_ => "stat.speed.very_slow"
+    });
 }

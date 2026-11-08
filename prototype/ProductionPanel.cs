@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 using Reforged.Simulation;
 
 public partial class CommandPanel
@@ -68,12 +69,13 @@ public partial class CommandPanel
             var rules = world.TrainingCost(PlayerTeam,world.ProductionRules[producer!.Units[slot]]);
             button.Disabled = !world.CanTrain(PlayerTeam,producer.Id,slot,out string reason);
             button.Icon = _art.GetValueOrDefault(PortraitName(rules.Unit));
-            button.TooltipText = $"Train {rules.DisplayName} [{GridKeys[slot]}]\n{rules.FoodCost} food · {rules.OreCost} ore"
-                + (rules.FateCost > 0 ? $" · {rules.FateCost} Fate" : "")+$" · population {rules.Population} · {rules.DurationTicks/20}s"
-                + (rules.UniqueGroup >= 0 ? world.FactionOf(PlayerTeam) == SimWorld.Evil
-                    ? $"\nHero: your Fortress holds {world.UniqueGroupLimit(PlayerTeam,rules.UniqueGroup)} of the Nazgul King, Saleme and Grishnakh at a time"
-                    : $"\nHero: your Citadel holds {world.UniqueGroupLimit(PlayerTeam,rules.UniqueGroup)} of Gimli, Aragorn and Legolas at a time" : "")
-                + (button.Disabled ? "\n"+reason : "");
+            // Build-184: as the original's recruitment tooltip, the unit's own name, cost cells and description (campaign-012).
+            string? heroes = rules.UniqueGroup < 0 ? null : GameText.T("tip.hero_limit",world.UniqueGroupLimit(PlayerTeam,rules.UniqueGroup),
+                string.Join(", ",world.ProductionRules.Values.Where(r => r.UniqueGroup == rules.UniqueGroup && SimWorld.FactionOfName(r.Unit) == SimWorld.FactionOfName(rules.Unit))
+                    .Select(r => r.DisplayName).Distinct()));
+            button.TooltipText = HudTip.Make(HudTip.Keyed(rules.DisplayName,GridKeys[slot].ToString()),
+                HudTip.Costs(rules.FoodCost,rules.OreCost,rules.FateCost,rules.Population),
+                Seconds("tip.time",rules.DurationTicks),heroes,GameText.Record(rules.Unit,"description"),button.Disabled ? reason : null);
         }
         _upgradeButton.Visible = upgrade != null;
         if (upgrade != null)
@@ -83,28 +85,30 @@ public partial class CommandPanel
             var opens = world.BuildingRules.Values.Where(r => r.Prerequisites.Contains(upgrade.Name)).Select(r => r.DisplayName)
                 .Concat(world.ProductionRules.Values.Where(r => r.Prerequisites?.Contains(upgrade.Name) == true).Select(r => r.DisplayName)).ToArray();
             int population = world.PopulationProvided.GetValueOrDefault(upgrade.Name)-world.PopulationProvided.GetValueOrDefault(site.Building!);
-            _upgradeButton.TooltipText = $"Upgrade to {upgrade.DisplayName} [{GridKeys[UpgradeSlot]}]\n{upgrade.FoodCost} food · {upgrade.OreCost} ore · {upgrade.DurationTicks/20}s · {upgrade.MaxHealth} health"
-                + (population > 0 ? $" · +{population} population" : "")
-                + (opens.Length > 0 ? "\nOpens "+string.Join(", ",opens) : "")
-                + (_upgradeButton.Disabled ? "\n"+reason : "");
+            _upgradeButton.TooltipText = HudTip.Make(HudTip.Keyed(upgrade.DisplayName,GridKeys[UpgradeSlot].ToString()),HudTip.Costs(upgrade.FoodCost,upgrade.OreCost),
+                Seconds("tip.time",upgrade.DurationTicks),GameText.Labeled("stat.health",upgrade.MaxHealth),
+                population > 0 ? GameText.Labeled("resource.population","+"+population) : null,
+                opens.Length > 0 ? GameText.Labeled("tip.opens",string.Join(", ",opens)) : null,
+                GameText.Record(upgrade.Name,"description"),_upgradeButton.Disabled ? reason : null);
         }
         // An upgrade or a research in progress heads the queue (local skirmish-003): its own portrait, progress and refund.
         var research = site is { Research: { } name } && site.Team == PlayerTeam ? world.Techniques.First(t => t.Name == name) : null;
         (string Label,string? Portrait,int Done,int Duration,int Food,int Ore)? head = upgrading
-            ? ($"Upgrading to {upgrade!.DisplayName}",upgradePortrait,site!.UpgradeTicks,upgrade.DurationTicks,
+            ? (GameText.T("queue.upgrading",upgrade!.DisplayName),upgradePortrait,site!.UpgradeTicks,upgrade.DurationTicks,
                 upgrade.FoodCost*upgrade.FoodRefundPpm/1_000_000,upgrade.OreCost*upgrade.OreRefundPpm/1_000_000)
-            : research != null ? ($"Researching {research.DisplayName}",researchPortrait,site!.ResearchTicks,research.DurationTicks,research.FoodCost,research.OreCost) : null;
+            : research != null ? (GameText.T("queue.researching",research.DisplayName),researchPortrait,site!.ResearchTicks,research.DurationTicks,research.FoodCost,research.OreCost) : null;
         _training.Visible = producer is { Queue.Count: > 0 } || head != null;
         if (producer == null && head == null) return;
-        string rally = producer == null ? "" : producer.RallyResource >= 0 ? $"Rally: gather {world.Resources[producer.RallyResource].Kind.ToString().ToLowerInvariant()}"
-            : producer.RallyCell >= 0 ? "Rally point set" : "No rally point";
+        string rally = producer == null ? "" : producer.RallyResource >= 0
+            ? GameText.T(world.Resources[producer.RallyResource].Kind == ResourceKind.Food ? "rally.gather_food" : "rally.gather_ore")
+            : GameText.T(producer.RallyCell >= 0 ? "rally.set" : "rally.none");
         var queue = producer?.Queue ?? [];
         if (head == null && queue.Count == 0) { _order.Text = rally; return; }
         int done = head?.Done ?? producer!.ProgressTicks;
         int duration = head?.Duration ?? world.ProductionRules[queue[0].Unit].DurationTicks;
         int percent = done*100/duration,waiting = queue.Count-(head != null ? 0 : 1);
-        _order.Text = (head != null ? $"{head.Value.Label} {percent}%" : $"Training {world.ProductionRules[queue[0].Unit].DisplayName} {percent}%")
-            + (waiting > 0 ? $" · {waiting} queued" : "")+(rally != "" ? " · "+rally : "");
+        _order.Text = (head != null ? $"{head.Value.Label} {percent}%" : GameText.T("queue.training",world.ProductionRules[queue[0].Unit].DisplayName)+$" {percent}%")
+            + (waiting > 0 ? " · "+GameText.T("queue.waiting",waiting) : "")+(rally != "" ? " · "+rally : "");
         _trainingBar.Texture ??= _art.GetValueOrDefault("console_g_progressbar");
         _trainingProgress.Size = new(185f*done/duration,6);
         int offset = head != null ? 1 : 0;
@@ -115,15 +119,15 @@ public partial class CommandPanel
             if (index < offset)
             {
                 button.Icon = head!.Value.Portrait == null ? null : _art.GetValueOrDefault(head.Value.Portrait);
-                button.TooltipText = $"{head.Value.Label} · {percent}%\nCancel refunds {head.Value.Food} food and {head.Value.Ore} ore";
+                button.TooltipText = HudTip.Make($"{head.Value.Label} · {percent}%",null,GameText.T("queue.refund",head.Value.Food,head.Value.Ore));
                 continue;
             }
             var rules = world.ProductionRules[queue[index-offset].Unit];
             var paid = queue[index-offset];
             button.Icon = _art.GetValueOrDefault(PortraitName(rules.Unit));
-            button.TooltipText = (index == 0 ? $"Training {rules.DisplayName} · {percent}%" : $"Queued {rules.DisplayName}")
-                + $"\nCancel refunds {(paid.FoodPaid < 0 ? rules.FoodCost : paid.FoodPaid)} food and {(paid.OrePaid < 0 ? rules.OreCost : paid.OrePaid)} ore"
-                + ((paid.FatePaid < 0 ? rules.FateCost : paid.FatePaid) is > 0 and var fate ? $" and {fate} Fate" : "");
+            int food = paid.FoodPaid < 0 ? rules.FoodCost : paid.FoodPaid,ore = paid.OrePaid < 0 ? rules.OreCost : paid.OrePaid;
+            button.TooltipText = HudTip.Make(index == 0 ? GameText.T("queue.training",rules.DisplayName)+$" · {percent}%" : GameText.T("queue.queued",rules.DisplayName),null,
+                (paid.FatePaid < 0 ? rules.FateCost : paid.FatePaid) is > 0 and var fate ? GameText.T("queue.refund_fate",food,ore,fate) : GameText.T("queue.refund",food,ore));
         }
     }
 }

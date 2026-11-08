@@ -206,18 +206,19 @@ public partial class Main
         var definition = _structureDefinitions[site?.Building ?? entry.Type];
         int max = site != null ? world.SiteMaxHealth(site) : definition.GetProperty("max_health").GetInt32();
         int progress = site == null || site.Complete ? 100 : (int)(site.ProgressMicroTicks*100/(world.SiteRules(site).DurationTicks*1_000_000L));
-        string resource = entry.Resource < 0 ? "" : $"{world.Resources[entry.Resource].Kind} remaining: {(world.Resources[entry.Resource].RemainingMilli+999)/1000}";
+        string resource = entry.Resource < 0 ? "" : GameText.T(world.Resources[entry.Resource].Kind == ResourceKind.Food ? "stat.food_remaining" : "stat.ore_remaining",
+            (world.Resources[entry.Resource].RemainingMilli+999)/1000);
         var place = PlaceAt(id);
         string building = site?.Building ?? entry.Type;
         var weapons = world.Defenses.TryGetValue(building,out var first) ? new[] {first}
             .Concat(world.ExtraDefenses.GetValueOrDefault(building) ?? []).Select((defense,weapon) => DefenseHudStats.From(
-                _defenseLabels.TryGetValue(building,out var labels) && weapon < labels.Length ? labels[weapon] : "Attack",defense)).ToArray() : [];
+                _defenseLabels.TryGetValue(building,out var labels) && weapon < labels.Length ? labels[weapon] : GameText.T("stat.attack"),defense)).ToArray() : [];
         string attack = string.Join(" / ",weapons.Select(w => w.Attack));
         return new(id,entry.Team,place?.Name ?? GameText.Name(building,definition.GetProperty("display_name").GetString()!),definition.GetProperty("portrait").GetString()!,site != null ? ShownHealth(site) : max,max,
             definition.GetProperty("armor").GetDouble().ToString("0.##",System.Globalization.CultureInfo.InvariantCulture),progress,place == null ? resource : PlaceSummary(place),entry.Resource,
             !definition.TryGetProperty("has_health",out var hasHealth) || hasHealth.GetBoolean(),site?.Id ?? -1,
-            place == null ? "" : place.Owner == PlayerTeam && !_observing ? "Place of power · yours until an enemy stands alone in its zone"
-                : $"Place of power · stand alone within {place.RadiusMm/1000} m to take it",attack,
+            place == null ? "" : GameText.T("place.of_power")+" · "+(place.Owner == PlayerTeam && !_observing ? GameText.T("place.yours_until")
+                : GameText.T("place.stand_alone",place.RadiusMm/1000)),attack,
             Burning: site is { FirePpm: > 0,Health: > 0 },Weapons:weapons,
             GarrisonCapacity: site != null ? world.GarrisonCapacityOf(site) : 0,
             Garrison: site == null ? null : [.. world.GarrisonOf(site).Select(u => new GarrisonSlot(u.Id,UnitName(u.Id),

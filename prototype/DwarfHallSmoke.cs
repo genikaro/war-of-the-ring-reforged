@@ -72,7 +72,8 @@ public partial class Main
                     && _commands.DisplayedHealth == "140/140" && victim != null;
                 _dwarfChecks["axe_passives_visible_but_locked"] = new[] {2,3}.All(slot => _commands.AbilityButton(slot) is { Visible: true,Disabled: true,Icon: not null }
                     && _commands.AbilityButton(slot).GetThemeColor("icon_disabled_color").R < .5f
-                    && _commands.AbilityButton(slot).TooltipText.EndsWith(world.Units[_dwarfTrained].Ability(slot)!.Description));
+                    && _commands.AbilityButton(slot).TooltipText.EndsWith(Reforged.Presentation.GameNames.AbilityText(world.Units[_dwarfTrained].Ability(slot),"description")
+                        ?? world.Units[_dwarfTrained].Ability(slot)!.Description));
                 if (victim == null) break;
                 _dwarfVictim = victim.Id; _dwarfVictimHealth = victim.HealthMilli;
                 PushKey(Key.A); Click(_camera.UnprojectPosition(UnitPosition(victim)+Vector3.Up)); break;

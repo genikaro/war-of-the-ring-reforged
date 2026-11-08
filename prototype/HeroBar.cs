@@ -89,14 +89,15 @@ public partial class HeroBar : Control
                 slot.Experience.Position = new(X(FillLeft),top+ExperienceFill*768*scale);
                 slot.Experience.Size = new Vector2(FillWidth*1024*Math.Clamp(life,0,1),FillHeight*768)*scale;
                 slot.Level.Text = "";
-                slot.Portrait.TooltipText = $"{hero.Definition.DisplayName} · {hero.Health}/{hero.MaxHealth} HP\nRemaining life {Math.Clamp(life,0,1):P0}";
+                slot.Portrait.TooltipText = HudTip.Make(GameText.T("hero.health_line",hero.Definition.DisplayName,hero.Health,hero.MaxHealth),null,
+                    GameText.T("hero.remaining_life",GameText.Number((decimal)Math.Clamp(life,0,1)*100,"0")+"%"));
                 continue;
             }
             var xp=HeroExperienceText.From(hero);
             slot.Experience.Position = new(X(FillLeft),top+ExperienceFill*768*scale); slot.Experience.Size = new Vector2(FillWidth*1024*xp.Progress,FillHeight*768)*scale;
             slot.Level.Text=hero.HeroLevel.ToString();
-            slot.Portrait.TooltipText = fallen ? $"{hero.Definition.DisplayName} · fallen\n"+xp.Tooltip
-                : $"{hero.Definition.DisplayName} · {hero.Health}/{hero.MaxHealth} HP\n"+xp.Tooltip+(hero.RingActive ? "\nWearing the One Ring" : "");
+            slot.Portrait.TooltipText = fallen ? GameText.T("hero.fallen",hero.Definition.DisplayName)+"\n"+xp.Tooltip
+                : GameText.T("hero.health_line",hero.Definition.DisplayName,hero.Health,hero.MaxHealth)+"\n"+xp.Tooltip+(hero.RingActive ? "\n"+GameText.T("hero.ring") : "");
         }
     }
 

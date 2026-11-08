@@ -40,8 +40,8 @@ public partial class CommandPanel
         if (summoned)
         {
             float life=_world!.SummonLifeLeft(unit); int seconds=(unit.SummonedUntil-_world.Tick+SimWorld.TicksPerSecond-1)/SimWorld.TicksPerSecond;
-            _singleLevel.Text="Lifetime"; _singleLevel.TooltipText=_singleExperienceFrame.TooltipText=$"Remaining life: {seconds} s";
-            _singleExperienceText.Text=$"{seconds} s"; _singleExperienceClip.Size=new(SelectedBarWidth*life,12);
+            _singleLevel.Text=GameText.T("stat.lifetime"); _singleLevel.TooltipText=_singleExperienceFrame.TooltipText=GameText.T("hero.remaining_life_seconds",seconds);
+            _singleExperienceText.Text=$"{seconds} {GameText.T("tip.seconds")}"; _singleExperienceClip.Size=new(SelectedBarWidth*life,12);
             return;
         }
         if (!unit.Definition.Hero) return;
@@ -69,7 +69,7 @@ public partial class Main
             if (!unit.Present || !_world.CanSeeUnit(PlayerTeam,unit)) continue;
             var position=UnitPosition(unit);
             ElvenBurst(335,unit.Id,position,e.Tick); PlayAbilitySound([412],unit.Id,position);
-            var label=new Label3D {Text=$"Level {e.Level}",FontSize=40,PixelSize=.018f,Modulate=new Color("ffe098"),
+            var label=new Label3D {Text=$"{GameText.T("tip.level")} {e.Level}",FontSize=40,PixelSize=.018f,Modulate=new Color("ffe098"),
                 OutlineModulate=new Color("352408"),OutlineSize=8,Billboard=BaseMaterial3D.BillboardModeEnum.Enabled,
                 NoDepthTest=true,Position=position+Vector3.Up*(unit.Definition.BodyHeightMm/1000f+.6f)};
             AddChild(label);_healLabels.Add((label,e.Tick+40));

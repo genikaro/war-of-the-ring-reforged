@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 using Reforged.Simulation;
 using System.Text.Json;
 
@@ -104,11 +105,12 @@ public partial class Main
     /// <summary>Build-76: the Fate cell's state, the progress toward the next point and what battle has earned.</summary>
     public static string FateTip(SimWorld world,int team)
     {
+        // Build-184: in the install's language.
         var bank = world.Economies[team];
-        string progress = world.FateRules == null ? "Not earned in this match" : bank.Fate >= world.MaxFate ? "Maximum Fate reached"
-            : $"Progress to next point: {world.FateProgressPercent(team)}%";
-        string earned = world.FactionOf(team) == SimWorld.Evil ? "earned in battle and from the ground its War Posts corrupt" : "earned in battle";
-        return $"Fate {bank.Fate}/{world.MaxFate}\n{progress}\n{bank.FateEarned} {earned}. Pays for heroes, ability unlocks and global abilities.\nClick for global abilities.";
+        string progress = GameText.T(world.FateRules == null ? "fate.not_earned" : bank.Fate >= world.MaxFate ? "fate.max_reached" : "fate.progress",
+            world.FateProgressPercent(team));
+        return HudTip.Make($"{GameText.T("resource.fate")} {bank.Fate}/{world.MaxFate}",null,progress,
+            GameText.T(world.FactionOf(team) == SimWorld.Evil ? "fate.earned_evil" : "fate.earned",bank.FateEarned),GameText.T("fate.click"));
     }
 
     private void LoadSkirmishEconomy(JsonElement data)

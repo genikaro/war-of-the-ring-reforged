@@ -199,10 +199,10 @@ public partial class Main
                 var menu = Enumerable.Range(0,5).Select(i => _commands.GlobalPowerButton(i)).ToArray();
                 _evilChecks["fate_orb_shows_the_five_evil_powers"] = _commands.GlobalAbilitiesOpen && menu.All(b => b.IsVisibleInTree() && b.Icon != null)
                     && new[] {ShownPower(7,"Summon Bog"),ShownPower(8,"Murder of Crows"),ShownPower(2,"Vile Surge"),ShownPower(9,"Obelisk"),ShownPower(0,"Summon Balrog")}.Select((name,i) => menu[i].TooltipText.StartsWith(name)).All(v => v)
-                    && new[] {2,3,3,4,7}.Select((cost,i) => menu[i].TooltipText.Contains(cost+" Fate")).All(v => v);
+                    && new[] {2,3,3,4,7}.Select((cost,i) => menu[i].TooltipText.Contains(HudTip.FateCost(cost))).All(v => v);
                 _evilChecks["evil_palantir_uses_its_own_atlas"] = _commands.Art("console_e_powerbutton") is AtlasTexture evilOrb
                     && _commands.FateButton.GetChild<TextureRect>(0).Texture is AtlasTexture currentOrb && currentOrb.Atlas == evilOrb.Atlas;
-                _evilChecks["obelisk_is_castable"] = !menu[3].Disabled && menu[3].TooltipText.Contains("soaks");
+                _evilChecks["obelisk_is_castable"] = !menu[3].Disabled && menu[3].TooltipText.Contains(GameText.GlobalPower(9,"description") ?? "soaks");
                 _evilNotes["fate_menu"] = string.Join(" | ",menu.Select(b => b.TooltipText.Split((char)10)[0]));
                 if (_capture != "") _ = CaptureFrame(false,Shot("fate"));
                 // Casting through the command path: Vile Surge heals a wounded Goblin Slave and a Balrog answers the Summon.
@@ -787,7 +787,7 @@ public partial class Main
         {
             case 1:
                 _evilChecks["selected_summon_shows_its_lifetime"] = _commands.DisplayedLifetime is > .9f and <= 1f
-                    && _commands.HeroExperienceTooltip.StartsWith("Remaining life") && _commands.DisplayedHeroLevel == "Lifetime";
+                    && _commands.HeroExperienceTooltip.StartsWith(ShownBefore("hero.remaining_life_seconds",Slot)) && _commands.DisplayedHeroLevel == GameText.T("stat.lifetime");
                 if (obelisk != null) { _focus = new(-obelisk.X/1000f,obelisk.Y/1000f,obelisk.Z/1000f); _distance = 42; UpdateCamera(); }
                 _evilHudStep = 2; break;
             case 2:

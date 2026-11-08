@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 using Reforged.Simulation;
 using System.Text.Json;
 
@@ -175,8 +176,8 @@ public partial class Main
                 Choose(3); break;
             case 1953:
                 _structureChecks["neutral_well_selected_exclusively"] = _selected.Count == 0 && _selectedStructure == 3 && SelectedStructureDetails() is {Team: -1,ResourceId: 3};
-                _structureChecks["well_stock_and_original_portrait"] = SelectedStructureDetails() is {Resource: "Food remaining: 4500",Portrait: "Object_Well_Border"} well
-                    && well.Name == Shown("OBJECT_RESOURCE_FOOD_WELL","Food Well")
+                _structureChecks["well_stock_and_original_portrait"] = SelectedStructureDetails() is {Portrait: "Object_Well_Border"} well
+                    && well.Resource == GameText.T("stat.food_remaining",4500) && well.Name == Shown("OBJECT_RESOURCE_FOOD_WELL","Food Well")
                     && _commands.StructurePortraitButton.Icon != null;
                 _structureChecks["neutral_resource_has_no_fake_hp"] = !_commands.StructureHealthVisible && _commands.DisplayedHealth == "";
                 _structureChecks["neutral_structure_palette_empty"] = _commands.CommandPaletteEmpty;
@@ -189,7 +190,7 @@ public partial class Main
                 _structureChecks["neutral_shift_toggle"] = _selectedStructure == null && _selected.Count == 0;
                 Choose(2); break;
             case 1962:
-                _structureChecks["neutral_ore_stock_and_portrait"] = _selectedStructure == 2 && SelectedStructureDetails() is {Team: -1,Resource: "Ore remaining: 4500",Portrait: "Object_Ore_Pile_Border"}
+                _structureChecks["neutral_ore_stock_and_portrait"] = _selectedStructure == 2 && SelectedStructureDetails() is {Team: -1,Portrait: "Object_Ore_Pile_Border"} ore && ore.Resource == GameText.T("stat.ore_remaining",4500)
                     && _commands.StructurePortraitButton.Icon != null && _commands.CommandPaletteEmpty;
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-ore.png"); break;
             case 1970: Choose(521); break;
@@ -200,7 +201,7 @@ public partial class Main
                 // Build-54: the random place draws one source place by the match seed (0 here), shows what it gives and its zone.
                 _structureChecks["random_place_of_power_drawn"] = PlaceAt(521) is { Rules.Length: 1 } drawn && drawn.Rules[0].Random
                     && SelectedStructureDetails() is { } power && power.Name == drawn.Name && power.Name.StartsWith("Random Place of Power: ")
-                    && power.Place.StartsWith("Place of power · ") && power.Resource.Contains(PlaceBenefit(drawn.Rules[0]))
+                    && power.Place.StartsWith(GameText.T("place.of_power")+" · ") && power.Resource.Contains(PlaceBenefit(drawn.Rules[0]))
                     && _placeZones[521].Visible && !_placeZones.Values.Except([_placeZones[521]]).Any(z => z.Visible);
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-power.png"); break;
             case 1980: RecallWorkers(); break;

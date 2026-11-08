@@ -2,6 +2,8 @@ using Reforged.Simulation;
 using System.Text.Json;
 
 using var allocations = args.Contains("--allocation-profile") ? new AllocationProbe() : null;
+// Build-184: the HUD text the checks read comes from the repository's catalog in English (no install tables here).
+GameTextChecks.LoadRepositoryCatalog();
 // Build-160: local scans are checked against the full scans they replaced, in the checks and on request (soaks);
 // timing benchmarks run without the cross-check.
 SimWorld.VerifyFastPaths = args.Contains("--verify-fast-paths") || !args.Any(a => a.EndsWith("-benchmark") || a == "--army-soak");

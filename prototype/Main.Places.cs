@@ -86,42 +86,47 @@ public partial class Main
     /// <summary>Who holds the place and what it gives, for the structure panel.</summary>
     private string PlaceSummary(PlaceOfPower place)
     {
-        string holder = place.Owner < 0 ? "Unclaimed" : $"Held by {PlaceHolder(place.Owner,capital: false)}";
-        if (place.Contested) holder += " · contested";
+        // Build-184: in the install's language (the capture notices keep PlaceHolder's English until build-185).
+        string Holder(int team) => team == PlayerTeam && !_observing ? GameText.T("place.holder.you")
+            : _observing || _world!.Contenders.Count() > 2 ? GameText.T("place.holder.player",team+1) : GameText.T("place.holder.enemy");
+        string holder = place.Owner < 0 ? GameText.T("place.unclaimed") : GameText.T("place.held_by",Holder(place.Owner));
+        if (place.Contested) holder += " · "+GameText.T("place.contested");
         var benefits = place.Rules.Where(r => r.Modifier != "NONE").Select(PlaceBenefit).ToList();
-        if (_world!.PlacePowers.TryGetValue(place.Type,out var power)) benefits.Add(power.Description);
-        if (benefits.Count == 0) benefits.Add("Scenario landmark · no army bonus");
+        if (_world!.PlacePowers.TryGetValue(place.Type,out var power)) benefits.Add(CommandPanel.PlacePowerText(power));
+        if (benefits.Count == 0) benefits.Add(GameText.T("place.landmark"));
         return holder+"\n"+string.Join("\n",benefits);
     }
 
     /// <summary>A source place's benefit in words; modifiers the simulation does not apply yet say so.</summary>
     private static string PlaceBenefit(PlaceOfPowerRule rule)
     {
-        string who = rule.HeroesOnly ? "Heroes" : rule.AllUnits ? "All units" : rule.Name.Contains("STEED_OF_ROHAN") ? "Cavalry"
-            : rule.Name.Contains("ORC_MASK") ? "Orcs" : rule.Name.Contains("BALROG") ? "Balrog" : "Affected units";
+        string who = GameText.T(rule.HeroesOnly ? "place.who.heroes" : rule.AllUnits ? "place.who.all" : rule.Name.Contains("STEED_OF_ROHAN") ? "place.who.cavalry"
+            : rule.Name.Contains("ORC_MASK") ? "place.who.orcs" : rule.Name.Contains("BALROG") ? "place.who.balrog" : "place.who.affected");
         string Percent(int ppm) => ((ppm-1_000_000)/10_000).ToString("+0;-0",CultureInfo.InvariantCulture)+"%";
         string Signed(int value) => value.ToString("+0;-0",CultureInfo.InvariantCulture);
+        string T(string key,params object?[] args) => GameText.T(key,args);
         string what = rule.Modifier switch {
-            SimWorld.ArmorModifier => $"+{rule.Long} armor",
-            SimWorld.RegenerationModifier => "+"+(rule.FloatPpm/1_000_000.0).ToString("0.##",CultureInfo.InvariantCulture)+" HP/s regeneration",
-            SimWorld.MaxHealthModifier => Percent(rule.FloatPpm)+" maximum health",
-            SimWorld.DamageAdditiveModifier => $"+{rule.Long} attack",
-            SimWorld.MeleeDamageModifier => Percent(rule.FloatPpm)+" melee damage",
-            SimWorld.RangedDamageModifier => Percent(rule.FloatPpm)+" ranged damage",
-            SimWorld.DamageModifier => Percent(rule.FloatPpm)+" damage",
-            SimWorld.SiegeDamageModifier => Percent(rule.FloatPpm)+" damage to buildings",
-            SimWorld.CoolDownModifier => $"abilities recharge in {rule.FloatPpm/10_000}% of the time",
-            "RUNNING_SPEED" => Percent(rule.FloatPpm)+" running speed",
-            "LINE_OF_SIGHT" => Percent(rule.FloatPpm)+" sight",
-            "EXPERIENCE" => Percent(rule.FloatPpm)+" experience",
-            SimWorld.FateGatherModifier => Percent(rule.FloatPpm)+" Fate gathering",
-            "COST" => Percent(rule.FloatPpm)+" cost",
-            "FATE_COST_ADDITIVE" => Signed(rule.Long)+" Fate cost",
-            "FOOD_COST_ADDITIVE" => Signed(rule.Long)+" food cost",
-            "ORE_COST_ADDITIVE" => Signed(rule.Long)+" ore cost",
-            "DAMAGE_ADDITIVE_VERSUS_SPECIFIC_UNITS" => $"+{rule.Long} attack against Orcs and Goblins",
-            _ => "a special power" };
-        return $"{who} {what}"+(SimWorld.SimulatedPlaceModifiers.Contains(rule.Modifier) ? "" : " (not simulated yet)");
+            SimWorld.ArmorModifier => T("place.armor",rule.Long),
+            SimWorld.RegenerationModifier => T("place_benefit.regeneration",GameText.Number(rule.FloatPpm/1_000_000m)),
+            SimWorld.MaxHealthModifier => T("place_benefit.max_health",Percent(rule.FloatPpm)),
+            SimWorld.DamageAdditiveModifier => T("place.attack",rule.Long),
+            SimWorld.MeleeDamageModifier => T("place_benefit.melee_damage",Percent(rule.FloatPpm)),
+            SimWorld.RangedDamageModifier => T("place_benefit.ranged_damage",Percent(rule.FloatPpm)),
+            SimWorld.DamageModifier => T("place_benefit.damage",Percent(rule.FloatPpm)),
+            SimWorld.SiegeDamageModifier => T("place_benefit.siege_damage",Percent(rule.FloatPpm)),
+            SimWorld.CoolDownModifier => T("place_benefit.recharge",rule.FloatPpm/10_000),
+            "RUNNING_SPEED" => T("place_benefit.running_speed",Percent(rule.FloatPpm)),
+            "LINE_OF_SIGHT" => T("place_benefit.sight",Percent(rule.FloatPpm)),
+            "EXPERIENCE" => T("place_benefit.experience",Percent(rule.FloatPpm)),
+            SimWorld.FateGatherModifier => T("place_benefit.fate_gathering",Percent(rule.FloatPpm)),
+            "COST" => T("place_benefit.cost",Percent(rule.FloatPpm)),
+            "FATE_COST_ADDITIVE" => T("place_benefit.fate_cost",Signed(rule.Long)),
+            "FOOD_COST_ADDITIVE" => T("place_benefit.food_cost",Signed(rule.Long)),
+            "ORE_COST_ADDITIVE" => T("place_benefit.ore_cost",Signed(rule.Long)),
+            "DAMAGE_ADDITIVE_VERSUS_SPECIFIC_UNITS" => T("place.attack_vs_orcs",rule.Long),
+            _ => T("place_benefit.special") };
+        string line = T("place.benefit",who,what);
+        return SimWorld.SimulatedPlaceModifiers.Contains(rule.Modifier) ? line : T("place.not_simulated",line);
     }
 
     /// <summary>The selected place's zone in its holder's colour.</summary>

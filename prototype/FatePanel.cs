@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 using Reforged.Simulation;
 
 public partial class CommandPanel
@@ -29,7 +30,7 @@ public partial class CommandPanel
         _fateText = Counter("0",Vector2.Zero,new(30,30),17,HorizontalAlignment.Center);
         _fateText.AddThemeColorOverride("font_outline_color",new Color("14202b")); _fateText.AddThemeConstantOverride("outline_size",4);
         _fateButton.AddChild(_fateText);
-        _fateButton.TooltipText = "Fate\nProgress to next point: 0%\nClick for global abilities.";
+        _fateButton.TooltipText = HudTip.Make(GameText.T("resource.fate"),null,GameText.T("fate.progress",0),GameText.T("fate.click"));
         _fateButton.Pressed += () => {
             _fateAnimationMs = 0;
             if (GlobalAbilitiesOpen) CloseGlobalAbilities();
@@ -106,9 +107,11 @@ public partial class CommandPanel
             button.SetPressedNoSignal(pending == slot);
             int remaining = _world.GlobalCooldown(PlayerTeam,power.Id);
             int seconds = SimWorld.TicksPerSecond;
-            if (remaining > 0) reason = $"Recharging ({(remaining+seconds-1)/seconds}s)";
-            button.TooltipText = $"{power.Name} [{GridKeys[slot]}]\n{power.FateCost} Fate · {power.RechargeTicks/seconds}s recharge\n{power.Description}"
-                +(button.Disabled ? "\n"+reason : "\nChoose "+(power.Kind == GlobalPowerKind.HeroicLegacy ? "a friendly hero." : "a point on the battlefield."));
+            if (remaining > 0) reason = GameText.T("fate.recharging",(remaining+seconds-1)/seconds);
+            // Build-184: the power's name and the install's description, the Fate cell and the recharge time.
+            button.TooltipText = HudTip.Make(HudTip.Keyed(power.Name,GridKeys[slot].ToString()),HudTip.FateCost(power.FateCost),
+                GameText.Labeled("tip.cooldown",SecondsValue(power.RechargeTicks)),GameText.GlobalPower(power.Id,"description") ?? power.Description,
+                button.Disabled ? reason : GameText.T(power.Kind == GlobalPowerKind.HeroicLegacy ? "fate.choose_hero" : "fate.choose_point"));
         }
     }
 }

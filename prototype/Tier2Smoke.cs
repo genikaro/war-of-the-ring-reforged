@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 using Reforged.Simulation;
 using System.Text.Json;
 
@@ -80,20 +81,20 @@ public partial class Main
                 Select(SmokeBarracks); break;
             case 42:
                 _tier2Checks["citadel_2_unlocks_the_rider"] = _commands.TrainButton(1) is { Visible: true,Disabled: false }
-                    && _commands.TrainButton(1).TooltipText.StartsWith($"Train {Shown("UNIT_G_ROHAN_RIDER","Rohan Rider")} [W]\n85 food · 30 ore · population 3 · 24s");
+                    && _commands.TrainButton(1).TooltipText.StartsWith(ShownTip(Shown("UNIT_G_ROHAN_RIDER","Rohan Rider"),"W",HudTip.Costs(85,30,0,3),480));
                 PressButton(_commands.TrainButton(1)); break;
             case 43: ReleaseButton(_commands.TrainButton(1)); Click(Rally(),MouseButton.Right); break;
             case 45: Select(SmokeDwarfHall); break;
             case 47:
                 _tier2Checks["forge_unlocks_the_shieldbreaker"] = _commands.TrainButton(1) is { Visible: true,Disabled: false }
-                    && _commands.TrainButton(1).TooltipText.StartsWith($"Train {Shown("UNIT_G_DWARVEN_SHIELDBREAKER","Dwarf Shieldbreaker")} [W]\n90 food · 65 ore · population 3 · 24s");
+                    && _commands.TrainButton(1).TooltipText.StartsWith(ShownTip(Shown("UNIT_G_DWARVEN_SHIELDBREAKER","Dwarf Shieldbreaker"),"W",HudTip.Costs(90,65,0,3),480));
                 PressButton(_commands.TrainButton(1)); break;
             case 48: ReleaseButton(_commands.TrainButton(1)); Click(Rally(),MouseButton.Right); break;
             case 50: Select(SmokeRangerPost); break;
             case 52:
                 _tier2Checks["ranger_post_trains_the_ranger"] = SelectedStructureDetails() is { Health: 675 } shown94 && shown94.Name == Shown("BUILDING_G_RANGER_BARRACKS","Ranger Post")
                     && _commands.TrainButton(0) is { Visible: true,Disabled: false,Icon: not null } && !_commands.TrainButton(1).Visible
-                    && _commands.TrainButton(0).TooltipText.StartsWith($"Train {Shown("UNIT_G_RANGER","Ranger")} [Q]\n50 food · 40 ore · population 2 · 22s");
+                    && _commands.TrainButton(0).TooltipText.StartsWith(ShownTip(Shown("UNIT_G_RANGER","Ranger"),"Q",HudTip.Costs(50,40,0,2),440));
                 PressButton(_commands.TrainButton(0)); break;
             case 53: ReleaseButton(_commands.TrainButton(0)); Click(Rally(),MouseButton.Right); break;
             case 55:

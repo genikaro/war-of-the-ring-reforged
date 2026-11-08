@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 using Reforged.Simulation;
 using System.Text.Json;
 
@@ -186,7 +187,7 @@ public partial class Main
                     && _commands.DisplayedName == Shown("UNIT_G_GONDOR_SWORDSMAN","Gondor Swordsman") && _commands.DisplayedHealth == "155/155" && stats is { Attack: "10",Armor: "0" }
                     // Build-62: Attack is damage per hit; the row's tooltip has the source 10 damage per second.
                     && _commands.DisplayedAttack == "10"
-                    && _commands.DisplayedAttackTip == "Damage per hit: 10\nDamage per second: 10\nAttack speed: very fast (a hit every 0.96 s)"
+                    && _commands.DisplayedAttackTip == string.Join("\n",GameText.Labeled("stat.damage_per_hit",10),GameText.Labeled("stat.damage_per_second",10),GameText.T("stat.attack_speed",GameText.T("stat.speed.very_fast"),GameText.Number(0.96m,"0.##")))
                     && !_commands.ConstructionButton(SmokeCamp).Visible && !_commands.BuildButton.Visible;
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-swordsman.png");
                 break;

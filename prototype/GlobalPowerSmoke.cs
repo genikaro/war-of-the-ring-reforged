@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 using Reforged.Simulation;
 using System.Text.Json;
 
@@ -53,7 +54,7 @@ public partial class Main
             case 6:
                 _globalChecks["all_five_source_portraits_visible"]=_commands.GlobalAbilitiesOpen && Enumerable.Range(0,5)
                     .All(i=>_commands.GlobalPowerButton(i).IsVisibleInTree() && _commands.GlobalPowerButton(i).Icon!=null);
-                _globalChecks["source_costs_in_tooltips"]=Enumerable.Range(0,5).All(i=>_commands.GlobalPowerButton(i).TooltipText.Contains(w.GlobalPower(i)!.FateCost+" Fate"));
+                _globalChecks["source_costs_in_tooltips"]=Enumerable.Range(0,5).All(i=>_commands.GlobalPowerButton(i).TooltipText.Contains(HudTip.FateCost(w.GlobalPower(i)!.FateCost)));
                 CaptureGlobal("menu");_globalBefore=w.Commands.Count;
                 // Separate mouse press and release across HUD refreshes, as with a real click.
                 Press(_commands.GlobalPowerButton(0).GetGlobalRect().GetCenter());break;
@@ -71,7 +72,7 @@ public partial class Main
                 _globalChecks["blind_effect_cost_and_source_attachment"]=w.Units[_globalEnemy].BlindUntil>w.Tick && w.Economies[0].Fate==18
                     && _elvenAttachments.ContainsKey((_globalEnemy,226));
                 _globalChecks["recharging_power_dims_in_the_grid"] = _commands.GlobalPowerButton(0).Disabled
-                    && _commands.GlobalPowerButton(0).TooltipText.Contains("Recharging");
+                    && _commands.GlobalPowerButton(0).TooltipText.Contains(ShownBefore("fate.recharging",Slot));
                 SetPaused(true);CaptureGlobal("blind");GlobalKey(Key.W);Hover(Point(_globalEnemy));break;
             case 16:
                 Click(Point(_globalEnemy),MouseButton.Right);

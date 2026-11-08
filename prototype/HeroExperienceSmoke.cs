@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 using Reforged.Simulation;
 using System.Text.Json;
 
@@ -49,7 +50,7 @@ public partial class Main
                 _selected.Clear();_selectedStructure=null;_selected.Add(_experienceHero);
                 _focus=UnitPosition(w.Units[_experienceHero]);_distance=30;UpdateCamera();break;
             case 5:
-                _experienceChecks["starts_at_level_1_with_original_stats"]=_commands.DisplayedHeroLevel=="Level 1" && w.Units[_experienceHero].MaxHealth==485;
+                _experienceChecks["starts_at_level_1_with_original_stats"]=_commands.DisplayedHeroLevel==$"{GameText.T("tip.level")} 1" && w.Units[_experienceHero].MaxHealth==485;
                 _experienceChecks["selected_and_portrait_xp_bars_show_progress"]=_commands.DisplayedHeroExperience>.99f
                     && _heroBar.ExperienceFraction(PortraitSlot())>.99f && _heroBar.DisplayedLevel(PortraitSlot())=="1";
                 _experienceChecks["original_style_xp_counter_and_health_are_centered"]=_commands.DisplayedHeroExperienceText=="499/500"
@@ -70,7 +71,7 @@ public partial class Main
             case 12: _selected.Add(_experienceHero);break;
             case 45:
                 var advanced=w.Units[_experienceHero];
-                _experienceChecks["combat_reaches_level_2_and_updates_hud"] = advanced.HeroLevel==2 && _commands.DisplayedHeroLevel=="Level 2";
+                _experienceChecks["combat_reaches_level_2_and_updates_hud"] = advanced.HeroLevel==2 && _commands.DisplayedHeroLevel==$"{GameText.T("tip.level")} 2";
                 _experienceChecks["level_up_preserves_wounded_health_fraction"] = advanced.MaxHealth==510 && advanced.HealthMilli==255000;
                 _experienceChecks["original_level_up_effect_and_sound_loaded"] = _elvenVisuals.ContainsKey(335) && _abilitySounds.Any(s=>s.EventId==412) && _experienceEffectSeen;
                 _experienceChecks["hero_glow_follows_movement"] = _views[_experienceHero].HeroGlow!.Ground.GlobalPosition
@@ -79,7 +80,7 @@ public partial class Main
             case 50:
                 _experienceChecks["xp_bar_uses_current_level_interval"] = Math.Abs(_commands.DisplayedHeroExperience-w.Units[_experienceHero].ExperienceProgressPpm/1000000f)<.001f
                     && _commands.DisplayedHeroExperienceText=="275/550"
-                    && _commands.HeroExperienceTooltip.Contains("XP to level 3") && _heroBar.DisplayedLevel(PortraitSlot())=="2";
+                    && _commands.HeroExperienceTooltip.Contains(ShownAfter("hero.xp_to_level",Slot,Slot,3)) && _heroBar.DisplayedLevel(PortraitSlot())=="2";
                 CaptureLevel("progress");break;
             case 65:
                 var last=w.Units[_experienceHero];last.HeroLevel=9;last.ExperienceMicro=6299000000;last.HealthMilli=last.MaxHealth*500L;
@@ -88,9 +89,9 @@ public partial class Main
                 var capped=w.Units[_experienceHero];
                 _experienceChecks["all_three_attack_animations_rendered"] = _experienceAttackClips.Count==3 && _experienceAttackClipMatches;
                 _experienceChecks["reaches_original_level_10_cap"] = capped.HeroLevel==10 && capped.ExperienceMicro==6300000000;
-                _experienceChecks["maximum_level_hud_and_portrait"] = _commands.DisplayedHeroLevel=="Level 10"
-                    && _commands.DisplayedHeroExperience==1 && _commands.HeroExperienceTooltip.Contains("Maximum level")
-                    && _commands.DisplayedHeroExperienceText=="MAX"
+                _experienceChecks["maximum_level_hud_and_portrait"] = _commands.DisplayedHeroLevel==$"{GameText.T("tip.level")} 10"
+                    && _commands.DisplayedHeroExperience==1 && _commands.HeroExperienceTooltip.Contains(GameText.T("hero.max_level"))
+                    && _commands.DisplayedHeroExperienceText==GameText.T("hero.max")
                     && _heroBar.DisplayedLevel(PortraitSlot())=="10" && _heroBar.ExperienceFraction(PortraitSlot())>.999f;
                 _experienceChecks["level_10_health_armor_and_attack"] = capped.MaxHealth==735 && capped.ArmorMilli==7000
                     && capped.MeleeDamageRate==45000 && _commands.DisplayedArmorBonus=="+4";
@@ -130,8 +131,8 @@ public partial class Main
                     && returned.ArmorMilli==5000 && returned.MeleeDamageRate==37500;
                 _experienceChecks["purchased_fury_survives_resummoning"] = returned.AbilityPurchased(returned.Ability(1)!);
                 _experienceChecks["revived_hero_glow_is_visible"] = _views[_experienceHero].HeroGlow!.Ground.Visible;
-                _experienceChecks["resummoned_hero_level_and_xp_bars_match"]=_commands.DisplayedHeroLevel=="Level 6"
-                    && _commands.DisplayedHeroExperienceText=="123/750" && _commands.HeroExperienceTooltip.Contains("123.46 / 750")
+                _experienceChecks["resummoned_hero_level_and_xp_bars_match"]=_commands.DisplayedHeroLevel==$"{GameText.T("tip.level")} 6"
+                    && _commands.DisplayedHeroExperienceText=="123/750" && _commands.HeroExperienceTooltip.Contains($"{GameText.Number(123.46m)} / 750")
                     && Math.Abs(_commands.DisplayedHeroExperience-returned.ExperienceProgressPpm/1000000f)<.001f
                     && _heroBar.DisplayedLevel(PortraitSlot())=="6"
                     && Math.Abs(_heroBar.ExperienceFraction(PortraitSlot())-_commands.DisplayedHeroExperience)<.001f;

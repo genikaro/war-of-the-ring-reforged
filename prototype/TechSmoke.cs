@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 using Reforged.Simulation;
 using System.Text.Json;
 
@@ -42,20 +43,20 @@ public partial class Main
             case 12:
                 _techChecks["citadel_offers_upgrade_with_source_cost"] = SelectedStructureDetails() is { Health: 750 } shown43 && shown43.Name == Shown("BUILDING_G_TOWN_CENTER_LEVEL_1","Citadel 1")
                     && _commands.UpgradeButton is { Visible: true,Disabled: false,Icon: not null }
-                    && _commands.UpgradeButton.TooltipText.StartsWith($"Upgrade to {Shown("BUILDING_G_TOWN_CENTER_LEVEL_2","Citadel 2")} [Z]\n115 food · 105 ore · 50s · 1000 health")
+                    && _commands.UpgradeButton.TooltipText.StartsWith(ShownTip(Shown("BUILDING_G_TOWN_CENTER_LEVEL_2","Citadel 2"),"Z",HudTip.Costs(115,105),1000)+"\n"+GameText.Labeled("stat.health",1000))
                     && _commands.UpgradeButton.TooltipText.Contains(Shown("BUILDING_G_SKILLS_STRUCTURE","Forge")) && _commands.PaletteOnlyTraining;
                 _techFood = bank.FoodMilli; _techOre = bank.OreMilli;
                 PressButton(_commands.UpgradeButton); break;
             case 13: ReleaseButton(_commands.UpgradeButton); break;
             case 15:
                 _techChecks["upgrade_pays_and_heads_the_queue"] = citadel.Upgrading && bank.FoodMilli == _techFood-115_000 && bank.OreMilli == _techOre-105_000
-                    && _commands.TrainingVisible && _commands.QueueButton(0) is { Visible: true,Icon: not null } && _commands.DisplayedOrder.StartsWith($"Upgrading to {Shown("BUILDING_G_TOWN_CENTER_LEVEL_2","Citadel 2")}")
+                    && _commands.TrainingVisible && _commands.QueueButton(0) is { Visible: true,Icon: not null } && _commands.DisplayedOrder.StartsWith(GameText.T("queue.upgrading",Shown("BUILDING_G_TOWN_CENTER_LEVEL_2","Citadel 2")))
                     && _commands.UpgradeButton.Disabled;
                 PressButton(_commands.TrainButton(0)); break;
             case 16: ReleaseButton(_commands.TrainButton(0)); break;
             case 18:
                 _techChecks["training_queues_behind_the_upgrade"] = producer.Queue.Count == 1 && producer.ProgressTicks == 0
-                    && _commands.QueueButton(1).Visible && _commands.QueueButton(0).TooltipText.StartsWith($"Upgrading to {Shown("BUILDING_G_TOWN_CENTER_LEVEL_2","Citadel 2")}");
+                    && _commands.QueueButton(1).Visible && _commands.QueueButton(0).TooltipText.StartsWith(GameText.T("queue.upgrading",Shown("BUILDING_G_TOWN_CENTER_LEVEL_2","Citadel 2")));
                 _techFood = bank.FoodMilli; _techOre = bank.OreMilli;
                 PressButton(_commands.QueueButton(0)); break;
             case 19: ReleaseButton(_commands.QueueButton(0)); break;
@@ -77,7 +78,7 @@ public partial class Main
                 _techChecks["upgraded_model_and_panel"] = _constructionViews[10000].Building == SmokeCitadel2 && _structureViews[10000].Type == SmokeCitadel2
                     && SelectedStructureDetails() is { Health: 1000,MaxHealth: 1000 } shown78 && shown78.Name == Shown("BUILDING_G_TOWN_CENTER_LEVEL_2","Citadel 2") && _commands.DisplayedHealth == "1000/1000"
                     // Build-58: Citadel 2 goes on to Citadel 3.
-                    && _commands.UpgradeButton.Visible && _commands.UpgradeButton.TooltipText.StartsWith($"Upgrade to {Shown("BUILDING_G_TOWN_CENTER_LEVEL_3","Citadel 3")}") && StructureAt(StructureSmokePoint(10000))?.Id == 10000;
+                    && _commands.UpgradeButton.Visible && _commands.UpgradeButton.TooltipText.StartsWith(HudTip.Keyed(Shown("BUILDING_G_TOWN_CENTER_LEVEL_3","Citadel 3"),"Z")) && StructureAt(StructureSmokePoint(10000))?.Id == 10000;
                 if (_capture != "") _ = CaptureFrame(false);
                 break;
             case 1035:
@@ -87,7 +88,7 @@ public partial class Main
                 var camp = Site(SmokeCamp)!; _focus = PositionOf(camp.X,camp.Z); UpdateCamera(); Click(StructureSmokePoint(camp.Obstacle)); break;
             case 1038:
                 _techChecks["camp_offers_war_camp"] = SelectedStructureDetails() is {  } shown89 && shown89.Name == Shown("BUILDING_G_WORKER_STRUCTURE","Camp") && _commands.UpgradeButton is { Visible: true,Disabled: false }
-                    && _commands.UpgradeButton.TooltipText.StartsWith($"Upgrade to {Shown("BUILDING_G_POPULATION_STRUCTURE_UPGRADE","War Camp")} [Z]\n0 food · 55 ore · 40s · 500 health · +4 population")
+                    && _commands.UpgradeButton.TooltipText.StartsWith(ShownTip(Shown("BUILDING_G_POPULATION_STRUCTURE_UPGRADE","War Camp"),"Z",HudTip.Costs(0,55),800)+"\n"+GameText.Labeled("stat.health",500)+"\n"+GameText.Labeled("resource.population","+4"))
                     && world.PopulationCapacity(0) == 21;
                 PushGridKey(CommandPanel.UpgradeSlot); break;
             case 1040:

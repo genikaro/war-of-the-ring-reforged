@@ -20,6 +20,13 @@ public static class GameNames
     public static UnitDefinition Unit(UnitDefinition unit)
         => unit with { DisplayName = GameText.Name(unit.Name,unit.DisplayName),Abilities = unit.Abilities?.Select(Ability).ToArray() };
 
+    /// <summary>A Fate power's status carries an ability whose id is 10000 + the power's id (GlobalPowerDefinition.StatusAbility).</summary>
+    public const int PowerStatusBase = 10000;
+
+    /// <summary>The install's text of an ability or a Fate power's status (description, effect, hint), else null.</summary>
+    public static string? AbilityText(AbilityDefinition? ability,string field) => ability == null ? null
+        : ability.Id >= PowerStatusBase ? GameText.GlobalPower(ability.Id-PowerStatusBase,field) : GameText.Ability(ability.Id,field);
+
     /// <summary>Ability ids are BattleGear ids, or -1000 - Technique id for a technique's own ability (Elven Cloaks -1022).</summary>
     public static AbilityDefinition Ability(AbilityDefinition ability) => ability with { Name = GameText.Ability(ability.Id,"name") ?? ability.Name };
 }

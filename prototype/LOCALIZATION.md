@@ -112,9 +112,10 @@ The catalog is CSV with the columns `key, original, en, ru, note`. Quoted cells 
 A key that starts with `#` marks a comment row. Godot keeps the file as it is (`strings.csv.import`), so the CSV is
 not imported as a translation.
 
-- **Set `original`** to use the install's text: `Menu:12`, or a symbol such as `TOOLTIPS_LEVEL`. Leave `en` and `ru`
-  empty; `note` glosses the text in English. If an install lacks that entry, `en`/`ru` text in the same row is the
-  fallback.
+- **Set `original`** to use the install's text: `Menu:12`, or a symbol such as `TOOLTIPS_LEVEL`. `note` glosses the
+  text in English. If an install lacks that entry, `en`/`ru` text in the same row is the fallback. Since build-184 a
+  row whose text the simulation checks read keeps the English the HUD used before in `en` (`tip.level` is `Level`),
+  because `tests/simulation` runs without install text.
 - **Leave `original` empty** for custom text, which needs both `en` and `ru`:
   - Plural rows end in `.one`/`.few`/`.many` (Russian) or `.one`/`.other` (English).
   - Arguments are `{0}`…`{9}`.
@@ -124,7 +125,8 @@ not imported as a translation.
   is missing or a stub. `record.OBJECT_PLACE_OF_POWER_RANDOM.name` is one.
 
 `tests/simulation` (`GameTextChecks`, run alone with `--game-text-checks`) fails when a custom row lacks a language,
-when an original ref is malformed, or when Russian text contains ё.
+when an original ref is malformed, or when Russian text contains ё. The other checks run with the repository catalog
+and no install tables (`GameTextChecks.LoadRepositoryCatalog`), so they read the catalog's English.
 
 ## In code
 
@@ -146,14 +148,29 @@ powers, and the production, construction, research and place loaders for the res
 with no change. Nothing in the simulation decides by a display name. Lookups go by symbolic names: unit portraits
 are `CommandPanel.PortraitName(UNIT_…)`.
 
+**Tooltips (build-184)** are built by `Presentation/HudTip.cs`, as the original lays them out: the title with the
+button's hotkey (`HudTip.Keyed`), a cost line, then the body. The cost line is a marked list of numbers
+(`HudTip.Costs(food, ore, fate, population)`, `HudTip.FateCost`), which the tooltip box turns into the original's
+resource cells, so it no longer reads costs out of English words. Bodies use the record's own description from the
+install (`GameText.Record(symbol, "description")`, `GameNames.AbilityText`, `GameText.GlobalPower(id, "description")`),
+then the lines with the simulation's numbers from the catalog. Labels are the original's where it has them: Level,
+Description, Sec. and Cooldown (GameConsole 8300-8304), Armor, Attack, Health, Victories, Ballista and Lifetime
+(8404-8414), Poisoned (8420), Food, Ore, Fate and Population (8450-8453), the Hold, Guard and Patrol commands with their
+descriptions (8104-8115), Idle workers (8006-8007) and the attack chart's Weapon Rating (8122).
+
 **Smokes** expect what the game shows, in any language. Write `Shown("UNIT_G_RANGER","Ranger")`,
-`ShownAbility(id,"…")`, `ShownPower(id,"…")` or `GameText.T("key")`, never the English literal.
+`ShownAbility(id,"…")`, `ShownPower(id,"…")` or `GameText.T("key")`, never the English literal. For tooltips,
+`ShownTip(name, key, HudTip.Costs(…), ticks)` is a construct, train, upgrade or research tooltip's head, and
+`ShownBefore`/`ShownAfter(key, …Slot…)` give the text on either side of an argument a check does not pin.
+
+Still English after build-184, for build-185: refusal reasons (they come from the simulation), the order readouts in
+the console and portrait tooltips, the group, walk/run and pause labels, notices, the observer HUD and the menus.
 
 ## What is localized
 
 | Build | Text |
 | --- | --- |
 | 183 | Names of units, heroes, buildings, upgrades and research, abilities, Fate powers, places of power and neutral objects, and maps. The AI personalities' names come from the install's `.rai` files |
-| 184 (next) | Tooltips: construct, train, upgrade, research, ability, Fate, place power, status effect; the stat labels |
+| 184 | Tooltips: construct, train, upgrade, research, queue, ability, Fate, place power, status effect, hero bar, garrison; the stat labels and the place-of-power summary |
 | 185 (next) | Menus, setup, settings, outcome, HUD labels, messages; refusal reasons become codes |
 | Later | Campaign text, which the import already covers (briefings, objectives, hints, speakers, subtitles) |

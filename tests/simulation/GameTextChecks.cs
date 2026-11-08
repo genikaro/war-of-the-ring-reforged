@@ -58,15 +58,20 @@ static class GameTextChecks
             check(!GameText.HasOriginal && GameText.Language == "en" && GameText.T("menu.skirmish") == "⟦menu.skirmish⟧" && GameText.T("tip.missing") == "Fallback"
                 && GameText.Plural("unit.count",2,2) == "2 units","without an install, custom English text only");
         }
-        finally { File.Delete(path); }
+        finally { File.Delete(path); LoadRepositoryCatalog(); }
         CatalogRules(check);
     }
+
+    private static string CatalogFile => Path.Combine(AppContext.BaseDirectory,"..","..","..","..","..","prototype","Locale","strings.csv");
+
+    /// <summary>The game's text as the checks see it: no install tables, so the catalog's English (original rows fall back
+    /// to their en text), which is the HUD's wording before build-183.</summary>
+    public static void LoadRepositoryCatalog() { if (File.Exists(CatalogFile)) GameText.Load(null,File.ReadAllText(CatalogFile)); }
 
     /// <summary>The repository's catalog: complete custom rows, well-formed original refs, no yo in Russian.</summary>
     private static void CatalogRules(Action<bool,string> check)
     {
-        string file = Path.Combine(AppContext.BaseDirectory,"..","..","..","..","..","prototype","Locale","strings.csv");
-        var rows = GameText.ParseCatalog(File.ReadAllText(file));
+        var rows = GameText.ParseCatalog(File.ReadAllText(CatalogFile));
         check(rows.Count > 0,"the catalog has rows");
         var custom = rows.Where(r => r.Original == "").ToArray();
         // Plural rows may leave a form a language has no use for: English has no few/many, Russian no other.

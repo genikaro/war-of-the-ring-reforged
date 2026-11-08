@@ -134,6 +134,12 @@ public static class GameText
         return n == 1 ? "one" : "other";
     }
 
+    /// <summary>A number in the text language (1,5 in Russian, 1.5 in English) with a .NET format such as "0.#".</summary>
+    public static string Number(decimal value,string format = "0.##") => value.ToString(format,Culture);
+
+    /// <summary>"Label: value" with a catalog label, the shape Russian text needs to keep names undeclined.</summary>
+    public static string Labeled(string key,object? value) => $"{T(key)}: {(value is decimal d ? Number(d) : value)}";
+
     private static readonly Regex Argument = new(@"\{(\d)\}",RegexOptions.Compiled);
 
     /// <summary>{0}..{9} replaced by the arguments, numbers in the text language's culture. No other brace syntax:

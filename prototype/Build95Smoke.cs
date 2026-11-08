@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 using Reforged.Simulation;
 
 public partial class Main
@@ -20,7 +21,7 @@ public partial class Main
                 checks["fate_twenty_is_centered_on_orb"] = _commands.FateReadout == "20" && _commands.FateCounterCentered;
                 checks["fate_orb_aligns_with_original_art"] = _commands.FateButton.GetGlobalRect().GetCenter().DistanceTo(
                     _commands.GetGlobalRect().Position+new Vector2(510,21)*_commands.EffectiveScale) < .1f;
-                checks["fate_hover_displays_cap"] = _commands.DisplayedTooltip.Contains("Maximum Fate reached");
+                checks["fate_hover_displays_cap"] = _commands.DisplayedTooltip.Contains(GameText.T("fate.max_reached"));
                 Click(_commands.FateButton.GetGlobalRect().GetCenter());
                 break;
             case 164:
@@ -50,7 +51,7 @@ public partial class Main
                 ApplySkirmishHud(_commands); InteractionHover(_commands.FateButton.GetGlobalRect().GetCenter());
                 break;
             case 176:
-                checks["fate_hover_shows_next_point_progress"] = _commands.DisplayedTooltip.Contains("Progress to next point: 42%");
+                checks["fate_hover_shows_next_point_progress"] = _commands.DisplayedTooltip.Contains(GameText.T("fate.progress",42));
                 Click(_commands.FateButton.GetGlobalRect().GetCenter());
                 break;
             case 178: _selected.Clear(); _selected.Add(_interactionTarget); break;

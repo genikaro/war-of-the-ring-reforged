@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 using Reforged.Simulation;
 using System.Text.Json;
 
@@ -50,7 +51,7 @@ public partial class Main
                 _abilityChecks["insufficient_fate_rejects_unlock"] = world.Commands.Count==_abilityCommandCount && hero.PurchasedAbilities.Count==0;
                 world.Economies[0].Fate=3;HoverAbilityPoint(_commands.AbilityButton(1).GetGlobalRect().GetCenter());break;
             case 5:
-                _abilityChecks["purchase_tooltip_has_fate_cost"] = _commands.DisplayedTooltipCosts.SequenceEqual(["Fate 2"]);
+                _abilityChecks["purchase_tooltip_has_fate_cost"] = _commands.DisplayedTooltipCosts.SequenceEqual(["fate 2"]);
                 Click(_commands.AbilityButton(1).GetGlobalRect().GetCenter());break;
             case 6:
                 _abilityChecks["button_buys_passive_without_cast"] = hero.AbilityPurchased(hero.Ability(1)!) && hero.MeleeDamageRate==30000
@@ -114,7 +115,7 @@ public partial class Main
                 _abilityChecks["original_healing_sprite_layers_visible"] = _healingLayers.Length == 5 && _healingEffects.Count == 1
                     && _healingEffects[0].VisibleSprites > 0;
                 _abilityChecks["original_heal_sound_loaded"] = _abilitySounds.Count > 0;
-                _abilityChecks["cooldown_displayed"] = _commands.AbilityButton(0).Disabled && _commands.AbilityLabel(0).EndsWith('s')
+                _abilityChecks["cooldown_displayed"] = _commands.AbilityButton(0).Disabled && _commands.AbilityLabel(0).EndsWith(GameText.T("tip.seconds_short"))
                     && _commands.AbilityOverlay(0) == null;
                 _abilityCommandCount = world.Commands.Count; PushKey(Key.Q); Click(_commands.AbilityButton(0).GetGlobalRect().GetCenter()); break;
             case 38: PushKey(Key.Space); break;

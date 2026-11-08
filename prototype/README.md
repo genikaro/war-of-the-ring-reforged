@@ -1,5 +1,10 @@
 # Godot C# skirmish sandbox
 
+**build-184:** tooltips follow: construct, train, upgrade, research, ability, Fate, place power and status tooltips use
+the install's own descriptions and labels (Level, Sec., Cooldown, Food, Ore, Attack, Armor...), with the numbers in
+catalog lines in English and Russian. Cost cells no longer depend on English words. Refusal reasons, order readouts and
+menus are still English until build-185.
+
 **build-183:** names now come from your own install's text, in its language: units, heroes, buildings, research,
 abilities, Fate powers, places of power and maps. A Russian install shows Russian names. Run
 `python tools/game_text.py --pack converted/content/good` once to import the text. Strings the original never had

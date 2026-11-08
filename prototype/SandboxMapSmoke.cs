@@ -70,15 +70,15 @@ public partial class Main
                     && SandboxFateHeroes.All(hero => world.CanTrain(t,citadel.Id,Array.IndexOf(citadel.Units,hero),out _)))
                     && world.MaxFate == 20 && _commands.FateReadout == "20"
                     // Build-76: the Fate cell's tooltip states the count and that nothing more can be earned.
-                    && _commands.FateTooltip.StartsWith("Fate 20/20\nMaximum Fate reached");
+                    && _commands.FateTooltip.StartsWith($"{GameText.T("resource.fate")} 20/20\n{GameText.T("fate.max_reached")}");
                 _sandboxMapChecks["no_bots_and_no_chasing"] = world.AiPlayers.Count == 0 && world.AggressiveIdleTeams.Count == 0;
                 // Build-61: the Ballista Tower's info lists both its weapons.
                 var shown = _selectedStructure; _selectedStructure = Site(teams[0],"BUILDING_G_TOWER_UPGRADE")!.Obstacle;
                 var towerDetails = SelectedStructureDetails(); _commands.RefreshStructure(towerDetails);
                 _sandboxMapChecks["ballista_tower_lists_both_weapons"] = towerDetails is { Attack: "14 / 50",Weapons: [_,{ Tooltip: var boltTip }] }
-                    && boltTip.Contains("a hit every 3 s") && _commands.DisplayedStructureAttacks.SequenceEqual(["14","50"]);
-                _sandboxMapChecks["tower_attack_tooltip_uses_unit_damage_and_speed_format"] = _commands.DisplayedTooltipTitle == "Ballista"
-                    && _commands.DisplayedTooltipBody.Contains("Damage per hit: 50") && _commands.DisplayedTooltipBody.Contains("a hit every 3 s");
+                    && boltTip.Contains(ShownAfter("stat.attack_speed",Slot,GameText.Number(3m,"0.##"))) && _commands.DisplayedStructureAttacks.SequenceEqual(["14","50"]);
+                _sandboxMapChecks["tower_attack_tooltip_uses_unit_damage_and_speed_format"] = _commands.DisplayedTooltipTitle == GameText.T("stat.ballista")
+                    && _commands.DisplayedTooltipBody.Contains(GameText.Labeled("stat.damage_per_hit",50)) && _commands.DisplayedTooltipBody.Contains(ShownAfter("stat.attack_speed",Slot,GameText.Number(3m,"0.##")));
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-tower.png");
                 _selectedStructure = shown;
                 // The widest trainable body finds open ground beside every producer, connected to its base.
@@ -158,9 +158,9 @@ public partial class Main
                         && Math.Abs(box.Size.X-CommandPanel.TooltipWidth*_commands.EffectiveScale) < 1 && _commands.DefaultTooltipsHidden;
                     // The source layout: the first line in the title band, food, ore and population as cells, the rest under Description.
                     var rules = world.ProductionRules[SelectedProducer()!.Units[0]];
-                    _sandboxMapChecks["train_tooltip_title_cost_cells_and_description"] = _commands.DisplayedTooltipTitle == $"Train {rules.DisplayName} [Q]"
+                    _sandboxMapChecks["train_tooltip_title_cost_cells_and_description"] = _commands.DisplayedTooltipTitle == HudTip.Keyed(rules.DisplayName,"Q")
                         && _commands.DisplayedTooltipCosts.SequenceEqual([$"food {rules.FoodCost}",$"ore {rules.OreCost}",$"population {rules.Population}"])
-                        && _commands.DisplayedTooltipBody.StartsWith($"{rules.DurationTicks/20}s");
+                        && _commands.DisplayedTooltipBody.StartsWith(CommandPanel.Seconds("tip.time",rules.DurationTicks));
                 }
                 var gandalf = world.Units.FirstOrDefault(u => u.Team == 0 && u.Present && u.Definition.Name == SandboxGandalf);
                 // Rendered frames and simulation ticks do not pair one to one: wait for him to step out.
@@ -281,7 +281,7 @@ public partial class Main
                 string siegeAura = GameText.Ability(10,"name") ?? "Siege Aura";
                 _sandboxMapChecks["gimli_shows_his_siege_aura_on_the_status_bar"] = _commands.DisplayedStatuses.Contains(siegeAura)
                     && _commands.StatusIcon(0) is { Visible: true,Texture: not null }
-                    && _commands.StatusIcon(0).TooltipText.StartsWith(siegeAura+"\nDeals 150% damage to buildings.");
+                    && _commands.StatusIcon(0).TooltipText.StartsWith(siegeAura+"\n"+GameText.T("status.siege_aura","150%"));
                 HoverAbilityPoint(_commands.StatusIcon(0).GetGlobalRect().GetCenter()); _sandboxHoverFrame = _frames; break;
             case 51:
             {
@@ -298,7 +298,7 @@ public partial class Main
             case 52:
                 _sandboxMapChecks["status_tooltip_in_the_box"] = _commands.DisplayedTooltip == _commands.StatusIcon(0).TooltipText
                     && _commands.DisplayedTooltipTitle == (GameText.Ability(10,"name") ?? "Siege Aura") && _commands.DisplayedTooltipCosts.Length == 0
-                    && _commands.DisplayedTooltipBody.StartsWith("Deals 150% damage to buildings.");
+                    && _commands.DisplayedTooltipBody.StartsWith(GameText.T("status.siege_aura","150%"));
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-status.png");
                 // The Hero Dummy alone, one armor up from its own 0.
                 _selected.Clear(); _selected.Add(_sandboxDummies[3]); PushKey(Key.Q); break;

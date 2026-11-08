@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 using Reforged.Rendering;
 using Reforged.Simulation;
 using System.Text.Json;
@@ -25,7 +26,7 @@ public partial class Main
             case 3: _focus = _structureViews[10000].Root.GlobalPosition; UpdateCamera(); Click(StructureSmokePoint(10000)); break;
             case 6:
                 _frodoChecks["citadel_offers_frodo_with_source_cost"] = citadel.Units.Take(2).SequenceEqual(["UNIT_G_HUMAN_WORKER",SmokeFrodo])
-                    && _commands.TrainButton(1) is { Visible: true,Disabled: false,Icon: not null } && _commands.TrainButton(1).TooltipText.Contains("150 food · 100 ore · population 0 · 36s");
+                    && _commands.TrainButton(1) is { Visible: true,Disabled: false,Icon: not null } && _commands.TrainButton(1).TooltipText.Contains(HudTip.Costs(150,100,0,0)+"\n"+CommandPanel.Seconds("tip.time",720));
                 Press(_commands.TrainButton(1).GetGlobalRect().GetCenter()); break;
             case 7: Release(_commands.TrainButton(1).GetGlobalRect().GetCenter()); break;
             case 9:
@@ -66,7 +67,7 @@ public partial class Main
             case 768:
                 _frodoRingTick = world.Tick;
                 _frodoChecks["q_puts_on_the_ring"] = world.Units[_frodoId].RingActive && _commands.AbilityButton(0).ButtonPressed
-                    && _heroBar.Portrait(0).TooltipText.Contains("One Ring") && world.Commands.Last() is { Kind: OrderKind.UseAbility,AbilitySlot: 0,Target: -1 };
+                    && _heroBar.Portrait(0).TooltipText.Contains(GameText.T("hero.ring")) && world.Commands.Last() is { Kind: OrderKind.UseAbility,AbilitySlot: 0,Target: -1 };
                 _frodoChecks["ring_bearer_drawn_translucent"] = Faded(true);
                 _frodoChecks["invisible_hero_glow_is_hidden"] = !_views[_frodoId].HeroGlow!.Ground.Visible;
                 _frodoChecks["ring_hides_frodos_emitter"] = !_auraEffects.ContainsKey((_frodoId,AuraEffect.Heroic,true));

@@ -166,7 +166,7 @@ public partial class Main
             // Build-173: MaxGarrisonedUnits rides on the building's defenses export.
             if (weapons[0].TryGetProperty("max_garrison",out var garrison) && garrison.GetInt32() > 0) world.GarrisonCapacity[item.Name] = garrison.GetInt32();
             if (loaded.Length > 1) world.ExtraDefenses.Add(item.Name,loaded[1..]);
-            _defenseLabels[item.Name] = weapons.Select(w => w.TryGetProperty("weapon",out var key) && key.GetString()!.EndsWith("_BOLT") ? "Ballista" : "Arrows").ToArray();
+            _defenseLabels[item.Name] = weapons.Select(w => w.TryGetProperty("weapon",out var key) && key.GetString()!.EndsWith("_BOLT") ? GameText.T("stat.ballista") : GameText.T("stat.arrows")).ToArray();
         }
         foreach (var radius in construction.GetProperty("placement_radius_mm").EnumerateObject()) world.PlacementRadiusMm.Add(radius.Name,radius.Value.GetInt32());
         var order = construction.GetProperty("order").EnumerateArray().Select(n => n.GetString()!).Where(Loaded).ToArray();

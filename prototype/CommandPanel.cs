@@ -76,12 +76,16 @@ public partial class CommandPanel : Control
     private bool NoticeShowing => Time.GetTicksMsec() < _noticeUntil;
     public string DisplayedHint => _hint.Text;
 
+    /// <summary>Build-184: Label is a catalog key; Hold, Guard and Patrol are the original's own command card text, whose
+    /// description (key.tip) follows the title in the tooltip.</summary>
     public static readonly (OrderKind Kind,string Label,string Key,string Icon)[] Commands = [
-        (OrderKind.Attack,"Attack","A","console_g_action_forceattack"),
-        (OrderKind.HoldGround,"Hold Position","H","console_g_action_standground"),
-        (OrderKind.Guard,"Guard","G","console_g_action_guard"),
-        (OrderKind.Patrol,"Patrol","T","console_g_action_patrol")
+        (OrderKind.Attack,"cmd.attack","A","console_g_action_forceattack"),
+        (OrderKind.HoldGround,"cmd.hold","H","console_g_action_standground"),
+        (OrderKind.Guard,"cmd.guard","G","console_g_action_guard"),
+        (OrderKind.Patrol,"cmd.patrol","T","console_g_action_patrol")
     ];
+    public static string CommandTooltip(int index)
+        => HudTip.Make(HudTip.Keyed(GameText.T(Commands[index].Label),Commands[index].Key),null,GameText.TryT(Commands[index].Label+".tip"));
 
     public override void _Ready()
     {
@@ -102,20 +106,20 @@ public partial class CommandPanel : Control
         _walkRun.Pressed += () => WalkRunChosen?.Invoke(); _content.AddChild(_walkRun);
         _idleWorker = new TextureButton { Name = "IdleWorker",Position = new(198,176),Size = new(34,27),FocusMode = FocusModeEnum.None,
             IgnoreTextureSize = true,StretchMode = TextureButton.StretchModeEnum.KeepAspectCentered,
-            Disabled = true,TooltipText = "Idle Worker [I]\nSelect and center the next idle worker." };
+            Disabled = true,TooltipText = HudTip.Make(HudTip.Keyed(GameText.T("cmd.idle_workers"),"I"),null,GameText.TryT("cmd.idle_workers.tip")) };
         _idleWorker.Pressed += () => IdleWorkerChosen?.Invoke(); _content.AddChild(_idleWorker);
         _title = Text("",new(265,59),new(505,22),17); _content.AddChild(_title);
         _order = Text("",new(265,192),new(505,18),12); _content.AddChild(_order);
         _armies = Text("",new(787,8),new(229,18),12); _content.AddChild(_armies);
         _resources = new Control { Position = new(787,6),Size = new(229,22),Visible = false,MouseFilter = MouseFilterEnum.Ignore }; _content.AddChild(_resources);
-        (_populationIcon,_populationText) = ResourceCell(0,10,"Population · units / capacity",52);
-        (_foodIcon,_foodText) = ResourceCell(65,21,"Food",40);
-        (_oreIcon,_oreText) = ResourceCell(130,24,"Ore",40);
+        (_populationIcon,_populationText) = ResourceCell(0,10,GameText.T("resource.population_tip"),52);
+        (_foodIcon,_foodText) = ResourceCell(65,21,GameText.T("resource.food"),40);
+        (_oreIcon,_oreText) = ResourceCell(130,24,GameText.T("resource.ore"),40);
         CreateSelectionRoster();
         _single = new Control { Position = new(265,59),Size = new(505,129),Visible = false,MouseFilter = MouseFilterEnum.Ignore }; _content.AddChild(_single);
         _singlePortrait = new Button { Size = new(52,52),ExpandIcon = true,FocusMode = FocusModeEnum.None };
         Skin(_singlePortrait); WirePortrait(_singlePortrait,() => _detailUnit); _single.AddChild(_singlePortrait);
-        _single.AddChild(Text("Health",new(3,49),new(SelectedBarWidth,16),12));
+        _single.AddChild(Text(GameText.T("stat.health"),new(3,49),new(SelectedBarWidth,16),12));
         _singleHealthFrame = new TextureRect { Position = new(1,66),Size = new(SelectedBarWidth+6,18),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Ignore }; _single.AddChild(_singleHealthFrame);
         _singleHealth = new ColorRect { Position = new(4,69),Size = new(SelectedBarWidth,12),Color = new Color("48972e"),MouseFilter = MouseFilterEnum.Ignore }; _single.AddChild(_singleHealth);
@@ -126,7 +130,7 @@ public partial class CommandPanel : Control
         _singleOrder.Hide(); _single.AddChild(_singleOrder);
         _typeIcon = new TextureRect { Name = "AttackTypeIcon",Position = new(270,28),Size = new(47,48),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Stop }; _single.AddChild(_typeIcon);
         _statsBackground = new TextureRect { Position = new(333,28),Size = new(171,77),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Ignore }; _single.AddChild(_statsBackground);
-        string[] statNames = ["Attack","Armor","Victories"];
+        string[] statNames = [GameText.T("stat.attack"),GameText.T("stat.armor"),GameText.T("stat.victories")];
         var statValues = new Label[3];
         for (int row = 0; row < statNames.Length; row++)
         {
@@ -151,7 +155,7 @@ public partial class CommandPanel : Control
         {
             var command = Commands[index];
             var button = new Button { Name = command.Kind.ToString(),Position = new(788+index*56,146),Size = new(54,54),
-                TooltipText = $"{command.Label} [{command.Key}]",FocusMode = FocusModeEnum.None,ToggleMode = true,Disabled = true,ExpandIcon = true };
+                TooltipText = CommandTooltip(index),FocusMode = FocusModeEnum.None,ToggleMode = true,Disabled = true,ExpandIcon = true };
             Skin(button); button.Pressed += () => CommandChosen?.Invoke(command.Kind);
             var key = Text(command.Key,new(35,34),new(16,18),13); key.HorizontalAlignment = HorizontalAlignment.Right; button.AddChild(key);
             _buttons.Add(command.Kind,button); _content.AddChild(button);
@@ -459,8 +463,8 @@ public partial class CommandPanel : Control
                 + (unit.Definition.Hero ? "\n"+HeroExperienceText.From(unit).Tooltip : "")
                 + (readout == null ? "" : $"\n{readout.Headline}\n{readout.Activity}"+(readout.Queue != "" ? "\n"+readout.Queue : "")
                     + (readout.Role != "" ? "\n"+readout.Role : ""))
-                + $"\nAttack {stats.Attack}{stats.AttackBonus} per hit · Armor {stats.Armor}{stats.ArmorBonus} · Victories {stats.Victories}"
-                + (StatusLine(unit,name) is { Length: > 0 } effects ? "\nUnder "+effects : "")+$"\n{stats.Type}\n{stats.Matchups}";
+                + $"\n{GameText.T("stat.attack")}: {stats.Attack}{stats.AttackBonus} · {GameText.T("stat.armor")}: {stats.Armor}{stats.ArmorBonus} · {GameText.T("stat.victories")}: {stats.Victories}"
+                + (StatusLine(unit,name) is { Length: > 0 } effects ? "\n"+GameText.T("unit.under",effects) : "")+$"\n{stats.Type}\n{stats.Matchups}";
             if (single)
             {
                 _detailUnit = unit.Id; _singlePortrait.Icon = portrait.Button.Icon; _singlePortrait.TooltipText = portrait.Button.TooltipText;
@@ -468,7 +472,7 @@ public partial class CommandPanel : Control
                 _typeIcon.Texture = _art.GetValueOrDefault(stats.Icon);
                 bool evil = SimWorld.FactionOfName(unit.Definition.Name) == SimWorld.Evil;
                 _tipAttackChart.Texture = stats.Icon == "" ? null : _art.GetValueOrDefault(evil ? "tooltip_E_right_counter_graph" : "tooltip_g_right_counter_graph");
-                _typeIcon.TooltipText = _tipAttackChart.Texture != null ? AttackTypeChartTitle : stats.Type+" damage\n"+stats.Matchups;
+                _typeIcon.TooltipText = _tipAttackChart.Texture != null ? AttackTypeChartTitle : GameText.T("stat.type_damage",stats.Type)+"\n"+stats.Matchups;
                 _attackValue.Text = stats.Attack; _armorValue.Text = stats.Armor; _victoriesValue.Text = stats.Victories;
                 _attackName.TooltipText = _attackValue.TooltipText = stats.AttackTip;
                 _armorName.TooltipText = _armorValue.TooltipText = stats.ArmorTip;
@@ -586,9 +590,6 @@ public partial class CommandPanel : Control
     public Color SingleHealthColor => _singleHealth.Color;
     public Label AbilityHotkey(int slot) => _abilityHotkeys[slot];
 
-    /// <summary>Numbers in tooltips read with a decimal point whatever the system's language.</summary>
-    private static readonly System.Globalization.CultureInfo Invariant = System.Globalization.CultureInfo.InvariantCulture;
-
     public static SimUnit? AbilitySource(IEnumerable<SimUnit> units,int team)
         => units.All(u => u.Team == team) ? units.OrderByDescending(u => u.Definition.Hero).ThenBy(u => u.Id)
             .FirstOrDefault(u => u.Definition.Abilities?.Length > 0) : null;
@@ -619,26 +620,36 @@ public partial class CommandPanel : Control
             bool purchaseArt = purchasing && purchaseOverlay != null;
             button.AddThemeColorOverride("icon_disabled_color",purchaseArt || ability.Passive && researched && !unsimulated ? Colors.White : new Color(.35f,.35f,.35f,1));
             button.AddThemeColorOverride("icon_normal_color",purchasing && !purchaseArt ? new Color(.55f,.55f,.55f,1) : Colors.White);
-            _abilityLabels[slot].Text = purchasing && !purchaseArt ? $"{ability.PurchaseFateCost} Fate" : remaining > 0 && !ability.Passive ? $"{remaining/20f:0.0}s" : "";
+            _abilityLabels[slot].Text = purchasing && !purchaseArt ? GameText.T("ability.fate_short",ability.PurchaseFateCost)
+                : remaining > 0 && !ability.Passive ? GameText.Number(remaining/20m,"0.0")+GameText.T("tip.seconds_short") : "";
             _abilityHotkeys[slot].Text = ability.Passive && !purchasing || unsimulated ? "" : key;
             _abilityHotkeys[slot].Position = new(35,purchaseArt ? 2 : 34);
             _abilityRecharge[slot].Size = new(54,ability.RechargeTicks > 0 ? 54*Math.Clamp(remaining/(float)ability.RechargeTicks,0,1) : 0);
-            string effect = ability.Kind switch {
-                AbilityKind.Detection => $"Reveals invisible enemies within {hero.SightRangeMm/1000} m. Cannot reveal the One Ring.",
-                AbilityKind.Ring => string.Create(Invariant,$"Turns Frodo invisible to enemies and prevents him from fighting. Drains {ability.DrainMilliPerTick*SimWorld.TicksPerSecond/1000m:0.#} HP per second, stopping at 1 HP."),
-                AbilityKind.Bane => $"Deals {ability.BonusScale/10000}% damage against orcs, Uruk-Hai and goblins.",
-                AbilityKind.Aura => $"Allies within {ability.RangeMm/1000} m recharge abilities {ability.RechargeScalePpm/10000}% as fast.",
-                AbilityKind.Heal => $"Restores up to {ability.HealMilli/1000} HP to a friendly unit within {ability.RangeMm/1000} m.",
-                AbilityKind.Fury => $"Increases weapon damage by {(long)ability.DpsMilli*100/Math.Max(1,hero.Definition.DpsMilli)-100}%. Deals {ability.BonusScale/10000}% damage against Wraiths and Black Riders.",
-                AbilityKind.SiegeAura => $"Allies within {ability.RangeMm/1000} m, including the bearer, deal {ability.BonusScale/10000}% damage to buildings.",
-                AbilityKind.Ward => string.Create(Invariant,$"Allies within {ability.RangeMm/1000} m take {ability.BonusScale/10000m:0.#}% damage from missiles for {ability.DurationTicks/20}s."),
-                AbilityKind.ArmorUp => "Adds 1 armor.",
-                AbilityKind.ArmorReset => "Sets armor to 0.",
-                AbilityKind.Restore => "Restores full health.",
-                AbilityKind.Immunity => "Protects against poison, stun, blind and slow.",
-                _ => ability.Description };
-            button.TooltipText = ability.Name+"\n"+(purchasing ? $"{ability.PurchaseFateCost} Fate\nUnlock [{key}]\n" : "")+effect;
+            button.TooltipText = AbilityTooltip(hero,ability,purchasing,key);
         }
+    }
+
+    /// <summary>Build-184: the ability's name (with its hotkey while it can be bought), the Fate cell when it costs any,
+    /// the install's description, then the line with the numbers the simulation uses.</summary>
+    public static string AbilityTooltip(SimUnit hero,AbilityDefinition ability,bool purchasing,string key)
+    {
+        string? effect = ability.Kind switch {
+            AbilityKind.Detection => GameText.T("ability.detection",hero.SightRangeMm/1000),
+            AbilityKind.Ring => GameText.T("ability.ring",GameText.Number(ability.DrainMilliPerTick*SimWorld.TicksPerSecond/1000m,"0.#")),
+            AbilityKind.Bane => GameText.T("ability.bane",ability.BonusScale/10000),
+            AbilityKind.Aura => GameText.T("ability.aura",ability.RangeMm/1000,ability.RechargeScalePpm/10000),
+            AbilityKind.Heal => GameText.T("ability.heal",ability.HealMilli/1000,ability.RangeMm/1000),
+            AbilityKind.Fury => GameText.T("ability.fury",(long)ability.DpsMilli*100/Math.Max(1,hero.Definition.DpsMilli)-100,ability.BonusScale/10000),
+            AbilityKind.SiegeAura => GameText.T("ability.siege_aura",ability.RangeMm/1000,ability.BonusScale/10000),
+            AbilityKind.Ward => GameText.T("ability.ward",ability.RangeMm/1000,GameText.Number(ability.BonusScale/10000m,"0.#"),ability.DurationTicks/20),
+            AbilityKind.ArmorUp => GameText.T("ability.armor_up"),
+            AbilityKind.ArmorReset => GameText.T("ability.armor_reset"),
+            AbilityKind.Restore => GameText.T("ability.restore"),
+            AbilityKind.Immunity => GameText.T("ability.immunity"),
+            _ => null };
+        string? described = GameNames.AbilityText(ability,"description");
+        return HudTip.Make(ability.Name,purchasing ? HudTip.FateCost(ability.PurchaseFateCost) : null,
+            described ?? (effect == null ? ability.Description : null),effect,purchasing ? HudTip.Keyed(GameText.T("ability.unlock"),key) : null);
     }
     private static OrderKind? PanelCommand(OrderKind? kind) => kind is OrderKind.Attack or OrderKind.AttackMove or OrderKind.ForceAttack ? OrderKind.Attack : kind;
     public Button GroupButton(int slot) => _groups[slot];

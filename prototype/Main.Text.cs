@@ -21,4 +21,13 @@ public partial class Main
     private static string Shown(string symbol,string english) => GameText.Name(symbol,english);
     private static string ShownAbility(int id,string english) => GameText.Ability(id,"name") ?? english;
     private static string ShownPower(int id,string english) => GameText.GlobalPower(id,"name") ?? english;
+
+    // Build-184: tooltips as the panels make them (HudTip's title, cost line and body), for exact or prefix checks.
+    // Slot marks an argument whose value a check does not pin: ShownBefore / ShownAfter give the text on either side.
+    private const string Slot = "\u0001";
+    private static string ShownBefore(string key,params object?[] args) => GameText.T(key,args).Split(Slot)[0];
+    private static string ShownAfter(string key,params object?[] args) => GameText.T(key,args).Split(Slot)[^1];
+    /// <summary>A construct, train, upgrade or research tooltip's head: "Name [Q]", the cost cells, then the time.</summary>
+    private static string ShownTip(string name,string key,string costs,int ticks,string timeLabel = "tip.time")
+        => HudTip.Make(HudTip.Keyed(name,key),costs,CommandPanel.Seconds(timeLabel,ticks));
 }

@@ -1,5 +1,5 @@
 using Godot;
-using System.Text.RegularExpressions;
+using Reforged.Presentation;
 
 /// <summary>Build-70: every console tooltip shows in one place, the source's parchment box flush with the right edge on top
 /// of the console (references/original-game/TOOLTIPS-2026-10-21.md: worker recruitment and Hold Position), as Warcraft
@@ -10,15 +10,14 @@ using System.Text.RegularExpressions;
 public partial class CommandPanel
 {
     public const float TooltipWidth = 244;
-    // GameConsole.ltx text 8122 is the original counter chart heading.
-    private const string AttackTypeChartTitle = "Weapon Rating";
+    // GameConsole.ltx text 8122 is the original counter chart heading (build-184: read from the install).
+    private static string AttackTypeChartTitle => GameText.T("tip.weapon_rating");
     private PanelContainer _tip = null!;
     private PanelContainer _tipTitleBand = null!, _tipDescriptionStrip = null!;
     private Label _tipTitle = null!, _tipBody = null!, _tipDescription = null!;
     private HBoxContainer _tipCosts = null!;
     private TextureRect _tipAttackChart = null!;
     private string _tipText = "";
-    private static readonly Regex CostPart = new(@"^(?:(\d+) (food|ore|Fate)|(population) (\d+))$");
     private static readonly Color TipInk = new("2e2110"),TipLight = new("fff3cb");
 
     private void CreateTooltip()
@@ -33,7 +32,7 @@ public partial class CommandPanel
         _tipTitle = TipLabel(15,TipLight); _tipTitle.HorizontalAlignment = HorizontalAlignment.Center; _tipTitleBand.AddChild(_tipTitle);
         _tipCosts = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore }; _tipCosts.AddThemeConstantOverride("separation",4); rows.AddChild(_tipCosts);
         _tipDescriptionStrip = new PanelContainer { MouseFilter = MouseFilterEnum.Ignore }; rows.AddChild(_tipDescriptionStrip);
-        _tipDescription = TipLabel(13,TipInk,"Description"); _tipDescriptionStrip.AddChild(_tipDescription);
+        _tipDescription = TipLabel(13,TipInk,GameText.T("tip.description")); _tipDescriptionStrip.AddChild(_tipDescription);
         _tipBody = TipLabel(13,TipInk); _tipBody.AddThemeConstantOverride("line_spacing",-2); rows.AddChild(_tipBody);
         _tipAttackChart = new TextureRect { Name = "AttackTypeChart",Visible = false,MouseFilter = MouseFilterEnum.Ignore,
             SizeFlagsHorizontal = SizeFlags.ShrinkCenter };
@@ -90,6 +89,10 @@ public partial class CommandPanel
         if (text != "") ShowTooltip(text);
     }
 
+    /// <summary>"Время: 22 Сек.": a catalog label, the seconds and the original's seconds label (GameConsole 8303).</summary>
+    public static string Seconds(string label,int ticks) => GameText.Labeled(label,SecondsValue(ticks));
+    public static string SecondsValue(int ticks) => $"{GameText.Number(ticks/20m,"0.#")} {GameText.T("tip.seconds")}";
+
     /// <summary>Above the console's right section, flush with its right edge, growing upward with the text.</summary>
     private void PlaceTooltip() => _tip.Position = new(1024-_tip.Size.X,-_tip.Size.Y);
 
@@ -116,18 +119,11 @@ public partial class CommandPanel
         var lines = text.Split('\n').ToList();
         _tipTitle.Text = lines[0]; lines.RemoveAt(0);
         foreach (Node cell in _tipCosts.GetChildren()) { _tipCosts.RemoveChild(cell); cell.QueueFree(); }
-        if (lines.Count > 0)
+        // Build-184: the cost line (HudTip) becomes the source's food, ore, Fate and population cells, in any language.
+        if (lines.Count > 0 && HudTip.ParseCosts(lines[0]) is { } costs)
         {
-            // A cost line: food, ore, Fate and population become the source's icon cells; the rest (time, health) leads the description.
-            var parts = lines[0].Split(" · ");
-            var costs = parts.Select(p => CostPart.Match(p)).Where(m => m.Success).ToArray();
-            if (costs.Length > 0)
-            {
-                foreach (var cost in costs) _tipCosts.AddChild(CostCell(cost.Groups[3].Success ? "population" : cost.Groups[2].Value,
-                    cost.Groups[3].Success ? cost.Groups[4].Value : cost.Groups[1].Value));
-                string rest = string.Join(" · ",parts.Where(p => !CostPart.IsMatch(p)));
-                if (rest == "") lines.RemoveAt(0); else lines[0] = rest;
-            }
+            foreach (var (resource,amount) in costs) _tipCosts.AddChild(CostCell(resource,amount));
+            lines.RemoveAt(0);
         }
         _tipCosts.Visible = _tipCosts.GetChildCount() > 0;
         _tipBody.Text = string.Join("\n",lines);

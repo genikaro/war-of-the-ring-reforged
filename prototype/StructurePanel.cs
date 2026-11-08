@@ -28,7 +28,7 @@ public partial class CommandPanel
         _structurePortrait = new Button { Size = new(62,62),ExpandIcon = true,FocusMode = FocusModeEnum.None };
         Skin(_structurePortrait); _structurePortrait.Pressed += () => StructurePortraitChosen?.Invoke(); _structureDetails.AddChild(_structurePortrait);
         _structureHealthDetails = new Control { Size = new(248,110),MouseFilter = MouseFilterEnum.Ignore }; _structureDetails.AddChild(_structureHealthDetails);
-        _structureHealthDetails.AddChild(Text("Health",new(0,66),new(248,18),12));
+        _structureHealthDetails.AddChild(Text(GameText.T("stat.health"),new(0,66),new(248,18),12));
         var frame = new Panel { Position = new(0,85),Size = new(248,16),MouseFilter = MouseFilterEnum.Ignore };
         frame.AddThemeStyleboxOverride("panel",Border(new Color("282418"),new Color("bda56b"))); _structureHealthDetails.AddChild(frame);
         _structureHealthBar = new ColorRect { Position = new(2,87),Size = new(244,12),MouseFilter = MouseFilterEnum.Ignore }; _structureHealthDetails.AddChild(_structureHealthBar);
@@ -49,7 +49,7 @@ public partial class CommandPanel
         _structureBurning = new TextureRect { Position = new(0,104),Size = new(StatusSize,StatusSize),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,StretchMode = TextureRect.StretchModeEnum.Scale,
             MouseFilter = MouseFilterEnum.Stop,Visible = false,
-            TooltipText = "Burning\nTakes damage over time until the fire goes out." };
+            TooltipText = HudTip.Make(GameText.T("status.burning.title"),null,GameText.T("structure.burning")) };
         _structureDetails.AddChild(_structureBurning);
         // Build-173: the tower's four outlined garrison boxes (the Evil compendium's capture 24), beside the portrait.
         for (int slot = 0; slot < _garrisonSlots.Length; slot++)
@@ -89,9 +89,9 @@ public partial class CommandPanel
         {
             var (name,value) = _structureStatRows[row];
             name.Visible = value.Visible = row <= count;
-            name.Text = row < count ? count == 1 ? "Attack" : weapons[row].Name : "Armor";
+            name.Text = row < count ? count == 1 ? GameText.T("stat.attack") : weapons[row].Name : GameText.T("stat.armor");
             value.Text = row < count ? weapons[row].Attack : details.Armor;
-            name.TooltipText = value.TooltipText = row < count ? weapons[row].Tooltip : "Armor\nReduces incoming weapon damage.";
+            name.TooltipText = value.TooltipText = row < count ? weapons[row].Tooltip : HudTip.Make(GameText.T("stat.armor"),null,GameText.T("structure.armor_tip"));
             if (row == count) _structureArmorText = value;
         }
         var garrison = details.Garrison ?? [];
@@ -102,10 +102,10 @@ public partial class CommandPanel
             _garrisonUnits[slot] = inside?.Unit ?? -1;
             box.Icon = inside == null ? null : _art.GetValueOrDefault(inside.Portrait);
             box.Disabled = inside == null || details.Team != PlayerTeam;
-            box.TooltipText = inside == null ? "Garrison: empty" : $"{inside.Name} · {inside.Health}/{inside.MaxHealth}"
-                +(details.Team == PlayerTeam ? "\nLeaves the tower" : "");
+            box.TooltipText = inside == null ? GameText.T("structure.garrison_empty") : HudTip.Make($"{inside.Name} · {inside.Health}/{inside.MaxHealth}",null,
+                details.Team == PlayerTeam ? GameText.T("structure.leaves_tower") : null);
         }
-        _structureProgressText.Text = string.Join("\n",new[] {details.UnderConstruction ? $"Construction {details.ProgressPercent}%" : "",
+        _structureProgressText.Text = string.Join("\n",new[] {details.UnderConstruction ? GameText.T("structure.construction",details.ProgressPercent) : "",
             details.Resource}.Where(line => line != ""));
         // A place of power's holder and benefits take the room the health bar leaves (build-54).
         _structureProgressText.Position = details.Place != "" ? new(0,66) : new(70,28);
@@ -116,7 +116,7 @@ public partial class CommandPanel
     }
 
     public bool StructureHealthVisible => _structureHealthDetails.IsVisibleInTree();
-    public string[] DisplayedStructureAttacks => _structureStatRows.Where(r => r.Name.Visible && r.Name.Text != "Armor").Select(r => r.Value.Text).ToArray();
+    public string[] DisplayedStructureAttacks => _structureStatRows.Where(r => r.Name.Visible && r.Name.Text != GameText.T("stat.armor")).Select(r => r.Value.Text).ToArray();
     public Label StructureAttackValue(int row) => _structureStatRows[row].Value;
     public TextureRect StructureBurningStatus => _structureBurning;
     public Color StructureHealthColor => _structureHealthBar.Color;
