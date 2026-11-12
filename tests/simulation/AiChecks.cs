@@ -220,7 +220,7 @@ public static class AiChecks
             +string.Join(" | ",duel.AiPlayers.Values.Select(a => string.Join("; ",a.Journal.Entries.TakeLast(3).Select(e => e.Text)))));
 
         // Build-49: bots thinking at different rates (Hard twice a second, Easy every 3 s) still replay identically. Who
-        // wins is judged on Bilbo's Bluffs (SKIRMISH.md): here the bases stand 52 m apart, inside each other's 30 m
+        // wins is judged on Bilbo's Bluffs (docs/SKIRMISH.md): here the bases stand 52 m apart, inside each other's 30 m
         // defence radius, so the duel turns on whose buildings stand farther forward.
         SimWorld Skill()
         {

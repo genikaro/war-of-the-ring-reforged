@@ -2,7 +2,7 @@
 
 Extends wor's conservative container inventory. Unknown property words remain
 integers; unsupported versions fail instead of scanning for plausible records.
-See NOTES-world-scenes.md for executable evidence and rendering limits.
+See docs/NOTES-world-scenes.md for executable evidence and rendering limits.
 """
 from collections import Counter
 import math

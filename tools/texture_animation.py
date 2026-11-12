@@ -1,4 +1,4 @@
-"""UVA atlas/UV descriptors and LTA texture sequences. See NOTES-presentation-assets.md."""
+"""UVA atlas/UV descriptors and LTA texture sequences. See docs/NOTES-presentation-assets.md."""
 import math
 
 from asset_io import Reader

@@ -115,7 +115,7 @@ def export(resolver, buildings, units, install=None, language=None):
                             'PLACEOFPOWERSCOUT': war_party(resolver, 'AIWARPARTY_PLACEOFPOWERSCOUT')},
             'policy': 'Source data: .rai knobs, Buildings AI columns, Units AIAssaultEffectiveness/AIRaidingEffectiveness/AINeverAddUnit and '
                       'the AIWARPARTY_ASSAULT, AIWARPARTY_RAIDING and AIWARPARTY_PLACEOFPOWERSCOUT sizes and member shares. Decision '
-                      'logic is an adapter; see prototype/SKIRMISH.md build-27, build-53 and build-54.'}
+                      'logic is an adapter; see docs/SKIRMISH.md build-27, build-53 and build-54.'}
 
 
 def refresh(output):

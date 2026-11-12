@@ -1,6 +1,6 @@
 """Traced melee/ranged rules adapter for the four Godot demo types.
 
-Source data is read-only. Runtime numbers are integers. See prototype/COMBAT.md
+Source data is read-only. Runtime numbers are integers. See docs/COMBAT.md
 for the explicitly approximate armor/range policies and unsupported rules.
 """
 from decimal import Decimal, ROUND_HALF_UP, ROUND_CEILING

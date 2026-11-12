@@ -4,7 +4,7 @@ Six arrays contain texture, trail, beam and auxiliary tracks, particle
 emitters and mesh emitters. Fixed records retain unnamed words by offset;
 padding and editor heap bytes are not interpreted as floats. No scan for
 magic values is used. Executable reader addresses and layouts are documented
-in NOTES-presentation-assets.md. This is data export, not a particle simulator.
+in docs/NOTES-presentation-assets.md. This is data export, not a particle simulator.
 """
 import struct
 

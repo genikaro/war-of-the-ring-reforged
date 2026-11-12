@@ -112,7 +112,7 @@ fire arrows 125, and ballista arrows 151 use the same layout. Resource bindings
 on Elven/ordinary arrows reference Effects 12 (`Test_Arrow_Trail.lfx`), while
 fire and ballista bindings reference their matching effects 91 and 382. The
 Elven adapter imports that trail's 250 ms track, width and packed color keys;
-full runtime effect support remains open. See prototype/COMBAT.md for the
+full runtime effect support remains open. See docs/COMBAT.md for the
 explicit ribbon, blending and sound scheduling policies.
 
 Cloth begins with an integer version. V100 stores counts, 83-byte particles,

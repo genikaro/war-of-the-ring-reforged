@@ -1,6 +1,6 @@
 # Unit collision sizes — October 20, 2026
 
-**Current demo policy:** the later [crowd follow-up](../prototype/ENGAGEMENT.md#crowd-and-attack-move-follow-up)
+**Current demo policy:** the later [crowd follow-up](ENGAGEMENT.md#crowd-and-attack-move-follow-up)
 separates full envelopes from allied personal space. Friendly pair separation
 can compress to 50%; enemy contact, terrain and selection use full envelopes.
 Aragorn's full demo radius/height are 800/2,347 mm and his visual scale is 112%.
@@ -87,7 +87,7 @@ otherwise possible routes between samples.
 Both radii determine pair contact, swept reservations and interpolated movement
 safety. Formations use slots that fit their largest body. Imported bodies use
 physical pair separation for combat slots and permission to strike; added comfort
-margins trapped packed formations. [Engagement notes](../prototype/ENGAGEMENT.md)
+margins trapped packed formations. [Engagement notes](ENGAGEMENT.md)
 cover the subsequent target distribution and performance corrections. Effective center reach is the greater
 of the legacy 2 m and both radii plus the raw weapon range as a surface gap.
 That reach interpretation and cylinder response remain prototype policies.
@@ -99,7 +99,7 @@ retain continuous avoidance and exchange blocked/crossing slots within the same
 Move or Attack-move order. Marching units retain a passing side briefly and avoid
 backward steering oscillations; presentation filters tiny heading corrections.
 Attack-move has bounded encounters and regrouping rather than unlimited flank
-pursuit. See [crowd movement policy](../prototype/MOVEMENT.md#crowded-arrival-and-attack-move-cohesion--october-20-2026).
+pursuit. See [crowd movement policy](MOVEMENT.md#crowded-arrival-and-attack-move-cohesion--october-20-2026).
 Narrow routes retain constrained reservations. Checks cover combined
 and redirected 18-unit moves, stable arrival, excess melee attackers, unequal
 body sweeps, real-map arrivals, narrow doors, deck support and headroom.

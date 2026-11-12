@@ -116,7 +116,7 @@ Each type routes through its own cached terrain/object/mesh clearance and
 headroom profile. Formations allocate slots using their largest body. The base
 mesh graph still starts from 350 mm support; larger profiles only remove nodes
 and links, so some routes remain conservatively excluded. See
-[the source interpretation](../tools/NOTES-unit-collision.md).
+[the source interpretation](NOTES-unit-collision.md).
 
 An 18-unit formation reproduced jitter and stalled arrivals after the size
 change. Large units on wide ground now keep continuous avoidance when crowded,

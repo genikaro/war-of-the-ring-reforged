@@ -78,7 +78,7 @@ def export(resolver):
                       'Models follow Objects.ModelEvent -> ModelEvents.AssociatedModelResource1; shared source models stay shared. '
                       'Skirmishes replace Steed of Rohan, Aviary and Willow with allowed random landmarks. '
                       'Owner balance override: Monument of Narsil grants heroes +25% damage; its original rule is preserved in source_rule. '
-                      'See prototype/PLACES-OF-POWER.md for spell adapters and source-only campaign entries.'}
+                      'See docs/PLACES-OF-POWER.md for spell adapters and source-only campaign entries.'}
 
 
 def export_models(output, resolver, data):

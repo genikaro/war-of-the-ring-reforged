@@ -179,7 +179,7 @@ not document the binary format. Relevant chapters:
 Phase 2 now extends this initial inventory through EOF: terrain painting,
 placements, passability, water, camera/marker records and decals decode in
 `world_scene.py`. See `NOTES-world-scenes.md` for scene exports and current
-validation, and `prototype/README.md` above this folder for the Godot sandbox.
+validation, and `docs/README.md` for the Godot sandbox.
 
 ## Validation
 

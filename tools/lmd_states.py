@@ -3,7 +3,7 @@
 Recovered from the files and Rings.exe readers at 0x5ed556 and 0x5e749b.
 The caller supplies lmd._Reader; this module has no dependency on game files.
 Unknown property flags and event payloads are retained without assigning them
-gameplay meanings. See NOTES-animation-states.md for the byte layout.
+gameplay meanings. See docs/NOTES-animation-states.md for the byte layout.
 """
 from dataclasses import dataclass, field
 import math

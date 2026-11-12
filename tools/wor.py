@@ -4,7 +4,7 @@ Supported: world 125, metadata 102, terrain 104. Reads the fixed minimap,
 pre-terrain records and CRC-checked terrain vertex blob sequentially. Locates
 the interned name table by its repeated size and validated UTF-16 contents;
 terrain layers, environment and object payloads remain explicitly opaque.
-See NOTES-levels.md for reader addresses, evidence and remaining work.
+See docs/NOTES-levels.md for reader addresses, evidence and remaining work.
 """
 import argparse
 from collections import Counter

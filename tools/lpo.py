@@ -2,7 +2,7 @@
 
 Keys bind Models/Effects, motion parameters and collision actions. Unknown
 gameplay enums/parameters retain their original values. All 37 shipped files
-are read sequentially to EOF. See NOTES-presentation-assets.md for readers.
+are read sequentially to EOF. See docs/NOTES-presentation-assets.md for readers.
 """
 from asset_io import Reader
 import struct

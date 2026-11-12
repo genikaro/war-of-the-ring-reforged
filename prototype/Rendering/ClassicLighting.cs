@@ -50,7 +50,7 @@ public sealed record MapLighting(Color Ambient,Color Sun,Vector3 SunDirection,fl
         time_of_day = TimeOfDay,clouds = Clouds && CloudTexture != null,sky = SkySide != null,tonemapper = "Linear" };
 }
 
-/// <summary>Build-152 classic lighting (LIGHTING.md). The 2003 game's Direct3D 9 renderer added ambient and
+/// <summary>Build-152 classic lighting (docs/LIGHTING.md). The 2003 game's Direct3D 9 renderer added ambient and
 /// diffuse x sun x N.L in gamma space, clamped the sum to 1 and multiplied the texture by it. Godot lights in linear
 /// space, where the same numbers come out much brighter and flatter (an unlit side showed at about 63% of its texture
 /// instead of about 30%). The classic shader makes that sum in light() and converts it to linear once, so a texel shows

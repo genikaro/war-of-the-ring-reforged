@@ -1,14 +1,14 @@
 # WotR asset tools (proof of concept)
 
-Python 3.13 + Pillow; map export also uses NumPy. Run from this folder.
+Python 3.13 + Pillow; map export also uses NumPy. Run from `tools/`.
 
 ## Current playable prototype
 
 The Godot 4 C# sandbox loads Helm's Deep and 36 animated units in six squads. It
 starts framing the units; keys 1/2/3 select the three blue squads. From the
-repository root, run `./prototype/run.ps1`; see [setup and controls](../prototype/README.md).
+repository root, run `./prototype/run.ps1`; see [setup and controls](README.md).
 Phase 2 is complete and the movement/spacing prototype is accepted. The three
-demo types now have [imported melee stats and timed attacks](../prototype/COMBAT.md),
+demo types now have [imported melee stats and timed attacks](COMBAT.md),
 equipment visibility and impact sounds; original formulas remain partly unverified.
 The original console art, scalable HUD,
 four bottom-row actions with contextual Attack/A, hidden Move/Stop controls,
@@ -42,7 +42,7 @@ assets, previews, validation reports and portable tools stay in ignored
 
 | Script | Purpose |
 |---|---|
-| `frontend_assets.py` | Build-147: menu art, the Immortal bitmap font (`LIQDFONT`), the Mordor sky panorama and the Barad-dûr menu scene (`MenuScene.wor`) into `converted/frontend` for the main menu, setup and loading screens ([MENUS.md](../prototype/MENUS.md)). |
+| `frontend_assets.py` | Build-147: menu art, the Immortal bitmap font (`LIQDFONT`), the Mordor sky panorama and the Barad-dûr menu scene (`MenuScene.wor`) into `converted/frontend` for the main menu, setup and loading screens ([MENUS.md](MENUS.md)). |
 | `combat_rules.py` | Export traced definitions, fixed-tick melee events and impact sounds for the three demo types. |
 | `pcm_audio.py` | Decode selected mono Microsoft ADPCM impact WAVs to PCM without an external codec. |
 | `h2o.py` | List/extract Liquid Entertainment `.H2O` archives (v6). Format notes in the module docstring. |

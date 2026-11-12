@@ -2,7 +2,7 @@
 
 Goal: a playable Good faction Tier 1 tech tree with working workers on the
 stock 2-player map captured in the first local original-game session. This file
-tracks what exists; planning lives in `tools/Roadmap.md` (Phase 4 economy).
+tracks what exists; planning lives in `docs/ROADMAP.md` (Phase 4 economy).
 
 ## Build-123: resource-based bot worker limits
 
@@ -1227,7 +1227,7 @@ winner on the same tick and the same final state digest.
 Still open: stuck units re-plan routes that flood the map, which causes most of
 the remaining spikes, and unit combat targeting is the next largest cost. Frame
 cost on a real display at 16x is not measured yet. The ideas, measured costs and
-the corpse rule are kept in the roadmap's [performance backlog](../tools/Roadmap.md#performance-backlog).
+the corpse rule are kept in the roadmap's [performance backlog](ROADMAP.md#performance-backlog).
 
 Validation: 760 simulation and 34 worker-cache checks and all skirmish and Helm's
 Deep smokes pass; the observer smoke's final digest matches build-28's.
@@ -1328,7 +1328,7 @@ The Gimli against Aragorn observer match ends exactly as on build-30 (Aragorn wi
 at tick 33895 with the same final digest), and 153 bodies left the field during it.
 Its closing siege still shows heavy blocked replanning, about 4 s in the last two
 minutes, as armies crowd around the last buildings. Remaining costs, mostly unit movement and
-combat targeting, are listed in the roadmap's [performance backlog](../tools/Roadmap.md#performance-backlog).
+combat targeting, are listed in the roadmap's [performance backlog](ROADMAP.md#performance-backlog).
 
 Validation: the observer smoke gains a corpse check (10 cases): every removed body
 is hidden and disabled and was dead for at least 60 s, and no body outstays its
@@ -3246,7 +3246,7 @@ fault was not reproduced from the data.
 The owner asked for Fate point generation. The manual says Fate is "obtained by
 Exploring, Expanding your camp, and Battling"; the rules themselves are in Rings.exe,
 which reads the source `WorldVariables`. Decoded from the shipped executable (SHA-256
-`7d9e30a7...`, see `tools/NOTES-levels.md`):
+`7d9e30a7...`, see `docs/NOTES-levels.md`):
 
 | Address | Role |
 |---|---|

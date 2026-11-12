@@ -23,33 +23,33 @@ The [prototype reference review](../references/original-game/PROTOTYPE-REVIEW.md
 corrects missing runtime mipmaps, ignored lake vertex colours, spawned team
 colours and selection disks. Menu/launch-time views and capture metadata make further
 comparisons repeatable. Build-152 lights every map with its own decoded sun, ambient, clouds and
-skybox in the original's gamma-space model ([LIGHTING.md](../prototype/LIGHTING.md)); weather, placed lights,
+skybox in the original's gamma-space model ([LIGHTING.md](LIGHTING.md)); weather, placed lights,
 water animation, original UI and the complete animation-event/appearance adaptation remain open. The three demo
 types now have the melee-event and equipment-visibility subset described below.
 
 ## Current checkpoint
 
 The Godot sandbox launches from the repository root with `./prototype/run.ps1`.
-Setup, controls and known limits are in [the prototype README](../prototype/README.md).
+Setup, controls and known limits are in [the prototype README](README.md).
 **Build-76 (Oct 25):** Fate is earned in battle, by the rule decoded from Rings.exe:
 damage dealt to enemy units and buildings x 0.8 (tower arrows a quarter), divided by
 (Fate held + Fate queued + 1) x 1.1, x1 at home rising to x1.45 at the farthest map
 corner, x1.4 with the Soulfire Monolith; 500 make a point, up to 20. The first 3-Fate hero
 costs about 4100 damage dealt at home. The Fate tooltip and a new observer column show
 progress. Warpost corruption (Evil), the Power Acquisition lobby setting and bots
-training heroes remain. See [skirmish notes](../prototype/SKIRMISH.md#build-76-fate-earned-in-battle).
+training heroes remain. See [skirmish notes](SKIRMISH.md#build-76-fate-earned-in-battle).
 
 **Build-63 (Oct 24):** bones a clip leaves unkeyed go back to rest instead of keeping
 the previous clip's pose. The Ranger's hood and cape and the Elven Archer's hair are not
 keyed in their idle clips, so after a run they stayed raised or streaming while idle.
 Unit animation players are now deterministic. See
-[skirmish notes](../prototype/SKIRMISH.md#build-63-bones-a-clip-leaves-unkeyed-return-to-rest).
+[skirmish notes](SKIRMISH.md#build-63-bones-a-clip-leaves-unkeyed-return-to-rest).
 
 **Build-62 (Oct 24):** the unit panel's Attack is damage per hit, matching the
 Sandbox dummies' floating numbers; the original showed the weapon's damage per second.
 Hovering Attack gives the damage per second and the attack speed from very slow to very
 fast (Gondor Swordsman 10 per hit, 10 per second, very fast). Hits show whole numbers. See
-[skirmish notes](../prototype/SKIRMISH.md#build-62-attack-shows-damage-per-hit).
+[skirmish notes](SKIRMISH.md#build-62-attack-shows-damage-per-hit).
 
 **Build-61 (Oct 24):** four fixes from the owner's playtest. The Ranger (and the
 Rohan Rider's and Shieldbreaker's runs) no longer runs ahead of its centre: root motion
@@ -57,7 +57,7 @@ is removed from the rest position, not the clip's first key. A source unit-pair 
 replaces the type matchup instead of stacking with it, so the Rohan Rider hits a Gondor
 Swordsman for 150%, not 187.5%. Towers list their weapons in the info panel (the
 Ballista Tower its arrows and its bolt). The walk/run button shows the current pace.
-See [skirmish notes](../prototype/SKIRMISH.md#build-61-four-unit-fixes-from-playtesting).
+See [skirmish notes](SKIRMISH.md#build-61-four-unit-fixes-from-playtesting).
 
 **Build-60 (Oct 24):** each unit runs at its own speed. The original has no speed
 column: units move as far as their Run clip's root joint travels. The prototype keeps
@@ -65,7 +65,7 @@ those ratios and scales them so the Gondor Swordsman still runs 3 m/s, so the Ro
 Rider runs 4.54 m/s, Legolas 4.04, Aragorn 3.66, Frodo 2.82 and the Huorn 2.12.
 Walking scales each unit's own run speed by its walk/run ratio. The bot reference match
 is shorter: Gimli beats Aragorn on Bilbo's Bluffs at tick 16483 (was 21983). See
-[movement notes](../prototype/MOVEMENT.md#build-60-per-unit-run-speeds).
+[movement notes](MOVEMENT.md#build-60-per-unit-run-speeds).
 
 **Build-59 (Oct 24):** training dummies in the Sandbox. Four dummies stand beside the
 blue base, one per damage type (Cutting, Piercing, Blunt, Hero), with 1000 health, no
@@ -73,7 +73,7 @@ regeneration and no attack; they never fight back. Their buttons add 1 armor, se
 to 0 and restore health, for every selected dummy; the 0 key selects all four. They are
 drawn half again as big and gilded, and every hit on one floats its damage with the type
 multiplier, for example "-26.8 (125%)". See
-[skirmish notes](../prototype/SKIRMISH.md#build-59-training-dummies-in-the-sandbox).
+[skirmish notes](SKIRMISH.md#build-59-training-dummies-in-the-sandbox).
 
 **Build-58 (Oct 24):** the rest of the Good tech tree, and the Fate heroes, checked
 against the Good compendium. Citadel 3, 4 and 5; Nature's Haven, the Elven Sanctuary
@@ -85,19 +85,19 @@ Guardian Wind work; the other new hero abilities show disabled. All 32 Good tech
 are listed and 22 simulated, every stat chain with tiers that replace each other (+1,
 +2, +3, as captured), plus Eagle Fletching, both axes and Dwarven Engineering. The Build
 menu gets an Advanced page (W). Fate is not earned yet, so outside the Sandbox the heroes
-wait; bots climb the tree but do not train the new units yet. See [skirmish notes](../prototype/SKIRMISH.md#build-58-the-rest-of-the-good-tech-tree-and-the-fate-heroes).
+wait; bots climb the tree but do not train the new units yet. See [skirmish notes](SKIRMISH.md#build-58-the-rest-of-the-good-tech-tree-and-the-fate-heroes).
 
 **Build-57 (Oct 24):** the River Raid stall. A four-bot match froze at 11:07: a
 walled-in unit asked to make way searched every free cell of its region for a
 refuge, flooding the whole map for each. A cell that a failed search already reached
 is now skipped without searching again; the refuges chosen are the same (identical
-Bilbo observer digest), and the match plays to the end. See [skirmish notes](../prototype/SKIRMISH.md#build-57-the-river-raid-stall).
+Bilbo observer digest), and the match plays to the end. See [skirmish notes](SKIRMISH.md#build-57-the-river-raid-stall).
 
 **Build-55 (Oct 24):** observer Stats tab. The spectator overview gets a third tab
 (S): each player's food and ore gathered over the match and units killed and lost,
 with tooltips by unit type plus buildings razed and lost. A tower's kills count for
 its side; a friendly kill is a loss only; a surrender's demolition is no loss. The
-tally stays out of the state digest. See [skirmish notes](../prototype/SKIRMISH.md#build-55-observer-stats-tab).
+tally stays out of the state digest. See [skirmish notes](SKIRMISH.md#build-55-observer-stats-tab).
 
 **Build-54 (Oct 23):** places of power. A side alone in a place's 13 m zone takes
 it and keeps it until another side does; every unit of the holder carries its
@@ -105,7 +105,7 @@ source modifier (armor, regeneration, maximum health, attack, siege damage, abil
 cooldown; speed, sight, costs, Fate and experience are shown but not simulated yet).
 A random place draws one of the 19 random-eligible places from the match seed.
 Bots send the source scout war party's five soldiers after their `.rai` Scouting
-gate. See [skirmish notes](../prototype/SKIRMISH.md#build-54-places-of-power).
+gate. See [skirmish notes](SKIRMISH.md#build-54-places-of-power).
 
 **Build-53 (Oct 23):** the Raider trait. A Raider's assaults go for Mills and Foundries
 first, and while an assault fights at the enemy base it sends a small raid, 3 to 6
@@ -113,7 +113,7 @@ soldiers by its `.rai` Harassment (source `AIWARPARTY_RAIDING`), at enemy worker
 and economy buildings away from towers and defenders; raiders kill the workers
 first and run from bigger forces. Tuned against bots until it plays no worse than a
 plain bot on three maps; a bot's all-out base defence keeps raids small, so how
-much they annoy a person is the owner's playtest. See [skirmish notes](../prototype/SKIRMISH.md#build-53-the-raider-trait).
+much they annoy a person is the owner's playtest. See [skirmish notes](SKIRMISH.md#build-53-the-raider-trait).
 
 **Build-52 (Oct 23):** health regeneration from the source tables. A unit regains
 its animation state's `HealthRegenerationRate` (1 HP a second idle, walking or in an
@@ -122,14 +122,14 @@ repairing; heroes 0.167 mid-swing) times its `HealthRegenerationMultiplier` (her
 2.25), never while the One Ring is on, as its source actions say. A Hard bot's
 retreated soldiers now heal at home and rejoin parties above half health. The
 HP-per-second reading of the rates is an adapter until the original game is
-measured. See [skirmish notes](../prototype/SKIRMISH.md#build-52-health-regeneration).
+measured. See [skirmish notes](SKIRMISH.md#build-52-health-regeneration).
 
 **Build-51 (Oct 23):** bot traits. Each bot slot takes traits on top of its style,
 picked in a Traits menu on the setup screen or written `-Bots Gimli+Defender`:
 Rusher, Expansionist, Defender, Relentless, Marksman and Demolisher (parties raze
 buildings under fire). Rusher excludes Defender and Expansionist. Fixed on the way:
 a party member chasing an enemy that was no longer a threat held the whole
-regrouping party, which froze a match for 18 minutes. See [skirmish notes](../prototype/SKIRMISH.md#build-51-bot-traits).
+regrouping party, which froze a match for 18 minutes. See [skirmish notes](SKIRMISH.md#build-51-bot-traits).
 
 **Build-50 (Oct 23):** bot order discipline. A bot's orders wait for a swing
 under way to land instead of cancelling it, it never repeats an order a unit is
@@ -139,7 +139,7 @@ any fight within 16 m. A party fights the soldiers and towers hurting it before 
 building, then picks buildings by kind (military before economy). Soldiers left
 idle in the field rejoin the party out or walk home; a Hard bot's badly wounded
 soldier retreats one time in three and rejoins parties above half health. Traits
-move to build-51. See [skirmish notes](../prototype/SKIRMISH.md#build-50-bot-order-discipline-idle-guard-and-target-priority).
+move to build-51. See [skirmish notes](SKIRMISH.md#build-50-bot-order-discipline-idle-guard-and-target-priority).
 
 **Build-49 (Oct 23):** bot difficulty and style. Difficulty now sets how well a bot
 plays (think rate, builders, regrouping, target choice, when a party falls back;
@@ -150,35 +150,35 @@ item's tooltip and a bot card on the setup screen. Hard beats Easy of the same
 style from both bases on Sorrow and Dust and Blood. Fixed on the way: in fights
 lasting 30 s bots gave up on enemies they were hitting and cancelled their own
 swings, which froze Hard armies. Traits follow in build-50.
-See [skirmish notes](../prototype/SKIRMISH.md#build-49-bot-difficulty-and-style).
+See [skirmish notes](SKIRMISH.md#build-49-bot-difficulty-and-style).
 
 **Build-48 (Oct 23):** one content pack for every map. The Good faction's models,
 rules, HUD art, production, research and AI tables now live once in
 `converted/content/good/` (`tools/content_pack.py`); a skirmish map cache holds
 only its map and names the pack, and its navigation covers every unit body of both
 factions. New units, buildings and research reach all maps by rebuilding the pack;
-older self-contained caches still load. All 32 map caches are re-imported. See [skirmish notes](../prototype/SKIRMISH.md#build-48-one-content-pack-for-every-map).
+older self-contained caches still load. All 32 map caches are re-imported. See [skirmish notes](SKIRMISH.md#build-48-one-content-pack-for-every-map).
 
 **Build-47 (Oct 23):** bots climb the tree. A bot upgrades its Citadel after
 4:00-10:40 depending on aggressiveness, builds the Ranger Post, Forge and
 Wilderness Outpost, prefers the Rider and Shieldbreaker once its army is a full
 party, and researches for the units it has. In the reference match Gimli reaches
 Citadel 2 at 7:05 and fields Riders, Shieldbreakers and Rangers with all four
-researches, and wins at 17:46. See [skirmish notes](../prototype/SKIRMISH.md#build-47-bots-climb-the-tree).
+researches, and wins at 17:46. See [skirmish notes](SKIRMISH.md#build-47-bots-climb-the-tree).
 
 **Build-46 (Oct 23):** Forge and Wilderness Outpost research. The Forge
 researches Iron Blades (+1 attack) and Iron Plating (+1 armor) for the Swordsman,
 Rider, Axethrower and Shieldbreaker, the Outpost Etched Blades and Improved
 Leather for the Ranger: 75 food, 75 ore, 90 s each, applied to units already
 trained. The +1 comes from the source per-unit modifiers; whether the technique's
-x1.2 also applies needs one in-game capture. See [skirmish notes](../prototype/SKIRMISH.md#build-46-forge-and-wilderness-outpost-research).
+x1.2 also applies needs one in-game capture. See [skirmish notes](SKIRMISH.md#build-46-forge-and-wilderness-outpost-research).
 
 **Build-45 (Oct 23):** the Tier 2 units. The Barracks trains the Rohan Rider once
 Citadel 2 stands, the Dwarf Hall the Dwarf Shieldbreaker once a Forge stands, and
 the Ranger Post the Ranger, all with the captured costs and stats. Units trained to
 one rally point now gather around it instead of queuing for its cell, and a wide
 body (the Rider) re-picks a siege spot fighters already block. Abilities and Forge
-research remain. See [skirmish notes](../prototype/SKIRMISH.md#build-45-the-tier-2-units).
+research remain. See [skirmish notes](SKIRMISH.md#build-45-the-tier-2-units).
 
 **Build-44 (Oct 23):** Citadel 2 and the Tier 2 buildings, from the October 22
 captures. The Citadel upgrades in place to level 2 (115 food, 105 ore, 50 s, 1000
@@ -187,7 +187,7 @@ building's queue as in the original and pauses its training. Citadel 2 opens the
 Wilderness Outpost, Ranger Post and Forge on the Build page; every building and
 unit now checks its source prerequisites and locked buttons name what is missing.
 Next: the Tier 2 units (Rider, Shieldbreaker, Ranger), then Forge research.
-See [skirmish notes](../prototype/SKIRMISH.md#build-44-citadel-2-and-the-tier-2-buildings).
+See [skirmish notes](SKIRMISH.md#build-44-citadel-2-and-the-tier-2-buildings).
 
 **Build-43 (Oct 23):** no more frozen fighters. Units standing where their cell
 centre is too close to a building (after razing it, at work spots) found nothing
@@ -196,7 +196,7 @@ can stand on. Bots spread attacks over the enemies in range, at most four on eac
 instead of sending a whole army at one, and a party member razing the target takes
 the party in instead of holding the march. Freezes of 3 s or more in traced bot
 matches fell from 18-75 per match to 1-4.
-See [skirmish notes](../prototype/SKIRMISH.md#build-43-no-more-frozen-fighters).
+See [skirmish notes](SKIRMISH.md#build-43-no-more-frozen-fighters).
 
 **Build-41 (Oct 23):** bot armies regroup and keep walking. Saruman's army
 stopped and started because its Swordsmen and Axethrowers, ordered to attack a
@@ -207,7 +207,7 @@ their route before leaving and regroup on open ground every 25 m instead of
 filing through narrow places. On Bilbo's Bluffs (Saruman against Aragorn) the
 party stands still on move orders 7% of the time instead of 39%, marches 4 m
 wide instead of 43 m, and Aragorn wins at 19:23 where build-40 stalemated.
-See [skirmish notes](../prototype/SKIRMISH.md#build-41-bot-armies-regroup-and-keep-walking).
+See [skirmish notes](SKIRMISH.md#build-41-bot-armies-regroup-and-keep-walking).
 
 **Build-40 (Oct 22):** owner playtest fixes. Each bot expansion keeps half an
 assault party as its guard; the first Foundry goes on the home pile the bot's
@@ -219,14 +219,14 @@ no longer hold up assaults. Two freezes in the reference matches are fixed: home
 armies stop chasing enemies far from every building, and a full party's worth of
 idle soldiers reinforces a party still out. Aragorn now wins Bilbo's Bluffs at
 17:54 and the Wasteland free-for-all at 18:33.
-See [skirmish notes](../prototype/SKIRMISH.md#build-40-expansion-guards-home-foundry-trapped-spawns).
+See [skirmish notes](SKIRMISH.md#build-40-expansion-guards-home-foundry-trapped-spawns).
 
 **Build-39 (Oct 22):** skirmish setup screen (step 4). `./prototype/run.ps1
 -Skirmish` opens a lobby: every multiplayer map with its player count and a preview
 of its start positions, You / a bot personality / Closed for each start position (no
 human means watching), and the start speed. You can play any slot; closed slots get
 no base. Restart replays the setup, and Setup returns to it. Launch flags still
-skip it. See [skirmish notes](../prototype/SKIRMISH.md#build-39-skirmish-setup-screen).
+skip it. See [skirmish notes](SKIRMISH.md#build-39-skirmish-setup-screen).
 
 **Build-38 (Oct 22):** bots expand from 10-15 minutes (by aggressiveness) with a
 Citadel by unclaimed resources, then every 10 minutes up to three. They rebuild a
@@ -235,7 +235,7 @@ they can never field an army again. Workers keep away from resources near enemy
 buildings. Three freezes found by watching are fixed: reachability judged from a
 blocked cell, enemy workers counted as a threat, and give-up timers reset by
 alternating targets. The reference matches decide again (Gimli wins Bilbo's
-Bluffs at 33:26 and Wasteland at 48:15). See [skirmish notes](../prototype/SKIRMISH.md#build-38-bots-expand-go-all-in-and-surrender).
+Bluffs at 33:26 and Wasteland at 48:15). See [skirmish notes](SKIRMISH.md#build-38-bots-expand-go-all-in-and-surrender).
 
 **Build-37 (Oct 22):** an 8-bot free-for-all on MP08_Rift fell to 1 FPS once
 armies grew. Speed bursts now stop after 25 ms of simulation per frame, and Godot
@@ -246,7 +246,7 @@ local detour first, and its full replan stops after 32,768 nodes. In Rift's big
 fights the median FPS went from 2 to 13-20, and ticks from 18-28 ms to 11-17 ms.
 The new routes leave two reference bot matches in a stalemate (Gimli against
 Aragorn on Bilbo's Bluffs, the Wasteland free-for-all): the bots cannot recover
-once their economy is gone. See [skirmish notes](../prototype/SKIRMISH.md#build-37-large-map-performance).
+once their economy is gone. See [skirmish notes](SKIRMISH.md#build-37-large-map-performance).
 
 **Build-36 (Oct 22):** spectator HUD in the style of other RTS observer modes. A
 foldable overview at the top right lists every player under an Economy tab (bank,
@@ -254,7 +254,7 @@ income per minute, population, workers, army, buildings) or a Units tab (portrai
 with counts); E, U and Tab switch and fold it, and a player's name centres the
 camera on that base. The console's empty action grid becomes the match panel: map
 name, game clock, players left, pause button and a notched 1x-16x speed slider
-(`-` and `+` still work). The match itself is unchanged (same digest). See [skirmish notes](../prototype/SKIRMISH.md#build-36-spectator-hud).
+(`-` and `+` still work). The match itself is unchanged (same digest). See [skirmish notes](SKIRMISH.md#build-36-spectator-hud).
 
 **Build-35 (Oct 22):** any multiplayer map with any number of players (skirmish
 setup steps 2 and 3). All 32 maps import into their own caches (`--map`,
@@ -263,30 +263,30 @@ side but the player's. A 4-bot free-for-all on Wasteland plays to a result. Bots
 attack only buildings they can reach, and every bot side's idle units now chase
 noticed enemies as team 1's always did, so the observer match changes: Gimli now
 wins at 33:33 (digest 75D5F383...). Mighty Silverlode's rope bridges are too narrow
-for armies. See [skirmish notes](../prototype/SKIRMISH.md#build-35-any-multiplayer-map-any-number-of-players).
+for armies. See [skirmish notes](SKIRMISH.md#build-35-any-multiplayer-map-any-number-of-players).
 
 **Build-34 (Oct 22):** a wide body's attack-position search stops after 1,024
 nodes instead of 2,048 (owner's choice after an experiment; remembering failed
 searches was tried and dropped). Exhausted searches cost half as much; the observer
-match now ends at 30:05 with a new reference digest (31E28C29...). See [skirmish notes](../prototype/SKIRMISH.md#build-34-smaller-attack-position-search-budget).
+match now ends at 30:05 with a new reference digest (31E28C29...). See [skirmish notes](SKIRMISH.md#build-34-smaller-attack-position-search-budget).
 
 **Build-33 (Oct 22):** combat targeting pass, no change in play. A unit grid
 (8 m buckets kept current by unit moves) serves the distance-bounded threat scans,
 and the wide-body attack-position search runs once instead of twice. Combat time in
-big fights roughly halves; the observer match keeps its digest. See [skirmish notes](../prototype/SKIRMISH.md#build-33-unit-grid-for-threat-scans-one-pass-attack-position-search).
+big fights roughly halves; the observer match keeps its digest. See [skirmish notes](SKIRMISH.md#build-33-unit-grid-for-threat-scans-one-pass-attack-position-search).
 
 **Build-32 (Oct 22):** third performance pass, no change in play. Route smoothing's
 swept-body test solved each row's cells directly instead of scanning a long
 path's bounding box, which halves mid-game unit movement; combat position and
 opponent scans skip units that cannot matter. Mid-game ticks fall 10-27% and the
-observer match keeps its digest. See [skirmish notes](../prototype/SKIRMISH.md#build-32-swept-body-tests-and-exact-scan-trims).
+observer match keeps its digest. See [skirmish notes](SKIRMISH.md#build-32-swept-body-tests-and-exact-scan-trims).
 
 **Build-31 (Oct 22):** corpse removal and stuck-unit replanning. Bodies sink away
 60 s after death (owner's choice; the original fades them after 10 s) and their
 models stop rendering and animating. A stuck unit's route fallback no longer
 re-floods a region an earlier failed search already proved closed, which removes
 most remaining pathfinding spikes without changing any route; the observer match
-ends exactly as on build-30 (same final digest). See [skirmish notes](../prototype/SKIRMISH.md#build-31-corpse-removal-and-stuck-unit-replanning).
+ends exactly as on build-30 (same final digest). See [skirmish notes](SKIRMISH.md#build-31-corpse-removal-and-stuck-unit-replanning).
 
 **Build-30 (Oct 22):** five fixes from an owner skirmish, Warcraft III style.
 Attack-move razes enemy buildings it passes (units first) and then marches on. A
@@ -297,7 +297,7 @@ training buttons take grid hotkeys (QWER/ASDF/ZXCV by key position, letters on
 the buttons). Queued orders show a dashed line and the original gather-point
 flags. A Citadel rally point on a Mill, Foundry, well or ore pile sends new
 workers straight to gathering.
-See [skirmish notes](../prototype/SKIRMISH.md#build-30-owner-playtest-fixes).
+See [skirmish notes](SKIRMISH.md#build-30-owner-playtest-fixes).
 
 **Build-29 (Oct 22):** pathfinding performance, first pass, after an owner report
 of frame drops in large matches. `-Profile` prints where simulation and frame time
@@ -306,7 +306,7 @@ every body graph, only around itself, and A* runs on flat cached arrays. Every
 route is unchanged (the observer match reproduces build-28's final digest), and
 mid-game ticks cost about a third: 1.7-2 ms instead of 5-6 ms, with 16x running at
 17-26 fps instead of 5-11. Stuck-unit replanning and combat targeting are next.
-See [skirmish notes](../prototype/SKIRMISH.md#build-29-pathfinding-performance-first-pass).
+See [skirmish notes](SKIRMISH.md#build-29-pathfinding-performance-first-pass).
 
 **Build-28 (Oct 22):** observer mode and game speed. `-Observe -Bots Gimli,Aragorn`
 runs a bot on every side and nobody plays: any unit can be inspected but not
@@ -317,7 +317,7 @@ the match. Watching bot against bot exposed four bot bugs, now fixed: stragglers
 blocking new assaults, workers leading squads in circles, unreachable units
 stalling an army forever, and food starvation. Gimli beats Aragorn at 30:51.
 Validation: a 9-case observer smoke, 3 new synthetic checks and all regressions.
-See [skirmish notes](../prototype/SKIRMISH.md#build-28-observer-mode-bot-against-bot-and-game-speed).
+See [skirmish notes](SKIRMISH.md#build-28-observer-mode-bot-against-bot-and-game-speed).
 
 **Build-27 (Oct 21):** the skirmish AI. The enemy trains workers, builds its
 base, trains Swordsmen and Axethrowers, and sends assaults that raze the player's
@@ -328,7 +328,7 @@ and not recovered, so it is an adapter on those numbers; the default personality
 is a medium adapter (Difficulty 1, knobs at 50) and `-AiPersonality` picks any
 `.rai`. Against a passive player it razes the Citadel at 5:48 of game time. No
 scouting, raids, flanking or heroes yet. Validation: a 9-case AI smoke on Bilbo's
-Bluffs, 11 synthetic checks and all regressions. See [skirmish notes](../prototype/SKIRMISH.md#build-27-the-skirmish-ai).
+Bluffs, 11 synthetic checks and all regressions. See [skirmish notes](SKIRMISH.md#build-27-the-skirmish-ai).
 
 **Build-26 (Oct 21):** the skirmish can be won and lost. The captured stock
 skirmish's "destruction" game type decodes from the localized menu text as Razing
@@ -336,7 +336,7 @@ skirmish's "destruction" game type decodes from the localized menu text as Razin
 defeated whatever units remain, and the last one standing wins. A centred panel
 with the original result lines ("You won!" / "You lost!", in English) pauses the
 game and offers the original Continue and Restart. Validation: a 9-case victory
-smoke, 9 new synthetic checks and all regressions. See [skirmish notes](../prototype/SKIRMISH.md#build-26-the-razing-win-condition).
+smoke, 9 new synthetic checks and all regressions. See [skirmish notes](SKIRMISH.md#build-26-the-razing-win-condition).
 
 **Build-25 (Oct 21):** Watchtower defenses. A completed Watchtower shoots its
 source weapon, `BuildingDefenses` row `G_WATCHTOWER` with weapon 40 (14 cutting
@@ -346,17 +346,17 @@ carries `1 << 11`, the Building Projectile flag). Arrows use the source model,
 launch sounds and trail. An idle armed unit that is shot turns on the tower.
 Adapters: centre-distance ranges, 25 m/s arrows without line of fire, no damage
 type, and no garrison, so the tower stays at its base rate. Validation: a 10-case
-defense smoke, 13 new synthetic checks and all regressions. See [skirmish notes](../prototype/SKIRMISH.md#build-25-watchtower-defenses).
+defense smoke, 13 new synthetic checks and all regressions. See [skirmish notes](SKIRMISH.md#build-25-watchtower-defenses).
 
 **Build-24 (Oct 21):** axes thrown at buildings now draw, and force attacks no
-longer provoke retaliation. See [skirmish notes](../prototype/SKIRMISH.md#build-24-axes-at-buildings-and-force-attacks-without-retaliation).
+longer provoke retaliation. See [skirmish notes](SKIRMISH.md#build-24-axes-at-buildings-and-force-attacks-without-retaliation).
 
 **Build-23 (Oct 21):** besiegers face the building. A melee attacker kept its
 approach heading and hit the wall sideways, since a unit's melee facing is chosen
 from its order in the presentation and no case covered an attack on a building. It
 now turns to the building's centre once it is in range and striking. Missile units
 were already correct. Validation: the siege smoke grows to 17 cases, sampling every
-besieger's rendered yaw, plus all regressions. See [skirmish notes](../prototype/SKIRMISH.md#build-23-besiegers-face-the-building).
+besieger's rendered yaw, plus all regressions. See [skirmish notes](SKIRMISH.md#build-23-besiegers-face-the-building).
 
 **Build-22 (Oct 21):** owner playtest fixes. The armed Attack command now forces
 its building target, of any team, so force-attack works on buildings instead of
@@ -365,7 +365,7 @@ right-click stays contextual, leaving friendly buildings to the repair order.
 Right-clicking the minimap orders the selection to that point, as the original
 manual describes, with Ctrl to march and Shift to queue, and without moving the
 camera. Validation: the siege smoke grows to 16 cases and the minimap smoke to
-15, plus all regressions. See [skirmish notes](../prototype/SKIRMISH.md#build-22-force-attack-on-buildings-and-minimap-orders).
+15, plus all regressions. See [skirmish notes](SKIRMISH.md#build-22-force-attack-on-buildings-and-minimap-orders).
 
 **Build-21 (Oct 21):** combat against buildings. Every skirmish building has
 health and armour from the source `Buildings` table, start buildings included,
@@ -378,7 +378,7 @@ Workers repair a damaged owned building with the source hammer clip, restoring a
 full bar over its own BuildTime. Adapters: no damage type, attacker limit or
 retaliation for buildings, and repair is free. Validation: a 14-case siege smoke
 plus 722 simulation, 34 worker-cache and 170 Python checks and all other
-regressions. See [skirmish notes](../prototype/SKIRMISH.md#build-21-combat-against-buildings-and-repair).
+regressions. See [skirmish notes](SKIRMISH.md#build-21-combat-against-buildings-and-repair).
 
 **Build-20 (Oct 21):** work ranges and world health bars. A worker may now stand
 at most one body radius plus one navigation cell beyond a target's footprint,
@@ -392,7 +392,7 @@ climbs with the work done, so the bar doubles as the progress bar, and it shows
 only below full health. Start and neutral structures take no damage yet, so they
 never carry one. Validation: 722 synthetic simulation and 34 worker-cache checks,
 a new real-map check that every miner stands within a body and a cell of the ore
-pile's footprint, and all skirmish and Helm's Deep smokes. See [skirmish notes](../prototype/SKIRMISH.md#build-20-footprint-work-ranges-and-world-health-bars).
+pile's footprint, and all skirmish and Helm's Deep smokes. See [skirmish notes](SKIRMISH.md#build-20-footprint-work-ranges-and-world-health-bars).
 
 **Build-19 (Oct 21):** Frodo trains at the Citadel (150 food, 100 ore,
 population 0, 36 s, one per player) with his source abilities: the One Ring
@@ -402,13 +402,13 @@ recharge within 15 m). Living heroes get the original right-edge portrait strip
 from `GameConsole_Hero_Portraits.lsr` with health and experience bars; a click
 selects the hero and a double click also centers the camera. Hero experience,
 levels and regeneration are not simulated. Validation: 722 synthetic / 789 cached simulation and 170
-Python checks, a 13-case Frodo smoke and all skirmish and Helm's Deep smokes. See [skirmish notes](../prototype/SKIRMISH.md#build-19-frodo-and-the-hero-portraits).
+Python checks, a 13-case Frodo smoke and all skirmish and Helm's Deep smokes. See [skirmish notes](SKIRMISH.md#build-19-frodo-and-the-hero-portraits).
 
 **Build-18 (Oct 21):** map navigation. Edge scrolling (the original manual's
 "pushing" on screen edges), minimap press-and-drag, a white outline of the
 visible ground on the minimap, and the original ore, well and place-of-power
 minimap markers. Validation: a 12-case minimap smoke plus all regressions. See
-[the prototype README](../prototype/README.md).
+[the prototype README](README.md).
 
 Next (after build-28): step 2 of the skirmish setup plan (any number of player
 slots), owner playtest against the AI, then scouting, raids and flanking war
@@ -424,7 +424,7 @@ builders loop the source repair (hammer) clip. Workers choose work spots beside
 the target. The F4 debug menu gains +1000 food/ore and instant build/train
 cheats. Validation: 704 simulation, 33 worker-cache and 168 Python checks; 27-case
 gathering and 28-case construction smokes plus all skirmish and Helm's Deep
-regressions. See [skirmish notes](../prototype/SKIRMISH.md#build-17-warcraft-style-gathering-building-animation-and-debug-cheats).
+regressions. See [skirmish notes](SKIRMISH.md#build-17-warcraft-style-gathering-building-animation-and-debug-cheats).
 
 **Build-16 (Oct 21):** owner playtest found construction icons unclickable. The
 panel hid and re-showed them every frame, cancelling real clicks that span
@@ -433,7 +433,7 @@ release across frames. At the owner's request, workers use a Warcraft-style Buil
 button (B) that swaps the unit commands for the Tier 1 buildings and Back; Esc
 steps back. Paging for later tiers is deferred.
 Validation: 23-case placement check including cross-frame clicks and Esc/B
-navigation, plus all skirmish, Helm's Deep, simulation and Python regressions. See [skirmish notes](../prototype/SKIRMISH.md#build-16-build-menu-and-working-construction-clicks).
+navigation, plus all skirmish, Helm's Deep, simulation and Python regressions. See [skirmish notes](SKIRMISH.md#build-16-build-menu-and-working-construction-clicks).
 
 **Build-15 (Oct 20):** a completed Dwarf Hall trains the Dwarf Axethrower
 (60 food, 10 ore, population 2, 340 ticks; 140 HP, 9 DPS, 0.5–10 m). The rules
@@ -444,7 +444,7 @@ unchanged apart from that format. The Axethrower's right-hand throw uses an
 undecoded LMD event type 33 and is skipped for now.
 Validation: 680 synthetic / 747 cached simulation checks, 33 worker-cache checks
 (including the cached Axethrower throw), 167 Python tests, a 9-case Godot Dwarf Hall
-check and unchanged Helm's Deep arrow results; fresh and upgraded caches pass. See [skirmish notes](../prototype/SKIRMISH.md#build-15-dwarf-hall-trains-the-dwarf-axethrower).
+check and unchanged Helm's Deep arrow results; fresh and upgraded caches pass. See [skirmish notes](SKIRMISH.md#build-15-dwarf-hall-trains-the-dwarf-axethrower).
 Next: Frodo at the Citadel (hero model, rules and abilities), decoding event
 type 33 for the second throw, and Watchtower defenses.
 
@@ -454,7 +454,7 @@ completed Barracks trains it through the build-12 queue (50 food, population 2,
 larger than the producer's anchor now exit through a cell they can stand on.
 Validation: 680 synthetic / 747 cached simulation checks, 30 worker-cache checks,
 167 Python tests and an 18-case Godot placement/training check, plus all
-regressions; upgraded and fresh caches pass. See [skirmish notes](../prototype/SKIRMISH.md#build-14-barracks-trains-the-gondor-swordsman).
+regressions; upgraded and fresh caches pass. See [skirmish notes](SKIRMISH.md#build-14-barracks-trains-the-gondor-swordsman).
 Next: generalize the Elven Archer projectile path for the Dwarf Axethrower
 (Dwarf Hall), then Frodo at the Citadel.
 
@@ -467,7 +467,7 @@ existing construction, resume, cancellation and scaffold presentation. A complet
 Camp adds 11 population; a new Citadel accepts deliveries and trains workers.
 Validation: 678 synthetic / 745 cached simulation checks, 30 worker-cache checks,
 167 Python tests, a 15-case Godot placement check and all skirmish/Helm's Deep
-regressions; upgraded and fresh caches pass; 1280x800 and 4K captures inspected. See [skirmish notes](../prototype/SKIRMISH.md#build-13-tier-1-building-placement).
+regressions; upgraded and fresh caches pass; 1280x800 and 4K captures inspected. See [skirmish notes](SKIRMISH.md#build-13-tier-1-building-placement).
 Next: export the Gondor Swordsman and Dwarf Axethrower and train them at the
 Barracks and Dwarf Hall, then Frodo at the Citadel.
 
@@ -482,7 +482,7 @@ Validation: 655 synthetic / 722 cached simulation checks, 30 worker-cache checks
 166 Python tests, a 17-case Godot production check and the structure/command/
 gathering/construction/orders/ability regressions; 1280x800 and 4K captures
 inspected. Refresh existing caches with the production command. See
-[skirmish notes](../prototype/SKIRMISH.md#build-12-citadel-worker-training).
+[skirmish notes](SKIRMISH.md#build-12-citadel-worker-training).
 Next: general building placement for the Camp, Barracks, Dwarf Hall and
 Watchtower, then Swordsman/Axethrower training through the same queue.
 
@@ -492,7 +492,7 @@ while preserving hue, alpha and fully lit values; cast shadows remain. Source
 assets/caches and simulation geometry are unchanged. Preview settings and terrain
 adjustment audits are recorded in captures. Clean build, 61 structure checks,
 Helm's Deep gameplay/import checks and 1280x800/4K visual checks pass. Restart;
-no cache refresh required. See [skirmish notes](../prototype/SKIRMISH.md#build-11-brighter-environment-and-softer-terrain-shadows).
+no cache refresh required. See [skirmish notes](SKIRMISH.md#build-11-brighter-environment-and-softer-terrain-shadows).
 
 **Build-10 (Oct 20):** box selection includes buildings and neutral interactables
 when no friendly units are selected. Units take priority, including Shift-retained
@@ -500,7 +500,7 @@ units; structure selection remains a single inspector. Visible triangle overlap
 supports partial roofs and uses click depth checks. Empty and reverse drags keep
 the expected selection behavior. Validation: 61 structure and 49 command Godot
 checks pass, including rendered 1280x800 and 4K selection. Build-9 caches work
-unchanged. See [skirmish notes](../prototype/SKIRMISH.md#build-10-structure-box-selection-with-unit-priority).
+unchanged. See [skirmish notes](SKIRMISH.md#build-10-structure-box-selection-with-unit-priority).
 
 **Build-9 (Oct 20):** all eight resource sites and the map's Place of Power are
 selectable as neutral objects with original portraits, outlines and live stock.
@@ -511,7 +511,7 @@ font minimum heights. Unit groups, worker orders and the global pace control
 remain available. Validation: 164 Python tests, 51 structure and 49 command Godot
 checks, plus construction/order/ability regressions. Fresh and upgraded caches
 pass at 1280x800 and 4K. Local cache updated; older caches use the documented
-skirmish upgrade. See [skirmish notes](../prototype/SKIRMISH.md#build-9-neutral-inspection-and-command-palettes).
+skirmish upgrade. See [skirmish notes](SKIRMISH.md#build-9-neutral-inspection-and-command-palettes).
 
 **Build-8 (Oct 20):** corrected excess collision clearance in the owner's
 Citadel/Foundry gap. Versioned skirmish footprints use a single swept-body circle
@@ -524,7 +524,7 @@ Existing skirmish caches need the documented upgrade; the local cache is updated
 Validation: 633 synthetic / 700 cached simulation checks, 30 worker-cache checks,
 162 Python tests and 26 structure Godot checks, plus gathering/construction/
 command/order/ability regressions. Fresh and upgraded caches pass; 1280x800 and
-4K views are inspected. See [skirmish notes](../prototype/SKIRMISH.md#build-8-building-clearance-and-selection).
+4K views are inspected. See [skirmish notes](SKIRMISH.md#build-8-building-clearance-and-selection).
 Next: remaining Tier 1 construction and production queues. Building damage/repair,
 worker work animations, fog and the scripted opponent remain open.
 
@@ -536,7 +536,7 @@ route stalls from 8,884/7,754 ticks to 7/8; all workers keep delivering. Move
 orders recover the exact stranded position. Validation: 624 synthetic / 691
 cached simulation checks, 29 worker-cache checks and expanded 23-check gathering
 smoke, plus Construction/Command/Orders regressions. No asset refresh required.
-See [movement notes](../prototype/MOVEMENT.md#build-7-reconnecting-from-an-off-center-ground-position).
+See [movement notes](MOVEMENT.md#build-7-reconnecting-from-an-off-center-ground-position).
 Remaining Tier 1 buildings, building selection and production are still next.
 
 **Build-6 (Oct 20):** Mill/Foundry construction is connected to worker portraits
@@ -545,7 +545,7 @@ prerequisites, shared worker progress, original scaffold stages, Stop/resume and
 75% cancellation refunds. Completed owned buildings unlock food and improved
 ore gathering; cargo returns to the Citadel. Rules, work, costs, footprints,
 ownership and fractional resources replay deterministically. See [skirmish
-notes](../prototype/SKIRMISH.md) for source values and explicit adapter policies.
+notes](SKIRMISH.md) for source values and explicit adapter policies.
 Validation: 613 synthetic / 680 cached simulation checks, 160 Python tests,
 23 construction and 19 gathering Godot checks, plus Command/Orders/Ability
 regressions. Fresh and upgraded caches pass; 1280x800 and 4K views are inspected.
@@ -558,7 +558,7 @@ skirmish. Workers gather carried loads, return to an owned Citadel and credit
 the live resource bank. Shared deposits, partial final loads, cancellation,
 queued orders and economy replay state use the deterministic simulation.
 Imported source values and explicit timing/range interpretations are documented
-in [skirmish notes](../prototype/SKIRMISH.md). Food gathering requires Mill
+in [skirmish notes](SKIRMISH.md). Food gathering requires Mill
 construction; production and the rest of the Good Tier 1 tree remain open.
 Validation: 588 simulation checks, 158 Python tests and 19 Godot skirmish checks,
 including all four workers completing a delivery and exact resource conservation.
@@ -572,7 +572,7 @@ matching the captured start). Economy, construction and production are still
 absent; they follow in builds 5-8. The Helm's Deep cache is byte-identical after
 the importer refactor. Validation: 566 simulation checks, 156 Python tests,
 11 skirmish smoke checks and the Command/Orders/Ability/Melee smokes; start
-captures inspected at 1280x800 and 4K. See [skirmish notes](../prototype/SKIRMISH.md).
+captures inspected at 1280x800 and 4K. See [skirmish notes](SKIRMISH.md).
 
 **Build-3 (Oct 20):** Greater Kingsfoil uses original Effects 171 texture layers
 for expanding rings, leaves, clouds and sparkles, with finite, pause-aware visual
@@ -582,7 +582,7 @@ returns the normal pointer. Passive labels are removed, with active skill
 hotkeys at the bottom-right and the cooldown centered separately. Validation:
 566 simulation/presentation checks, 147 Python tests and 38 Ability input checks;
 healing captures inspected at 1280x800 and 4K. Legacy particle motion remains a
-documented adapter in [ability notes](../prototype/ABILITIES.md).
+documented adapter in [ability notes](ABILITIES.md).
 
 **Build-2 (Oct 20):** Aragorn's source ability slice is implemented. Q and the
 original Kingsfoil icon target injured allies/self, approach within 10 m, heal
@@ -591,7 +591,7 @@ clip/sound, health popup and cooldown overlay are connected. Fury and Immunity
 are equipped passive trial upgrades; W/E do not activate spells and R is empty.
 Fury replaces weapon Attack 20 with 30, with the source Wraith/Black Rider bonus.
 Immunity flags are imported; status producers, poison cleansing, original spell
-effects and purchase progression remain open. See [source trace and limits](../prototype/ABILITIES.md).
+effects and purchase progression remain open. See [source trace and limits](ABILITIES.md).
 Validation: 626 C# checks with the local cache, 145 Python tests, 25 Ability,
 46 Command and 27 Orders Godot checks, plus the 420-tick Melee smoke pass.
 The hero console was inspected at 1280x800 and 4K.
@@ -624,7 +624,7 @@ cardinal moves, with blocked-corner checks and swept-body crossing reservations.
 Wide-ground orders now use full-route any-angle smoothing, next-tick redirects,
 rolling body checks, local steering and minimum-travel formation assignment.
 The six-unit open-field fixture finishes in 211 ticks versus 274, with no waits.
-[Movement notes](../prototype/MOVEMENT.md) document the benchmark and limits.
+[Movement notes](MOVEMENT.md) document the benchmark and limits.
 Single-file and mesh routes retain constrained coordination; deck links
 remain eight-way. Rendering follows the recorded path between fixed ticks and turns
 gradually. An 80 FPS motion smoke check verifies interpolation and turning with
@@ -658,7 +658,7 @@ combat routes; Attack-move resumes after combat, force moves ignore retaliation,
 and stationary orders never chase. Names, health, tooltips, active orders and
 disabled commands are visible. Twenty-two actual Godot input checks cover all
 three blue squads, cancellation, pause/resume and dead selections. The
-[command notes](../prototype/COMMANDS.md) record behavior, original references,
+[command notes](COMMANDS.md) record behavior, original references,
 intentional shortcut/layout differences and remaining limits.
 
 Debug tools now show live simulation/selection/order state, with pause/resume,
@@ -692,7 +692,7 @@ bounded goal-set searches; region caches warm while loading. A new 18-versus-18
 fixture requires broad participation and replay stability. The measured fixture
 uses about 52% less simulation CPU time than the reported-bug baseline; actual
 Godot reproduction checks all-ally input, both armies, body safety and step times.
-See [engagement measurements](../prototype/ENGAGEMENT.md).
+See [engagement measurements](ENGAGEMENT.md).
 
 Further owner feedback reopened crowded melee and attack-move responsiveness.
 Friendly personal space now compresses to a solid half-envelope core; terrain,
@@ -702,7 +702,7 @@ react to reachable enemies. Combat routes obey the same encounter area as motion
 and steering retains a passing side. Aragorn's demo model is enlarged 12%, with
 an 800 mm full radius and 2,347 mm height; raw source bounds remain preserved.
 Both full-army Attack and Attack-move checks now record 18 hitters per side.
-See the [crowd follow-up](../prototype/ENGAGEMENT.md#crowd-and-attack-move-follow-up).
+See the [crowd follow-up](ENGAGEMENT.md#crowd-and-attack-move-follow-up).
 
 The owner confirmed the crowd changes feel much better. Idle player units now
 automatically watch a 10 m radius, assist nearby allies, and use a 12 m pursuit
@@ -720,7 +720,7 @@ classification and attacker caps. Original clip durations and `.lmd` hit events
 drive integer windup, damage and recovery. Cancellation retains cooldown;
 multi-hit damage preserves cycle DPS. Rendering seeks from simulation state;
 equipment visibility and three converted impact sounds are connected. The
-[combat notes](../prototype/COMBAT.md) record provenance and explicit armor,
+[combat notes](COMBAT.md) record provenance and explicit armor,
 range and event-scale approximations. Four source-unit duels replay identically.
 The current melee Godot check records correctly timed hits over 420 ticks with all
 three squads fighting safely; a 4K capture was inspected. Original-game formula
@@ -823,7 +823,7 @@ later work. Do not expand this slice to all 85 unit records.
 Build-147 added the front end and a game executable: the original main menu over its
 3D menu scene, Skirmish and Sandbox setup screens in the original game-creation frame,
 the One Ring loading screen with staged loading, and `prototype/export.ps1` building
-`build/WarOfTheRingReforged.exe` ([MENUS.md](../prototype/MENUS.md)). Campaign stays disabled.
+`build/WarOfTheRingReforged.exe` ([MENUS.md](MENUS.md)). Campaign stays disabled.
 
 ## Next milestone: original-game command and combat corrections
 
@@ -883,7 +883,7 @@ valid; they demonstrate our behavior, not equivalence to the original.
      DPS and 1–13 m bow range. Source missile-release events launch visible
      original arrows; fixed-tick projectile arrivals apply damage. Existing
      commands, body clearance and Walk/Run remain connected. See the
-     [ranged implementation and approximations](../prototype/COMBAT.md#elven-archer).
+     [ranged implementation and approximations](COMBAT.md#elven-archer).
    - Ranged units switch to source melee weapons/animations during melee combat,
      as clarified by the owner, and resume bow use after contact ends. Switching
      preserves cooldown; released arrows remain in flight. Elven Archer's three
@@ -905,7 +905,7 @@ valid; they demonstrate our behavior, not equivalence to the original.
      Q for Greater Kingsfoil, W/E for passive Fury/Immunity, and no fourth slot.
      The sandbox equips these without purchase progression. Original spell
      effects, status producers/cleansing and continuous reference comparison
-     remain open; see [ability notes](../prototype/ABILITIES.md). Collect Evil,
+     remain open; see [ability notes](ABILITIES.md). Collect Evil,
      hero and mixed-selection panels before generalizing the Good infantry HUD.
 4. **Build the skirmish loop from the captured selection cases.**
    - Separate infantry statistics, worker construction choices and building
@@ -1152,7 +1152,7 @@ The engine is chosen. Remaining choices can be made as their implementation appr
 
 **Gate:** a skirmish sandbox on one map where you select units, order them to move and attack, and they path, animate and fight with placeholder rules.
 
-**Status (Oct 20): per-type bodies and enemy inspection implemented.** `prototype/run.ps1` launches 36 animated units in six squads with original console art, a scalable four-button bottom row (Attack, Hold, Guard, Patrol), target-dependent Attack/A, hidden Move/Stop controls, editable groups and queued waypoints. The integer 20 Hz core passes 397 synthetic/cache checks; 34 command checks plus existing group/debug and combat/motion/picking checks cover actual Godot dispatch. Source body sizes replace the shared radius, rings show collision size, and an 18-unit jitter/stalling regression is corrected. Imported melee definitions, type ratings, kill counts, single-unit stats, animation-timed damage, equipment visibility and impact sounds are connected. Original formula validation, advanced navigation, complete presentation and importer packaging remain open. See `prototype/README.md` and `prototype/COMBAT.md`.
+**Status (Oct 20): per-type bodies and enemy inspection implemented.** `prototype/run.ps1` launches 36 animated units in six squads with original console art, a scalable four-button bottom row (Attack, Hold, Guard, Patrol), target-dependent Attack/A, hidden Move/Stop controls, editable groups and queued waypoints. The integer 20 Hz core passes 397 synthetic/cache checks; 34 command checks plus existing group/debug and combat/motion/picking checks cover actual Godot dispatch. Source body sizes replace the shared radius, rings show collision size, and an 18-unit jitter/stalling regression is corrected. Imported melee definitions, type ratings, kill counts, single-unit stats, animation-timed damage, equipment visibility and impact sounds are connected. Original formula validation, advanced navigation, complete presentation and importer packaging remain open. See `docs/README.md` and `docs/COMBAT.md`.
 
 - [x] Settle the engine: Godot 4 with C#; current local cache is generated from the owner's install, with no assets in source control. Production asset-delivery packaging remains open.
 - [ ] Package the first-run importer: `prepare_prototype.py --install` now extracts/verifies source archives and writes a hashed runtime cache; in-game install selection and production packaging remain.
@@ -1183,13 +1183,13 @@ and production remain later work.
 - [ ] Open `Rings.exe` in Ghidra to recover the formulas the tables only feed: damage, hit chance, experience, upgrade effects
 - [ ] Validate original command semantics against recorded inputs and expand hero abilities; build-2 connects Aragorn's source Q heal and W/E passive slots. F2 global Walk/Run and Hold Position labeling are implemented. Preserve documented prototype conveniences.
 - [ ] Record continuous reference fights and controlled health traces, then compare outcomes; the 30 local stills establish HUD/encounter observations, not timing or damage formulas
-- [x] Skirmish visibility: explored terrain/building memory, currently visible enemy units and minimap markers; match the captured fog behavior before calling the skirmish loop complete (build-150: sight grid from the source sight ranges, remembered buildings, haze and grey minimap after local-023/027, bots that scout and search; see `prototype/FOG.md`; line-of-sight blocking and the forest multiplier remain)
+- [x] Skirmish visibility: explored terrain/building memory, currently visible enemy units and minimap markers; match the captured fog behavior before calling the skirmish loop complete (build-150: sight grid from the source sight ranges, remembered buildings, haze and grey minimap after local-023/027, bots that scout and search; see `docs/FOG.md`; line-of-sight blocking and the forest multiplier remain)
 
 ## Phase 5: AI and campaign
 
 **Gate:** the first campaign mission (Light Side tutorial 1) plays start to finish, with objectives, dialogue and cinematics.
 
-- [ ] Skirmish AI from the `.rai` personalities and the AI tables (`AIWarParties`, `AIUnitDescriptors`, `AIBuildingClasses`); build-27 adds the core loop (economy, build plan, training, Assault parties, base defence) as an adapter on those numbers, without scouting, raids, flanking, heroes or abilities (Build-163, owner request: the late game. A bot that can never earn food again makes an all-in last stand with every unit and surrenders once it is lost; its last food buys soldiers; heroes count toward a party and go with squads and raids; three guards stay at each place of power taken; ore is mined only near a depot; an Evil side above its population can train the Slavemaster again. See [skirmish notes](../prototype/SKIRMISH.md#build-163-the-bots-late-game).)
+- [ ] Skirmish AI from the `.rai` personalities and the AI tables (`AIWarParties`, `AIUnitDescriptors`, `AIBuildingClasses`); build-27 adds the core loop (economy, build plan, training, Assault parties, base defence) as an adapter on those numbers, without scouting, raids, flanking, heroes or abilities (Build-163, owner request: the late game. A bot that can never earn food again makes an all-in last stand with every unit and surrenders once it is lost; its last food buys soldiers; heroes count toward a party and go with squads and raids; three guards stay at each place of power taken; ore is mined only near a depot; an Evil side above its population can train the Slavemaster again. See [skirmish notes](SKIRMISH.md#build-163-the-bots-late-game).)
 - [ ] Customizable bots (owner request, Oct 21): choose a difficulty (Easy / Normal / Hard), then combine style traits. Difficulty sets how *well* a bot plays (think rate, worker target, reaction to attacks, retreating the wounded, target choice), ideally without resource bonuses; traits set *what* it plays by adjusting one shared strategy profile. Trait ideas: Expansionist (claims contested wells and ore early, second Citadel, more workers), Defender (Watchtower ring, attacks only with a full 12-unit party), Rusher (thin economy, two or three Barracks, smallest waves), Raider (small parties against workers and Mills; source `AIWARPARTY_RAIDING`), Tactician (assault with flank and fix groups; source war-party combos), Tower killer (Axethrower-led parties; source `AIWARPARTY_TOWERKILLER`), Hero lover (early Frodo). Some traits exclude each other (Rusher and Defender), others stack; the twelve shipped `.rai` personalities become presets; traits as data files would serve the modding item. Groundwork, in order: gather `SkirmishAi.cs` tunables into one profile record; raids, flanking and Watchtower garrisons; expansion with multiple Citadels; a skirmish setup screen for difficulty and traits (today only launch switches). (Build-49, owner model Oct 23: difficulty = execution, style = a point in an Aggression / Expansion / Tech triangle, one `AiProfile` record in `Simulation/AiRoster.cs`, a fixed style and description per named bot, a lobby bot card. Build-50: order discipline (patient bot orders, urgent interrupts), idle guard for bot units, target priority by kind with threats first. Build-51: player-picked traits per slot (Rusher, Expansionist, Defender, Relentless, Marksman, Demolisher), in the lobby and as `Id+Trait`. Build-53: Raider (raids from `AIWARPARTY_RAIDING` and the `.rai` Harassment). Scout (needs fog of war) and hero use (needs fate points for heroes beyond Frodo) remain open. Build-150: fog of war; every bot scouts by its .rai Scouting, searches, remembers armies seen and holds weaker attacks; hero courage follows Aggression. A Scout trait remains open.)
 - [ ] Skirmish setup, bot free-for-alls and an observer mode (owner request, Oct 21): create a skirmish with map selection, player slots (human, bot with difficulty and traits, observer, closed), teams and colours, so large free-for-alls between different bots can be watched. Facts: `extracted/Levels/Multiplayer` holds 32 maps whose `MPnn` prefix gives the player count, up to six 8-player maps; the skirmish importer is hard-wired to MP02 Bilbo's Bluffs and two start points, the cache carries two team colours, about 84 places in `prototype/` assume the human is team 0 and the AI team 1, and only the Good faction is exported. The simulation already handles any number of teams as separate sides, which is exactly a free-for-all, and its Razing outcome takes any number of contenders. Steps, in order:
   1. (Done in build-28; spectator HUD redone in build-36, Stats tab in build-55.) Observer and speed: a bot on every side, a player-less observer HUD (every player's resources, population, army and AI status; read-only selection; camera free), and game speed control (pause, 1x to 16x by stepping the fixed-tick simulation several times per frame, so it stays deterministic) to skip the opening and jump into the fighting.
@@ -1197,7 +1197,7 @@ and production remain later work.
   3. Map pipeline: `prepare_prototype.py --skirmish --map <name>` for any multiplayer map and its start points, one cache per map, and a batch for all 32; verify navigation, resources and start bases on each. (Build-35: `--map`, `--all-maps`, `run.ps1 -Map`; all 32 maps import, and `SimulationTests --crossing-probe` shows every map connected for a Swordsman except MP04_Mighty_Silverlode, whose rope bridges only fit Frodo. Remaining: rope bridges wide enough for armies, and a bot that has lost every worker cannot recover; build-38 adds Citadel rebuilding, all-in attacks and surrender.)
   4. Setup screen: map list with player count and minimap, slots, difficulty and traits, start. (Build-39: map list with previews, You / bot / Closed per start position, any human slot or none, start speed; bot difficulty and traits wait for the customizable-bot work. Build-49: each bot item's tooltip and a bot card give its difficulty, style and description. Build-51: a Traits menu per bot slot.)
   5. Teams and alliances (2v2 and up): split a unit's owner from its alliance, so allies share victory and do not attack each other.
-  6. The Evil faction, so bots can differ by side as well as by style. (Builds 133-135: playable Evil side, bots, Fate powers and hero abilities in part; see [Evil notes](../prototype/EVIL.md).)
+  6. The Evil faction, so bots can differ by side as well as by style. (Builds 133-135: playable Evil side, bots, Fate powers and hero abilities in part; see [Evil notes](EVIL.md).)
 - [ ] List every `BattleScriptInterface` function the 26 mission DLLs import, with its signature, as the scripting API spec
 - [ ] Implement that API in the new engine: objectives, triggers, camera paths, cinematics, dialogue, war parties
 - [ ] Rewrite the missions one by one, starting with the three Light Side tutorials (disassembly of each DLL as the reference)
@@ -1234,6 +1234,8 @@ Everything lives in the project folder `war-of-the-ring-reforged`; the research 
 | Path | What it holds |
 | --- | --- |
 | `TLOTR - War of the Ring/` | The original install, read only |
+| `docs/` | All project documentation, including this roadmap |
+| `references/` | Local original-game research library; not in the repository |
 | `extracted/` | Unpacked archives (regenerate with the first command below) |
 | `converted/units/` | 84 unit records (69 unique GLBs) plus `index.json`; butterfly source gap recorded |
 | `converted/presentation/` | 1507 presentation asset JSON files, typed references and inventory |
@@ -1242,9 +1244,9 @@ Everything lives in the project folder `war-of-the-ring-reforged`; the research 
 | `converted/phase2-report.json` | Complete map/terrain/decal audit and two validated scene gates |
 | `converted/walker-mask-report.json` | 54-map audit of ground bitsets against the original walker region graphs |
 | `converted/prototype/` | Local hashed runtime cache, rendered preview and smoke/verification reports |
-| `prototype/` | Godot C# project, launch script and integer simulation core; start with `prototype/README.md` |
+| `prototype/` | Godot C# project, launch script and integer simulation core; start with `docs/README.md` |
 | `tests/simulation/` | Independent C# navigation, movement, combat and repeatability checks |
-| `tools/` | Asset import/export code; start with `tools/README.md`, then `tools/NOTES-database.md` |
+| `tools/` | Asset import/export code; start with `docs/TOOLS.md`, then `docs/NOTES-database.md` |
 | `.claude/launch.json` | The `viewer` server config (Python HTTP server on port 8765) |
 
 Run from `tools/`:

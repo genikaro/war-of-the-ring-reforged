@@ -3,11 +3,15 @@
 /extracted/
 /converted/
 
-# Third-party walkthrough licensed for personal use only
-/references/original-game/GUIDE.txt
+# Original-game research: captures, compendiums, galleries, data dumps and
+# third-party reference material stay on the owner's machine
+/references/
 
 # Local editor settings and Python caches
 /.claude/
+.vs/
+.idea/
+*.user
 __pycache__/
 *.py[cod]
 .venv/

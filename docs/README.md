@@ -722,7 +722,7 @@ units to formation slots by travel cost. The six-unit benchmark finishes in
 10.55 seconds versus 13.70 seconds before, with no waiting samples. See the
 [movement notes](MOVEMENT.md) for the fixture, measurements and remaining limits.
 The remaining Phase 3 work and acceptance criteria are in
-[the local roadmap](../tools/Roadmap.md).
+[the local roadmap](ROADMAP.md).
 
 The accepted movement baseline now includes per-type body sizes and a correction
 for large formations getting stuck behind early arrivals. The original console artwork, scalable HUD, control groups,
@@ -769,7 +769,7 @@ Aragorn's demo model is enlarged 12% with a wider hitbox. Raw source bounds rema
 travelling can compress to half the combined envelope so units can squeeze between allies.
 Solid cores still prevent stacking; enemies and terrain retain full clearance.
 Resting formations keep full spacing. Large formations retain continuous movement and exchange
-blocked arrival slots. See [collision details](../tools/NOTES-unit-collision.md).
+blocked arrival slots. See [collision details](NOTES-unit-collision.md).
 Refresh an existing cache with `python tools/prepare_prototype.py --rules-only`;
 this also rebuilds body-specific navigation profiles for rules format 3.
 
@@ -1265,7 +1265,7 @@ physics interpolation is disabled for these manually interpolated unit roots.
 
 Movement interprets the saved painted walker bits as allowed cells. On all 54
 maps the original walker region graph covers exactly these bits; the two other
-bitsets are editor inputs (`tools/NOTES-world-scenes.md`). Cache generation
+bitsets are editor inputs (`docs/NOTES-world-scenes.md`). Cache generation
 fails if they disagree. Ground diagonals still need both flank cells, while the
 original region graph also links corner-only diagonals: 66 painted Helm's Deep
 cells are outside the prototype's main area only for that reason.

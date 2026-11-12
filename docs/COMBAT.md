@@ -170,7 +170,7 @@ unknown. Effective center reach is `max(2000 mm, both body radii + source range)
 with wall/layer checks, so larger bodies can fight without overlapping.
 The gap interpretation is an adapter policy. Source radius/height are 561/2095 mm for
 Aragorn, 927/2534 mm for Elven Knights and 693/2197 mm for Uruk-hai, traced from
-scaled Main collision boxes. [Collision notes](../tools/NOTES-unit-collision.md)
+scaled Main collision boxes. [Collision notes](NOTES-unit-collision.md)
 record the later Aragorn demo adjustment to 800/2347 mm and 112% visual scale.
 Friendly cores use half the combined radii; enemy contact retains full envelopes.
 The collision notes also describe clearance profiles and limits. Default running
@@ -212,7 +212,7 @@ adds sampled encounter evidence, not a timing trace. A Gondor swordsman displays
 1. HP also rose between later samples. Those observations do not establish
 per-hit damage, regeneration rate/cause, armor subtraction or kill attribution.
 
-The [roadmap](../tools/Roadmap.md#next-milestone-original-game-command-and-combat-corrections)
+The [roadmap](ROADMAP.md#next-milestone-original-game-command-and-combat-corrections)
 still calls for a repeatable swordsman/worker reference fixture and matching continuous
 recordings or health traces, followed by the current three demo types. Hold,
 retaliation, retreat, interruption and regeneration must be isolated. Cross-check

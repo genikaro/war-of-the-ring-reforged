@@ -293,7 +293,7 @@ full original binding/layout fidelity remain subsequent work.
 
 The [30-capture session](../references/original-game/LOCAL-SESSION-2026-10-19.md)
 confirms the bottom command row and captures its tooltips. It does not validate
-the current command algorithms. The [roadmap](../tools/Roadmap.md#next-milestone-original-game-command-and-combat-corrections)
+the current command algorithms. The [roadmap](ROADMAP.md#next-milestone-original-game-command-and-combat-corrections)
 puts a focused comparison/correction pass before ranged combat. The controls
 above describe the implementation as it stands. The
 [behavior matrix](../references/original-game/COMMAND-BEHAVIOR-MATRIX.md)

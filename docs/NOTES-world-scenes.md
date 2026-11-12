@@ -41,7 +41,7 @@ The tail now decodes structurally, including spline keys, half-resolution grid,
 camera/marker records, placed decals and fog payloads. Unnamed properties remain
 numerical; their runtime behavior is not claimed to be implemented. Build-152 names the lighting, environment,
 sky and grass fields (`map_lighting.py`; the tail's former `properties`, `regions` and `camera` are `time_of_day`,
-`sun_keyframes` and `grass`) and the prototype uses them ([LIGHTING.md](../prototype/LIGHTING.md)).
+`sun_keyframes` and `grass`) and the prototype uses them ([LIGHTING.md](LIGHTING.md)).
 
 Helm's Deep exports 92,133 height samples, 5,720 primary tiles/105 textures,
 767 placement nodes/93 models, two lakes and both pathing categories. Four
