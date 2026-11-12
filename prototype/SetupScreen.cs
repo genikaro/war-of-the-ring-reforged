@@ -155,7 +155,7 @@ public partial class SetupScreen : Control
         Place(Caption("Start speed",15,Ink),565,520,120,26);
         _speed = Place(new SpeedSlider { TooltipText = "Game speed at the start · - and + change it during the match" },700,515,280,40);
         _speed.Chosen += _ => Refresh();
-        _instantBuild = Place(Check("Instant building and training","Buildings, units, upgrades and research finish at once for both players (F4 still turns it off in the match)."),561,560,420,30);
+        _instantBuild = Place(Check("Instant building and training","Buildings, units, upgrades and research finish at once for both players."+(DebugSession.Enabled ? " F4 still turns it off in the match." : "")),561,560,420,30);
         _trainingDummies = Place(Check("Training dummies","Four gilded dummies stand by the blue base, one per damage type, showing every hit's damage."),561,592,420,30);
         _instantBuild.Visible = _trainingDummies.Visible = sandbox;
         _instantBuild.ButtonPressed = Previous?.SandboxInstantBuild ?? true; _trainingDummies.ButtonPressed = Previous?.SandboxTrainingDummies ?? true;

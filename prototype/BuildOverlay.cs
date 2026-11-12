@@ -1,6 +1,28 @@
 using Godot;
 
-/// <summary>Live session information, independent of selection and simulation pause.</summary>
+/// <summary>Build-189: the debug data (this build line) and the debug tools (their button, F4) show only in a debug
+/// session: the game started with -Debug (the exported game, or run.ps1 -Debug, which passes --debug), run.ps1
+/// -DebugMenu, or an automated run (smokes and captures, which check and drive the tools).</summary>
+public static class DebugSession
+{
+    private static bool? _enabled;
+
+    public static bool Enabled => _enabled ??= Detect();
+
+    private static bool Detect()
+    {
+        // -Debug before the engine's "--" reaches the game among the engine's arguments; --debug after it among the
+        // user's. A bare --debug before "--" is the engine's own debugger switch and never reaches the game.
+        bool asked = OS.GetCmdlineArgs().Concat(OS.GetCmdlineUserArgs())
+            .Any(arg => arg.Equals("-debug",StringComparison.OrdinalIgnoreCase) || arg.Equals("--debug",StringComparison.OrdinalIgnoreCase)
+                || arg == "--debug-menu");
+        bool enabled = asked || Main.AutomatedRun;
+        if (asked) GD.Print("Debug session: build line and debug tools (F4) on");
+        return enabled;
+    }
+}
+
+/// <summary>Live session information, independent of selection and simulation pause. Shown in a debug session only.</summary>
 public partial class BuildOverlay : Label
 {
     private const float LineHeight = 30;
@@ -15,6 +37,7 @@ public partial class BuildOverlay : Label
     public override void _Ready()
     {
         MouseFilter = MouseFilterEnum.Ignore;
+        if (!DebugSession.Enabled) { Visible = false; SetProcess(false); return; }
         HorizontalAlignment = HorizontalAlignment.Right;
         VerticalAlignment = VerticalAlignment.Center;
         SetAnchorsAndOffsetsPreset(LayoutPreset.TopRight);
@@ -34,7 +57,10 @@ public partial class BuildOverlay : Label
         AddThemeFontSizeOverride("font_size",Mathf.RoundToInt(16*scale));
     }
 
-    public override void _ExitTree() => GetViewport().SizeChanged -= ResizeOverlay;
+    public override void _ExitTree()
+    {
+        if (DebugSession.Enabled) GetViewport().SizeChanged -= ResizeOverlay;
+    }
 
     public override void _Process(double delta)
     {
@@ -47,11 +73,12 @@ public partial class BuildOverlay : Label
 }
 
 /// <summary>The debug tools' own button at the top right, above the build line (build-96); it stays lit while the
-/// tools are open. The console's Menu button opens the game menu instead.</summary>
+/// tools are open. The console's Menu button opens the game menu instead. Shown in a debug session only.</summary>
 public partial class DebugToggle : Button
 {
     public override void _Ready()
     {
+        if (!DebugSession.Enabled) { Visible = false; Disabled = true; return; }
         Text = "Debug · F4"; ToggleMode = true; FocusMode = FocusModeEnum.None;
         var gold = new Color("d8b574");
         foreach (var (state,color) in new[] { ("normal",new Color(.035f,.055f,.07f,.85f)),("hover",new Color(.07f,.1f,.12f,.95f)),
@@ -66,7 +93,10 @@ public partial class DebugToggle : Button
         ResizeToggle(); GetViewport().SizeChanged += ResizeToggle;
     }
 
-    public override void _ExitTree() => GetViewport().SizeChanged -= ResizeToggle;
+    public override void _ExitTree()
+    {
+        if (DebugSession.Enabled) GetViewport().SizeChanged -= ResizeToggle;
+    }
 
     private void ResizeToggle()
     {

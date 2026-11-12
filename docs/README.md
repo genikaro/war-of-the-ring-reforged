@@ -1,5 +1,12 @@
 # Godot C# skirmish sandbox
 
+**build-189:** the debug data and tools show only in a debug session. Started normally, the game has no build, date
+and FPS line and no **Debug · F4** button at the top right, and F4 does nothing. Start the exported game with
+`WarOfTheRingReforged.exe -Debug`, or the project with `./prototype/run.ps1 -Debug` (`-DebugMenu` too), to get them
+back. Smokes and captures always run as debug sessions, since they check and use the tools. Without the button the
+observer panel moves up into the corner. The console's Menu button tooltip now says Menu instead of "Debug tools [F4]",
+and the controls list and the Sandbox's instant-building note mention F4 only in a debug session.
+
 **build-188:** a launcher. The exported game (`build/WarOfTheRingReforged.exe`) now opens on it: pick the folder the
 original War of the Ring is installed in (Browse, or type it and press Enter) and the launcher checks that its database,
 archives, text and AI players parse, then shows the text language and counts. **Import game data** extracts every
@@ -1045,7 +1052,7 @@ caches and Helm's Deep.
 | Right-click while targeting | Cancel targeting and retain the current order |
 | Restart sandbox | Reset the encounter |
 | Console Menu button | Open the game menu (pauses play): Settings, Exit, Resume |
-| F4 / Debug button (top right) | Open/close debug tools |
+| F4 / Debug button (top right) | Open/close debug tools (debug sessions only: `-Debug`, build-189) |
 | F10 | Show/hide the debug UI |
 
 Control policy (user decision): **Q/W/E/R for abilities 1–4** and **F2 for

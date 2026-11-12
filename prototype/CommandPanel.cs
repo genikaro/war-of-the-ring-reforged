@@ -96,7 +96,7 @@ public partial class CommandPanel : Control
         _content.AddChild(_background);
         _menu = new TextureButton { Position = new(14,5),Size = new(66,17),FocusMode = FocusModeEnum.None,
             IgnoreTextureSize = true,StretchMode = TextureButton.StretchModeEnum.KeepAspectCentered,
-            TooltipText = "Debug tools [F4]" };
+            TooltipText = GameText.T("cmd.menu") };
         _menu.Pressed += () => MenuChosen?.Invoke(); _content.AddChild(_menu);
         _map = new BattleMinimap { Position = new(14,28),Size = new(174,174) };
         _map.Chosen += p => MapChosen?.Invoke(p);

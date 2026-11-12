@@ -590,7 +590,7 @@ public partial class Main : Node3D
             int groupSlot = key.Keycode == Key.Key0 ? 9 : key.Keycode is >= Key.Key1 and <= Key.Key9 ? (int)key.Keycode-(int)Key.Key1 : -1;
             if (groupSlot >= 0 && !key.AltPressed && !key.MetaPressed) UseGroup(groupSlot,key.CtrlPressed,key.ShiftPressed);
             if (key.Keycode == Key.Backspace) CancelTraining(-1);
-            if (key.Keycode == Key.F4) ToggleDebugMenu();
+            if (key.Keycode == Key.F4 && DebugSession.Enabled) ToggleDebugMenu();
             if (key.Keycode == Key.F2 && !key.CtrlPressed && !key.AltPressed && !key.MetaPressed) ToggleWalkRun();
             if (key.Keycode == Key.F10) _hud.Visible = !_hud.Visible;
         }

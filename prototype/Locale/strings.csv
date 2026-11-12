@@ -88,6 +88,7 @@ cmd.patrol,GameConsole:8104,Patrol,,Patrol command
 cmd.patrol.tip,GameConsole:8105,,,
 cmd.idle_workers,GameConsole:8006,Idle Worker,,Idle worker button
 cmd.idle_workers.tip,GameConsole:8007,Select and center the next idle worker.,,
+cmd.menu,GameConsole:8004,Menu,,Console button that opens the game menu (build-189)
 cmd.build,,Build,Строительство,Worker's build menu button
 cmd.build_advanced,,Build advanced,Особые постройки,Worker's advanced build menu button
 cmd.cancel_construction,,Cancel construction,Отменить строительство,

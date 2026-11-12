@@ -84,6 +84,8 @@ param(
     [string]$View = 'squad',
     [switch]$HideHud,
     [switch]$DebugMenu,
+    # Build-189: the build line and the debug tools (F4); without it a session shows neither (smokes always do).
+    [switch]$Debug,
     [string]$CapturePath,
     [ValidatePattern('^[1-9][0-9]{2,4}x[1-9][0-9]{2,4}$')]
     [string]$Resolution,
@@ -102,10 +104,10 @@ if (-not $GodotPath) {
     else { $GodotPath = (Get-Command godot -ErrorAction Stop).Source }
 }
 # -Skirmish with nothing else that chooses the match opens the setup screen; -Setup always does.
-$launchOnly = @('Skirmish','GodotPath','DotnetPath','Resolution','HideHud','DebugMenu','View','Unmuted','Mute')
+$launchOnly = @('Skirmish','GodotPath','DotnetPath','Resolution','HideHud','DebugMenu','Debug','View','Unmuted','Mute')
 $setupMode = $Setup -or $SetupSmoke -or ($Skirmish -and -not ($PSBoundParameters.Keys | Where-Object { $_ -notin $launchOnly }))
 # Build-147: nothing that chooses a scene (or -Menu) opens the main menu; -View, -CapturePath and the like keep Helm's Deep.
-$menuMode = $Menu -or $MenuSmoke -or $Launcher -or $LauncherSmoke -or -not ($PSBoundParameters.Keys | Where-Object { $_ -notin @('GodotPath','DotnetPath','Resolution','Unmuted','Mute','DebugMenu') })
+$menuMode = $Menu -or $MenuSmoke -or $Launcher -or $LauncherSmoke -or -not ($PSBoundParameters.Keys | Where-Object { $_ -notin @('GodotPath','DotnetPath','Resolution','Unmuted','Mute','DebugMenu','Debug') })
 $env:DOTNET_ROOT = Split-Path -Parent $DotnetPath
 $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
@@ -149,6 +151,7 @@ if ($HideHud) { $arguments += '--hide-hud' }
 # Debug sessions start muted (build-142); -Unmuted plays the audio.
 if ($Unmuted) { $arguments += '--unmuted' }
 if ($DebugMenu) { $arguments += '--debug-menu' }
+if ($Debug) { $arguments += '--debug' }
 if ($Smoke -or $MotionSmoke) { $arguments += '--smoke' }
 if ($MotionSmoke) { $arguments += '--motion-smoke' }
 if ($CombatSmoke) { $arguments += '--combat-smoke' }

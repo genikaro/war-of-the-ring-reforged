@@ -232,11 +232,13 @@ public partial class ObserverHud : Control
             button.SetPressedNoSignal(bot && JournalTeam == _teams[index]);
             button.TooltipText = bot ? $"Decision journal · {PlayerName(world,_teams[index])}" : "";
         }
-        // The build label (BuildOverlay) keeps the top-right corner; the panel hangs just below it, the journal below that.
+        // In a debug session the debug button and build label (BuildOverlay) keep the top-right corner and the panel hangs
+        // just below them; otherwise (build-189) it takes the corner. The journal hangs below the panel.
         var viewport = GetViewportRect().Size; float overlay = Math.Clamp(viewport.Y/800f,.75f,3);
-        LayoutAssetPages(scale,70*overlay,consoleTop);
+        float top = (DebugSession.Enabled ? 70 : 8)*overlay;
+        LayoutAssetPages(scale,top,consoleTop);
         _frame.Scale = new(scale,scale); _frame.ResetSize();
-        _frame.Position = new(viewport.X-12*overlay-_frame.Size.X*scale,70*overlay);
+        _frame.Position = new(viewport.X-12*overlay-_frame.Size.X*scale,top);
         RefreshJournal(world,color,scale,consoleTop,overlay);
     }
 
