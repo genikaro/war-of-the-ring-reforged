@@ -2,7 +2,9 @@ using Godot;
 
 /// <summary>Build-189: the debug data (this build line) and the debug tools (their button, F4) show only in a debug
 /// session: the game started with -Debug (the exported game, or run.ps1 -Debug, which passes --debug), run.ps1
-/// -DebugMenu, or an automated run (smokes and captures, which check and drive the tools).</summary>
+/// -DebugMenu, or an automated run (smokes and captures, which check and drive the tools). Build-190: --no-debug
+/// (run.ps1 -NoDebug) holds a session to the normal interface whatever else asked for the tools, so a capture can
+/// picture the game as it is played.</summary>
 public static class DebugSession
 {
     private static bool? _enabled;
@@ -13,7 +15,14 @@ public static class DebugSession
     {
         // -Debug before the engine's "--" reaches the game among the engine's arguments; --debug after it among the
         // user's. A bare --debug before "--" is the engine's own debugger switch and never reaches the game.
-        bool asked = OS.GetCmdlineArgs().Concat(OS.GetCmdlineUserArgs())
+        string[] args = OS.GetCmdlineArgs().Concat(OS.GetCmdlineUserArgs()).ToArray();
+        // Build-190: --no-debug answers before anything else, so a capture can show a normal session.
+        if (args.Any(arg => arg.Equals("--no-debug",StringComparison.OrdinalIgnoreCase)))
+        {
+            GD.Print("Normal session: no build line, no debug tools (--no-debug)");
+            return false;
+        }
+        bool asked = args
             .Any(arg => arg.Equals("-debug",StringComparison.OrdinalIgnoreCase) || arg.Equals("--debug",StringComparison.OrdinalIgnoreCase)
                 || arg == "--debug-menu");
         bool enabled = asked || Main.AutomatedRun;

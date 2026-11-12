@@ -1,5 +1,11 @@
 # Godot C# skirmish sandbox
 
+**build-190:** `-NoDebug` pictures the game as it is played. A smoke or capture counts as a debug session, so no
+capture could show the interface without the build line and the **Debug · F4** button. Now
+`./prototype/run.ps1 -Smoke -NoDebug -CapturePath artifacts/plain.png` holds the run to a normal session, where the
+observer panel takes the corner. `--no-debug` answers before `-Debug`, `-DebugMenu` and the automated run, and the
+exported game takes it too.
+
 **build-189:** the debug data and tools show only in a debug session. Started normally, the game has no build, date
 and FPS line and no **Debug · F4** button at the top right, and F4 does nothing. Start the exported game with
 `WarOfTheRingReforged.exe -Debug`, or the project with `./prototype/run.ps1 -Debug` (`-DebugMenu` too), to get them
