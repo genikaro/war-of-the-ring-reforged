@@ -59,8 +59,33 @@ assets, previews, validation reports and portable tools stay in ignored
 | `wor2gltf.py`, `verify_phase2.py` | Export Helm's Deep as one GLB; audit all 54 maps and the rendered scene. |
 | `verify_walker_masks.py` | Audit every map's ground bitsets against its original walker region graph (`converted/walker-mask-report.json`). |
 | `prepare_prototype.py` | Build a hashed local runtime cache for the Godot C# sandbox; optionally extract the owner's install. |
+| `formats_fingerprint.py` | Build-192: every archive file's path, size, packing, CRC and SHA-256 and every table as `lqr.py export` writes it, for `tests/formats --python` to check the C# readers against (see below). |
 | `import_install.py` | Build-188, the launcher's import: check an install parses (`--check`), then extract it, build the content pack, menu art and every map (in parallel) and record it in `converted/install.json`. Progress lines start with `@reforged `. |
 | `viewer.html` | three.js viewer with unit and clip pickers (`?clip=Name`, `?t=0.5` freezes a frame). |
+
+## C# readers (build-192)
+
+`prototype/Formats` is the start of reading the install in place, as OpenMW and Daggerfall Unity do, instead of
+importing it first. These are ports of the Python readers and give the same results, without Godot, so the game and
+the checks share them:
+
+| C# | Python | Reads |
+|---|---|---|
+| `H2OArchive`, `GameArchives` | `h2o.py` | One archive or every archive of an install. A file is read on request, CRC-checked, by its archive path or by its `extracted/` path (`Models/Units/...`), in any case and with either separator. Reads are positional, so threads can share an archive. |
+| `Blast`, `Crc32` | `blast.py`, `zlib.crc32` | DCL-imploded data and zlib's CRC-32. |
+| `LqrTable`, `LqrDatabase` | `lqr.py` | Database tables with their schema, the Rings.lrp table ids and reference/enum resolution. Tables load when first asked for. |
+
+```powershell
+dotnet run --project tests/formats -c Release
+python tools/formats_fingerprint.py "Legacy/Game EN" artifacts/fingerprint-en.json
+dotnet run --project tests/formats -c Release -- --install "Legacy/Game EN" --python artifacts/fingerprint-en.json
+```
+
+The first runs 26 checks on synthetic archives and tables. `--install` reads and CRC-checks every archive file and
+parses every table, with timings (`--sequential` for one thread); `--python` then requires every file's bytes and
+record and every table's columns, records and values to equal the Python readers'. On the English install: 23
+archives open in about 25 ms, 678 MB of files read in 1.0 s on one thread, the 154 tables parse in under 0.1 s, and
+all 13,666 files and 264,243 values match (13,654 files on the Russian install).
 
 Extract the archives once:
 

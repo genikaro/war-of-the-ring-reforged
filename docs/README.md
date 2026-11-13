@@ -1,5 +1,16 @@
 # Godot C# skirmish sandbox
 
+**build-192:** the first step towards playing straight from the install, without the import: the game can now read
+the original archives and database itself. `prototype/Formats` holds C# readers for H2O archives (with the DCL
+decompressor and CRC-32) and `.lqr` database tables, ported from `h2o.py`, `blast.py` and `lqr.py`. An archive opens
+in place: its file list once, then any file on request, by the same paths `extracted/` uses
+(`Models/Units/Good/Aragorn/G_Aragorn.lmd`). On the English install the 23 archives open in about 25 ms, all 678 MB
+of files read and CRC-check in 1.0 s on one thread (0.5 to 0.7 s on all cores, files already in the disk cache), and
+the 154 tables parse in under 0.1 s. `tests/formats` checks the readers on synthetic archives and tables, and with
+`--install` on a real one. `tools/formats_fingerprint.py` records what the Python readers make of an install (about
+40 s on all cores), and `--python` compares the two. On the English and Russian installs every file's bytes, CRC and
+record and all 264,243 table values match. Nothing in the game uses the readers yet, so the launcher still imports.
+
 **build-191:** the launcher's import shows its progress properly. Above a wide bar sit the import's five steps, each
 ticked off when done, and the bar is marked at the step boundaries, carries the percentage and glides instead of
 jumping. It keeps moving through the long steps too: archives count by the bytes written, maps by their file size, and
@@ -1096,6 +1107,9 @@ a normal viewport capture with `-CapturePath`.
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --cache converted/prototype
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --worker-cache converted/skirmish
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --crossing-probe converted/skirmish-maps/MP04_Wasteland
+./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release
+python tools/formats_fingerprint.py "Legacy/Game EN" artifacts/fingerprint-en.json
+./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python artifacts/fingerprint-en.json
 ./prototype/run.ps1 -Smoke
 ./prototype/run.ps1 -MotionSmoke
 ./prototype/run.ps1 -CombatSmoke
