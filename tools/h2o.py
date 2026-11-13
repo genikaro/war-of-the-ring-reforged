@@ -87,7 +87,8 @@ class H2OArchive:
         return out
 
 
-def extract(archive_path, out_root, verify=False):
+def extract(archive_path, out_root, verify=False, progress=None):
+    """Every entry of one archive into out_root/<archive name>/. `progress(entry)` is called after each entry."""
     arc = H2OArchive(archive_path)
     dest = os.path.join(out_root, os.path.splitext(os.path.basename(archive_path))[0])
     start = time.time()
@@ -96,6 +97,8 @@ def extract(archive_path, out_root, verify=False):
         os.makedirs(os.path.dirname(target), exist_ok=True)
         with open(target, 'wb') as f:
             f.write(arc.read(entry, verify))
+        if progress:
+            progress(entry)
     print('%-22s %5d files  %7.1f MB  %5.1fs' % (
         os.path.basename(archive_path), len(arc.entries),
         sum(e.raw_size for e in arc.entries) / 1e6, time.time() - start), flush=True)

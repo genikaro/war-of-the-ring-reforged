@@ -260,6 +260,12 @@ launcher.duration,,{0} min {1} s,{0} мин {1} с,
 launcher.import.done,,Import finished in {0}.,Импорт завершен за {0}.,
 launcher.import.failed,,Import failed: {0},Импорт не удался: {0},
 launcher.import.cancelled,,Import cancelled.,Импорт отменен.,
+"# Build-191: the import's time left, the second Cancel click and the install found on a first start."
+launcher.eta,,about {0} min left,осталось около {0} мин,{0} = minutes
+launcher.eta.minute,,less than a minute left,осталось меньше минуты,
+launcher.eta.estimating,,estimating the time left...,оцениваем оставшееся время...,
+launcher.cancel.confirm,,Click again to cancel,Нажмите еще раз для отмены,
+launcher.found_install,,Found War of the Ring in {0}.,Война Кольца найдена в {0}.,{0} = folder
 launcher.log,,Log,Журнал,
 launcher.game_data,,Game data,Данные игры,
 launcher.data.ready,,"Imported from {0} ({1}) on {2}: {3} maps.","Импортировано из {0} ({1}) {2}: карт {3}.","{0} = folder, {1} = language, {2} = date, {3} = count"

@@ -9,8 +9,11 @@ import then extracts every archive into extracted/ (CRC-checked), builds the sha
 and every multiplayer map plus the Sandbox. converted/install.json records it: `complete` is false while the import
 runs and true once every step finished, which is when the launcher offers Start Reforged. The install is only read.
 
-Progress goes to stdout as lines `@reforged {json}` (events check, step, progress, warning, done, error), so the
-launcher can follow the steps while the tools' own output stays readable in its log. The exit code is 0 on success.
+Progress goes to stdout as lines `@reforged {json}` (events check, plan, step, progress, warning, done, error), so the
+launcher can follow the steps while the tools' own output stays readable in its log. `plan` lists every step's share of
+the bar up front; `progress` carries `fraction`, how much of the current step is done, weighted by the work (archive
+bytes, map sizes; build-191) and, while maps import, an estimate for the maps still running, so the bar keeps moving.
+The exit code is 0 on success.
 Check errors carry a code (missing_folder, not_install, no_database, missing_archives, parse) for the launcher's text.
 """
 import argparse
@@ -35,10 +38,29 @@ LANGUAGES = {'en': 'English', 'ru': 'Russian', 'uk': 'Ukrainian', 'de': 'German'
 # The import's steps and their share of its time (measured on the English install), for the launcher's bar.
 STEPS = [('Checking the install', 1), ('Extracting archives', 6), ('Building the content pack', 8),
          ('Building the menu art', 1), ('Importing maps', 84)]
+# A map's import time grows with its file: about 20 s per MB with several maps at once, plus a fixed part worth 0.7 MB.
+# The rate is re-measured from every finished map; this is only the first guess.
+MAP_OVERHEAD = 700_000
+SECONDS_PER_BYTE = 20e-6
 
 
 def emit(event, **fields):
     print('@reforged ' + json.dumps(dict(event=event, **fields)), flush=True)
+
+
+class Reporter:
+    """`progress` events for one step: `fraction` of the step done, never going back, at most every `interval` seconds
+    unless forced."""
+
+    def __init__(self, total, interval=0.25):
+        self.total, self.interval, self.last, self.sent = total, interval, 0.0, 0.0
+
+    def __call__(self, fraction, done, item='', force=False):
+        now = time.monotonic()
+        if not force and now - self.last < self.interval:
+            return
+        self.last, self.sent = now, min(1.0, max(fraction, self.sent))
+        emit('progress', done=done, total=self.total, item=item, fraction=round(self.sent, 4))
 
 
 def check(install):
@@ -104,32 +126,43 @@ def extract(install):
     """Every archive into extracted/<archive name>/, CRC-checked, entry paths kept inside it."""
     import h2o
     paths = sorted((Path(install) / 'Archives').glob('*.H2O'))
-    for index, path in enumerate(paths):
-        emit('progress', done=index, total=len(paths), item=path.name)
-        archive = h2o.H2OArchive(str(path))
+    archives = [(path, h2o.H2OArchive(str(path))) for path in paths]
+    total = sum(entry.raw_size for _, archive in archives for entry in archive.entries) or 1
+    report = Reporter(len(paths))
+    state = {'written': 0, 'index': 0, 'name': ''}
+
+    def entry_done(entry):
+        state['written'] += entry.raw_size
+        report(state['written'] / total, state['index'], state['name'])
+
+    for index, (path, archive) in enumerate(archives):
+        state.update(index=index, name=path.name)
+        report(state['written'] / total, index, path.name, force=True)
         destination = (ROOT / 'extracted' / path.stem).resolve()
         for entry in archive.entries:
             if not (destination / entry.path.replace('\\', '/')).resolve().is_relative_to(destination):
                 raise ValueError('%s: entry path escapes the extraction folder: %s' % (path.name, entry.path))
-        h2o.extract(str(path), str(ROOT / 'extracted'), verify=True)
-    emit('progress', done=len(paths), total=len(paths), item='')
+        h2o.extract(str(path), str(ROOT / 'extracted'), verify=True, progress=entry_done)
+    report(1.0, len(paths), '', force=True)
 
 
 def import_map(stem, cache, sandbox):
-    """One map's cache, in a worker process: (stem, error or None, the tools' output)."""
+    """One map's cache, in a worker process: (stem, error or None, the tools' output, seconds taken)."""
     import contextlib
     import io
     import prepare_prototype
     output = io.StringIO()
+    started = time.monotonic()
     try:
         with contextlib.redirect_stdout(output):
             if sandbox:
                 prepare_prototype.prepare_skirmish(cache, sandbox=True)
             else:
                 prepare_prototype.prepare_skirmish(cache, map_name=stem)
-        return stem, None, output.getvalue()
+        return stem, None, output.getvalue(), time.monotonic() - started
     except Exception as failure:  # noqa: BLE001 - the record names every failed map
-        return stem, str(failure) or type(failure).__name__, output.getvalue() + traceback.format_exc()
+        return stem, str(failure) or type(failure).__name__, output.getvalue() + traceback.format_exc(), \
+            time.monotonic() - started
 
 
 def python_executable():
@@ -147,45 +180,81 @@ def import_maps(workers=None):
     """Every multiplayer map into its own cache, then the Sandbox, several at once (each writes only its own folder);
     a failed map is a warning, not the import's end. `workers` 1 imports them one by one in this process."""
     import multiprocessing
-    from concurrent.futures import ProcessPoolExecutor, as_completed
+    from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
     import prepare_prototype
     import sandbox_map
     # Largest maps first: the 8-player maps take minutes each, and started last they would finish long after the rest.
     sources = sorted((ROOT / 'extracted/Levels/Multiplayer').glob('MP*.wor'), key=lambda path: (-path.stat().st_size, path.stem))
     jobs = [(path.stem, prepare_prototype.skirmish_cache(path.stem), False) for path in sources]
     jobs.append((sandbox_map.STEM, prepare_prototype.SANDBOX_CACHE, True))
+    # Each map's share of the bar follows its file size; the generated Sandbox counts as a mid-sized map.
+    weights = {path.stem: path.stat().st_size + MAP_OVERHEAD for path in sources}
+    weights[sandbox_map.STEM] = 1_500_000 + MAP_OVERHEAD
+    total_weight = sum(weights.values())
     imported, failed = [], []
-    emit('progress', done=0, total=len(jobs), item='')
+    measured = {'seconds': 0.0, 'weight': 0}
+    report = Reporter(len(jobs), interval=0.5)
+    report(0.0, 0, '', force=True)
 
-    def finished(stem, failure, output):
+    def fraction(running, now):
+        """Finished maps' weight plus, for each running map, the part its expected time says is done (at most 90%)."""
+        rate = measured['seconds'] / measured['weight'] if measured['weight'] else SECONDS_PER_BYTE
+        done = sum(weights[stem] for stem in imported + failed)
+        partial = sum(weights[stem] * min(0.9, (now - started) / (weights[stem] * rate)) for stem, started in running)
+        return (done + partial) / total_weight
+
+    def finished(stem, failure, output, seconds):
         print(output, end='' if output.endswith('\n') or not output else '\n', flush=True)
         if failure:
             failed.append(stem)
             emit('warning', message='%s did not import: %s' % (stem, failure))
         else:
             imported.append(stem)
-            print('%s: imported' % stem, flush=True)
-        emit('progress', done=len(imported) + len(failed), total=len(jobs), item=stem)
+            measured['seconds'] += seconds
+            measured['weight'] += weights[stem]
+            print('%s: imported (%.0f s)' % (stem, seconds), flush=True)
 
     # Half the cores by default: a map takes about 100 MB and 20-90 s alone; the machine stays usable meanwhile.
     workers = max(1, min(len(jobs), workers or (os.cpu_count() or 2) // 2))
     if workers == 1:
         for job in jobs:
             finished(*import_map(*job))
+            report(fraction([], 0), len(imported) + len(failed), job[0], force=True)
     else:
         multiprocessing.set_executable(python_executable())
         with ProcessPoolExecutor(max_workers=workers) as pool:
-            for future in as_completed([pool.submit(import_map, *job) for job in jobs]):
-                finished(*future.result())
+            pending = {pool.submit(import_map, *job): job[0] for job in jobs}
+            started = {}
+            while pending:
+                done, _ = wait(pending, timeout=0.5, return_when=FIRST_COMPLETED)
+                now = time.monotonic()
+                for future in pending:
+                    if future not in started and future.running():
+                        started[future] = now
+                last = ''
+                for future in done:
+                    last = pending.pop(future)
+                    started.pop(future, None)
+                    finished(*future.result())
+                running = [(pending[future], at) for future, at in started.items()]
+                report(fraction(running, now), len(imported) + len(failed), last, force=bool(done))
+    report(1.0, len(jobs), '', force=True)
     return sorted(imported), sorted(failed)
 
 
+def plan():
+    """Every step's title and its share of the bar: [{title, start, end}], start and end from 0 to 1."""
+    total, start, steps = sum(weight for _, weight in STEPS), 0, []
+    for title, weight in STEPS:
+        steps.append({'title': title, 'start': round(start / total, 3), 'end': round((start + weight) / total, 3)})
+        start += weight
+    return steps
+
+
 def step(number):
-    total = sum(weight for _, weight in STEPS)
-    start = sum(weight for _, weight in STEPS[:number - 1]) / total
-    title, weight = STEPS[number - 1]
-    emit('step', step=number, steps=len(STEPS), title=title, start=round(start, 3), end=round(start + weight / total, 3))
-    print('== %s' % title, flush=True)
+    part = plan()[number - 1]
+    emit('step', step=number, steps=len(STEPS), **part)
+    print('== %s' % part['title'], flush=True)
 
 
 def write_record(record):
@@ -197,6 +266,7 @@ def run_import(install, build=None, workers=None):
     import content_pack
     import frontend_assets
     started = time.time()
+    emit('plan', steps=plan())
     step(1)
     report = check(install)
     emit('check', report=report)

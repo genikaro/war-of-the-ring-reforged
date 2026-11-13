@@ -11,7 +11,10 @@ using Reforged.Presentation;
 /// and offers Start Reforged once a complete import is there (converted/install.json). Game data made earlier with the
 /// developer tools, without a record, counts as imported. Start Reforged opens the main menu in the same window.
 /// Shown when the exported game starts with no arguments, or with --launcher (run.ps1 -Launcher); --launcher-smoke
-/// checks it end to end (--launcher-folder=, --launcher-import, --capture=).</summary>
+/// checks it end to end (--launcher-folder=, --launcher-import, --capture=).
+/// Build-191: the import's progress is a LauncherProgress (the steps, a bar that keeps moving, the percentage) with the
+/// time taken and an estimate of the time left, also shown in the window title; Cancel asks for a second click; on a
+/// first start the launcher looks for the original game in the usual install folders.</summary>
 public partial class Launcher : Control
 {
     /// <summary>Start Reforged was pressed: the main scene opens the menu instead of the launcher.</summary>
@@ -49,8 +52,8 @@ public partial class Launcher : Control
 
     private LineEdit _folder = null!;
     private Button _browse = null!,_import = null!,_start = null!,_exit = null!;
-    private Label _checkStatus = null!,_dataStatus = null!,_progressText = null!;
-    private ProgressBar _progress = null!;
+    private Label _checkStatus = null!,_dataStatus = null!,_progressText = null!,_timeText = null!;
+    private LauncherProgress _progress = null!;
     private RichTextLabel _log = null!;
     private FileDialog? _dialog;
 
@@ -86,14 +89,14 @@ public partial class Launcher : Control
         _browse = ActionButton(GameText.T("launcher.browse"),false); _browse.Pressed += OpenFolderDialog; row.AddChild(_browse);
         _checkStatus = Caption("",15,Dim); _checkStatus.AutowrapMode = TextServer.AutowrapMode.WordSmart; column.AddChild(_checkStatus);
 
-        var importRow = new HBoxContainer(); importRow.AddThemeConstantOverride("separation",12); column.AddChild(importRow);
+        var importRow = new HBoxContainer(); importRow.AddThemeConstantOverride("separation",14); column.AddChild(importRow);
         _import = ActionButton(GameText.T("launcher.import"),false); _import.Pressed += ImportOrCancel; importRow.AddChild(_import);
-        _progress = new ProgressBar { MinValue = 0,MaxValue = 1,Step = 0,ShowPercentage = false,SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            CustomMinimumSize = new(0,14),SizeFlagsVertical = SizeFlags.ShrinkCenter };
-        _progress.AddThemeStyleboxOverride("background",Box(new Color(.02f,.03f,.04f),Dim,1,0));
-        _progress.AddThemeStyleboxOverride("fill",Box(Gold.Darkened(.25f),Gold,1,0));
-        importRow.AddChild(_progress);
-        _progressText = Caption("",14,Dim); column.AddChild(_progressText);
+        _progressText = Caption("",14,Dim);
+        _progressText.SizeFlagsHorizontal = SizeFlags.ExpandFill; _progressText.ClipText = true; _progressText.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        _progressText.VerticalAlignment = VerticalAlignment.Center; importRow.AddChild(_progressText);
+        _timeText = Caption("",14,Dim); _timeText.VerticalAlignment = VerticalAlignment.Center; _timeText.HorizontalAlignment = HorizontalAlignment.Right;
+        importRow.AddChild(_timeText);
+        _progress = new LauncherProgress(); column.AddChild(_progress);
 
         column.AddChild(Caption(GameText.T("launcher.log"),14,Gold));
         _log = new RichTextLabel { CustomMinimumSize = new(0,170),ScrollFollowing = true,SelectionEnabled = true,FitContent = false };
@@ -110,12 +113,51 @@ public partial class Launcher : Control
 
         var overlay = new CanvasLayer { Layer = 40 }; AddChild(overlay); overlay.AddChild(new BuildOverlay());
 
-        string folder = SmokeFolder ?? SavedFolder() ?? ReadRecord()?.Install ?? "";
+        _windowTitle = GetWindow().Title;
+        string? known = SmokeFolder ?? SavedFolder() ?? ReadRecord()?.Install;
+        string folder = known ?? FindInstall() ?? "";
         _folder.Text = folder;
         GD.Print($"Launcher: data root {GamePaths.Root}, game data {(DataPresent() ? "present" : "missing")}, folder '{folder}'");
         Refresh();
+        if (known == null && folder != "") Log(GameText.T("launcher.found_install",folder),Good);
         if (folder != "") RunCheck(folder);
         else Log(GameText.T("launcher.choose_folder"),Dim);
+    }
+
+    /// <summary>The original game in one of the folders it is usually installed in, for a first start: the Program Files
+    /// folders (also under the publishers' names), a Games folder or the root of a fixed drive, and next to Reforged.</summary>
+    private static string? FindInstall()
+    {
+        string[] names = ["War of the Ring","TLOTR - War of the Ring","The Lord of the Rings - War of the Ring","LOTR War of the Ring"];
+        var parents = new List<string>();
+        foreach (var special in new[] { System.Environment.SpecialFolder.ProgramFilesX86,System.Environment.SpecialFolder.ProgramFiles })
+        {
+            string programs = System.Environment.GetFolderPath(special);
+            if (programs == "") continue;
+            parents.Add(programs);
+            foreach (string publisher in new[] { "Sierra","Sierra Entertainment","Vivendi Universal Games","VU Games","Liquid Entertainment" })
+                parents.Add(System.IO.Path.Combine(programs,publisher));
+        }
+        try
+        {
+            foreach (var drive in System.IO.DriveInfo.GetDrives().Where(d => d.DriveType == System.IO.DriveType.Fixed && d.IsReady))
+            {
+                parents.Add(System.IO.Path.Combine(drive.RootDirectory.FullName,"Games"));
+                parents.Add(drive.RootDirectory.FullName);
+            }
+        }
+        catch (Exception error) when (error is System.IO.IOException or UnauthorizedAccessException) { }
+        parents.Add(GamePaths.Root);
+        if (System.IO.Path.GetDirectoryName(GamePaths.Root.TrimEnd('/','\\')) is { Length: > 0 } above) parents.Add(above);
+        foreach (string parent in parents.Distinct(StringComparer.OrdinalIgnoreCase))
+            foreach (string name in names)
+            {
+                string candidate = System.IO.Path.Combine(parent,name);
+                if (System.IO.File.Exists(System.IO.Path.Combine(candidate,"Database","Models.lqr"))
+                    && System.IO.Directory.Exists(System.IO.Path.Combine(candidate,"Archives")))
+                    return System.IO.Path.GetFullPath(candidate);
+            }
+        return null;
     }
 
     public override void _ExitTree() => StopProcess();
@@ -203,7 +245,8 @@ public partial class Launcher : Control
     {
         bool running = _job != Job.None;
         _folder.Editable = !running; _browse.Disabled = running;
-        _import.Text = _job == Job.Import ? GameText.T("button.cancel") : GameText.T(DataPresent() ? "launcher.reimport" : "launcher.import");
+        _import.Text = _job == Job.Import ? GameText.T(CancelArmed ? "launcher.cancel.confirm" : "button.cancel")
+            : GameText.T(DataPresent() ? "launcher.reimport" : "launcher.import");
         _import.Disabled = _job == Job.Check || (_job == Job.None && !(_check?.Ok == true && _checkedFolder == _folder.Text.Trim()));
         _start.Disabled = !CanStart;
         var record = ReadRecord();
@@ -363,7 +406,8 @@ public partial class Launcher : Control
             if (item.Line != null) OnLine(item.Line);
             else if (item.Exit is { } exit) OnExit(exit);
         }
-        if (_job == Job.Import) UpdateProgressText();
+        if (_job == Job.Import) UpdateProgress(delta);
+        if (_cancelArmedAt != 0 && !CancelArmed) { _cancelArmedAt = 0; Refresh(); }
         SmokeStep();
     }
 
@@ -378,35 +422,75 @@ public partial class Launcher : Control
             switch (message.GetProperty("event").GetString())
             {
                 case "check": ShowCheck(ParseCheck(message.GetProperty("report"))); break;
+                case "plan":
+                    _progress.SetPlan(message.GetProperty("steps").EnumerateArray().Select(step => (step.GetProperty("title").GetString() ?? "",
+                        step.GetProperty("start").GetDouble(),step.GetProperty("end").GetDouble())).ToList());
+                    break;
                 case "step":
                     _step = message.GetProperty("step").GetInt32(); _steps = message.GetProperty("steps").GetInt32();
                     _stepStart = message.GetProperty("start").GetDouble(); _stepEnd = message.GetProperty("end").GetDouble();
                     _stepTitle = GameText.TryT("launcher.step."+_step) ?? message.GetProperty("title").GetString() ?? "";
-                    _progress.Value = _stepStart;
+                    _stepItem = ""; _stepReported = false; _stepStartedAt = Elapsed();
+                    _progress.SetStep(_step); _progress.Advance(_stepStart);
                     Log("== "+_stepTitle,Gold);
                     break;
                 case "progress":
                     int total = message.GetProperty("total").GetInt32(),done = message.GetProperty("done").GetInt32();
-                    _progress.Value = _stepStart+(_stepEnd-_stepStart)*(total > 0 ? (double)done/total : 0);
+                    // Build-191: `fraction` weighs the work; older imports only count the items.
+                    double part = message.TryGetProperty("fraction",out var fraction) ? fraction.GetDouble() : total > 0 ? (double)done/total : 0;
+                    _stepReported = true;
+                    _progress.Advance(_stepStart+(_stepEnd-_stepStart)*part);
                     string item = message.GetProperty("item").GetString() ?? "";
-                    _stepItem = total > 0 ? $"{done}/{total}"+(item != "" ? "  "+item : "") : item;
+                    if (total > 0 || item != "") _stepItem = total > 0 ? $"{done}/{total}"+(item != "" ? "  "+item : "") : item;
                     break;
                 case "warning": Log(message.GetProperty("message").GetString() ?? "",Warn); break;
                 case "error": _importError = message.GetProperty("message").GetString() ?? ""; Log(_importError,Bad); break;
-                case "done": _progress.Value = 1; break;
+                case "done": _progress.Advance(1); break;
             }
         }
         catch (Exception error) when (error is JsonException or KeyNotFoundException or InvalidOperationException) { Log(line); }
     }
 
-    private string _stepItem = "";
+    private string _stepItem = "",_windowTitle = "";
+    private bool _stepReported;
+    private double _stepStartedAt,_eta = -1;
+    private int _titlePercent = -1;
 
-    private void UpdateProgressText()
+    private void UpdateProgress(double delta)
     {
-        if (_step == 0) return;
-        string text = GameText.T("launcher.step",_step,_steps,_stepTitle);
-        if (_stepItem != "") text += ": "+_stepItem;
-        _progressText.Text = text+"   "+Duration(Elapsed());
+        double elapsed = Elapsed();
+        if (_step > 0 && !_stepReported)
+        {
+            // A step that reports nothing on its way (the content pack, the menu art) creeps on at the pace the import
+            // has kept so far, slowing near its end rather than stopping, until the next step starts.
+            double perUnit = _stepStart > .02 ? _stepStartedAt/_stepStart : 17*60;
+            double expected = Math.Max(1,(_stepEnd-_stepStart)*perUnit),t = (elapsed-_stepStartedAt)/expected;
+            double part = t < .85 ? t : .85+.14*(1-Math.Exp(-(t-.85)/.3));
+            _progress.Advance(_stepStart+(_stepEnd-_stepStart)*part);
+        }
+        if (_step > 0)
+        {
+            string text = GameText.T("launcher.step",_step,_steps,_stepTitle);
+            if (_stepItem != "") text += ": "+_stepItem;
+            _progressText.Text = text;
+        }
+        // The time left from the pace so far, smoothed so it counts down steadily instead of jumping.
+        double shown = _progress.Shown;
+        string left;
+        if (shown > .03 && elapsed > 15)
+        {
+            double estimate = elapsed*(1-shown)/shown;
+            _eta = _eta < 0 ? estimate : Math.Max(0,_eta-delta)+(estimate-Math.Max(0,_eta-delta))*Math.Min(1,delta/4);
+            left = _eta < 60 ? GameText.T("launcher.eta.minute") : GameText.T("launcher.eta",(int)Math.Ceiling(_eta/60));
+        }
+        else left = GameText.T("launcher.eta.estimating");
+        _timeText.Text = Duration(elapsed)+"  ·  "+left;
+        int percent = (int)Math.Floor(shown*100);
+        if (percent != _titlePercent)
+        {
+            _titlePercent = percent;
+            GetWindow().Title = $"{percent}% · {GameText.T("launcher.data.importing")} {_windowTitle}";
+        }
     }
 
     private double Elapsed() => Stopwatch.GetElapsedTime(_importStarted).TotalSeconds;
@@ -424,10 +508,15 @@ public partial class Launcher : Control
         }
         if (job == Job.Import)
         {
-            _stepItem = "";
-            if (_cancelled) { _progressText.Text = GameText.T("launcher.import.cancelled"); Log(_progressText.Text,Warn); }
-            else if (exit == 0) { _progress.Value = 1; _progressText.Text = GameText.T("launcher.import.done",Duration(Elapsed())); Log(_progressText.Text,Good); }
-            else { _progressText.Text = GameText.T("launcher.import.failed",_importError != "" ? _importError : "exit "+exit); }
+            _stepItem = ""; _timeText.Text = ""; _cancelArmedAt = 0;
+            GetWindow().Title = _windowTitle;
+            if (_cancelled) { _progress.Finish(LauncherProgress.Phase.Cancelled); _progressText.Text = GameText.T("launcher.import.cancelled"); Log(_progressText.Text,Warn); }
+            else if (exit == 0) { _progress.Finish(LauncherProgress.Phase.Done); _progressText.Text = GameText.T("launcher.import.done",Duration(Elapsed())); Log(_progressText.Text,Good); }
+            else
+            {
+                _progress.Finish(LauncherProgress.Phase.Failed);
+                _progressText.Text = GameText.T("launcher.import.failed",_importError != "" ? _importError : "exit "+exit);
+            }
             _progressText.AddThemeColorOverride("font_color",_cancelled ? Warn : exit == 0 ? Good : Bad);
             _cancelled = false;
             if (exit == 0)
@@ -441,13 +530,23 @@ public partial class Launcher : Control
     }
 
     private bool _cancelled;
+    private long _cancelArmedAt;
+    /// <summary>Cancel was pressed once in the last few seconds: a second press stops the import. A stray click does not
+    /// throw away a quarter of an hour's work.</summary>
+    private bool CancelArmed => _cancelArmedAt != 0 && Stopwatch.GetElapsedTime(_cancelArmedAt).TotalSeconds < 4;
 
     private void ImportOrCancel()
     {
-        if (_job == Job.Import) { _cancelled = true; StopProcess(); return; }
+        if (_job == Job.Import)
+        {
+            if (CancelArmed) { _cancelled = true; StopProcess(); }
+            else { _cancelArmedAt = Stopwatch.GetTimestamp(); Refresh(); }
+            return;
+        }
         string folder = _folder.Text.Trim();
         if (_job != Job.None || _check?.Ok != true || folder != _checkedFolder) return;
-        _importError = ""; _step = 0; _stepItem = ""; _progress.Value = 0;
+        _importError = ""; _step = 0; _stepItem = ""; _eta = -1; _titlePercent = -1; _cancelArmedAt = 0;
+        _progress.Begin(); _progressText.Text = ""; _timeText.Text = "";
         _progressText.AddThemeColorOverride("font_color",Dim);
         _importStarted = Stopwatch.GetTimestamp();
         Log("> "+GameText.T("launcher.import")+" "+folder,Dim);
@@ -486,8 +585,16 @@ public partial class Launcher : Control
                 if (SmokeImport && _check.Ok) { _smokePhase = 1; ImportOrCancel(); SmokeChecks["start_disabled_while_importing"] = _start.Disabled; }
                 else _smokePhase = 2;
                 break;
+            case 1 when _job == Job.Import:
+                // Build-191: a capture also pictures the import halfway, beside the final one (<capture>-importing.png).
+                if (SmokeCapture != "" && !_capturedImport && _progress.Shown >= .5)
+                {
+                    _capturedImport = true;
+                    _ = Capture(System.IO.Path.ChangeExtension(SmokeCapture,null)+"-importing.png");
+                }
+                break;
             case 1 when _job == Job.None:
-                SmokeChecks["import_succeeds"] = ReadRecord() is { Complete: true,Maps: > 0 } && _progress.Value >= 1;
+                SmokeChecks["import_succeeds"] = ReadRecord() is { Complete: true,Maps: > 0 } && _progress.Target >= 1;
                 _smokePhase = 2;
                 break;
             case 2:
@@ -505,12 +612,19 @@ public partial class Launcher : Control
         _start.EmitSignal(BaseButton.SignalName.Pressed);
     }
 
+    private bool _capturedImport;
+
     private async Task CaptureAndStart()
     {
-        await ToSignal(RenderingServer.Singleton,RenderingServer.SignalName.FramePostDraw);
-        using (var image = GetViewport().GetTexture().GetImage())
-            GD.Print("CAPTURE "+SmokeCapture+" "+image.SavePng(SmokeCapture));
+        await Capture(SmokeCapture);
         Start();
+    }
+
+    private async Task Capture(string path)
+    {
+        await ToSignal(RenderingServer.Singleton,RenderingServer.SignalName.FramePostDraw);
+        using var image = GetViewport().GetTexture().GetImage();
+        GD.Print("CAPTURE "+path+" "+image.SavePng(path));
     }
 
     /// <summary>The smoke's end: called by Main once the main menu shows after Start (null when it never started).</summary>

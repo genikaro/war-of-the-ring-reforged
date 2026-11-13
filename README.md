@@ -8,7 +8,7 @@ read the original archives, database, models, maps, audio and text.
 Unofficial, non-commercial fan project. It ships no game content and needs a legally obtained
 installation of the original game — see [NOTICE.md](NOTICE.md).
 
-**Status (build-189):** a playable skirmish and sandbox prototype — original maps, economy,
+**Status (build-191):** a playable skirmish and sandbox prototype — original maps, economy,
 construction, research, heroes, abilities, places of power, bots, fog of war, a main menu,
 setup screens and an exported Windows executable with a launcher. Not the original campaign,
 and not a finished game. [docs/README.md](docs/README.md) is the build log and the detailed
@@ -24,24 +24,40 @@ setup and controls.
 
 ## Getting started
 
-Import your installation (about 17 minutes for a full English install on 16 threads):
+The launcher is how Reforged is played: it finds your copy of the game, imports it and starts the main menu.
 
-```powershell
-python tools/import_install.py "C:/Games/War of the Ring"
-```
+1. Build the game once. The first time, `-DownloadTemplates` fetches Godot's official export templates (about
+   1.2 GB) and checks their SHA-512:
 
-Run the project from source, or open the launcher that the exported game opens on:
+   ```powershell
+   ./prototype/export.ps1 -DownloadTemplates
+   ```
+
+2. Start `build/WarOfTheRingReforged.exe`. The launcher opens with your War of the Ring folder already filled in if
+   the game is in one of the usual install folders. If it isn't, click **Browse** and pick the folder that holds
+   `Database` and `Archives`. The launcher then checks that the install reads correctly.
+3. Click **Import game data**. A progress bar shows each step, the time taken and the time left. A full English
+   install takes about 17 minutes on a 16-thread machine, mostly for the maps, which import several at a time.
+   The install itself is only read.
+4. Click **Start Reforged**. Next time the launcher remembers the folder and the import, so Start is ready at once.
+   It says when the data came from an older build and should be imported again.
+
+Importing needs Python 3.13 with Pillow and NumPy, from `converted/tooling/python` or on PATH.
+
+### Development
+
+`run.ps1` runs the project from source. With no parameters it opens the main menu; `-Launcher` opens the
+launcher. The smokes and captures are listed in [docs/README.md](docs/README.md):
 
 ```powershell
 ./prototype/run.ps1
 ./prototype/run.ps1 -Launcher
 ```
 
-Export a Windows executable to `build/WarOfTheRingReforged.exe` (once with
-`-DownloadTemplates`, which fetches and verifies the official export templates):
+The launcher's import without the launcher (`--check` only checks the install):
 
 ```powershell
-./prototype/export.ps1
+python tools/import_install.py "C:/Games/War of the Ring"
 ```
 
 Checks:

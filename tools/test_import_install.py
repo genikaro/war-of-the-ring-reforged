@@ -51,6 +51,20 @@ class ProgressTest(unittest.TestCase):
         for previous, current in zip(steps, steps[1:]):
             self.assertEqual(previous['end'], current['start'])
 
+    def test_plan_matches_the_steps(self):
+        steps = import_install.plan()
+        self.assertEqual(len(steps), len(import_install.STEPS))
+        self.assertEqual((steps[0]['start'], steps[-1]['end']), (0, 1))
+
+    def test_progress_never_goes_back(self):
+        lines = io.StringIO()
+        with contextlib.redirect_stdout(lines):
+            report = import_install.Reporter(4, interval=0)
+            for fraction in (0.2, 0.5, 0.3, 1.5):
+                report(fraction, 1, force=True)
+        sent = [json.loads(line[len('@reforged '):])['fraction'] for line in lines.getvalue().splitlines()]
+        self.assertEqual(sent, [0.2, 0.5, 0.5, 1.0])
+
 
 if __name__ == '__main__':
     unittest.main()

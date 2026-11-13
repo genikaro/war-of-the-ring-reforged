@@ -1,5 +1,17 @@
 # Godot C# skirmish sandbox
 
+**build-191:** the launcher's import shows its progress properly. Above a wide bar sit the import's five steps, each
+ticked off when done, and the bar is marked at the step boundaries, carries the percentage and glides instead of
+jumping. It keeps moving through the long steps too: archives count by the bytes written, maps by their file size, and
+maps still importing add the share their expected time says is done. That time is measured again from every finished
+map. The content pack and menu art steps say nothing on their way, so the bar moves on at the pace the import has kept
+so far. Beside the bar are the time taken and the time left, and the window title carries the percentage, so it shows
+in the taskbar while you do something else. The bar turns green when the import finishes, red when it fails and amber
+when it is cancelled. Cancel now asks for a second click. On a first start the launcher looks for the original game in
+the usual install folders: Program Files, also under the publishers' names, a `Games` folder or a drive's root, and
+next to Reforged. A launcher smoke with `-CapturePath` also captures the import halfway (`<capture>-importing.png`). The
+top-level README now starts players on the launcher; `run.ps1` is for development.
+
 **build-190:** `-NoDebug` pictures the game as it is played. A smoke or capture counts as a debug session, so no
 capture could show the interface without the build line and the **Debug · F4** button. Now
 `./prototype/run.ps1 -Smoke -NoDebug -CapturePath artifacts/plain.png` holds the run to a normal session, where the
