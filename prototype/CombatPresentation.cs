@@ -49,7 +49,12 @@ public partial class Main
 
     private (AudioStreamWav Stream,float VolumeDb) LoadCombatSound(JsonElement sound)
     {
-        string path = System.IO.Path.GetFullPath(CachePath(sound.GetProperty("File").GetString()!));
+        string relative = sound.GetProperty("File").GetString()!;
+        // Build-205: the install's decoded sound when it gives the pack's file.
+        if (InstallSound(relative) is { } data)
+            return (AudioStreamWav.LoadFromBuffer(data) ?? throw new InvalidOperationException("Cannot load combat audio"),
+                Mathf.LinearToDb(sound.GetProperty("VolumePpm").GetInt32()/1_000_000f));
+        string path = System.IO.Path.GetFullPath(CachePath(relative));
         if (!new[] {_cache,_cacheFiles.Content}.Any(root => path.StartsWith(System.IO.Path.GetFullPath(root)+System.IO.Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException("Combat audio escapes cache");
         var stream = AudioStreamWav.LoadFromFile(path) ?? throw new InvalidOperationException("Cannot load combat audio");

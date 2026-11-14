@@ -18,6 +18,8 @@ public partial class GameAudio : Node
     private JsonElement _data;
     private Func<string,string> _resolve = null!;
     private string[] _roots = [];
+    /// <summary>Build-205: the audio files the install gives, by pack path, or null for a file read from disk.</summary>
+    private Func<string,byte[]?>? _files;
     private double _time,_replyAt;
     private int _replyEvent = -1,_uiCursor;
     private MusicPlaylist? _playlist;
@@ -74,10 +76,15 @@ public partial class GameAudio : Node
         }
     }
 
-    public void Load(string indexPath,Func<string,string>? resolve = null,params string[] roots)
+    public void Load(string indexPath,Func<string,string>? resolve = null,params string[] roots) => Load(indexPath,null,null,resolve,roots);
+
+    /// <summary>Build-205: the index from <paramref name="indexText"/> when given (built from the install), and its files
+    /// from <paramref name="files"/> where it gives them; otherwise both from the cache on disk.</summary>
+    public void Load(string indexPath,string? indexText,Func<string,byte[]?>? files,Func<string,string>? resolve,params string[] roots)
     {
-        if (!File.Exists(indexPath)) { GD.PushWarning("Audio cache missing: run python tools/game_audio.py, then restart."); return; }
-        _data = JsonDocument.Parse(File.ReadAllText(indexPath)).RootElement.Clone();
+        if (indexText == null && !File.Exists(indexPath)) { GD.PushWarning("Audio cache missing: run python tools/game_audio.py, then restart."); return; }
+        _data = JsonDocument.Parse(indexText ?? File.ReadAllText(indexPath)).RootElement.Clone();
+        _files = files;
         int version = _data.GetProperty("FormatVersion").GetInt32();
         if (version is not (1 or 2)) throw new InvalidOperationException("Unsupported audio cache");
         if (version == 1) GD.PushWarning("Refresh menu/faction music: run python tools/game_audio.py, then restart.");
@@ -89,6 +96,10 @@ public partial class GameAudio : Node
     private AudioStream Stream(string relative)
     {
         if (_streams.TryGetValue(relative,out var stream)) return stream;
+        bool ogg = Path.GetExtension(relative).Equals(".ogg",StringComparison.OrdinalIgnoreCase);
+        if (_files?.Invoke(relative) is { } data)
+            return _streams[relative] = (ogg ? AudioStreamOggVorbis.LoadFromBuffer(data) : (AudioStream)AudioStreamWav.LoadFromBuffer(data))
+                ?? throw new InvalidOperationException("Cannot load audio: "+relative);
         string path = Path.GetFullPath(_resolve(relative));
         if (!_roots.Any(root => path.StartsWith(root,StringComparison.OrdinalIgnoreCase))) throw new InvalidOperationException("Audio escapes cache");
         stream = Path.GetExtension(path).Equals(".ogg",StringComparison.OrdinalIgnoreCase)

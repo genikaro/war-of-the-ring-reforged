@@ -23,7 +23,30 @@ public partial class Main
     private const string CombatRulesFile = "combat/rules.json", BloodFile = "combat/blood.json";
 
     /// <summary>The install's archives and database, open for the session, and the models built from them.</summary>
-    private static (string Install,Reforged.Formats.GameArchives Archives,Reforged.Formats.LqrDatabase Db,PackModels Models)? _installModels;
+    private static (string Install,Reforged.Formats.GameArchives Archives,Reforged.Formats.LqrDatabase Db,PackModels Models,PackAudio Audio)? _installModels;
+
+    /// <summary>Build-205: the audio index built from the install, as JSON text, in the background from startup.</summary>
+    private static Task<string?>? _installAudio;
+
+    /// <summary>The audio the install gives in place of the pack's: the index text and the files by pack path, or null.
+    /// Waits for the index when it has not been built.</summary>
+    private static (string Index,Func<string,byte[]?> Files)? InstallAudio()
+    {
+        if (_installModels is not { } install || _installAudio?.Result is not { } index) return null;
+        return (index,relative => install.Audio.Has(relative,SkirmishCatalog.Roster) ? install.Audio.File(relative,SkirmishCatalog.Roster) : null);
+    }
+
+    /// <summary>A combat sound (combat/sounds/) the install gives for a pack file, or null: it then comes from disk.</summary>
+    private byte[]? InstallSound(string relative)
+    {
+        if (_installModels is not { } install || !_cacheFiles.FromPack(relative) || !install.Audio.Has(relative,SkirmishCatalog.Roster)) return null;
+        try { return install.Audio.File(relative,SkirmishCatalog.Roster); }
+        catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException)
+        {
+            GD.PushWarning($"Audio: cannot build {relative} from the install ({error.Message}); using the content pack's");
+            return null;
+        }
+    }
 
     private static void LoadInstallRules(string? install)
     {
@@ -107,6 +130,7 @@ public partial class Main
         if (install != null && _installModels?.Install == install) return;
         _installModels?.Archives.Dispose();
         _installModels = null;
+        _installAudio = null;
         if (install == null) return;
         Reforged.Formats.GameArchives? archives = null;
         try
@@ -115,7 +139,24 @@ public partial class Main
             var db = Reforged.Formats.LqrDatabase.OpenInstall(install);
             var models = new PackModels(db,archives);
             _ = models.Plan; // Which files the install gives, worked out now so a damaged database cannot fail a load.
-            _installModels = (install,archives,db,models);
+            var audio = new PackAudio(db,archives);
+            _installModels = (install,archives,db,models,audio);
+            _installAudio = Task.Run<string?>(() =>
+            {
+                try
+                {
+                    var clock = System.Diagnostics.Stopwatch.StartNew();
+                    string index = audio.Index(SkirmishCatalog.Roster).ToJsonString();
+                    GD.Print($"Audio: index built from the install in {clock.ElapsedMilliseconds} ms");
+                    return index;
+                }
+                catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException
+                    or InvalidCastException or NullReferenceException or InvalidOperationException)
+                {
+                    GD.PushWarning($"Audio: cannot build the index from the install ({error.Message}); using the content pack's");
+                    return null;
+                }
+            });
         }
         catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or UnauthorizedAccessException
             or KeyNotFoundException or InvalidCastException or NullReferenceException)

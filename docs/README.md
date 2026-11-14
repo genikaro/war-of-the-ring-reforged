@@ -1,5 +1,18 @@
 # Godot C# skirmish sandbox
 
+**build-205:** the game's audio comes from the install. `PackAudio` (`prototype/Install`) ports `game_audio.export`:
+the index (`audio/index.json`: the roster's speech events with weighted clips, the gameplay and melee impact sound
+events, the menu and faction music, the SHA-256 of every source) is built in the background from startup (about
+0.2 s), and each file it names is built when first played: Ogg music and speech as the archive holds it, a WAV as is
+when PCM and decoded when Microsoft ADPCM. The combat rules' sounds (`combat/sounds/`) come the same way.
+`MsAdpcm` (`prototype/Formats`) ports `pcm_audio.decode_ms_adpcm` to the byte, its RIFF header written as Python's
+`wave` writes it. `GameAudio` takes the index text and the files from memory (`AudioStreamOggVorbis` and
+`AudioStreamWav.LoadFromBuffer`); the menu starts its music when the index is ready. `tools/pack_fingerprint.py`
+builds the whole content pack the Python way from an install (about 3 minutes) and records every file it writes; the
+new `tests/formats --python-files` requires the audio index and all 2,514 audio files (342 MB, built in 0.4 s) to
+equal the Python's: they do on the English and Russian installs. The audio, menu and skirmish smokes pass with and
+without the install and give the same reports (the menu's load time aside).
+
 **build-204:** the construction section's defenses come from the install, so all of `skirmish.construction` now does.
 `PackCombat.Defenses` ports `skirmish_construction.defense_data`: each skirmish building's BuildingDefenses rows (the
 Watchtower's arrows, the Ballista Tower's arrows and bolt, the Evil Tower's arrows) with their weapon, rates of fire by

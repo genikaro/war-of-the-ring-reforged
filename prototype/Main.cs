@@ -388,7 +388,9 @@ public partial class Main : Node3D
         UpdateCamera();
         _initialDigest = _world.StateDigest();
         await LoadingStep("Loading sounds",.97f);
-        _audio.Load(CachePath(manifest.TryGetProperty("audio",out var audioIndex) ? audioIndex.GetString()! : "audio/index.json"),CachePath,_cache,_cacheFiles.Content);
+        string audioPath = manifest.TryGetProperty("audio",out var audioIndex) ? audioIndex.GetString()! : "audio/index.json";
+        var installAudio = _cacheFiles.FromPack(audioPath) ? await Task.Run(InstallAudio) : null;
+        _audio.Load(CachePath(audioPath),installAudio?.Index,installAudio?.Files,CachePath,_cache,_cacheFiles.Content);
         PlayFactionMusic();
         ResetWorldAudio();
         if (_smoke)

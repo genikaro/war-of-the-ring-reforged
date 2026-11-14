@@ -63,6 +63,7 @@ assets, previews, validation reports and portable tools stay in ignored
 | `models_fingerprint.py` | Build-195: every .lms (plain and with the strict footer), .lsk, .lwt and .lmd parse (build-200: and every .lfx and .lpo), hashed in a canonical form, for `tests/formats --python-models`; `--dump` prints one file's form. |
 | `gltf_fingerprint.py` | Build-197 (`--pack` build-198: the pack's model files post-processed as the import writes them): every model the content pack exports converted by `lms2gltf.convert_model` from the given install, compared by JSON with accessor bytes and image pixels in place of offsets, for `tests/formats --python-gltf`; `--dump` prints one. |
 | `resolve_fingerprint.py` | Build-196: every Models record resolved by `resolve_model.py` from the given install (its own extracted layout in a temporary folder), hashed in the canonical form, for `tests/formats --python-resolve`; `--dump` prints one. |
+| `pack_fingerprint.py` | Build-205: the whole content pack built the Python way from the given install (archives extracted into a temporary folder), every file it writes recorded: a PNG by its decoded pixels, a GLB in `gltf_fingerprint`'s form, anything else by its bytes; and the audio and interface indexes whole. For `tests/formats --python-files`. |
 | `combat_fingerprint.py` | Build-203: `combat/rules.json` and `combat/blood.json` as `combat_rules.export` and `blood_effects.export` build them from the given install (its own extracted layout in a temporary folder), for `tests/formats --python-combat` to check `PackCombat` against. |
 | `rules_fingerprint.py` | Build-194: the content pack's seven database-only rule sections as the import builds them, for `tests/formats --python-rules` to check `PackRules` against. Build-199: also the sections that need models (the `models` list, `skirmish.economy`, `skirmish.construction` key by key; build-204 its defenses), from a layout of the install, for `PackModelRules` and `PackCombat.Defenses`. |
 | `import_install.py` | Build-188, the launcher's import: check an install parses (`--check`), then extract it, build the content pack, menu art and every map (in parallel) and record it in `converted/install.json`. Progress lines start with `@reforged `. |
@@ -87,6 +88,7 @@ the checks share them:
 | `Install/PackModels` | `content_pack.build`'s model exports, `prototype_assets.adapt` and `restore_building` | Build-198: the pack's unit, building, place-of-power and rally banner files built from the install as the import writes them; the game loads them from memory. |
 | `Install/OriginalText` | `game_text.py` `build` | Build-193: the original text as the game reads it, built from the install at startup ([LOCALIZATION.md](LOCALIZATION.md)). |
 | `Install/PackModelRules`, `PyDecimal` | `prepare_prototype.export_units`' models list, `skirmish_economy.economy_data`, `skirmish_construction.construction_data` and `placement_data`, `skirmish_map.building_footprint`, Python's `decimal` | Build-199: the rule sections that need the models: clip names and in-place clips from a walk of the resolved model's skeletons (no glTF is built), worker clip lengths in ticks, building footprints from the oriented-collision boxes. `PyDecimal` is `Decimal(str(x))` with the default context's 28 digits. |
+| `Install/PackAudio`, `MsAdpcm` | `game_audio.export`, `pcm_audio.decode_ms_adpcm` | Build-205: the audio index and its files (Ogg copied, PCM WAV copied, Microsoft ADPCM decoded to the byte), and the combat rules' sounds, built on request. |
 | `Install/PackCombat` | `combat_rules.export` with `hero_abilities`, `hero_skills`, `dwarf_abilities`, `ranger_abilities`, `elven_abilities`, `nature_abilities`, `evil_abilities`, `evil_upgrades`, `hero_experience`, `healing_visual`, `global_powers`; `blood_effects.export` | Build-203: the combat rules and blood table built from the install, in the background from startup. The files they name (sounds, sprite frames, effect and projectile models) are not written. `PyMath.Hypot` and `PyMath.Sum` are CPython's `math.hypot` and float `sum`. |
 | `Install/PackRules`, `Install/SkirmishCatalog` | `content_pack.faction_data`, `prepare_prototype.team_colors`, `skirmish_production`, `skirmish_research`, `places_of_power.export`, `skirmish_ai.export`, the `skirmish_map` lists | Build-194: the content pack's database-only rule sections, built from the install at startup in place of the pack's. Python's rounding is kept (`round` halves to even, `quantize` halves away from zero on the shortest decimal form, `//` floors). While the import still builds the pack, a change to these Python modules or lists needs the same change here; `--python-rules` fails until it is made. |
 
@@ -111,6 +113,8 @@ python tools/gltf_fingerprint.py "Legacy/Game EN" artifacts/pack-en.json --pack
 dotnet run --project tests/formats -c Release -- --install "Legacy/Game EN" --python-pack artifacts/pack-en.json
 python tools/combat_fingerprint.py "Legacy/Game EN" artifacts/combat-en.json
 dotnet run --project tests/formats -c Release -- --install "Legacy/Game EN" --python-combat artifacts/combat-en.json
+python tools/pack_fingerprint.py "Legacy/Game EN" artifacts/files-en.json
+dotnet run --project tests/formats -c Release -- --install "Legacy/Game EN" --python-files artifacts/files-en.json
 ```
 
 The first runs 50 checks on synthetic archives, tables, text, rule rounding, model files, model resolution, DDS and PNG. `--install` reads and CRC-checks every archive file and
@@ -129,6 +133,8 @@ every Models record and requires it to hash as `resolve_fingerprint.py`'s does: 
 match on both installs. `--python-pack` does the same for the 89 content pack files with their post-processing, as the
 game builds them (about 1 s on all cores). `--python-combat` builds the combat rules and blood table and requires
 them to equal `combat_fingerprint.py`'s, section by section: they do on both installs, in about 0.75 s.
+`--python-files` builds the pack's files the game builds from the install and requires each to equal what
+`pack_fingerprint.py` recorded: the audio index and all 2,514 audio files do on both installs.
 
 Extract the archives once:
 

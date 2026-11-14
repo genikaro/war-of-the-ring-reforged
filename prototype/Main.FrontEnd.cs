@@ -24,6 +24,13 @@ public partial class Main
     private string _loadingStep = "";
     private long _loadingStepStart,_loadingStart;
 
+    private void LoadMenuAudio()
+    {
+        var install = InstallAudio();
+        _audio.Load(GamePaths.Data("converted/content/good/audio/index.json"),install?.Index,install?.Files,null);
+        _audio.PlayMusic(MusicContext.Menu);
+    }
+
     private void ShowFrontEnd(FrontEndScreen screen)
     {
         _nextScreen = null;
@@ -31,8 +38,10 @@ public partial class Main
         _commands.UseMenuPointer(pointer.Texture,pointer.Hotspot);
         _hud.Visible = false;
         _frontEndLayer = new CanvasLayer { Layer = 10 }; AddChild(_frontEndLayer);
-        _audio.Load(GamePaths.Data("converted/content/good/audio/index.json"));
-        _audio.PlayMusic(MusicContext.Menu);
+        // Build-205: the install's audio when it gives it; its index may still be building, and the music starts then.
+        if (_installAudio is { IsCompleted: false } building)
+            _ = building.ContinueWith(_ => Callable.From(() => { if (IsInstanceValid(this)) LoadMenuAudio(); }).CallDeferred(),TaskScheduler.Default);
+        else LoadMenuAudio();
         _frontEndSettings = new GameMenu { Visible = false,ControlsText = ControlsReference };
         _frontEndLayer.AddChild(_frontEndSettings);
         _frontEndSettings.AudioPreviewed += settings => _audio.Apply(settings);
