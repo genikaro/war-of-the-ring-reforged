@@ -1,5 +1,18 @@
 # Godot C# skirmish sandbox
 
+**build-194:** the rule tables the database gives are built from the install at startup too. `PackRules`
+(`prototype/Install`) ports the Python that writes seven content pack sections: `factions`, `team_colors`,
+`skirmish.start_state`, `skirmish.production` with Fate, `skirmish.research`, `skirmish.places_of_power` and
+`skirmish.ai` (the AI players' `.rai` files in the install's code page). `SkirmishCatalog` holds the skirmish lists the
+Python modules hold: buildings and units in scope, faction starts, worker palettes, player colours. After the text, the
+game builds the sections from the install it found (about 120 ms; kept while the install's tables and AI players are
+unchanged), and `CacheManifest.InstallRules` puts each in place of the pack's before the map's manifest merges in. So a
+match started with `-Install "Legacy/Game EN"` lists the English install's AI players even when the pack came from the
+Russian one. The sections that need models still come from the pack: the economy's worker clips, construction
+footprints and tower defenses, unit bodies and the combat rules (`combat/rules.json`). `tools/rules_fingerprint.py`
+writes the seven sections as the Python import builds them, and `tests/formats --python-rules` requires the C# ones to
+equal them; integers must stay integers. They do on the English and Russian installs (46 format checks).
+
 **build-193:** the game reads its text straight from the install. `OriginalText` (`prototype/Install`) is a C# port
 of `game_text.py`: Text.H2O's 49 tables, the database records, maps, abilities and Fate powers that name a text, the
 stub entries and the language read from the text itself. At startup the game finds the install (`--install=`,
@@ -1125,6 +1138,8 @@ python tools/formats_fingerprint.py "Legacy/Game EN" artifacts/fingerprint-en.js
 ./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python artifacts/fingerprint-en.json
 python tools/game_text.py --install "Legacy/Game EN" --out artifacts/text-en.json
 ./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python-text artifacts/text-en.json
+python tools/rules_fingerprint.py "Legacy/Game EN" artifacts/rules-en.json
+./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python-rules artifacts/rules-en.json
 ./prototype/run.ps1 -Smoke
 ./prototype/run.ps1 -MotionSmoke
 ./prototype/run.ps1 -CombatSmoke

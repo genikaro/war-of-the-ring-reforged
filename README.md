@@ -8,7 +8,7 @@ read the original archives, database, models, maps, audio and text.
 Unofficial, non-commercial fan project. It ships no game content and needs a legally obtained
 installation of the original game — see [NOTICE.md](NOTICE.md).
 
-**Status (build-193):** a playable skirmish and sandbox prototype — original maps, economy,
+**Status (build-194):** a playable skirmish and sandbox prototype — original maps, economy,
 construction, research, heroes, abilities, places of power, bots, fog of war, a main menu,
 setup screens and an exported Windows executable with a launcher. Not the original campaign,
 and not a finished game. [docs/README.md](docs/README.md) is the build log and the detailed
@@ -55,8 +55,8 @@ launcher. The smokes and captures are listed in [docs/README.md](docs/README.md)
 ./prototype/run.ps1 -Install "C:/Games/War of the Ring"
 ```
 
-The game reads its text straight from the install (build-193): the one `-Install` names, else the folder the launcher
-kept, else the last import's. Without one it uses the imported copy.
+The game reads its text (build-193) and the rule tables the database gives (build-194) straight from the install: the
+one `-Install` names, else the folder the launcher kept, else the last import's. Without one it uses the imported copy.
 
 The launcher's import without the launcher (`--check` only checks the install):
 

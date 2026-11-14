@@ -6,6 +6,8 @@
 //       tools/formats_fingerprint.py recorded from the Python readers
 //   ... --install "<install>" --python-text <original.json>
 //       build-193: the original text built from the install, compared with python tools/game_text.py --install --out
+//   ... --install "<install>" --python-rules <rules.json>
+//       build-194: the rule sections built from the install, compared with python tools/rules_fingerprint.py
 System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 int passed = 0;
@@ -22,5 +24,14 @@ if (Array.IndexOf(args,"--install") is int install && install >= 0)
     int python = Array.IndexOf(args,"--python");
     InstallChecks.Run(args[install+1],python >= 0 ? args[python+1] : null,args.Contains("--sequential"),Check);
     if (Array.IndexOf(args,"--python-text") is int text && text >= 0) TextChecks.Install(args[install+1],args[text+1],Check);
+    if (Array.IndexOf(args,"--python-rules") is int rules && rules >= 0) RulesChecks.Install(args[install+1],args[rules+1],RepositoryRoot(),Check);
 }
 Console.WriteLine($"{passed} format checks passed");
+
+// The folder the AI players' paths are given relative to, as tools/ uses it: the repository.
+static string RepositoryRoot()
+{
+    for (var folder = new DirectoryInfo(Directory.GetCurrentDirectory()); folder != null; folder = folder.Parent)
+        if (File.Exists(Path.Combine(folder.FullName,"tools","rules_fingerprint.py"))) return folder.FullName;
+    return Directory.GetCurrentDirectory();
+}

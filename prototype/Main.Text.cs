@@ -13,11 +13,19 @@ public partial class Main
     /// the same install's unchanged files need not be read again.</summary>
     private static (string Key,OriginalText Text)? _installText;
 
+    /// <summary>The text, then (build-194) the rule sections the install gives (LoadInstallRules).</summary>
     public static void LoadGameText()
+    {
+        string? install = GamePaths.FindInstall();
+        LoadText(install);
+        LoadInstallRules(install);
+    }
+
+    private static void LoadText(string? found)
     {
         GameText.Warn = message => GD.PushWarning(message);
         string catalog = Godot.FileAccess.GetFileAsString(TextCatalog);
-        if (GamePaths.FindInstall() is { } install)
+        if (found is { } install)
         {
             try
             {

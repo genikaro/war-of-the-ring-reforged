@@ -20,6 +20,7 @@ public static class SyntheticChecks
             ArchiveChecks(check,folder);
             TableChecks(check,folder);
             TextChecks.Synthetic(check);
+            RulesChecks.Synthetic(check);
         }
         finally { Directory.Delete(folder,true); }
     }

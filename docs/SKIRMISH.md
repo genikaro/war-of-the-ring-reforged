@@ -4,6 +4,16 @@ Goal: a playable Good faction Tier 1 tech tree with working workers on the
 stock 2-player map captured in the first local original-game session. This file
 tracks what exists; planning lives in `docs/ROADMAP.md` (Phase 4 economy).
 
+## Build-194: rule tables from the install
+
+The `factions`, `team_colors` and the `skirmish` sections `start_state`, `production` (with `fate`), `research`,
+`places_of_power` and `ai` are built from the install at startup (`prototype/Install/PackRules.cs`) and replace the
+content pack's; the map's own manifest still merges in after them. `economy`, `construction`, `bodies` and the combat
+rules still come from the pack, since they need models. The skirmish lists those sections are built for (buildings,
+units, faction starts, worker palettes, player colours) live twice while the import builds the pack:
+`tools/skirmish_map.py` and the other Python modules, and `prototype/Install/SkirmishCatalog.cs`. Change both;
+`tests/formats --python-rules` fails until they agree ([TOOLS.md](TOOLS.md#c-readers-build-192)).
+
 ## Build-123: resource-based bot worker limits
 
 Bot recruitment is capped at five workers per usable Mill or ore source, plus

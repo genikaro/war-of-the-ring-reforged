@@ -9,6 +9,12 @@ using System.Text.Json.Nodes;
 public sealed class CacheManifest
 {
     private static readonly Dictionary<string,JsonNode> Packs = [];
+
+    /// <summary>Build-194: rule sections built from the install at startup (Reforged.Install.PackRules), by path
+    /// ("skirmish.production"). Each replaces the pack's section whole before the map's manifest merges in; null keeps
+    /// the pack's own. Main sets it; the simulation checks leave it null.</summary>
+    public static IReadOnlyDictionary<string,JsonNode>? InstallRules { get; set; }
+
     public string Cache { get; }
     /// <summary>The content pack's folder, or the cache itself when it has none.</summary>
     public string Content { get; }
@@ -37,10 +43,24 @@ public sealed class CacheManifest
         if (pack["format_version"]?.GetValue<int>() != 1) throw new InvalidOperationException("Unsupported content pack: python tools/content_pack.py");
         var merged = pack.DeepClone().AsObject();
         merged.Remove("files");
+        if (InstallRules != null)
+            foreach (var (path,value) in InstallRules) Replace(merged,path,value);
         Merge(merged,manifest);
         var root = JsonDocument.Parse(merged.ToJsonString()).RootElement.Clone();
         var packFiles = JsonDocument.Parse(pack["files"]!.ToJsonString()).RootElement.Clone();
         return new(cache,content,root,root.GetProperty("files"),packFiles);
+    }
+
+    /// <summary>Puts <paramref name="value"/> at a dotted path ("skirmish.ai"), making the objects on the way.</summary>
+    private static void Replace(JsonObject target,string path,JsonNode value)
+    {
+        string[] keys = path.Split('.');
+        foreach (string key in keys[..^1])
+        {
+            if (target[key] is not JsonObject child) target[key] = child = new JsonObject();
+            target = child;
+        }
+        target[keys[^1]] = value.DeepClone();
     }
 
     /// <summary>Objects merge key by key; anything else in the map's manifest replaces the pack's value.</summary>

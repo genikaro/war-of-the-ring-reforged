@@ -84,38 +84,10 @@ public static class TextChecks
             +$"{text.Records.Count} records, {text.Maps.Count} maps) in {clock.ElapsedMilliseconds} ms");
         var expected = JsonNode.Parse(File.ReadAllText(python,Encoding.UTF8))!;
         var differences = new List<string>();
-        Compare(expected,text.ToJsonNode(),"$",differences);
+        JsonCompare.Compare(expected,text.ToJsonNode(),"$",differences);
         var again = OriginalText.FromJson(text.ToJson()).ToJsonNode();
-        Compare(text.ToJsonNode(),again,"(round trip) $",differences);
+        JsonCompare.Compare(text.ToJsonNode(),again,"(round trip) $",differences);
         check(differences.Count == 0,"The original text equals game_text.py's: tables, symbols, records, maps, abilities, language and stubs"
             +string.Concat(differences.Take(25).Select(d => "\n  "+d)));
-    }
-
-    /// <summary>JSON trees equal: objects by key in any order, arrays in order, numbers by value.</summary>
-    private static void Compare(JsonNode? expected,JsonNode? actual,string path,List<string> differences)
-    {
-        switch (expected,actual)
-        {
-            case (null,null): return;
-            case (JsonObject e,JsonObject a):
-                foreach (var (key,value) in e)
-                    if (a.ContainsKey(key)) Compare(value,a[key],$"{path}.{key}",differences);
-                    else differences.Add($"{path}.{key}: missing");
-                differences.AddRange(a.Where(p => !e.ContainsKey(p.Key)).Select(p => $"{path}.{p.Key}: not in game_text.py's"));
-                return;
-            case (JsonArray e,JsonArray a):
-                if (e.Count != a.Count) differences.Add($"{path}: {a.Count} items, expected {e.Count}");
-                for (int i = 0; i < Math.Min(e.Count,a.Count); i++) Compare(e[i],a[i],$"{path}[{i}]",differences);
-                return;
-            case (JsonValue e,JsonValue a):
-                static double Number(JsonValue value) => double.Parse(value.ToJsonString(),System.Globalization.CultureInfo.InvariantCulture);
-                bool same = e.GetValueKind() is System.Text.Json.JsonValueKind.Number && a.GetValueKind() is System.Text.Json.JsonValueKind.Number
-                    ? Number(e) == Number(a) : JsonNode.DeepEquals(e,a);
-                if (!same) differences.Add($"{path}: {a.ToJsonString()}, expected {e.ToJsonString()}");
-                return;
-            default:
-                differences.Add($"{path}: {actual?.ToJsonString() ?? "null"}, expected {expected?.ToJsonString() ?? "null"}");
-                return;
-        }
     }
 }
