@@ -1,5 +1,14 @@
 # Godot C# skirmish sandbox
 
+**build-204:** the construction section's defenses come from the install, so all of `skirmish.construction` now does.
+`PackCombat.Defenses` ports `skirmish_construction.defense_data`: each skirmish building's BuildingDefenses rows (the
+Watchtower's arrows, the Ballista Tower's arrows and bolt, the Evil Tower's arrows) with their weapon, rates of fire by
+garrison size, the projectile's source joint at the model's scale, the projectile's presentation (build-203's port)
+and the source files each read. They are built at startup with the other model sections, which together still take
+about 0.3 s. `rules_fingerprint.py` writes the defenses too, their sources named as `combat_fingerprint.py` names them,
+and `tests/formats --python-rules` requires all 20 sections to equal the Python's: they do on the English and Russian
+installs.
+
 **build-203:** the combat rules and blood table come from the install. `PackCombat` (`prototype/Install`) ports
 `combat_rules.export` with every module it calls: units' stats, attack and release ticks, locomotion speeds, bodies and
 experience; unit pairs and type matchups; impact, launch and ability sounds; projectiles with trails and spin; the

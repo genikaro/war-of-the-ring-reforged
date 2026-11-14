@@ -7,7 +7,7 @@ Writes {section path: value} for the sections built from the database (and the A
 team_colors, skirmish.start_state, skirmish.production, skirmish.research, skirmish.places_of_power and skirmish.ai,
 exactly as content_pack.build() puts them into content.json. Build-199 adds those that need the models too: the pack's
 models list (each roster unit exported as export_units does, in a pool of processes), skirmish.economy and
-skirmish.construction without its defenses, key by key. Models come from a layout of the install
+skirmish.construction key by key (build-204: its defenses too, their sources named as combat_fingerprint names them). Models come from a layout of the install
 (resolve_fingerprint.lay_out) in a temporary folder; the install is only read.
 """
 import argparse
@@ -57,9 +57,9 @@ def sections(install):
     }
 
 
-# The construction keys the game builds from the install (build-199); its defenses still come from the content pack.
+# The construction keys the game builds from the install (build-199; build-204 the defenses).
 CONSTRUCTION_KEYS = ['definitions', 'faction_definitions', 'buildings', 'order', 'palettes', 'corruption', 'placeable', 'upgrades',
-                     'placement_radius_mm', 'placement_adapter']
+                     'placement_radius_mm', 'placement_adapter', 'defenses']
 
 _resolver = None
 _root = None
@@ -68,17 +68,18 @@ _root = None
 def _start(install, root):
     """Points the modules that read extracted/ at the layout under root."""
     global _resolver, _root
+    import combat_fingerprint
+    import combat_rules
+    import healing_visual
     import lms2gltf
     import resolve_fingerprint
     import skirmish_economy
     import wor
-    resolve_fingerprint.READ = ('Models', 'Skeletons', 'Cloths', 'UVAs', 'Meshes', 'Weights', 'Textures')
-    resolve_fingerprint.LISTED = ('Effects',)
+    resolve_fingerprint.READ, resolve_fingerprint.LISTED = combat_fingerprint.READ, ()
     _resolver = resolve_fingerprint.resolver_for(install, root)
     _root = Path(root)
     lms2gltf.ROOT = root
-    wor.ROOT = _root
-    skirmish_economy.ROOT = _root
+    wor.ROOT = combat_rules.ROOT = healing_visual.ROOT = skirmish_economy.ROOT = _root
 
 
 def _unit(unit):
@@ -98,6 +99,13 @@ def model_sections(install, workers=None):
         construction, _ = skirmish_construction.construction_data(_resolver, [])
         del construction['sites']
         construction.update(skirmish_construction.placement_data(_resolver))
+        output = _root / 'pack'
+        output.mkdir(exist_ok=True)
+        construction['defenses'] = skirmish_construction.defense_data(output, _resolver)
+        import combat_fingerprint
+        for defenses in construction['defenses'].values():
+            for defense in defenses:
+                defense['sources'] = combat_fingerprint.import_names(defense['sources'], _resolver)
         if set(construction) != set(CONSTRUCTION_KEYS):
             raise ValueError('construction keys changed: %s' % sorted(construction))
         result = {'skirmish.economy': skirmish_economy.economy_data(_resolver)}

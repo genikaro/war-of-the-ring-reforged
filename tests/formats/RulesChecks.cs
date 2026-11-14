@@ -41,14 +41,18 @@ public static class RulesChecks
         Console.WriteLine($"Built {sections.Count} rule sections from the install ({language}) in {clock.ElapsedMilliseconds} ms");
         clock.Restart();
         using (var archives = Reforged.Formats.GameArchives.OpenInstall(install))
-            foreach (var (path,value) in PackModelRules.Build(Reforged.Formats.LqrDatabase.OpenInstall(install),archives)) sections[path] = value;
-        Console.WriteLine($"Built the {PackModelRules.Sections.Length} sections that need models in {clock.ElapsedMilliseconds} ms");
+        {
+            var db = Reforged.Formats.LqrDatabase.OpenInstall(install);
+            foreach (var (path,value) in PackModelRules.Build(db,archives)) sections[path] = value;
+            sections[PackCombat.DefensesSection] = new PackCombat(db,archives,root).Defenses();
+        }
+        Console.WriteLine($"Built the {PackModelRules.Sections.Length+1} sections that need models in {clock.ElapsedMilliseconds} ms");
         var expected = JsonNode.Parse(File.ReadAllText(python,Encoding.UTF8))!.AsObject();
         var differences = new List<string>();
         if (!expected.Select(p => p.Key).Order().SequenceEqual(sections.Keys.Order())) differences.Add("sections: "+string.Join(", ",sections.Keys));
         foreach (var (path,value) in expected)
             if (sections.TryGetValue(path,out var built)) JsonCompare.Compare(value,built,path,differences);
-        check(differences.Count == 0,$"Every rule section equals the Python import's: {string.Join(", ",PackRules.Sections.Concat(PackModelRules.Sections))}"
+        check(differences.Count == 0,$"Every rule section equals the Python import's: {string.Join(", ",PackRules.Sections.Concat(PackModelRules.Sections).Append(PackCombat.DefensesSection))}"
             +string.Concat(differences.Take(30).Select(d => "\n  "+d))+(differences.Count > 30 ? $"\n  ... {differences.Count} in all" : ""));
     }
 }

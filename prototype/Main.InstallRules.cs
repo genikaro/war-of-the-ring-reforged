@@ -83,7 +83,7 @@ public partial class Main
         return built == null ? null : relative == CombatRulesFile ? built.Value.Rules : built.Value.Blood;
     }
 
-    /// <summary>PackRules' sections, and PackModelRules' when the archives are open and give them.</summary>
+    /// <summary>PackRules' sections, and PackModelRules' and the construction defenses when the archives are open.</summary>
     private static Dictionary<string,System.Text.Json.Nodes.JsonNode> BuildInstallRules(string install)
     {
         var rules = PackRules.FromInstall(install,GameText.Language,GamePaths.Root);
@@ -91,6 +91,8 @@ public partial class Main
         try
         {
             foreach (var (path,value) in PackModelRules.Build(models.Db,models.Archives)) rules[path] = value;
+            // Build-204: the construction section's defenses (projectiles, sounds, trails) complete it.
+            rules[PackCombat.DefensesSection] = new PackCombat(models.Db,models.Archives,GamePaths.Root).Defenses();
         }
         catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException
             or InvalidCastException or IndexOutOfRangeException or ArgumentException or InvalidOperationException or NullReferenceException)

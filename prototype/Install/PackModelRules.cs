@@ -7,7 +7,8 @@ namespace Reforged.Install;
 /// <summary>Build-199: the content pack's rule sections that need the install's models as well as its database, built
 /// at startup beside PackRules' and put in place of the pack's by CacheManifest: the pack's models list (unit, file, the
 /// clips moved in place, the idle, walk, attack and death clips: prepare_prototype.export_units), skirmish.economy
-/// (skirmish_economy.economy_data: the workers' gather clips) and skirmish.construction except its defenses
+/// (skirmish_economy.economy_data: the workers' gather clips) and skirmish.construction except its defenses (those are
+/// PackCombat.Defenses', build-204)
 /// (skirmish_construction.construction_data without sites and placement_data, with the oriented-collision footprints of
 /// skirmish_map.building_footprint). tests/formats --python-rules compares them with tools/rules_fingerprint.py.</summary>
 public static class PackModelRules

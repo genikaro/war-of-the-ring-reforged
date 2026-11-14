@@ -64,7 +64,7 @@ assets, previews, validation reports and portable tools stay in ignored
 | `gltf_fingerprint.py` | Build-197 (`--pack` build-198: the pack's model files post-processed as the import writes them): every model the content pack exports converted by `lms2gltf.convert_model` from the given install, compared by JSON with accessor bytes and image pixels in place of offsets, for `tests/formats --python-gltf`; `--dump` prints one. |
 | `resolve_fingerprint.py` | Build-196: every Models record resolved by `resolve_model.py` from the given install (its own extracted layout in a temporary folder), hashed in the canonical form, for `tests/formats --python-resolve`; `--dump` prints one. |
 | `combat_fingerprint.py` | Build-203: `combat/rules.json` and `combat/blood.json` as `combat_rules.export` and `blood_effects.export` build them from the given install (its own extracted layout in a temporary folder), for `tests/formats --python-combat` to check `PackCombat` against. |
-| `rules_fingerprint.py` | Build-194: the content pack's seven database-only rule sections as the import builds them, for `tests/formats --python-rules` to check `PackRules` against. Build-199: also the sections that need models (the `models` list, `skirmish.economy`, `skirmish.construction` but its defenses, key by key), from a layout of the install, for `PackModelRules`. |
+| `rules_fingerprint.py` | Build-194: the content pack's seven database-only rule sections as the import builds them, for `tests/formats --python-rules` to check `PackRules` against. Build-199: also the sections that need models (the `models` list, `skirmish.economy`, `skirmish.construction` key by key; build-204 its defenses), from a layout of the install, for `PackModelRules` and `PackCombat.Defenses`. |
 | `import_install.py` | Build-188, the launcher's import: check an install parses (`--check`), then extract it, build the content pack, menu art and every map (in parallel) and record it in `converted/install.json`. Progress lines start with `@reforged `. |
 | `viewer.html` | three.js viewer with unit and clip pickers (`?clip=Name`, `?t=0.5` freezes a frame). |
 
@@ -120,8 +120,8 @@ archives open in about 25 ms, 678 MB of files read in 1.0 s on one thread, the 1
 all 13,666 files and 264,243 values match (13,654 files on the Russian install). `--python-text` builds the original
 text from the install and requires it to equal `game_text.py --out`'s, key for key: it does on both installs, built in
 about 90 ms. `--python-rules` does the same for the rule sections against `rules_fingerprint.py`'s (an integer
-there must be an integer here too): all 19 equal on both installs, the seven database-only ones built in about 50 ms
-and the twelve that need models (build-199) in about 0.35 s. `--python-models` parses every
+there must be an integer here too): all 20 equal on both installs, the seven database-only ones built in about 50 ms
+and the thirteen that need models (builds 199 and 204) in about 0.3 s. `--python-models` parses every
 model, effect and projectile file and requires each reading to hash as `models_fingerprint.py`'s does: all 7,749
 readings of the 5,354 files match on both installs (about 35 s in Python on all cores, 0.1 s in C# on one thread). `--python-resolve` resolves
 every Models record and requires it to hash as `resolve_fingerprint.py`'s does: all 2,108 match on both installs.

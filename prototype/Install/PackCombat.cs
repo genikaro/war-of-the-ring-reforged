@@ -17,7 +17,8 @@ public sealed partial class PackCombat
     private readonly LqrDatabase _db;
     private readonly ModelResolver _resolver;
     private readonly string _root;
-    private readonly Dictionary<string,string> _sources = [];
+    /// <summary>The files traced so far: the rules' Sources (each defense collects its own: PackCombat.Defenses).</summary>
+    private Dictionary<string,string> _sources = [];
     private readonly Dictionary<string,Dictionary<string,object?>> _effects = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string,(int Width,int Height)> _sizes = new(StringComparer.OrdinalIgnoreCase);
 
