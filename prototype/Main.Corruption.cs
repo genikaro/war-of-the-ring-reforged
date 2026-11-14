@@ -17,7 +17,7 @@ public partial class Main
         for (int n = 1; n <= 3; n++)
             try
             {
-                var image = Image.LoadFromFile(CachePath($"terrain/corruption_tile_0{n}.png"));
+                var image = InstallFiles.LoadImage(CachePath($"terrain/corruption_tile_0{n}.png"));
                 if (image == null) continue;
                 image.GenerateMipmaps(); tiles.Add(ImageTexture.CreateFromImage(image));
             }

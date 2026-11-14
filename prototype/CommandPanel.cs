@@ -317,12 +317,12 @@ public partial class CommandPanel : Control
     public void LoadArtwork(string cache,SimWorld world,bool evil = false)
     {
         _rules = world.Rules; _world = world;
-        var index = JsonDocument.Parse(System.IO.File.ReadAllText(System.IO.Path.Combine(cache,"interface/index.json"))).RootElement;
+        var index = JsonDocument.Parse(InstallFiles.ReadText(System.IO.Path.Combine(cache,"interface/index.json"))).RootElement;
         foreach (var asset in index.GetProperty("assets").EnumerateObject())
         {
             string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(cache,asset.Value.GetProperty("file").GetString()!));
             if (!path.StartsWith(System.IO.Path.GetFullPath(cache)+System.IO.Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Interface asset escapes cache");
-            using var image = Image.LoadFromFile(path);
+            using var image = InstallFiles.LoadImage(path);
             var texture = ImageTexture.CreateFromImage(image);
             _art[asset.Name] = asset.Value.TryGetProperty("frame_count",out var frames)
                 ? LoadFateOrb(asset.Name,texture,frames.GetInt32(),asset.Value.GetProperty("frame_ms").GetInt32())

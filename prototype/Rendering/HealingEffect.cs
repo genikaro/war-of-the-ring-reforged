@@ -25,7 +25,7 @@ public sealed class HealingEffect
             var frames = layer.GetProperty("Frames").EnumerateArray().Select(frame => {
                 string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(cache,frame.GetString()!));
                 if (!path.StartsWith(prefix,StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Healing texture escapes cache");
-                using var image = Image.LoadFromFile(path); image.GenerateMipmaps();
+                using var image = InstallFiles.LoadImage(path); image.GenerateMipmaps();
                 return (Texture2D)ImageTexture.CreateFromImage(image);
             }).ToArray();
             var keys = layer.GetProperty("Keys").EnumerateArray().Select(key => new HealingKey(key.GetProperty("Time").GetDouble(),

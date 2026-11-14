@@ -97,11 +97,13 @@ public sealed partial class PackCombat
             var (atlasWidth,atlasHeight) = ImageSize(texture);
             var rect = List(uva["rect"]).Select(D).ToArray();
             double x = rect[0], y = rect[1], width = rect[2], height = rect[3];
-            CropRect(x,y,width,height,atlasWidth,atlasHeight);
-            for (long frame = 0; frame < frameCount; frame++) CropRect(x+frame%perRow*width,y+frame/perRow*height,width,height,atlasWidth,atlasHeight);
+            var tiles = new List<(long,long,long,long)> { CropRect(x,y,width,height,atlasWidth,atlasHeight) };
+            for (long frame = 0; frame < frameCount; frame++) tiles.Add(CropRect(x+frame%perRow*width,y+frame/perRow*height,width,height,atlasWidth,atlasHeight));
+            string grid = $"combat/blood/{record.Name.ToLowerInvariant()}_{index}_{name.ToLowerInvariant()}.png";
+            _images?.AddGrid(grid,texture,tiles[1..],(int)columns,(int)rows);
             layers.Add(new JsonObject
             {
-                ["Name"] = name, ["Texture"] = $"combat/blood/{record.Name.ToLowerInvariant()}_{index}_{name.ToLowerInvariant()}.png",
+                ["Name"] = name, ["Texture"] = grid,
                 ["Columns"] = columns, ["Rows"] = rows, ["Frames"] = frameCount, ["FrameMs"] = Py(uva["frame_ms"]), ["RandomFrame"] = L(uva["start_mode"]) == 1,
                 ["DurationMs"] = Py(track["duration_ms"]), ["DelayMs"] = Py(track["delay_ms"]), ["Ground"] = Ground(track,emitter), ["Rests"] = Rests(track,emitter),
                 ["Keys"] = BloodKeys(track), ["Emitter"] = emitter,
@@ -116,7 +118,9 @@ public sealed partial class PackCombat
     private JsonObject Decal(int decalId)
     {
         var record = ById(T("Decals"),decalId);
-        ImageSize((string)_resolver.Texture(I(record,"FirstStageTexture"))!["file"]!);
+        string texture = (string)_resolver.Texture(I(record,"FirstStageTexture"))!["file"]!;
+        ImageSize(texture);
+        _images?.AddWhole($"combat/blood/{record.Name.ToLowerInvariant()}.png",texture,true);
         long Milli(string column) => Round(F(record,column)*1000);
         return new JsonObject
         {

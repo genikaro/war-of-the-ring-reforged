@@ -1,5 +1,20 @@
 # Godot C# skirmish sandbox
 
+**build-206:** the pack's pictures come from the install: the combat rules' sprite frames and blood grids and decals,
+the corruption tiles and the interface art with its index. `PackImages` (`prototype/Install`) makes each as the
+import writes it, a crop of an atlas `Images` decodes as Pillow does (pasted into a grid for blood, white with the
+original alpha for the selection rings, side by side for the Fate orb, the Settings frame cropped to its opaque
+part). `PackCombat` records how to make each picture as it names it in the rules; `PackImages.Interface` ports
+`prototype_interface.export` (the UVA globs in the import's order, cursor hotspots, the index's hashes and crops; about
+0.2 s); `AddCorruptionTiles` ports `content_pack.export_corruption_tiles`. Pictures are made on request; the decoded
+atlases are let go once a match has loaded. `InstallFiles` serves a pack picture or the interface index to the HUD,
+menu art, effects, blood and corruption loaders in place of the file, and Godot gets the pixels as they are
+(`Image.CreateFromData`). `tests/formats --python-files` now requires the interface index and all 1,265 pack
+pictures to equal the import's by their pixels, size and mode: they do on the English and Russian installs. A skirmish
+on Bilbo's Bluffs takes 1,163 pictures from the install (the log says how many). The skirmish, blood, Elven, hero
+skill, global power, Evil, menu and construction smokes pass and give the same reports with and without the install
+(the menu's load time aside); the placement smoke's swordsman stats check fails either way, as before.
+
 **build-205:** the game's audio comes from the install. `PackAudio` (`prototype/Install`) ports `game_audio.export`:
 the index (`audio/index.json`: the roster's speech events with weighted clips, the gameplay and melee impact sound
 events, the menu and faction music, the SHA-256 of every source) is built in the background from startup (about

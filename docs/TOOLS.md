@@ -88,6 +88,7 @@ the checks share them:
 | `Install/PackModels` | `content_pack.build`'s model exports, `prototype_assets.adapt` and `restore_building` | Build-198: the pack's unit, building, place-of-power and rally banner files built from the install as the import writes them; the game loads them from memory. |
 | `Install/OriginalText` | `game_text.py` `build` | Build-193: the original text as the game reads it, built from the install at startup ([LOCALIZATION.md](LOCALIZATION.md)). |
 | `Install/PackModelRules`, `PyDecimal` | `prepare_prototype.export_units`' models list, `skirmish_economy.economy_data`, `skirmish_construction.construction_data` and `placement_data`, `skirmish_map.building_footprint`, Python's `decimal` | Build-199: the rule sections that need the models: clip names and in-place clips from a walk of the resolved model's skeletons (no glTF is built), worker clip lengths in ticks, building footprints from the oriented-collision boxes. `PyDecimal` is `Decimal(str(x))` with the default context's 28 digits. |
+| `Install/PackImages` | `prototype_interface.export`, `healing_visual.export_sprite_effect`'s and `blood_effects`' pictures, `content_pack.export_corruption_tiles` | Build-206: the pack's pictures (crops of atlases decoded as Pillow does) and the interface index, made on request; the game reads them through `InstallFiles`. |
 | `Install/PackAudio`, `MsAdpcm` | `game_audio.export`, `pcm_audio.decode_ms_adpcm` | Build-205: the audio index and its files (Ogg copied, PCM WAV copied, Microsoft ADPCM decoded to the byte), and the combat rules' sounds, built on request. |
 | `Install/PackCombat` | `combat_rules.export` with `hero_abilities`, `hero_skills`, `dwarf_abilities`, `ranger_abilities`, `elven_abilities`, `nature_abilities`, `evil_abilities`, `evil_upgrades`, `hero_experience`, `healing_visual`, `global_powers`; `blood_effects.export` | Build-203: the combat rules and blood table built from the install, in the background from startup. The files they name (sounds, sprite frames, effect and projectile models) are not written. `PyMath.Hypot` and `PyMath.Sum` are CPython's `math.hypot` and float `sum`. |
 | `Install/PackRules`, `Install/SkirmishCatalog` | `content_pack.faction_data`, `prepare_prototype.team_colors`, `skirmish_production`, `skirmish_research`, `places_of_power.export`, `skirmish_ai.export`, the `skirmish_map` lists | Build-194: the content pack's database-only rule sections, built from the install at startup in place of the pack's. Python's rounding is kept (`round` halves to even, `quantize` halves away from zero on the shortest decimal form, `//` floors). While the import still builds the pack, a change to these Python modules or lists needs the same change here; `--python-rules` fails until it is made. |
@@ -134,7 +135,8 @@ match on both installs. `--python-pack` does the same for the 89 content pack fi
 game builds them (about 1 s on all cores). `--python-combat` builds the combat rules and blood table and requires
 them to equal `combat_fingerprint.py`'s, section by section: they do on both installs, in about 0.75 s.
 `--python-files` builds the pack's files the game builds from the install and requires each to equal what
-`pack_fingerprint.py` recorded: the audio index and all 2,514 audio files do on both installs.
+`pack_fingerprint.py` recorded: the audio index and all 2,514 audio files do on both installs, and (build-206) the
+interface index and all 1,265 pictures.
 
 Extract the archives once:
 

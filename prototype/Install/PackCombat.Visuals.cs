@@ -74,8 +74,10 @@ public sealed partial class PackCombat
                     if (Math.Min(ax,ay) < 0 || Math.Max(ax+aw,ay+ah) > 1.02) throw new InvalidDataException("source effect atlas overhang exceeds two percent");
                     (aw,ah) = (Math.Min(aw,1-ax),Math.Min(ah,1-ay));
                 }
-                CropRect(ax,ay,aw,ah,atlasWidth,atlasHeight);
-                frames.Add($"combat/{folder}/{name}_{frame}.png");
+                var box = CropRect(ax,ay,aw,ah,atlasWidth,atlasHeight);
+                string file = $"combat/{folder}/{name}_{frame}.png";
+                _images?.AddCrop(file,texture,box);
+                frames.Add(file);
             }
             layers.Add(new JsonObject { ["Name"] = name, ["DurationMs"] = Py(track["duration_ms"]), ["Frames"] = frames, ["Keys"] = LayerKeys(track) });
         }

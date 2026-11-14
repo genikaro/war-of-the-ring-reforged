@@ -41,10 +41,10 @@ public sealed class FrontEndArt
     private bool Index(string folder,string index)
     {
         string path = System.IO.Path.Combine(folder,index);
-        if (!System.IO.File.Exists(path)) return false;
+        if (!InstallFiles.Exists(path)) return false;
         try
         {
-            using var document = JsonDocument.Parse(System.IO.File.ReadAllText(path));
+            using var document = JsonDocument.Parse(InstallFiles.ReadText(path));
             foreach (var asset in document.RootElement.GetProperty("assets").EnumerateObject())
             {
                 _files[asset.Name] = Inside(folder,asset.Value.GetProperty("file").GetString()!);
@@ -69,9 +69,9 @@ public sealed class FrontEndArt
     {
         if (_textures.TryGetValue(name,out var cached)) return cached;
         Texture2D? texture = null;
-        if (_files.TryGetValue(name,out var file) && System.IO.File.Exists(file))
+        if (_files.TryGetValue(name,out var file) && InstallFiles.Exists(file))
         {
-            using var image = Image.LoadFromFile(file);
+            using var image = InstallFiles.LoadImage(file);
             texture = ImageTexture.CreateFromImage(image);
         }
         return _textures[name] = texture;

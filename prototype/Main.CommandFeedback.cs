@@ -26,9 +26,9 @@ public partial class Main
             string variant = unit.Hero ? "Solid" : "Faded";
             string path = CachePath($"interface/Selection_Ring_Gold_{faction}_{variant}.png");
             // Older local caches still work with the plain ring.
-            if (System.IO.File.Exists(path))
+            if (InstallFiles.Exists(path))
             {
-                using var image = Image.LoadFromFile(path);
+                using var image = InstallFiles.LoadImage(path);
                 image.GenerateMipmaps();
                 texture = ImageTexture.CreateFromImage(image);
             }

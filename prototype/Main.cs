@@ -391,6 +391,11 @@ public partial class Main : Node3D
         string audioPath = manifest.TryGetProperty("audio",out var audioIndex) ? audioIndex.GetString()! : "audio/index.json";
         var installAudio = _cacheFiles.FromPack(audioPath) ? await Task.Run(InstallAudio) : null;
         _audio.Load(CachePath(audioPath),installAudio?.Index,installAudio?.Files,CachePath,_cache,_cacheFiles.Content);
+        if (_installModels is { } installed)
+        {
+            installed.Images.Release(); // Build-206: the match's pictures are made; the decoded atlases can go.
+            GD.Print($"Pictures: {InstallFiles.PicturesServed} made from the install so far");
+        }
         PlayFactionMusic();
         ResetWorldAudio();
         if (_smoke)

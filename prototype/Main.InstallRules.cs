@@ -23,7 +23,7 @@ public partial class Main
     private const string CombatRulesFile = "combat/rules.json", BloodFile = "combat/blood.json";
 
     /// <summary>The install's archives and database, open for the session, and the models built from them.</summary>
-    private static (string Install,Reforged.Formats.GameArchives Archives,Reforged.Formats.LqrDatabase Db,PackModels Models,PackAudio Audio)? _installModels;
+    private static (string Install,Reforged.Formats.GameArchives Archives,Reforged.Formats.LqrDatabase Db,PackModels Models,PackAudio Audio,PackImages Images)? _installModels;
 
     /// <summary>Build-205: the audio index built from the install, as JSON text, in the background from startup.</summary>
     private static Task<string?>? _installAudio;
@@ -34,6 +34,34 @@ public partial class Main
     {
         if (_installModels is not { } install || _installAudio?.Result is not { } index) return null;
         return (index,relative => install.Audio.Has(relative,SkirmishCatalog.Roster) ? install.Audio.File(relative,SkirmishCatalog.Roster) : null);
+    }
+
+    /// <summary>Build-206: the pack's pictures and interface index from the install (InstallFiles). A combat picture waits
+    /// for the combat rules, which name it; an interface one for the interface index.</summary>
+    private static void UseInstallPictures(PackImages images)
+    {
+        var interfaceText = new Lazy<string?>(() => Guard(() => images.Interface().ToJsonString(),"the interface index"));
+        bool Ready(string relative)
+        {
+            if (relative.StartsWith("combat/",StringComparison.OrdinalIgnoreCase)) return _installCombat?.Build.Result != null;
+            return !relative.StartsWith("interface/",StringComparison.OrdinalIgnoreCase) || interfaceText.Value != null;
+        }
+        InstallFiles.Use(GamePaths.Data("converted/content/good"),
+            has: relative => Ready(relative) && images.Has(relative),
+            pictures: relative => Ready(relative) && images.Has(relative) ? Guard(() => images.Picture(relative),relative) : null,
+            texts: relative => relative == "interface/index.json" ? interfaceText.Value : null);
+    }
+
+    /// <summary>A build from the install, or null with a warning when the install cannot give it.</summary>
+    private static T? Guard<T>(Func<T> build,string what) where T : class
+    {
+        try { return build(); }
+        catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException
+            or InvalidCastException or NullReferenceException or InvalidOperationException or ArgumentException)
+        {
+            GD.PushWarning($"Install: cannot build {what} ({error.Message}); using the content pack's");
+            return null;
+        }
     }
 
     /// <summary>A combat sound (combat/sounds/) the install gives for a pack file, or null: it then comes from disk.</summary>
@@ -83,7 +111,7 @@ public partial class Main
             try
             {
                 var clock = System.Diagnostics.Stopwatch.StartNew();
-                var combat = new PackCombat(models.Db,models.Archives,GamePaths.Root);
+                var combat = new PackCombat(models.Db,models.Archives,GamePaths.Root,models.Images);
                 string rules = combat.Rules(SkirmishCatalog.Roster).ToJsonString(), blood = combat.Blood(SkirmishCatalog.Roster).ToJsonString();
                 GD.Print($"Combat: rules and blood built from the install in {clock.ElapsedMilliseconds} ms");
                 return (rules,blood);
@@ -131,6 +159,7 @@ public partial class Main
         _installModels?.Archives.Dispose();
         _installModels = null;
         _installAudio = null;
+        InstallFiles.Use(null);
         if (install == null) return;
         Reforged.Formats.GameArchives? archives = null;
         try
@@ -140,7 +169,10 @@ public partial class Main
             var models = new PackModels(db,archives);
             _ = models.Plan; // Which files the install gives, worked out now so a damaged database cannot fail a load.
             var audio = new PackAudio(db,archives);
-            _installModels = (install,archives,db,models,audio);
+            var images = new PackImages(db,archives);
+            images.AddCorruptionTiles();
+            _installModels = (install,archives,db,models,audio,images);
+            UseInstallPictures(images);
             _installAudio = Task.Run<string?>(() =>
             {
                 try

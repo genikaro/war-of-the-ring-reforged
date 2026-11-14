@@ -81,7 +81,7 @@ public sealed class BloodEffects
         {
             string full = System.IO.Path.GetFullPath(path(file));
             if (!full.StartsWith(prefix,StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Blood texture escapes content");
-            using var image = Image.LoadFromFile(full); image.GenerateMipmaps();
+            using var image = InstallFiles.LoadImage(full); image.GenerateMipmaps();
             return ImageTexture.CreateFromImage(image);
         }
         static Color Argb(uint v) => new((v>>16&255)/255f,(v>>8&255)/255f,(v&255)/255f,(v>>24)/255f);

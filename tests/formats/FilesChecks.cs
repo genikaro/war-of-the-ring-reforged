@@ -42,5 +42,44 @@ public static class FilesChecks
         Console.WriteLine($"Built {audioFiles.Count} audio files ({bytes/1e6:F0} MB) from the install in {clock.ElapsedMilliseconds} ms");
         var shown = mismatched.Order(StringComparer.Ordinal).ToList();
         check(shown.Count == 0,$"Every audio file equals the Python import's ({audioFiles.Count} files)"+string.Concat(shown.Take(20).Select(d => "\n  "+d)));
+        Pictures(files,expected,db,archives,check);
+    }
+
+    /// <summary>Build-206: the interface index whole, and every picture of the pack by its pixels, size and mode.</summary>
+    private static void Pictures(JsonObject files,JsonObject expected,LqrDatabase db,GameArchives archives,Action<bool,string> check)
+    {
+        var clock = Stopwatch.StartNew();
+        var images = new PackImages(db,archives);
+        var combat = new PackCombat(db,archives,Directory.GetCurrentDirectory(),images);
+        combat.Rules(SkirmishCatalog.Roster);
+        combat.Blood(SkirmishCatalog.Roster);
+        images.AddCorruptionTiles();
+        long named = clock.ElapsedMilliseconds;
+        var ui = images.Interface();
+        Console.WriteLine($"Named the combat rules' pictures from the install in {named} ms, the interface's in {clock.ElapsedMilliseconds-named} ms");
+        var differences = new List<string>();
+        JsonCompare.Compare(expected["indexes"]!["interface/index.json"],ui,"interface/index.json",differences);
+        check(differences.Count == 0,"The interface index equals the Python import's"+string.Concat(differences.Take(30).Select(d => "\n  "+d)));
+        var pictures = files.Select(p => p.Key).Where(f => f.EndsWith(".png",StringComparison.Ordinal)).ToList();
+        var mismatched = new System.Collections.Concurrent.ConcurrentBag<string>();
+        clock.Restart();
+        Parallel.ForEach(pictures,file =>
+        {
+            try
+            {
+                if (!images.Has(file)) { mismatched.Add(file+": not built here"); return; }
+                var picture = images.Picture(file);
+                var want = files[file]!;
+                string mode = picture.Alpha ? "RGBA" : "RGB";
+                if (Convert.ToHexStringLower(SHA256.HashData(picture.Pixels)) != want["pixels"]!.GetValue<string>() || mode != want["mode"]!.GetValue<string>()
+                    || picture.Width != want["size"]![0]!.GetValue<int>() || picture.Height != want["size"]![1]!.GetValue<int>())
+                    mismatched.Add($"{file}: differs ({picture.Width}x{picture.Height} {mode})");
+            }
+            catch (Exception error) when (error is InvalidDataException or FileNotFoundException or KeyNotFoundException) { mismatched.Add($"{file}: {error.Message}"); }
+        });
+        Console.WriteLine($"Made {pictures.Count} pictures from the install in {clock.ElapsedMilliseconds} ms");
+        var shown = mismatched.Order(StringComparer.Ordinal).ToList();
+        check(shown.Count == 0,$"Every picture equals the Python import's ({pictures.Count} files)"+string.Concat(shown.Take(25).Select(d => "\n  "+d))
+            +(shown.Count > 25 ? $"\n  ... {shown.Count} in all" : ""));
     }
 }

@@ -22,13 +22,18 @@ public sealed partial class PackCombat
     private readonly Dictionary<string,Dictionary<string,object?>> _effects = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string,(int Width,int Height)> _sizes = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Build-206: where the pictures the rules name are recorded, so they can be made (null: not recorded).</summary>
+    private readonly PackImages? _images;
+
     /// <param name="root">The folder database paths are given relative to (the data folder), as the import names them
     /// relative to the repository.</param>
-    public PackCombat(LqrDatabase db,GameArchives archives,string root)
+    /// <param name="images">Records how to make each sprite frame, blood grid and decal the rules name.</param>
+    public PackCombat(LqrDatabase db,GameArchives archives,string root,PackImages? images = null)
     {
         _db = db;
         _resolver = new ModelResolver(db,archives);
         _root = Path.GetFullPath(root);
+        _images = images;
     }
 
     // combat_rules.RANGED_UNITS and friends.
