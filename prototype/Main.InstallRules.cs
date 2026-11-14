@@ -161,6 +161,9 @@ public partial class Main
         _installModels?.Archives.Dispose();
         _installModels = null;
         _installMap = null;
+        _installPreviews = null;
+        SetupScreen.InstallMaps = null;
+        InstallFiles.UseMap(null);
         _installAudio = null;
         InstallFiles.Use(null);
         if (install == null) return;
@@ -175,6 +178,7 @@ public partial class Main
             var images = new PackImages(db,archives);
             images.AddCorruptionTiles();
             _installModels = (install,archives,db,models,audio,images,new PackMap(db,archives));
+            SetupScreen.InstallMaps = InstallMapPreviews; // Build-210: the setup screens list the install's maps.
             UseInstallPictures(images);
             _installAudio = Task.Run<string?>(() =>
             {

@@ -161,7 +161,8 @@ public static class ClassicLighting
 
     private static ImageTexture Texture(string path)
     {
-        var image = Image.LoadFromFile(path) ?? throw new InvalidOperationException("Cannot read "+path);
+        // Build-210: a map built from the install gives its pictures from memory.
+        var image = InstallFiles.LoadImage(path) ?? throw new InvalidOperationException("Cannot read "+path);
         image.GenerateMipmaps();
         return ImageTexture.CreateFromImage(image);
     }

@@ -27,7 +27,8 @@ public partial class SetupScreen : Control
 {
     public enum SetupKind { Skirmish,Sandbox }
     public sealed record MapEntry(string Stem,string Title,string? Cache,int Players,(int X,int Z)[] Bases,(bool Food,int X,int Z)[] Resources,
-        int WidthMm,int HeightMm,Color[] Colors,AiBotOption[] Personalities,string DefaultPersonality,bool Sandbox = false)
+        int WidthMm,int HeightMm,Color[] Colors,AiBotOption[] Personalities,string DefaultPersonality,bool Sandbox = false,
+        Reforged.Install.MapPreview? Preview = null)
     {
         public bool Imported => Cache != null;
     }
@@ -263,7 +264,7 @@ public partial class SetupScreen : Control
             }
             choice.Select(pick);
         }
-        if (map.Imported && map.Cache != null && !_terrain.ContainsKey(map.Cache)) _terrain[map.Cache] = Terrain(map.Cache);
+        if (map.Imported && map.Cache != null && !_terrain.ContainsKey(map.Cache)) _terrain[map.Cache] = Terrain(map);
         _cardSlot = -1;
         Refresh();
     }
@@ -417,12 +418,18 @@ public partial class SetupScreen : Control
         _status.Text = $"Loading {_selected?.Title}…";
     }
 
+    /// <summary>Build-210: the install's maps and their previews, when an install is open (Main sets it).</summary>
+    public static Func<IReadOnlyDictionary<string,Reforged.Install.MapPreview?>?>? InstallMaps { get; set; }
+
     /// <summary>Every source multiplayer map (extracted/Levels/Multiplayer) and every imported cache. Bilbo's Bluffs
-    /// lives in converted/skirmish, the others in converted/skirmish-maps/&lt;stem&gt;. Sorted by player count, then title.</summary>
+    /// lives in converted/skirmish, the others in converted/skirmish-maps/&lt;stem&gt;. Sorted by player count, then title.
+    /// Build-210: with an install, its maps, previewed from it; their folders need not exist.</summary>
     private static List<MapEntry> FindMaps(string converted,string sources)
     {
         const string bilbo = "MP02_Bilbos_Bluffs";
         var stems = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        var previews = InstallMaps?.Invoke();
+        if (previews != null) stems.UnionWith(previews.Keys);
         if (Directory.Exists(sources)) foreach (var file in Directory.GetFiles(sources,"MP*.wor")) stems.Add(Path.GetFileNameWithoutExtension(file));
         var imported = Path.Combine(converted,"skirmish-maps");
         if (Directory.Exists(imported)) foreach (var folder in Directory.GetDirectories(imported)) stems.Add(Path.GetFileName(folder));
@@ -431,7 +438,11 @@ public partial class SetupScreen : Control
         stems.Add(SandboxStem);
         return [.. stems.Select(stem => {
             string cache = stem.Equals(bilbo,StringComparison.OrdinalIgnoreCase) ? Path.Combine(converted,"skirmish") : Path.Combine(imported,stem);
-            try { if (File.Exists(Path.Combine(cache,"manifest.json"))) return Read(stem,cache); }
+            try
+            {
+                if (previews?.GetValueOrDefault(stem) is { } preview) return Read(stem,cache,preview);
+                if (File.Exists(Path.Combine(cache,"manifest.json"))) return Read(stem,cache);
+            }
             catch (Exception error) when (error is JsonException or IOException or KeyNotFoundException or InvalidOperationException or FormatException) { GD.PushWarning($"Skipping {stem}: {error.Message}"); }
             return stem == SandboxStem ? new MapEntry(stem,MapTitle(stem,stem),null,2,[],[],0,0,[],[],"",Sandbox: true)
                 : new MapEntry(stem,MapTitle(stem,Regex.Replace(stem,@"^MP\d\d_","").Replace('_',' ')),null,Players(stem),[],[],0,0,[],[],"");
@@ -443,10 +454,10 @@ public partial class SetupScreen : Control
 
     private static int Players(string stem) => Regex.Match(stem,@"^MP(\d\d)") is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
 
-    private static MapEntry Read(string stem,string cache)
+    private static MapEntry Read(string stem,string cache,Reforged.Install.MapPreview? preview = null)
     {
         // Team colours and AI personalities come from the content pack the map cache names (build-48).
-        var manifest = CacheManifest.Load(cache).Root;
+        var manifest = CacheManifest.Load(cache,preview?.Manifest.ToJsonString()).Root;
         var skirmish = manifest.GetProperty("skirmish");
         (int,int) Ground(JsonElement at) => ((int)Math.Round(at[0].GetDouble()*1000),(int)Math.Round(at[1].GetDouble()*1000));
         var bases = skirmish.GetProperty("bases").EnumerateArray().OrderBy(b => b.GetProperty("team").GetInt32()).Select(b => Ground(b.GetProperty("position"))).ToArray();
@@ -460,6 +471,10 @@ public partial class SetupScreen : Control
                 .Select(p => new AiBotOption(p.GetProperty("id").GetString()!,p.GetProperty("difficulty").GetInt32())));
             fallback = ai.GetProperty("default_personality").GetString()!;
         }
+        if (preview != null)
+            return new(stem,MapTitle(stem,manifest.GetProperty("name").GetString()!.Split(" — ")[0]),cache,bases.Length,bases,resources,
+                preview.Width*preview.CellSizeMm,preview.Height*preview.CellSizeMm,colors,personalities,fallback,
+                Sandbox: manifest.TryGetProperty("sandbox",out var previewSandbox) && previewSandbox.GetBoolean(),Preview: preview);
         // The navigation file opens with its size; reading the head spares parsing megabytes for every map.
         using var reader = new StreamReader(Path.Combine(cache,"navigation.json"));
         var head = new char[400]; string start = new(head,0,reader.Read(head,0,head.Length));
@@ -469,15 +484,26 @@ public partial class SetupScreen : Control
             Sandbox: manifest.TryGetProperty("sandbox",out var sandbox) && sandbox.GetBoolean());
     }
 
-    /// <summary>The map's walkable ground shaded by height, north up like the in-game minimap.</summary>
-    private static ImageTexture? Terrain(string cache)
+    /// <summary>The map's walkable ground shaded by height, north up like the in-game minimap; build-210: from the
+    /// install's preview when it has one.</summary>
+    private static ImageTexture? Terrain(MapEntry map)
     {
+        string cache = map.Cache!;
         try
         {
-            var nav = JsonDocument.Parse(File.ReadAllText(Path.Combine(cache,"navigation.json"))).RootElement;
-            int width = nav.GetProperty("width").GetInt32(),height = nav.GetProperty("height").GetInt32();
-            var allowed = Convert.FromBase64String(nav.GetProperty("allowed_base64").GetString()!);
-            var heights = File.ReadAllBytes(Path.Combine(cache,"heights.bin"));
+            int width, height; byte[] allowed, heights;
+            if (map.Preview is { } preview)
+            {
+                (width,height) = (preview.Width,preview.Height);
+                (allowed,heights) = preview.Ground();
+            }
+            else
+            {
+                var nav = JsonDocument.Parse(File.ReadAllText(Path.Combine(cache,"navigation.json"))).RootElement;
+                width = nav.GetProperty("width").GetInt32(); height = nav.GetProperty("height").GetInt32();
+                allowed = Convert.FromBase64String(nav.GetProperty("allowed_base64").GetString()!);
+                heights = File.ReadAllBytes(Path.Combine(cache,"heights.bin"));
+            }
             using var image = Image.CreateEmpty(width,height,false,Image.Format.Rgba8);
             for (int z = 0; z < height; z++) for (int x = 0; x < width; x++)
             {

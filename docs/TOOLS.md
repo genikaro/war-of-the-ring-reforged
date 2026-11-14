@@ -64,6 +64,7 @@ assets, previews, validation reports and portable tools stay in ignored
 | `gltf_fingerprint.py` | Build-197 (`--pack` build-198: the pack's model files post-processed as the import writes them): every model the content pack exports converted by `lms2gltf.convert_model` from the given install, compared by JSON with accessor bytes and image pixels in place of offsets, for `tests/formats --python-gltf`; `--dump` prints one. |
 | `resolve_fingerprint.py` | Build-196: every Models record resolved by `resolve_model.py` from the given install (its own extracted layout in a temporary folder), hashed in the canonical form, for `tests/formats --python-resolve`; `--dump` prints one. |
 | `pack_fingerprint.py` | Build-205: the whole content pack built the Python way from the given install (archives extracted into a temporary folder), every file it writes recorded: a PNG by its decoded pixels, a GLB in `gltf_fingerprint`'s form, anything else by its bytes; and the audio and interface indexes whole. For `tests/formats --python-files`. |
+| `scene_fingerprint.py` | Build-210: every multiplayer map's scene exported by `wor2gltf.export` from the given install's extracted archives (a temporary folder), in `gltf_fingerprint`'s form with the extras' source path left out, each top-level key hashed, and `map_lighting.write_images`' pictures by their pixels; for `tests/formats --python-scenes`; `--dump` writes one map's scene whole, for `--compare-scene`. |
 | `map_fingerprint.py` | Build-209: every multiplayer map's cache built by `prepare_prototype.prepare_skirmish` from a layout of the given install, without the scene, the clearance bodies from a given `content.json`: the manifest, `heights.bin` and `navigation.json` in pieces (each top-level value, obstacle layer and body profile hashed by value), for `tests/formats --python-maps`; `--dump` writes one map whole, for `--compare-map`. |
 | `world_fingerprint.py` | Build-208: every level of Levels.H2O read by `world_scene.parse` and resolved against the install's database, the part the game reads hashed in the canonical form, for `tests/formats --python-worlds`; `--dump` prints one. |
 | `combat_fingerprint.py` | Build-203: `combat/rules.json` and `combat/blood.json` as `combat_rules.export` and `blood_effects.export` build them from the given install (its own extracted layout in a temporary folder), for `tests/formats --python-combat` to check `PackCombat` against. |
@@ -86,6 +87,7 @@ the checks share them:
 | `LmsMesh`, `LskSkeleton`, `LwtWeights`, `LmdModel` | `lms.py`, `lsk.py`, `lwt.py`, `lmd.py`, `lmd_states.py` | Build-195: meshes (footer on request), skeletons with clips, skin weights, and models with their states, tracks, attachments, boxes, cloth volumes and clip events. Field names follow the Python's in the checks' canonical form. |
 | `PresentationAssets.Lfx`, `.Lpo` | `lfx.py`, `lpo.py` | Build-200: effects (tracks, transforms, atlas descriptors, emitters) and projectiles (keys, behaviour, actions, events, launch sounds), as dictionaries with the Python's keys and value types. |
 | `World` | `wor.py`, `world_scene.py` `parse`, `resolve_objects`, `region_cells` | Build-208: a level: header, terrain vertices and heights, name table, terrain layers and environment, placed objects and effects with what they resolve to, pathing bitsets and region graphs, lakes, the tail's lighting, grass, markers and decals. |
+| `Install/MapScene`, `Install/MapPictures` | `wor2gltf.export` with `map_decals`, `world_scene.resolve_decals`, `terrain_set.parse`'s checks; `map_lighting.write_images` with Pillow's Lanczos resize | Build-210: a map's scene as glTF (terrain, water, decals, placed models) and its cloud map and skybox faces, built while a match loads. |
 | `Install/PackMap`, `Install/MapNavigation`, `Install/MapGeometry` | `prepare_prototype.prepare_skirmish` (no scene), `build_navigation`, `skirmish_map`, `skirmish_construction.construction_data`'s sites, `prototype_navigation`, `prototype_obstacles`, `prototype_clearance`, `verify_walker_masks.audit_category`, `map_lighting.lighting` | Build-209: a skirmish map's manifest, heights and navigation with every body's clearance, built at load time; `PyMath.Dist` and `FloorDiv` are `math.dist` and float `//`. |
 | `Install/ModelResolver`, `PresentationAssets`, `Install/PyMath` | `resolve_model.py`, `cth.py`, `texture_animation.parse_uva` | Build-196: a model record to its files, states, attachments, events and cloth, as nested dictionaries with the Python's keys and `extracted/` file names; cloth grids and texture animations; Python's `round(x, n)`. |
 | `Install/ModelGltf`, `Images` | `lms2gltf.convert_model`, `model_appearance.py`, Pillow's DDS and TGA decoding | Build-197: a resolved model as glTF (JSON as dictionaries, the binary buffer, each image's pixels; `Glb()` writes the file), and DXT1/DXT5/TGA decoding with PNG encoding. |
@@ -124,6 +126,8 @@ python tools/world_fingerprint.py "Legacy/Game EN" artifacts/worlds-en.json
 dotnet run --project tests/formats -c Release -- --install "Legacy/Game EN" --python-worlds artifacts/worlds-en.json
 python tools/map_fingerprint.py "Legacy/Game EN" artifacts/maps-en.json --bodies converted/content/good/content.json
 dotnet run --project tests/formats -c Release -- --install "Legacy/Game EN" --python-maps artifacts/maps-en.json
+python tools/scene_fingerprint.py "Legacy/Game EN" artifacts/scenes-en.json
+dotnet run --project tests/formats -c Release -- --install "Legacy/Game EN" --python-scenes artifacts/scenes-en.json
 ```
 
 The first runs 50 checks on synthetic archives, tables, text, rule rounding, model files, model resolution, DDS and PNG. `--install` reads and CRC-checks every archive file and
@@ -148,7 +152,9 @@ interface index and all 1,265 pictures, and (build-207) all 110 model files. `--
 level and requires it to hash as `world_fingerprint.py`'s does: all 54 do on both installs. `--python-maps` (build-209)
 builds every multiplayer map's manifest, heights and navigation and requires them to equal `map_fingerprint.py`'s: all
 32 do on both installs (about 12 minutes in Python on all cores, 17 s in C#). `--time-maps <content.json> [stem]` times
-the builds; `--compare-map <stem> <dump> <content.json>` lists every difference against one `--dump`.
+the builds; `--compare-map <stem> <dump> <content.json>` lists every difference against one `--dump`. `--python-scenes`
+(build-210) builds every map's scene and lighting pictures and requires them to equal `scene_fingerprint.py`'s: all 32
+do on both installs (11 s in C#).
 
 Extract the archives once:
 

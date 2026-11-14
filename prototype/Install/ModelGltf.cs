@@ -275,7 +275,7 @@ public static class ModelGltf
 
     // ---- JSON ---------------------------------------------------------------------------------------------------
 
-    internal static void WriteJson(Utf8JsonWriter w,object? value)
+    public static void WriteJson(Utf8JsonWriter w,object? value)
     {
         switch (value)
         {

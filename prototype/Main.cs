@@ -286,7 +286,9 @@ public partial class Main : Node3D
         await LoadingStep("Checking the map files",.03f);
         await Task.Run(_cacheFiles.Verify);
         await PrepareInstallModels();
-        _lighting = MapLighting.FromManifest(manifest,CachePath);
+        UseInstallMapPictures(); // Build-210: the cloud map and skybox of a map built from the install.
+        _lighting = MapLighting.FromManifest(manifest,relative => _mapFromInstall && relative.StartsWith("map/",StringComparison.Ordinal)
+            ? System.IO.Path.Combine(_cache,relative) : CachePath(relative));
         ClassicLighting.Apply(_lighting);
         _presentation.Classic = true; _presentation.CloudMap = ClassicLighting.CloudMap(_lighting);
         if (manifest.TryGetProperty("team_colors", out var colors))
@@ -321,7 +323,9 @@ public partial class Main : Node3D
             _world.BuildingGround = Convert.FromBase64String(building.GetString()!).Select(b => b != 0).ToArray();
         _picker = NavigationPicker.FromCache(navigation, nav);
         await LoadingStep("Loading the terrain",.32f);
-        var map = LoadGlb(manifest.GetProperty("map").GetString()!); AddChild(map);
+        string mapScene = manifest.GetProperty("map").GetString()!;
+        var installScene = await Task.Run(InstallSceneGlb); // Build-210: built from the install while the rest loaded.
+        var map = installScene != null ? _presentation.Load(installScene,mapScene) : LoadGlb(mapScene); AddChild(map);
         _terrainMesh = Descendants(map).OfType<MeshInstance3D>().FirstOrDefault(m => m.Name == "Terrain");
         var gate = Descendants(map).OfType<Node3D>().FirstOrDefault(n => n.Name.ToString() == "MAIN_GATE");
         _fortressFocus = gate?.GlobalPosition + new Vector3(17, 0, -4)
@@ -1481,7 +1485,7 @@ public partial class Main : Node3D
                 hud_bounds = new[] { _commands.GetGlobalRect().Position.X,_commands.GetGlobalRect().Position.Y,
                     _commands.GetGlobalRect().Size.X,_commands.GetGlobalRect().Size.Y },
                 map_sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-                    System.IO.File.ReadAllBytes(System.IO.Path.Combine(_cache, "map/scene.glb")))).ToLowerInvariant(),
+                    InstallSceneGlb() ?? System.IO.File.ReadAllBytes(System.IO.Path.Combine(_cache, "map/scene.glb")))).ToLowerInvariant(),
                 lighting = _lighting.Metadata,
                 imports = _presentation.Imports, original_game_fidelity_verified = false };
             System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(destination, ".json"),

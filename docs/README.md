@@ -1,5 +1,28 @@
 # Godot C# skirmish sandbox
 
+**build-210:** the skirmish maps come from the install whole, so a match needs no map cache folder. `MapScene`
+(`prototype/Install`) ports `wor2gltf.export`: the terrain in one primitive per texture (normals from numpy's gradient,
+the squares summed left to right as `np.linalg.norm` does, vertex colours), the lakes' painted surfaces, the editor
+and object decals clipped to the terrain (`map_decals.py`, `world_scene.resolve_decals`), and every placed object as
+an instance of its converted model (each model converted once with `ModelGltf`, on all cores, and cloned per
+placement, skinned roots kept as scene roots), the walkable helpers without materials keeping their meshes out.
+`MapPictures` ports `map_lighting.write_images`: the cloud map and the skybox faces, a face that is not 512 x 512
+resized with Pillow's Lanczos filter, ported to the pixel (Resample.c's coefficients in 22-bit fixed point, the
+horizontal pass over the rows the vertical one reads). The scene and pictures are built on worker threads from the
+moment a match knows its map (0.7-1 s with the GLB written, alongside the rules and navigation loading), and
+Godot takes the GLB from memory; the lighting reads its pictures through `InstallFiles`. The setup screens list the
+install's maps and preview each from it (`PackMap.Preview`: the bases, resources and size, on all cores the first
+time, about 0.5 s for the 32 maps; the minimap ground when a map is chosen), so a map needs no folder to be listed or played.
+`tools/scene_fingerprint.py` exports every map's scene the Python way from an install and records it in
+`gltf_fingerprint`'s form with its lighting pictures by their pixels; `tests/formats --python-scenes` requires the C#
+ones to equal them: all 32 maps' scenes and pictures do on the English and Russian installs (`--compare-scene` lists
+every difference against one `--dump`). `run.ps1 -Data <folder>` runs on another data folder (`--data`): a skirmish
+on Bilbo's Bluffs from a folder holding only the content pack and the menu art gives the same report as one from the
+repository's caches. The skirmish, construction, minimap and setup smokes (the setup smoke previews all 32 maps
+and plays the 8-player Boneyard) give the same reports with the Russian install as without it, and the observer smoke
+on Mighty Silverlode ends in the same state digest at the same tick (its timeline samples frame-dependent ticks, as
+before). The simulation checks pass.
+
 **build-209:** a skirmish map's navigation, heights and start layout come from the install, built while the match
 loads. `PackMap` (`prototype/Install`) ports `prepare_prototype.prepare_skirmish` but its scene: the start points from
 the editor markers, each Citadel moved off the resources and unbuildable ground as `skirmish_map.start_position` moves

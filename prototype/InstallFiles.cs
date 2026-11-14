@@ -42,10 +42,29 @@ public static class InstallFiles
     public static int PicturesServed => _served;
     private static int _served;
 
-    /// <summary>A picture: the install's pixels when it gives the pack's file, else the file.</summary>
+    private static string? _map;
+    private static Func<string,Picture?>? _mapPictures;
+
+    /// <summary>Build-210: serves a map cache folder's pictures (map/clouds.png, map/sky-*.png) from the install's
+    /// builders, by their path in the folder; null stops it.</summary>
+    public static void UseMap(string? cache,Func<string,Picture?>? pictures = null)
+    {
+        _map = cache == null ? null : System.IO.Path.GetFullPath(cache).TrimEnd(System.IO.Path.DirectorySeparatorChar)+System.IO.Path.DirectorySeparatorChar;
+        _mapPictures = pictures;
+    }
+
+    private static Picture? MapPicture(string path)
+    {
+        if (_map == null || _mapPictures == null) return null;
+        string full = System.IO.Path.GetFullPath(path);
+        return full.StartsWith(_map,StringComparison.OrdinalIgnoreCase) ? _mapPictures(full[_map.Length..].Replace('\\','/')) : null;
+    }
+
+    /// <summary>A picture: the install's pixels when it gives the pack's file (or the map's, build-210), else the file.</summary>
     public static Image LoadImage(string path)
     {
-        if (Relative(path) is { } relative && _pictures?.Invoke(relative) is { } picture)
+        var picture = (Relative(path) is { } relative ? _pictures?.Invoke(relative) : null) ?? MapPicture(path);
+        if (picture != null)
         {
             Interlocked.Increment(ref _served);
             return Image.CreateFromData(picture.Width,picture.Height,false,picture.Alpha ? Image.Format.Rgba8 : Image.Format.Rgb8,picture.Pixels);

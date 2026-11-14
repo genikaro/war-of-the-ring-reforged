@@ -60,6 +60,31 @@ internal sealed class Exporter(ModelResolver resolver)
         return Accessors.Count-1;
     }
 
+    /// <summary>Build-210: unsigned int values (5125), the scene's index lists.</summary>
+    public int Uints(IReadOnlyList<int> values,string type = "SCALAR",int? target = null)
+    {
+        var data = new byte[values.Count*4];
+        for (int i = 0; i < values.Count; i++) BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(4*i),checked((uint)values[i]));
+        Accessors.Add(new() { ["bufferView"] = View(data,target), ["componentType"] = 5125, ["count"] = values.Count, ["type"] = type });
+        return Accessors.Count-1;
+    }
+
+    /// <summary>Build-210: another file's binary chunk appended at a 4-byte boundary (wor2gltf.import_model); returns
+    /// its offset in this buffer.</summary>
+    public int Append(byte[] binary)
+    {
+        while (_bin.Count%4 != 0) _bin.Add(0);
+        int offset = _bin.Count;
+        _bin.AddRange(binary);
+        return offset;
+    }
+
+    /// <summary>Build-210: the decoded pixels of an image another file brought in, for the checks.</summary>
+    public void ImportedPixels(int image,(int,int,int,byte[]) pixels) => _imagePixels[image] = pixels;
+
+    /// <summary>Build-210: a scene has no wotrAppearance (lms2gltf.Exporter writes it only when a model set one).</summary>
+    public bool WriteAppearance = true;
+
     /// <summary>Unsigned short rows (5123): indices or joint quadruples.</summary>
     public int Shorts(IReadOnlyList<int> values,int perRow,string type,int? target = null)
     {
@@ -529,8 +554,8 @@ internal sealed class Exporter(ModelResolver resolver)
         if (Skins.Count > 0) gltf["skins"] = Skins.Cast<object?>().ToList();
         if (Animations.Count > 0) gltf["animations"] = Animations.Cast<object?>().ToList();
         var extras = new Dictionary<string,object?>(Extras);
-        extras["wotrAppearance"] = Appearance;
-        gltf["extras"] = extras;
+        if (WriteAppearance) extras["wotrAppearance"] = Appearance;
+        if (extras.Count > 0) gltf["extras"] = extras;
         return new()
         {
             Json = gltf, Binary = [.. _bin], ImagePixels = new(_imagePixels), Log = Log,

@@ -91,6 +91,8 @@ param(
     [string]$CapturePath,
     # Build-193: the original game to read the text from (else the launcher's folder, converted/install.json, REFORGED_INSTALL).
     [string]$Install,
+    # Build-210: the data folder (--data), in place of the repository; the default map caches are looked for under it.
+    [string]$Data,
     [ValidatePattern('^[1-9][0-9]{2,4}x[1-9][0-9]{2,4}$')]
     [string]$Resolution,
     [string]$CachePath
@@ -108,10 +110,10 @@ if (-not $GodotPath) {
     else { $GodotPath = (Get-Command godot -ErrorAction Stop).Source }
 }
 # -Skirmish with nothing else that chooses the match opens the setup screen; -Setup always does.
-$launchOnly = @('Skirmish','GodotPath','DotnetPath','Resolution','HideHud','DebugMenu','Debug','NoDebug','View','Unmuted','Mute','Install')
+$launchOnly = @('Skirmish','GodotPath','DotnetPath','Resolution','HideHud','DebugMenu','Debug','NoDebug','View','Unmuted','Mute','Install','Data')
 $setupMode = $Setup -or $SetupSmoke -or ($Skirmish -and -not ($PSBoundParameters.Keys | Where-Object { $_ -notin $launchOnly }))
 # Build-147: nothing that chooses a scene (or -Menu) opens the main menu; -View, -CapturePath and the like keep Helm's Deep.
-$menuMode = $Menu -or $MenuSmoke -or $Launcher -or $LauncherSmoke -or -not ($PSBoundParameters.Keys | Where-Object { $_ -notin @('GodotPath','DotnetPath','Resolution','Unmuted','Mute','DebugMenu','Debug','NoDebug','Install') })
+$menuMode = $Menu -or $MenuSmoke -or $Launcher -or $LauncherSmoke -or -not ($PSBoundParameters.Keys | Where-Object { $_ -notin @('GodotPath','DotnetPath','Resolution','Unmuted','Mute','DebugMenu','Debug','NoDebug','Install','Data') })
 $env:DOTNET_ROOT = Split-Path -Parent $DotnetPath
 $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
@@ -158,6 +160,8 @@ if ($DebugMenu) { $arguments += '--debug-menu' }
 if ($Debug) { $arguments += '--debug' }
 if ($NoDebug) { $arguments += '--no-debug' }
 if ($Install) { $arguments += "--install=$($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Install))" }
+$dataRoot = if ($Data) { $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Data) } else { $repo }
+if ($Data) { $arguments += "--data=$dataRoot" }
 if ($Smoke -or $MotionSmoke) { $arguments += '--smoke' }
 if ($MotionSmoke) { $arguments += '--motion-smoke' }
 if ($CombatSmoke) { $arguments += '--combat-smoke' }
@@ -228,10 +232,10 @@ if ($ObstacleSmoke) { $arguments += '--obstacle-smoke' }
 if ($CapturePath) { $arguments += "--capture=$([System.IO.Path]::GetFullPath($CapturePath))" }
 if ($CapturePath -and $Resolution) { $arguments += "--capture-resolution=$Resolution" }
 # Bilbo's Bluffs lives in converted/skirmish; -Map MP04_Wasteland uses converted/skirmish-maps/MP04_Wasteland.
-if ($Map -and -not $CachePath) { $CachePath = Join-Path $repo "converted/skirmish-maps/$Map" }
+if ($Map -and -not $CachePath) { $CachePath = Join-Path $dataRoot "converted/skirmish-maps/$Map" }
 # The Sandbox test map (build-56): an empty field where you command both players; python tools/prepare_prototype.py --sandbox builds it.
-if (($Sandbox -or $SandboxSmoke) -and -not $CachePath) { $CachePath = Join-Path $repo 'converted/skirmish-maps/Sandbox' }
-if ($Skirmish -and -not $CachePath) { $CachePath = Join-Path $repo 'converted/skirmish' }
+if (($Sandbox -or $SandboxSmoke) -and -not $CachePath) { $CachePath = Join-Path $dataRoot 'converted/skirmish-maps/Sandbox' }
+if ($Skirmish -and -not $CachePath) { $CachePath = Join-Path $dataRoot 'converted/skirmish' }
 if ($CachePath) { $arguments += "--cache=$([System.IO.Path]::GetFullPath($CachePath))" }
 if ($AudioSmoke) {
     # Godot can report a signal connection error while still returning exit code zero.

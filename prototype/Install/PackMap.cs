@@ -8,6 +8,10 @@ namespace Reforged.Install;
 /// and its navigation.</summary>
 public sealed record MapBuild(string Stem,World World,JsonObject Manifest,MapNavigation Navigation);
 
+/// <summary>Build-210: a map as the setup screen shows it (PackMap.Preview): the manifest's name, bases and resources,
+/// the grid's size and cell, and its ground and heights made on request.</summary>
+public sealed record MapPreview(string Stem,JsonObject Manifest,int Width,int Height,int CellSizeMm,Func<(byte[] Allowed,byte[] Heights)> Ground);
+
 /// <summary>Build-209: a multiplayer map's cache built from the install as prepare_prototype.prepare_skirmish builds it,
 /// without the scene: the start points (editor markers), a Citadel footprint moved off the resources and unbuildable
 /// ground, the construction sites on every ore pile and well, the navigation with every body's clearance, the start
@@ -68,32 +72,16 @@ public sealed class PackMap(LqrDatabase db,GameArchives archives)
     private (JsonObject,MapNavigation) Layout(string stem,World world,string content)
     {
         var resolver = Resolver;
-        var points = StartPoints(Markers(world));
-        if (points.Count < 2 || points.Count > SlotColors.Length) throw new InvalidDataException($"expected 2 to {SlotColors.Length} start points, found {points.Count}");
+        var (points,resources,bases) = Bases(world,resolver);
         var walker = world.Categories.First(c => c.Name == "PATHING_CATEGORY_WALKER");
         int width = (int)walker.Grid![0];
         double spacing = world.CellSize;
-        var heights = world.Heights;
-        var buildable = StartGround(world);
-        var resources = ResourceNodes(world);
-        var radii = ResourceObjects.ToDictionary(p => p.Value,p => (double)db["Objects"].Get(p.Key)!.Float("MinBuildingPlacementRadius"));
-        var bases = new List<(int Team,string StartPoint,double[] Position,Footprint Footprint)>();
-        for (int team = 0; team < points.Count; team++)
-        {
-            double x = points[team].Position[0], y = points[team].Position[1];
-            var marker = BuildingFootprint(SkirmishCatalog.Citadel,x,y,0,CitadelObjectBase+team);
-            var (dx,dy) = StartPosition(marker.Polygon,(x,y),resources,radii,buildable,width,buildable.Length/width,spacing);
-            x += dx; y += dy;
-            double z = TerrainHeight(x,y,width,spacing,heights);
-            var footprint = BuildingFootprint(SkirmishCatalog.Citadel,x,y,z,CitadelObjectBase+team) with { Name = $"Start Citadel {team}" };
-            bases.Add((team,points[team].Name,[x,y,z],footprint));
-        }
         var sites = new JsonArray();
         var siteFootprints = new List<Footprint>();
         foreach (var node in resources)
         {
             long obstacle = SiteObstacleBase+node.Id;
-            siteFootprints.Add(BuildingFootprint(SiteBuildings[node.Kind],node.Position[0],node.Position[1],node.Position[2],obstacle) with { Name = $"Resource construction {node.Id}" });
+            siteFootprints.Add(BuildingFootprint(resolver,SiteBuildings[node.Kind],node.Position[0],node.Position[1],node.Position[2],obstacle) with { Name = $"Resource construction {node.Id}" });
             sites.Add(new JsonObject { ["resource"] = node.Id, ["kind"] = node.Kind, ["obstacle"] = obstacle });
         }
         var inactive = siteFootprints.Select(f => f.ObjectId).ToList();
@@ -131,6 +119,67 @@ public sealed class PackMap(LqrDatabase db,GameArchives archives)
             ["source_sha256"] = world.Sha256,
         };
         return (manifest,navigation);
+    }
+
+    /// <summary>The start points, the resources and each base: its Citadel moved off the resources and unbuildable
+    /// ground, at the terrain's height, with its footprint.</summary>
+    private (List<Marker> Points,List<ResourceNode> Resources,List<(int Team,string StartPoint,double[] Position,Footprint Footprint)> Bases) Bases(World world,ModelResolver resolver)
+    {
+        var points = StartPoints(Markers(world));
+        if (points.Count < 2 || points.Count > SlotColors.Length) throw new InvalidDataException($"expected 2 to {SlotColors.Length} start points, found {points.Count}");
+        var walker = world.Categories.First(c => c.Name == "PATHING_CATEGORY_WALKER");
+        int width = (int)walker.Grid![0];
+        double spacing = world.CellSize;
+        var buildable = StartGround(world);
+        var resources = ResourceNodes(world);
+        var radii = ResourceObjects.ToDictionary(p => p.Value,p => (double)db["Objects"].Get(p.Key)!.Float("MinBuildingPlacementRadius"));
+        var bases = new List<(int Team,string StartPoint,double[] Position,Footprint Footprint)>();
+        for (int team = 0; team < points.Count; team++)
+        {
+            double x = points[team].Position[0], y = points[team].Position[1];
+            var marker = BuildingFootprint(resolver,SkirmishCatalog.Citadel,x,y,0,CitadelObjectBase+team);
+            var (dx,dy) = StartPosition(marker.Polygon,(x,y),resources,radii,buildable,width,buildable.Length/width,spacing);
+            x += dx; y += dy;
+            double z = TerrainHeight(x,y,width,spacing,world.Heights);
+            var footprint = BuildingFootprint(resolver,SkirmishCatalog.Citadel,x,y,z,CitadelObjectBase+team) with { Name = $"Start Citadel {team}" };
+            bases.Add((team,points[team].Name,[x,y,z],footprint));
+        }
+        return (points,resources,bases);
+    }
+
+    /// <summary>Build-210: what the setup screen shows of a map, without its navigation: the manifest's name, bases and
+    /// resources, the grid's size, and its ground (the walker grid closed under the placed obstacles and the start
+    /// Citadels, as navigation.json's allowed cells are, and heights.bin) on request. Uses its own resolver, so several
+    /// maps can be previewed at once.</summary>
+    public MapPreview Preview(string stem,string content = "../../content/good")
+    {
+        var world = Read(stem);
+        var resolver = new ModelResolver(db,archives);
+        var (_,resources,bases) = Bases(world,resolver);
+        var walker = world.Categories.First(c => c.Name == "PATHING_CATEGORY_WALKER");
+        int width = (int)walker.Grid![0], height = (int)walker.Grid[1];
+        var manifest = new JsonObject
+        {
+            ["format_version"] = 1, ["mode"] = "skirmish", ["name"] = Title(stem)+" — Good Skirmish", ["map_file"] = MapFile(stem), ["players"] = bases.Count,
+            ["content"] = content, ["files"] = new JsonObject(),
+            ["skirmish"] = new JsonObject
+            {
+                ["resources"] = new JsonArray([.. resources.Select(n => (JsonNode)new JsonObject { ["id"] = n.Id, ["kind"] = n.Kind, ["position"] = Doubles(n.Position) })]),
+                ["bases"] = new JsonArray([.. bases.Select(b => (JsonNode)new JsonObject { ["team"] = b.Team, ["start_point"] = b.StartPoint, ["position"] = Doubles(b.Position) })]),
+            },
+        };
+        (byte[],byte[]) Ground()
+        {
+            var own = new ModelResolver(db,archives);
+            var painted = walker.Painted!.Bytes(width*height);
+            var footprints = MapNavigation.PlacedFootprints(world,own).Concat(bases.Select(b => b.Footprint)).ToList();
+            var (allowed,_) = MapNavigation.GroundMask(width,height,world.CellSize,painted,world.Heights,footprints,precise: true);
+            var heights = new byte[world.Heights.Length*4];
+            for (int i = 0; i < world.Heights.Length; i++)
+                System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(heights.AsSpan(4*i),(int)Math.Round(world.Heights[i]*1000,MidpointRounding.ToEven));
+            return (allowed,heights);
+        }
+        return new(stem,manifest,width,height,(int)Math.Round(world.CellSize*1000,MidpointRounding.ToEven),Ground);
     }
 
     private static JsonArray Doubles(IEnumerable<double> values) => new([.. values.Select(v => (JsonNode)v)]);
@@ -184,12 +233,12 @@ public sealed class PackMap(LqrDatabase db,GameArchives archives)
     }
 
     /// <summary>skirmish_map.building_footprint: a building's one oriented-collision box at a position, unrotated.</summary>
-    private Footprint BuildingFootprint(string building,double x,double y,double z,long objectId)
+    private Footprint BuildingFootprint(ModelResolver resolver,string building,double x,double y,double z,long objectId)
     {
         var record = PackRules.Named(db["Buildings"],building);
-        var resolved = Resolver.Resolve(PackRules.ById(db["Models"],PackRules.I(record,"Model")).Name,recurse: false);
+        var resolved = resolver.Resolve(PackRules.ById(db["Models"],PackRules.I(record,"Model")).Name,recurse: false);
         int layer = PackRules.Named(db["BBoxes"],"BBOX_LAYER_ORIENTED_COLLISION").Id;
-        var boxes = Resolver.Model((string)resolved["file"]!).BoundingBoxes.Where(b => b.Layer == layer).ToList();
+        var boxes = resolver.Model((string)resolved["file"]!).BoundingBoxes.Where(b => b.Layer == layer).ToList();
         if (boxes.Count != 1) throw new InvalidDataException("expected one oriented collision box for "+building);
         return BoxFootprint(boxes[0],objectId,record.Text("Name"),[1,1,1],[0.0,0.0,0.0],[x,y,z],MapNavigation.Scale(resolved));
     }
