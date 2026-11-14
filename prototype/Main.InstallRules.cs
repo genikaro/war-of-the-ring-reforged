@@ -6,15 +6,16 @@ using Reforged.Presentation;
 /// research, places of power, AI tables) are built from the install at startup with PackRules and replace the content
 /// pack's (CacheManifest.InstallRules). Build-198: so do the pack's unit, building, place-of-power and rally banner
 /// models (PackModels), built in memory while a match loads. Without an install, or when it cannot be read, the pack's
-/// own are used.</summary>
+/// own are used. Build-199: the sections that need the models too (the models list, skirmish.economy and
+/// skirmish.construction but its defenses: PackModelRules) are built beside them from the open archives.</summary>
 public partial class Main
 {
     /// <summary>The sections last built and what they were built from, kept while the install's tables and AI players,
     /// the text language and the data folder stay the same.</summary>
     private static (string Key,IReadOnlyDictionary<string,System.Text.Json.Nodes.JsonNode> Rules)? _installRules;
 
-    /// <summary>The install's archives, open for the session, and the models built from them.</summary>
-    private static (string Install,Reforged.Formats.GameArchives Archives,PackModels Models)? _installModels;
+    /// <summary>The install's archives and database, open for the session, and the models built from them.</summary>
+    private static (string Install,Reforged.Formats.GameArchives Archives,Reforged.Formats.LqrDatabase Db,PackModels Models)? _installModels;
 
     private static void LoadInstallRules(string? install)
     {
@@ -24,11 +25,11 @@ public partial class Main
         try
         {
             var clock = System.Diagnostics.Stopwatch.StartNew();
-            long newest = new[] { "Database","AIPlayers" }.Select(folder => System.IO.Path.Combine(install,folder)).Where(System.IO.Directory.Exists)
+            long newest = new[] { "Database","AIPlayers","Archives" }.Select(folder => System.IO.Path.Combine(install,folder)).Where(System.IO.Directory.Exists)
                 .SelectMany(System.IO.Directory.EnumerateFiles).Select(file => System.IO.File.GetLastWriteTimeUtc(file).Ticks).DefaultIfEmpty().Max();
             string key = string.Join("|",install,GameText.Language,GamePaths.Root,newest);
             bool reused = _installRules?.Key == key;
-            if (!reused) _installRules = (key,PackRules.FromInstall(install,GameText.Language,GamePaths.Root));
+            if (!reused) _installRules = (key,BuildInstallRules(install));
             CacheManifest.InstallRules = _installRules!.Value.Rules;
             GD.Print($"Rules: {_installRules.Value.Rules.Count} sections {(reused ? "kept" : "built")} from the install in {clock.ElapsedMilliseconds} ms");
         }
@@ -37,6 +38,23 @@ public partial class Main
         {
             GD.PushWarning($"Rules: cannot build them from the install {install} ({error.Message}); using the content pack's");
         }
+    }
+
+    /// <summary>PackRules' sections, and PackModelRules' when the archives are open and give them.</summary>
+    private static Dictionary<string,System.Text.Json.Nodes.JsonNode> BuildInstallRules(string install)
+    {
+        var rules = PackRules.FromInstall(install,GameText.Language,GamePaths.Root);
+        if (_installModels is not { } models) return rules;
+        try
+        {
+            foreach (var (path,value) in PackModelRules.Build(models.Db,models.Archives)) rules[path] = value;
+        }
+        catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException
+            or InvalidCastException or IndexOutOfRangeException or ArgumentException or InvalidOperationException or NullReferenceException)
+        {
+            GD.PushWarning($"Rules: cannot build the model sections from the install ({error.Message}); using the content pack's");
+        }
+        return rules;
     }
 
     private static void LoadInstallModels(string? install)
@@ -49,9 +67,10 @@ public partial class Main
         try
         {
             archives = Reforged.Formats.GameArchives.OpenInstall(install);
-            var models = new PackModels(Reforged.Formats.LqrDatabase.OpenInstall(install),archives);
+            var db = Reforged.Formats.LqrDatabase.OpenInstall(install);
+            var models = new PackModels(db,archives);
             _ = models.Plan; // Which files the install gives, worked out now so a damaged database cannot fail a load.
-            _installModels = (install,archives,models);
+            _installModels = (install,archives,db,models);
         }
         catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or UnauthorizedAccessException
             or KeyNotFoundException or InvalidCastException or NullReferenceException)

@@ -27,4 +27,62 @@ public static class PyMath
         string text = (negative ? "-" : "")+quotient.ToString(CultureInfo.InvariantCulture)+"e"+(-digits).ToString(CultureInfo.InvariantCulture);
         return double.Parse(text,NumberStyles.Float,CultureInfo.InvariantCulture);
     }
+
+    /// <summary>Python's str() of a float: the shortest text that reads back as the same double.</summary>
+    public static string Repr(double value) => value.ToString("R",CultureInfo.InvariantCulture);
+}
+
+/// <summary>Build-199: Python's decimal.Decimal as the import uses it: Decimal(str(x)) of a float, products rounded to
+/// the default context's 28 significant digits (halves to even), and to_integral_value with a rounding mode. The value
+/// is Coefficient x 10^Exponent.</summary>
+public readonly record struct PyDecimal(BigInteger Coefficient,int Exponent)
+{
+    private const int Precision = 28;
+
+    /// <summary>Decimal(str(value)): exact for a double through its shortest repr.</summary>
+    public static PyDecimal Of(double value) => Parse(PyMath.Repr(value));
+    public static PyDecimal Of(long value) => new(value,0);
+
+    public static PyDecimal Parse(string text)
+    {
+        int exponent = 0;
+        int e = text.IndexOfAny(['e','E']);
+        if (e >= 0) { exponent = int.Parse(text[(e+1)..],NumberStyles.AllowLeadingSign,CultureInfo.InvariantCulture); text = text[..e]; }
+        int dot = text.IndexOf('.');
+        if (dot >= 0) { exponent -= text.Length-dot-1; text = text.Remove(dot,1); }
+        return new(BigInteger.Parse(text,NumberStyles.AllowLeadingSign,CultureInfo.InvariantCulture),exponent);
+    }
+
+    public static PyDecimal operator *(PyDecimal a,PyDecimal b) => Rounded(a.Coefficient*b.Coefficient,a.Exponent+b.Exponent);
+
+    /// <summary>The context's rounding of an exact result: at most 28 significant digits, halves to even.</summary>
+    private static PyDecimal Rounded(BigInteger coefficient,int exponent)
+    {
+        int digits = BigInteger.Abs(coefficient).ToString(CultureInfo.InvariantCulture).Length;
+        if (digits <= Precision) return new(coefficient,exponent);
+        int drop = digits-Precision;
+        BigInteger quotient = BigInteger.DivRem(coefficient,BigInteger.Pow(10,drop),out var remainder);
+        int half = (BigInteger.Abs(remainder)*2).CompareTo(BigInteger.Pow(10,drop));
+        if (half > 0 || half == 0 && !quotient.IsEven) quotient += coefficient.Sign;
+        return Rounded(quotient,exponent+drop);
+    }
+
+    public enum Rounding { Ceiling, HalfUp, HalfEven, Floor }
+
+    /// <summary>to_integral_value(rounding): the integer the value rounds to.</summary>
+    public BigInteger ToIntegral(Rounding rounding)
+    {
+        if (Exponent >= 0) return Coefficient*BigInteger.Pow(10,Exponent);
+        var unit = BigInteger.Pow(10,-Exponent);
+        BigInteger quotient = BigInteger.DivRem(Coefficient,unit,out var remainder); // Truncated toward zero.
+        if (remainder.IsZero) return quotient;
+        int half = (BigInteger.Abs(remainder)*2).CompareTo(unit);
+        return rounding switch
+        {
+            Rounding.Ceiling => remainder.Sign > 0 ? quotient+1 : quotient,
+            Rounding.Floor => remainder.Sign < 0 ? quotient-1 : quotient,
+            Rounding.HalfUp => half >= 0 ? quotient+remainder.Sign : quotient,
+            _ => half > 0 || half == 0 && !quotient.IsEven ? quotient+remainder.Sign : quotient,
+        };
+    }
 }

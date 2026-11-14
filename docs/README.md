@@ -1,5 +1,22 @@
 # Godot C# skirmish sandbox
 
+**build-199:** the rule sections that need the models come from the install too. `PackModelRules`
+(`prototype/Install`) builds, beside `PackRules` at startup and from the same open archives as the models: the pack's
+`models` list (each roster unit's file, the run and walk clips moved in place, its idle, walk, attack and death clips:
+`prepare_prototype.export_units`), `skirmish.economy` (the workers' gather, carry, put-down and repair clips with their
+lengths in ticks and the pickaxe hit: `skirmish_economy.economy_data`) and `skirmish.construction` but its defenses
+(building rules, portraits, palettes, corruption, upgrades and every placeable building's oriented-collision footprint:
+`skirmish_construction.construction_data` and `placement_data`, with `skirmish_map.building_footprint`). The clip names
+and in-place clips come from a walk of the resolved model's skeletons in the glTF assembly's order, so no model is built
+at startup; the sections take about 0.35 s. `PyDecimal` (`PyMath.cs`) is Python's `decimal` as the import uses it:
+`Decimal(str(x))`, products to 28 digits, halves to even, `to_integral_value` with a rounding mode.
+`rules_fingerprint.py` now writes these sections too, exporting each roster unit as `export_units` does in a pool of
+processes from a layout of the install (about 30 s), and `tests/formats --python-rules` requires all 19 sections to
+equal the Python's: they do on the English and Russian installs, and the new ones equal the pack's on disk, built from
+the Russian install. The construction section's defenses (projectile models, sounds and trails) and `bodies` still come
+from the pack. The skirmish, construction, placement, production and Evil smokes give identical reports with and
+without the install; the placement smoke's swordsman stats check fails either way, as it did before this build.
+
 **build-198:** a match's models come from the install. `PackModels` (`prototype/Install`) builds the content pack's
 model files from it: every roster unit (`units/`), skirmish building (`buildings/`), place of power (`objects/places/`)
 and the rally banner, 89 files, each as the import writes it: `ModelGltf`, then for units `prototype_assets.adapt`

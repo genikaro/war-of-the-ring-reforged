@@ -12,8 +12,8 @@ namespace Reforged.Install;
 /// (content_pack.faction_data, prepare_prototype.team_colors), skirmish.start_state (content_pack.build),
 /// skirmish.production with fate (skirmish_production), skirmish.research (skirmish_research),
 /// skirmish.places_of_power (places_of_power.export) and skirmish.ai (skirmish_ai.export). CacheManifest puts them in
-/// place of the pack's. The sections that need models (economy clips, construction footprints and defenses, bodies,
-/// combat rules) still come from the pack. Python's rounding is kept: round() halves to even on the double,
+/// place of the pack's. The sections that need models are PackModelRules' (build-199); construction defenses, bodies
+/// and the combat rules still come from the pack. Python's rounding is kept: round() halves to even on the double,
 /// quantize() halves away from zero on the shortest decimal form of the value, // floors.</summary>
 public static class PackRules
 {
@@ -49,19 +49,19 @@ public static class PackRules
 
     // ---- Values, the way the Python reads and rounds them --------------------------------------------------------
 
-    private static LqrRecord Named(LqrTable table,string name) => table.Get(name) ?? throw new KeyNotFoundException($"{table.Name} has no {name}");
-    private static LqrRecord ById(LqrTable table,int id) => table.Get(id) ?? throw new KeyNotFoundException($"{table.Name} has no record {id}");
-    private static int I(LqrRecord record,string column) => record[column] is int value ? value
+    internal static LqrRecord Named(LqrTable table,string name) => table.Get(name) ?? throw new KeyNotFoundException($"{table.Name} has no {name}");
+    internal static LqrRecord ById(LqrTable table,int id) => table.Get(id) ?? throw new KeyNotFoundException($"{table.Name} has no record {id}");
+    internal static int I(LqrRecord record,string column) => record[column] is int value ? value
         : throw new InvalidCastException($"{record.Table.Name}.{column} is not an integer column");
-    private static double F(LqrRecord record,string column) => record[column] switch { float value => value, int value => value,
+    internal static double F(LqrRecord record,string column) => record[column] switch { float value => value, int value => value,
         _ => throw new InvalidCastException($"{record.Table.Name}.{column} is not a number") };
-    private static string S(LqrRecord record,string column) => (string)record[column];
-    private static bool B(LqrRecord record,string column) => I(record,column) != 0;
+    internal static string S(LqrRecord record,string column) => (string)record[column];
+    internal static bool B(LqrRecord record,string column) => I(record,column) != 0;
     /// <summary>A value as it is, an int, a float (as the double Python makes of it) or a string.</summary>
-    private static JsonNode V(LqrRecord record,string column) => Node(record[column]);
-    private static JsonNode Node(object value) => value switch { int i => i, float f => (double)f, string s => s, _ => throw new InvalidCastException() };
+    internal static JsonNode V(LqrRecord record,string column) => Node(record[column]);
+    internal static JsonNode Node(object value) => value switch { int i => i, float f => (double)f, string s => s, _ => throw new InvalidCastException() };
     /// <summary>Every column of a record (Python's record.values).</summary>
-    private static JsonObject Values(LqrRecord record)
+    internal static JsonObject Values(LqrRecord record)
     {
         var node = new JsonObject();
         for (int c = 0; c < record.Values.Length; c++) node[record.Table.Columns[c].Name] = Node(record.Values[c]);
@@ -81,12 +81,12 @@ public static class PackRules
         };
         return (long)Math.Round(decimal.Parse(text,NumberStyles.Float,CultureInfo.InvariantCulture)*scale,MidpointRounding.AwayFromZero);
     }
-    private static long Ppm(double value) => Round(value*1_000_000);
-    private static int FloorDiv(int a,int b) => (int)Math.Floor((double)a/b);
+    internal static long Ppm(double value) => Round(value*1_000_000);
+    internal static int FloorDiv(int a,int b) => (int)Math.Floor((double)a/b);
     /// <summary>A Windows path's file name without its extension (Path(...).stem, PureWindowsPath(...).stem).</summary>
-    private static string Stem(string path) => Path.GetFileNameWithoutExtension(path.Replace('\\','/'));
-    private static JsonArray Strings(IEnumerable<string> items) => new([.. items.Select(s => (JsonNode?)s)]);
-    private static JsonArray Ints(IEnumerable<int> items) => new([.. items.Select(i => (JsonNode?)i)]);
+    internal static string Stem(string path) => Path.GetFileNameWithoutExtension(path.Replace('\\','/'));
+    internal static JsonArray Strings(IEnumerable<string> items) => new([.. items.Select(s => (JsonNode?)s)]);
+    internal static JsonArray Ints(IEnumerable<int> items) => new([.. items.Select(i => (JsonNode?)i)]);
 
     // ---- factions, team_colors ---------------------------------------------------------------------------------
 

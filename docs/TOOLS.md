@@ -63,7 +63,7 @@ assets, previews, validation reports and portable tools stay in ignored
 | `models_fingerprint.py` | Build-195: every .lms (plain and with the strict footer), .lsk, .lwt and .lmd parse, hashed in a canonical form, for `tests/formats --python-models`; `--dump` prints one file's form. |
 | `gltf_fingerprint.py` | Build-197 (`--pack` build-198: the pack's model files post-processed as the import writes them): every model the content pack exports converted by `lms2gltf.convert_model` from the given install, compared by JSON with accessor bytes and image pixels in place of offsets, for `tests/formats --python-gltf`; `--dump` prints one. |
 | `resolve_fingerprint.py` | Build-196: every Models record resolved by `resolve_model.py` from the given install (its own extracted layout in a temporary folder), hashed in the canonical form, for `tests/formats --python-resolve`; `--dump` prints one. |
-| `rules_fingerprint.py` | Build-194: the content pack's seven database-only rule sections as the import builds them, for `tests/formats --python-rules` to check `PackRules` against. |
+| `rules_fingerprint.py` | Build-194: the content pack's seven database-only rule sections as the import builds them, for `tests/formats --python-rules` to check `PackRules` against. Build-199: also the sections that need models (the `models` list, `skirmish.economy`, `skirmish.construction` but its defenses, key by key), from a layout of the install, for `PackModelRules`. |
 | `import_install.py` | Build-188, the launcher's import: check an install parses (`--check`), then extract it, build the content pack, menu art and every map (in parallel) and record it in `converted/install.json`. Progress lines start with `@reforged `. |
 | `viewer.html` | three.js viewer with unit and clip pickers (`?clip=Name`, `?t=0.5` freezes a frame). |
 
@@ -84,6 +84,7 @@ the checks share them:
 | `Install/ModelGltf`, `Images` | `lms2gltf.convert_model`, `model_appearance.py`, Pillow's DDS and TGA decoding | Build-197: a resolved model as glTF (JSON as dictionaries, the binary buffer, each image's pixels; `Glb()` writes the file), and DXT1/DXT5/TGA decoding with PNG encoding. |
 | `Install/PackModels` | `content_pack.build`'s model exports, `prototype_assets.adapt` and `restore_building` | Build-198: the pack's unit, building, place-of-power and rally banner files built from the install as the import writes them; the game loads them from memory. |
 | `Install/OriginalText` | `game_text.py` `build` | Build-193: the original text as the game reads it, built from the install at startup ([LOCALIZATION.md](LOCALIZATION.md)). |
+| `Install/PackModelRules`, `PyDecimal` | `prepare_prototype.export_units`' models list, `skirmish_economy.economy_data`, `skirmish_construction.construction_data` and `placement_data`, `skirmish_map.building_footprint`, Python's `decimal` | Build-199: the rule sections that need the models: clip names and in-place clips from a walk of the resolved model's skeletons (no glTF is built), worker clip lengths in ticks, building footprints from the oriented-collision boxes. `PyDecimal` is `Decimal(str(x))` with the default context's 28 digits. |
 | `Install/PackRules`, `Install/SkirmishCatalog` | `content_pack.faction_data`, `prepare_prototype.team_colors`, `skirmish_production`, `skirmish_research`, `places_of_power.export`, `skirmish_ai.export`, the `skirmish_map` lists | Build-194: the content pack's database-only rule sections, built from the install at startup in place of the pack's. Python's rounding is kept (`round` halves to even, `quantize` halves away from zero on the shortest decimal form, `//` floors). While the import still builds the pack, a change to these Python modules or lists needs the same change here; `--python-rules` fails until it is made. |
 
 ```powershell
@@ -107,14 +108,15 @@ python tools/gltf_fingerprint.py "Legacy/Game EN" artifacts/pack-en.json --pack
 dotnet run --project tests/formats -c Release -- --install "Legacy/Game EN" --python-pack artifacts/pack-en.json
 ```
 
-The first runs 48 checks on synthetic archives, tables, text, rule rounding, model files, model resolution, DDS and PNG. `--install` reads and CRC-checks every archive file and
+The first runs 49 checks on synthetic archives, tables, text, rule rounding, model files, model resolution, DDS and PNG. `--install` reads and CRC-checks every archive file and
 parses every table, with timings (`--sequential` for one thread); `--python` then requires every file's bytes and
 record and every table's columns, records and values to equal the Python readers'. On the English install: 23
 archives open in about 25 ms, 678 MB of files read in 1.0 s on one thread, the 154 tables parse in under 0.1 s, and
 all 13,666 files and 264,243 values match (13,654 files on the Russian install). `--python-text` builds the original
 text from the install and requires it to equal `game_text.py --out`'s, key for key: it does on both installs, built in
-about 90 ms. `--python-rules` does the same for the seven rule sections against `rules_fingerprint.py`'s (an integer
-there must be an integer here too): equal on both installs, built in about 120 ms. `--python-models` parses every
+about 90 ms. `--python-rules` does the same for the rule sections against `rules_fingerprint.py`'s (an integer
+there must be an integer here too): all 19 equal on both installs, the seven database-only ones built in about 50 ms
+and the twelve that need models (build-199) in about 0.35 s. `--python-models` parses every
 model file and requires each reading to hash as `models_fingerprint.py`'s does: all 7,307 readings of the 4,912 files
 match on both installs (about 35 s in Python on all cores, 0.1 s in C# on one thread). `--python-resolve` resolves
 every Models record and requires it to hash as `resolve_fingerprint.py`'s does: all 2,108 match on both installs.
