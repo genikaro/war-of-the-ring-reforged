@@ -1,5 +1,23 @@
 # Godot C# skirmish sandbox
 
+**build-203:** the combat rules and blood table come from the install. `PackCombat` (`prototype/Install`) ports
+`combat_rules.export` with every module it calls: units' stats, attack and release ticks, locomotion speeds, bodies and
+experience; unit pairs and type matchups; impact, launch and ability sounds; projectiles with trails and spin; the
+heroes', Dwarves', Ranger's, Elves', Nature's and Evil units' abilities traced through the spell graphs; sprite effects
+(frame lists checked against each atlas's size); global powers; dropped objects; and the SHA-256 of every source file
+it reads. `blood_effects.export` comes with it. The game starts building both on a worker thread once the install is
+open (about 0.75 s) and reads them in place of `combat/rules.json` and `combat/blood.json` when a match loads; the
+sounds, sprite frames and effect models those files name still come from the pack. Exactness needed Python's own
+arithmetic in a few more places: `PyMath.Hypot` is CPython 3.13's `math.hypot` (fused multiply-add, one correction;
+a plain square root differs in the last place for one input in seven) and `PyMath.Sum` its compensated float `sum`.
+`tools/combat_fingerprint.py` builds both files the Python way from a layout of an install (about 45 s), and
+`tests/formats --python-combat` requires the C# ones to equal them: they do on the English and Russian installs, all
+25 sections of the rules and the blood table. `CombatRules.Hash`, which the state digest starts with, is now the
+SHA-256 of the rules' values (keys sorted, numbers by value, without the provenance `Sources`, whose database paths
+name where the install sits), not of the file's text: rules built from the install and the pack's file of the same
+install hash alike. Every digest changes once with it. The skirmish, blood, Elven, Nature, hero skill, global power,
+Evil, research, siege and defense smokes pass and give identical reports with and without the install.
+
 **build-202:** a unit following cells no longer waits forever behind an idle unit standing off its cell centre.
 A blocked unit replans every ten ticks around the cells other units stand in, but a body 0.3 m off its centre still
 blocks the diagonal step past that cell, so every replan chose the same step again: build-201's research smoke

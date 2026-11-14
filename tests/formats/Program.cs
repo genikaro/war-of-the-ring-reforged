@@ -16,6 +16,8 @@
 //       build-197: every model the content pack exports built as glTF, compared with python tools/gltf_fingerprint.py
 //   ... --install "<install>" --python-pack <pack.json>
 //       build-198: the content pack's model files as the game builds them, compared with gltf_fingerprint.py --pack
+//   ... --install "<install>" --python-combat <combat.json>
+//       build-201: the combat rules built from the install, compared with python tools/combat_fingerprint.py
 System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 int passed = 0;
@@ -40,6 +42,7 @@ if (Array.IndexOf(args,"--install") is int install && install >= 0)
     if (Array.IndexOf(args,"--python-gltf") is int gltf && gltf >= 0) GltfChecks.Install(args[install+1],args[gltf+1],Check);
     if (Array.IndexOf(args,"--dump-gltf") is int dumpGltf && dumpGltf >= 0) GltfChecks.Dump(args[install+1],args[dumpGltf+1]);
     if (Array.IndexOf(args,"--python-pack") is int pack && pack >= 0) GltfChecks.Pack(args[install+1],args[pack+1],Check);
+    if (Array.IndexOf(args,"--python-combat") is int combat && combat >= 0) CombatChecks.Install(args[install+1],args[combat+1],RepositoryRoot(),Check);
 }
 Console.WriteLine($"{passed} format checks passed");
 

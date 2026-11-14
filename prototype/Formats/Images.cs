@@ -37,6 +37,16 @@ public static class Images
         throw new InvalidDataException($"{name}: not a DDS or TGA picture");
     }
 
+    /// <summary>Build-201: a DDS or TGA picture's width and height from its header, as Pillow's Image.size gives them.</summary>
+    public static (int Width,int Height) Size(byte[] data,string name)
+    {
+        if (data.Length >= 128 && data.AsSpan(0,4).SequenceEqual("DDS "u8))
+            return (BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(16)),BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(12)));
+        if (name.EndsWith(".tga",StringComparison.OrdinalIgnoreCase) && data.Length >= 18)
+            return (BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(12)),BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(14)));
+        throw new InvalidDataException($"{name}: not a DDS or TGA picture");
+    }
+
     // ---- DDS ----------------------------------------------------------------------------------------------------
 
     public static DecodedImage Dds(byte[] data,string name)

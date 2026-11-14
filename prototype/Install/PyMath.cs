@@ -30,6 +30,66 @@ public static class PyMath
 
     /// <summary>Python's str() of a float: the shortest text that reads back as the same double.</summary>
     public static string Repr(double value) => value.ToString("R",CultureInfo.InvariantCulture);
+
+    /// <summary>Build-201: math.hypot(x, y) as CPython 3.13 computes it (vector_norm: lossless scaling, squares and sums
+    /// carried in double-length with fused multiply-add, one differential correction), which can differ from
+    /// sqrt(x*x+y*y) in the last place.</summary>
+    public static double Hypot(double x,double y)
+    {
+        x = Math.Abs(x); y = Math.Abs(y);
+        if (double.IsInfinity(x) || double.IsInfinity(y)) return double.PositiveInfinity;
+        if (double.IsNaN(x) || double.IsNaN(y)) return double.NaN;
+        return Norm([x,y],Math.Max(x,y));
+    }
+
+    /// <summary>Build-201: sum() of floats as CPython 3.12+ adds them: the start (int 0) plus the first item, then
+    /// Neumaier's compensated summation, the compensation added at the end when it is finite and not zero.</summary>
+    public static double Sum(IEnumerable<double> values)
+    {
+        double total = 0, compensation = 0;
+        bool first = true;
+        foreach (double x in values)
+        {
+            if (first) { total = 0+x; first = false; continue; }
+            double t = total+x;
+            compensation += Math.Abs(total) >= Math.Abs(x) ? (total-t)+x : (x-t)+total;
+            total = t;
+        }
+        if (compensation != 0 && double.IsFinite(compensation)) total += compensation;
+        return total;
+    }
+
+    private static double Norm(double[] vec,double max)
+    {
+        if (max == 0.0 || vec.Length <= 1) return max;
+        int maxE = Math.ILogB(max)+1; // frexp's exponent: max = m * 2^maxE with 0.5 <= m < 1.
+        const double Smallest = 2.2250738585072014E-308; // DBL_MIN, the smallest normal double.
+        if (maxE < -1023)
+        {
+            for (int i = 0; i < vec.Length; i++) vec[i] /= Smallest; // Subnormals to normals.
+            return Smallest*Norm(vec,max/Smallest);
+        }
+        double scale = Math.ScaleB(1.0,-maxE);
+        double csum = 1.0, frac1 = 0.0, frac2 = 0.0;
+        foreach (double value in vec)
+        {
+            double v = value*scale;
+            double hi = v*v, lo = Math.FusedMultiplyAdd(v,v,-hi);
+            double sum = csum+hi, sumLo = (csum-sum)+hi;
+            csum = sum;
+            frac1 += lo;
+            frac2 += sumLo;
+        }
+        double h = Math.Sqrt(csum-1.0+(frac1+frac2));
+        double prHi = -h*h, prLo = Math.FusedMultiplyAdd(-h,h,-prHi);
+        double smHi = csum+prHi, smLo = (csum-smHi)+prHi;
+        csum = smHi;
+        frac1 += prLo;
+        frac2 += smLo;
+        double x = csum-1.0+(frac1+frac2);
+        h += x/(2.0*h);
+        return h/scale;
+    }
 }
 
 /// <summary>Build-199: Python's decimal.Decimal as the import uses it: Decimal(str(x)) of a float, products rounded to

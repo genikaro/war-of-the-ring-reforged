@@ -81,6 +81,12 @@ public static class PackRules
         };
         return (long)Math.Round(decimal.Parse(text,NumberStyles.Float,CultureInfo.InvariantCulture)*scale,MidpointRounding.AwayFromZero);
     }
+    /// <summary>quantize of a computed double (a ratio, a speed), through its shortest decimal form.</summary>
+    public static long Quantize(double value,long scale = 1000)
+    {
+        if (!double.IsFinite(value)) throw new InvalidDataException("non-finite rules value");
+        return (long)(PyDecimal.Of(value)*PyDecimal.Of(scale)).ToIntegral(PyDecimal.Rounding.HalfUp);
+    }
     internal static long Ppm(double value) => Round(value*1_000_000);
     internal static int FloorDiv(int a,int b) => (int)Math.Floor((double)a/b);
     /// <summary>A Windows path's file name without its extension (Path(...).stem, PureWindowsPath(...).stem).</summary>
@@ -234,6 +240,9 @@ public static class PackRules
         ["TECHNIQUE_GOBLIN_FRENZY"] = "Goblin Spearmen and Slavemasters deal 50% more base damage and move and attack 30% faster (source unit list).",
     };
 
+    /// <summary>Build-201: a technique's description as its ability module gives it.</summary>
+    internal static string TechniqueDescription(string technique) => Descriptions[technique];
+
     /// <summary>evil_upgrades.SUPPORTED: the Evil techniques whose effects the simulation covers by name.</summary>
     private static readonly HashSet<string> EvilSupported = ["TECHNIQUE_ASSASSINS_CLOAK", "TECHNIQUE_DARKNESS", "TECHNIQUE_FLAME_ARROWS", "TECHNIQUE_GOBLIN_FRENZY",
         "TECHNIQUE_GREATER_PERCEPTION", "TECHNIQUE_MORGUL_BLADE", "TECHNIQUE_PARALYZE", "TECHNIQUE_PERPETUAL_DARKNESS", "TECHNIQUE_POISON_ARROWS",
@@ -328,7 +337,7 @@ public static class PackRules
     };
 
     /// <summary>evil_upgrades.poison_data: a weapon's poison as fixed-point fields.</summary>
-    private static IEnumerable<KeyValuePair<string,JsonNode?>> Poison(LqrDatabase db,LqrRecord weapon)
+    internal static IEnumerable<KeyValuePair<string,JsonNode?>> Poison(LqrDatabase db,LqrRecord weapon)
     {
         var poison = ById(db["Poisons"],I(weapon,"PoisonType"));
         yield return new("DpsMilli",Round(F(poison,"DamagePerSecond")*1000));
@@ -436,7 +445,7 @@ public static class PackRules
     private const string PlacesPolicy = "Source PlacesOfPower, PlaceOfPowerModifiers and the place-of-power Objects. A random place takes a complete object whose default rules allow random placement, chosen from the match seed. Models follow Objects.ModelEvent -> ModelEvents.AssociatedModelResource1; shared source models stay shared. Skirmishes replace Steed of Rohan, Aviary and Willow with allowed random landmarks. Owner balance override: Monument of Narsil grants heroes +25% damage; its original rule is preserved in source_rule. See docs/PLACES-OF-POWER.md for spell adapters and source-only campaign entries.";
 
     /// <summary>hero_abilities.linked: records chained by a next-record column, from <paramref name="first"/>.</summary>
-    private static List<LqrRecord> Linked(LqrTable table,int first,string next)
+    internal static List<LqrRecord> Linked(LqrTable table,int first,string next)
     {
         var result = new List<LqrRecord>();
         var seen = new HashSet<int>();
@@ -451,7 +460,7 @@ public static class PackRules
     }
 
     /// <summary>elven_abilities.graph: a spell's (event, action) pairs, child spells' pairs following the action that spawns them.</summary>
-    private static List<(LqrRecord Event,LqrRecord Action)> SpellGraph(LqrDatabase db,LqrRecord spell,HashSet<int>? seen = null)
+    internal static List<(LqrRecord Event,LqrRecord Action)> SpellGraph(LqrDatabase db,LqrRecord spell,HashSet<int>? seen = null)
     {
         seen ??= [];
         if (!seen.Add(spell.Id)) return [];

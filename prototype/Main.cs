@@ -250,7 +250,10 @@ public partial class Main : Node3D
     private string CachePath(string relative) => _cacheFiles.Resolve(relative);
 
     private JsonElement ReadJson(string relative)
-        => JsonDocument.Parse(System.IO.File.ReadAllText(CachePath(relative))).RootElement.Clone();
+        => JsonDocument.Parse(ReadText(relative)).RootElement.Clone();
+
+    /// <summary>A cache file's text; build-201: the combat rules and blood table from the install when it gives them.</summary>
+    private string ReadText(string relative) => InstallCombatText(relative) ?? System.IO.File.ReadAllText(CachePath(relative));
 
     private Node3D LoadGlb(string relative, Color? teamColor = null)
         => InstallModel(relative) is { } glb ? _presentation.Load(glb, relative, teamColor) : _presentation.Load(CachePath(relative), relative, teamColor);
@@ -285,7 +288,7 @@ public partial class Main : Node3D
             _teamColors = colors.EnumerateArray().Select(c => new Color(c[0].GetSingle(), c[1].GetSingle(), c[2].GetSingle())).ToArray();
         string rulesPath = manifest.GetProperty("combat_rules").GetString()!;
         await LoadingStep("Reading the rules",.16f);
-        (_rules,var rulesData) = await Task.Run(() => (CombatRules.Parse(System.IO.File.ReadAllText(CachePath(rulesPath))),ReadJson(rulesPath)));
+        (_rules,var rulesData) = await Task.Run(() => (CombatRules.Parse(ReadText(rulesPath)),ReadJson(rulesPath)));
         GameNames.Localize(_rules);
         LoadCombatAudio(rulesData);
         LoadBlood();

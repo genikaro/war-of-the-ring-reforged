@@ -24,6 +24,9 @@ public static class RulesChecks
             && PyDecimal.Parse("2.5").ToIntegral(PyDecimal.Rounding.HalfEven) == 2 && PyDecimal.Parse("1e-05").ToIntegral(PyDecimal.Rounding.Ceiling) == 1
             && PackModelRules.Ticks(0.1f) == 3 && PackModelRules.Ticks(1.5,0.5) == 15 && PackModelRules.Ticks(1.0f) == 20,
             "Decimal arithmetic as Python's: products to 28 digits, halves to even; ticks round up");
+        check(PyMath.Hypot(3,4) == 5 && PyMath.Hypot(-3.656357558875988,3.4743373693723267) == 5.043805186024396
+            && PyMath.Sum(Enumerable.Repeat(0.1,10)) == 1.0 && PyMath.Sum([1e16,1.0,-1e16]) == 1.0 && PyMath.Sum([]) == 0,
+            "math.hypot and float sum() as CPython 3.13 computes them (a plain square root gives 5.043805186024397)");
         var russian = PackRules.CodePage("ru");
         var rai = PackRules.ParseRai(russian.GetBytes("[AIPlayerSettings]\r\nName = Арагорн\r\n# Difficulty = 9\r\nDifficulty=2\r\n"),russian);
         check(russian.CodePage == 1251 && PackRules.CodePage("en").CodePage == 1252 && rai["Name"] == "Арагорн" && rai["Difficulty"] == "2" && rai.Count == 2,

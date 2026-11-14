@@ -7,12 +7,20 @@ using Reforged.Presentation;
 /// pack's (CacheManifest.InstallRules). Build-198: so do the pack's unit, building, place-of-power and rally banner
 /// models (PackModels), built in memory while a match loads. Without an install, or when it cannot be read, the pack's
 /// own are used. Build-199: the sections that need the models too (the models list, skirmish.economy and
-/// skirmish.construction but its defenses: PackModelRules) are built beside them from the open archives.</summary>
+/// skirmish.construction but its defenses: PackModelRules) are built beside them from the open archives. Build-201:
+/// the combat rules and blood table (combat/rules.json and combat/blood.json: PackCombat) are built in the background
+/// from startup and read in place of the pack's files.</summary>
 public partial class Main
 {
     /// <summary>The sections last built and what they were built from, kept while the install's tables and AI players,
     /// the text language and the data folder stay the same.</summary>
     private static (string Key,IReadOnlyDictionary<string,System.Text.Json.Nodes.JsonNode> Rules)? _installRules;
+
+    /// <summary>The combat rules and blood table as JSON text, built in the background, and what they were built from.</summary>
+    private static (string Key,Task<(string Rules,string Blood)?> Build)? _installCombat;
+
+    /// <summary>The pack files PackCombat gives in place of the pack's (content_pack writes them under these names).</summary>
+    private const string CombatRulesFile = "combat/rules.json", BloodFile = "combat/blood.json";
 
     /// <summary>The install's archives and database, open for the session, and the models built from them.</summary>
     private static (string Install,Reforged.Formats.GameArchives Archives,Reforged.Formats.LqrDatabase Db,PackModels Models)? _installModels;
@@ -21,7 +29,7 @@ public partial class Main
     {
         CacheManifest.InstallRules = null;
         LoadInstallModels(install);
-        if (install == null) { GD.Print("Rules: no install found; using the content pack's"); return; }
+        if (install == null) { _installCombat = null; GD.Print("Rules: no install found; using the content pack's"); return; }
         try
         {
             var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -32,12 +40,47 @@ public partial class Main
             if (!reused) _installRules = (key,BuildInstallRules(install));
             CacheManifest.InstallRules = _installRules!.Value.Rules;
             GD.Print($"Rules: {_installRules.Value.Rules.Count} sections {(reused ? "kept" : "built")} from the install in {clock.ElapsedMilliseconds} ms");
+            StartInstallCombat(string.Join("|",install,GamePaths.Root,newest));
         }
         catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException
             or UnauthorizedAccessException or InvalidCastException or FormatException or IndexOutOfRangeException or ArgumentException)
         {
+            _installCombat = null;
             GD.PushWarning($"Rules: cannot build them from the install {install} ({error.Message}); using the content pack's");
         }
+    }
+
+    /// <summary>Starts building the combat rules and blood table on a worker thread, unless the same install's are built.</summary>
+    private static void StartInstallCombat(string key)
+    {
+        if (_installModels is not { } models) { _installCombat = null; return; }
+        if (_installCombat?.Key == key) return;
+        _installCombat = (key,Task.Run<(string,string)?>(() =>
+        {
+            try
+            {
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                var combat = new PackCombat(models.Db,models.Archives,GamePaths.Root);
+                string rules = combat.Rules(SkirmishCatalog.Roster).ToJsonString(), blood = combat.Blood(SkirmishCatalog.Roster).ToJsonString();
+                GD.Print($"Combat: rules and blood built from the install in {clock.ElapsedMilliseconds} ms");
+                return (rules,blood);
+            }
+            catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException or InvalidCastException
+                or FormatException or IndexOutOfRangeException or ArgumentException or InvalidOperationException or NullReferenceException)
+            {
+                GD.PushWarning($"Combat: cannot build the rules from the install ({error.Message}); using the content pack's");
+                return null;
+            }
+        }));
+    }
+
+    /// <summary>The text of a combat file the install gives in place of the pack's, or null: the file then comes from
+    /// disk. Waits for the background build when it has not finished.</summary>
+    private string? InstallCombatText(string relative)
+    {
+        if (_installCombat is not { } combat || relative is not (CombatRulesFile or BloodFile) || !_cacheFiles.FromPack(relative)) return null;
+        var built = combat.Build.Result;
+        return built == null ? null : relative == CombatRulesFile ? built.Value.Rules : built.Value.Blood;
     }
 
     /// <summary>PackRules' sections, and PackModelRules' when the archives are open and give them.</summary>

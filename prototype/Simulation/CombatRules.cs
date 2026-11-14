@@ -130,12 +130,49 @@ public sealed class CombatRules
     private readonly Dictionary<(int From,int To),UnitPairRule> _pairs = [];
     private readonly Dictionary<(int From,int To),int> _types = [];
 
+    /// <summary>Build-203: the SHA-256 of the rules' values, not of their text: object keys in ordinal order, numbers by
+    /// value (20 and 20.0 alike), without the provenance Sources, whose keys name where the install sits. Rules built
+    /// from the install and the pack's file of the same install then hash alike, and so do the state digests.</summary>
+    public static string ValuesHash(JsonElement root)
+    {
+        var text = new StringBuilder();
+        void Write(JsonElement element,bool top)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    text.Append('{');
+                    foreach (var property in element.EnumerateObject().Where(p => !(top && p.Name == "Sources")).OrderBy(p => p.Name,StringComparer.Ordinal))
+                    {
+                        text.Append(JsonSerializer.Serialize(property.Name)).Append(':');
+                        Write(property.Value,false);
+                        text.Append(',');
+                    }
+                    text.Append('}');
+                    break;
+                case JsonValueKind.Array:
+                    text.Append('[');
+                    foreach (var item in element.EnumerateArray()) { Write(item,false); text.Append(','); }
+                    text.Append(']');
+                    break;
+                case JsonValueKind.Number:
+                    text.Append(element.TryGetInt64(out long whole) ? whole.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                        : element.GetDouble().ToString("R",System.Globalization.CultureInfo.InvariantCulture));
+                    break;
+                case JsonValueKind.String: text.Append(JsonSerializer.Serialize(element.GetString())); break;
+                default: text.Append(element.GetRawText()); break;
+            }
+        }
+        Write(root,true);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())));
+    }
+
     public static CombatRules Parse(string json)
     {
         using var document = JsonDocument.Parse(json); var root = document.RootElement;
         if (root.GetProperty("FormatVersion").GetInt32() != 3 || root.GetProperty("TicksPerSecond").GetInt32() != SimWorld.TicksPerSecond)
             throw new ArgumentException("Unsupported combat rules");
-        var rules = new CombatRules { Hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json))) };
+        var rules = new CombatRules { Hash = ValuesHash(root) };
         foreach (var item in root.GetProperty("TypeMatchups").EnumerateArray())
         {
             var type = item.Deserialize<DamageTypeRule>() ?? throw new ArgumentException("Missing damage type matchup");

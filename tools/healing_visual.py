@@ -6,6 +6,10 @@ from PIL import Image
 import lfx
 from prototype_interface import crop_rect
 
+# The folder the effects' extracted/ files are read from and named relative to (the repository; combat_fingerprint.py
+# points it at a layout of another install).
+ROOT = Path(__file__).resolve().parent.parent
+
 
 def layer_keys(track):
     keys = []
@@ -25,7 +29,7 @@ def export(output, resolver, trace):
 
 def export_sprite_effect(output, resolver, trace, effect_name, folder, clip_atlas_edges=False, track_names=None):
     """Shared original atlas/key extraction for Kingsfoil and the building fire effect."""
-    root = Path(__file__).resolve().parent.parent
+    root = ROOT
     record = resolver.db['Effects'].get(effect_name)
     source = Path(resolver.index.find('Effects', record['Filename']))
     effect = lfx.parse(source.read_bytes())
