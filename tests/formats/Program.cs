@@ -8,6 +8,8 @@
 //       build-193: the original text built from the install, compared with python tools/game_text.py --install --out
 //   ... --install "<install>" --python-rules <rules.json>
 //       build-194: the rule sections built from the install, compared with python tools/rules_fingerprint.py
+//   ... --install "<install>" --python-models <models.json> [--dump-model Models/Units/Good/Aragorn/G_Aragorn.lmd]
+//       build-195: every mesh, skeleton, weight and model file parsed, compared with python tools/models_fingerprint.py
 System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 int passed = 0;
@@ -25,6 +27,8 @@ if (Array.IndexOf(args,"--install") is int install && install >= 0)
     InstallChecks.Run(args[install+1],python >= 0 ? args[python+1] : null,args.Contains("--sequential"),Check);
     if (Array.IndexOf(args,"--python-text") is int text && text >= 0) TextChecks.Install(args[install+1],args[text+1],Check);
     if (Array.IndexOf(args,"--python-rules") is int rules && rules >= 0) RulesChecks.Install(args[install+1],args[rules+1],RepositoryRoot(),Check);
+    if (Array.IndexOf(args,"--python-models") is int models && models >= 0) ModelChecks.Install(args[install+1],args[models+1],Check);
+    if (Array.IndexOf(args,"--dump-model") is int dump && dump >= 0) ModelChecks.Dump(args[install+1],args[dump+1]);
 }
 Console.WriteLine($"{passed} format checks passed");
 

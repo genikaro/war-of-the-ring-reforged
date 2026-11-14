@@ -1,5 +1,16 @@
 # Godot C# skirmish sandbox
 
+**build-195:** C# parsers for the model formats, the start of building models and the model-based rules from the
+install. `prototype/Formats` gains `LmsMesh` (meshes, with the strict group and triangle-flag footer navigation needs),
+`LskSkeleton` (joints and animation clips), `LwtWeights` (skin weights) and `LmdModel` (model slots, animation states
+and their tracks, attachments, cloth, bounding boxes, cloth collision volumes and clip events), ported from `lms.py`,
+`lsk.py`, `lwt.py`, `lmd.py` and `lmd_states.py`; `Cursor` checks every length against the file. All 74 MB of the
+install's 4,912 model files parse in about 0.1 s on one thread. `tools/models_fingerprint.py` writes each parse in a
+canonical form both languages produce the same way (float bit patterns, UTF-8 hex, keys in order) and hashes it, and
+`tests/formats --python-models` requires the C# parse of every file to hash the same: on the English and Russian installs
+all 7,307 readings match (the nine Obelisk effect meshes whose footer neither side can read fail on both). `--dump-model`
+prints one file's canonical form beside `models_fingerprint.py --dump`. Nothing in the game uses the parsers yet.
+
 **build-194:** the rule tables the database gives are built from the install at startup too. `PackRules`
 (`prototype/Install`) ports the Python that writes seven content pack sections: `factions`, `team_colors`,
 `skirmish.start_state`, `skirmish.production` with Fate, `skirmish.research`, `skirmish.places_of_power` and
@@ -1140,6 +1151,8 @@ python tools/game_text.py --install "Legacy/Game EN" --out artifacts/text-en.jso
 ./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python-text artifacts/text-en.json
 python tools/rules_fingerprint.py "Legacy/Game EN" artifacts/rules-en.json
 ./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python-rules artifacts/rules-en.json
+python tools/models_fingerprint.py "Legacy/Game EN" artifacts/models-en.json
+./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python-models artifacts/models-en.json
 ./prototype/run.ps1 -Smoke
 ./prototype/run.ps1 -MotionSmoke
 ./prototype/run.ps1 -CombatSmoke
