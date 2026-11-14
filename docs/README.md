@@ -1,5 +1,14 @@
 # Godot C# skirmish sandbox
 
+**build-202:** a unit following cells no longer waits forever behind an idle unit standing off its cell centre.
+A blocked unit replans every ten ticks around the cells other units stand in, but a body 0.3 m off its centre still
+blocks the diagonal step past that cell, so every replan chose the same step again: build-201's research smoke
+Axethrower stood 2000 ticks behind an idle builder on Bilbo's Bluffs. The replan now also leaves out the cells next to
+the unit that a resting body (no destination, not crossing a link) leaves no room to step to; with no route left the
+unit asks for room, and the idle unit makes way. Moving blockers are still waited out as before, and the crowd checks'
+metrics and digests are unchanged. `--resting-blocker-checks` covers both cases; with the Axethrower's old rally point
+back, the research smoke passes too.
+
 **build-201:** the research smoke passes again (31 of 31, last seen passing at build-83). Its stage-352 axe target
 copies the worker's rules with `DpsMilli = 0`, but since build-95 the worker also carries a fixed 5-damage punch
 (`DamagePerHitMilli`), which `UnitDefinition.Validate` rightly refuses without a rate: the dummy now clears both. The final

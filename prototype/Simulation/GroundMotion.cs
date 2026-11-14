@@ -38,6 +38,30 @@ public sealed partial class SimWorld
         return detour;
     }
 
+    /// <summary>Build-200: a blocked unit following cells also leaves out the cells next to it that a resting body (a
+    /// unit with no destination, not crossing a link) leaves no room to step to. Occupancy holds the cell a body stands
+    /// in, not the diagonal past it: an idle builder 0.3 m off its centre blocked that step for good, and every replan
+    /// chose it again (the research smoke's Axethrower waited 2000 ticks). With no route left, the unit asks for room.</summary>
+    private void BlockRestingSteps(SimUnit unit,int start,HashSet<int> blocked)
+    {
+        if (start >= Navigation.GroundCount) return;
+        var (ax,az) = Navigation.Center(start);
+        foreach (int next in Nav(unit).NeighborsInto(start,_restingSteps))
+        {
+            if (next >= Navigation.GroundCount || blocked.Contains(next)) continue;
+            var (bx,bz) = Navigation.Center(next);
+            var heights = Navigation.MovementHeights(start,next);
+            bool Resting(SimUnit other) => other.Id != unit.Id && other.Present && other.Goal < 0 && other.TransitNode < 0
+                && heights.Low < other.Y+other.Definition.BodyHeightMm && other.Y < heights.High+unit.Definition.BodyHeightMm
+                && IntegerMotion.SegmentsNear(ax,az,bx,bz,other.X,other.Z,other.X,other.Z,BodySeparation(unit,other));
+            bool fast = false;
+            foreach (var other in Grid.AlongMovement(ax,az,bx,bz,SeparationBound(unit),_localScan)) if (Resting(other)) { fast = true; break; }
+            if (VerifyFastPaths) Verified(fast,ActiveUnits.Any(Resting),$"resting body beside the step of unit {unit.Id} to node {next}");
+            if (fast) blocked.Add(next);
+        }
+    }
+    private readonly List<int> _restingSteps = new(8);
+
     /// <summary>Whether a map change in these cell rectangles can affect this unit's route: the rest of it passes
     /// within a body radius and three cells of one (a new building may block it), or it never reached its goal
     /// (a removed one may open the way).</summary>

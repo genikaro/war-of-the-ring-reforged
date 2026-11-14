@@ -912,6 +912,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
                 // map; building one here needlessly rasterized every body for every blocked unit's retry.
                 var blocked = avoid ? OccupiedNodes(unit.Id,into: _replanOccupied) : null;
                 blocked?.Remove(start);
+                if (blocked != null && !unit.FreeMovement) BlockRestingSteps(unit,start,blocked);
                 // A unit whose last replan already failed keeps no route to repair; it retries on a smaller budget.
                 bool routed = unit.Path.Count > 0 && unit.Path[^1] == unit.Goal;
                 unit.Path = (avoid && unit.YieldGoal < 0 ? RepairRoute(unit,start,blocked!) : null)

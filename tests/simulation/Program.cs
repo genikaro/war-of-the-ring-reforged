@@ -107,6 +107,11 @@ if (args.Contains("--game-text-checks"))
     GameTextChecks.Run(Check);
     Console.WriteLine($"{passed} game text checks passed"); return;
 }
+if (args.Contains("--resting-blocker-checks"))
+{
+    RestingBlockerChecks.Run(Check);
+    Console.WriteLine($"{passed} resting blocker checks passed"); return;
+}
 if (args.Contains("--evil-upgrade-checks"))
 {
     EvilUpgradeChecks.Run(Check);
@@ -375,6 +380,7 @@ NavigationPickerChecks.Run(Check);
 DirectionalChecks.Run(Check);
 SmoothingChecks.Run(Check);
 TrafficChecks.Run(Check);
+RestingBlockerChecks.Run(Check);
 ResponsivenessChecks.Run(Check);
 CombatChecks.Run(Check);
 OrderChecks.Run(Check);
