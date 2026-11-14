@@ -1,5 +1,31 @@
 # Godot C# skirmish sandbox
 
+**build-209:** a skirmish map's navigation, heights and start layout come from the install, built while the match
+loads. `PackMap` (`prototype/Install`) ports `prepare_prototype.prepare_skirmish` but its scene: the start points from
+the editor markers, each Citadel moved off the resources and unbuildable ground as `skirmish_map.start_position` moves
+it, the construction sites on every ore pile and well, the start workers on the ground their base stands on, the
+resources with their nearest base, the selectable neutral objects, the camera cell and the map's classic lighting
+(`map_lighting.lighting`). `MapNavigation` ports `build_navigation` and `prototype_clearance`: the walker grid with
+every object's removable obstacle layer (`prototype_obstacles`), the walkable-mesh nodes and links over the bridges,
+Osgiliath's walkways and Lórien's flets (`prototype_navigation.build`), the walker-mask audit (`verify_walker_masks`),
+the building grid and a clearance profile for each of the pack's 53 bodies. `MapGeometry` is their geometry, operation
+for operation, with CPython's compensated `sum()`, `math.dist`, `hypot` and float `//` (`PyMath.Dist`, `FloorDiv`).
+**Navigation is built at load time, not cached.** The import cached it because the Python took 1.5 to 3 minutes a map,
+nearly all of it the 53 body profiles; the C# build of any of the 32 maps with all its profiles takes 0.1 to 1.4 s on
+all cores (Bilbo's Bluffs: about 0.2 s for the layout and 0.5 s for the profiles), less than reading and parsing the
+import's 20-60 MB `navigation.json` took. Nothing can go stale when a unit's body or the rules change (a new body used
+to need every map re-imported), and the map last built stays in memory, so Restart builds nothing again. A match on a
+map the install has (`converted/skirmish` is Bilbo's Bluffs, `converted/skirmish-maps/<stem>` the others; the Sandbox
+not yet) reads its manifest, `navigation.json` and `heights.bin` from these builders (`Main.InstallMaps.cs`); the scene
+and the lighting pictures still come from the cache folder (build-210). `tools/map_fingerprint.py` builds every map's
+cache the Python way from a layout of an install, without the scene, and records the manifest, the heights and
+`navigation.json` in pieces; `tests/formats --python-maps` requires the C# ones to equal them: all 32 multiplayer maps
+do on the English and Russian installs. The skirmish, construction, minimap and placement smokes on Bilbo's Bluffs
+and the observer smoke on Mighty Silverlode (rope bridges) give the same reports with the Russian install as without
+it; the placement smoke's swordsman stats check fails either way, as before, and the observer smoke ends in the same
+state digest at the same tick (its minute-by-minute timeline samples whichever tick a frame lands on, so a few lines
+differ between any two runs). The simulation checks pass.
+
 **build-208:** a C# reader for the levels, the first step to playing the maps straight from the install. `World`
 (`prototype/Formats`) ports `wor.py` and `world_scene.py`: the header, the Blast-packed terrain vertices with their CRC
 and heights, the name table (found as the Python finds it, by its repeated size and printable names, never guessed),

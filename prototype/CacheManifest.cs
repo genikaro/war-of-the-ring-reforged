@@ -24,10 +24,12 @@ public sealed class CacheManifest
     private CacheManifest(string cache,string content,JsonElement root,JsonElement mapFiles,JsonElement packFiles)
     { Cache = cache; Content = content; Root = root; _mapFiles = mapFiles; _packFiles = packFiles; }
 
-    public static CacheManifest Load(string cache)
+    /// <summary>Build-209: <paramref name="manifestText"/>, when given, is the map's manifest built from the install,
+    /// read in place of the folder's manifest.json.</summary>
+    public static CacheManifest Load(string cache,string? manifestText = null)
     {
         cache = Path.GetFullPath(cache);
-        var manifest = JsonNode.Parse(File.ReadAllText(Path.Combine(cache,"manifest.json")))!.AsObject();
+        var manifest = JsonNode.Parse(manifestText ?? File.ReadAllText(Path.Combine(cache,"manifest.json")))!.AsObject();
         if (manifest["content"]?.GetValue<string>() is not { } relative)
         {
             var self = JsonDocument.Parse(manifest.ToJsonString()).RootElement.Clone();

@@ -22,6 +22,10 @@
 //       build-205: the content pack's files built from the install, compared with python tools/pack_fingerprint.py
 //   ... --install "<install>" --python-worlds <worlds.json> [--dump-world Multiplayer/MP02_Sorrow.wor]
 //       build-208: every level read and resolved, compared with python tools/world_fingerprint.py
+//   ... --install "<install>" --python-maps <maps.json>
+//       build-209: every multiplayer map's manifest, heights and navigation built, compared with tools/map_fingerprint.py
+//   ... --install "<install>" --compare-map <stem> <dump.json> <content.json>
+//       one map whole against map_fingerprint.py --dump, every difference listed
 System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 int passed = 0;
@@ -50,6 +54,9 @@ if (Array.IndexOf(args,"--install") is int install && install >= 0)
     if (Array.IndexOf(args,"--python-files") is int packFiles && packFiles >= 0) FilesChecks.Install(args[install+1],args[packFiles+1],Check);
     if (Array.IndexOf(args,"--python-worlds") is int worlds && worlds >= 0) WorldChecks.Install(args[install+1],args[worlds+1],Check);
     if (Array.IndexOf(args,"--dump-world") is int dumpWorld && dumpWorld >= 0) WorldChecks.Dump(args[install+1],args[dumpWorld+1]);
+    if (Array.IndexOf(args,"--python-maps") is int maps && maps >= 0) MapChecks.Install(args[install+1],args[maps+1],Check);
+    if (Array.IndexOf(args,"--time-maps") is int timeMaps && timeMaps >= 0) MapChecks.Time(args[install+1],args[timeMaps+1],timeMaps+2 < args.Length && !args[timeMaps+2].StartsWith("--") ? args[timeMaps+2] : null);
+    if (Array.IndexOf(args,"--compare-map") is int compareMap && compareMap >= 0) MapChecks.CompareDump(args[install+1],args[compareMap+1],args[compareMap+2],args[compareMap+3]);
 }
 Console.WriteLine($"{passed} format checks passed");
 

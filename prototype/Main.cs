@@ -269,7 +269,12 @@ public partial class Main : Node3D
     private async Task LoadSandboxAsync()
     {
         await LoadingStep("Reading the map",.01f);
-        _cacheFiles = await Task.Run(() => CacheManifest.Load(_cache));
+        _cacheFiles = await Task.Run(() =>
+        {
+            string? built = InstallMapManifest(_cache); // Build-209: the map's own manifest from the install.
+            _mapFromInstall = built != null;
+            return CacheManifest.Load(_cache,built);
+        });
         var manifest = _cacheFiles.Root;
         if (manifest.GetProperty("format_version").GetInt32() != 1) throw new InvalidOperationException("Unsupported cache format");
         _skirmish = manifest.TryGetProperty("mode",out var mode) && mode.GetString() == "skirmish";
@@ -294,8 +299,8 @@ public partial class Main : Node3D
         LoadBlood();
         await LoadingStep("Building the ground",.22f);
         var (nav,navigation,dynamic) = await Task.Run(() => {
-            var nav = ReadJson("navigation.json");
-            byte[] bytes = System.IO.File.ReadAllBytes(CachePath("heights.bin"));
+            var nav = InstallNavigation() is { } built ? JsonDocument.Parse(built).RootElement.Clone() : ReadJson("navigation.json");
+            byte[] bytes = InstallHeights() ?? System.IO.File.ReadAllBytes(CachePath("heights.bin"));
             int[] heights = new int[bytes.Length / 4];
             for (int i = 0; i < heights.Length; i++) heights[i] = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(i * 4, 4));
             bool dynamic = nav.TryGetProperty("runtime_obstacles", out _obstacleLayers);

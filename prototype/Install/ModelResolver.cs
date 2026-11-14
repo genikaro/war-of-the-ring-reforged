@@ -53,7 +53,7 @@ public sealed class ModelResolver
     }
 
     /// <summary>The single file called <paramref name="name"/> anywhere in the folder's archive, else null.</summary>
-    private string? FindBasename(string folder,string name)
+    public string? FindBasename(string folder,string name)
     {
         if (Archives.Archive(folder) is not { } archive) return null;
         var hits = archive.Entries.Where(e => e.Path.Replace('\\','/').Split('/')[^1].Equals(name,StringComparison.OrdinalIgnoreCase)).Take(2).ToList();

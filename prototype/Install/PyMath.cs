@@ -59,6 +59,28 @@ public static class PyMath
         return total;
     }
 
+    /// <summary>Build-209: math.dist(p, q) as CPython 3.13 computes it: the absolute differences through vector_norm.</summary>
+    public static double Dist(double ax,double ay,double az,double bx,double by,double bz)
+    {
+        double x = Math.Abs(ax-bx), y = Math.Abs(ay-by), z = Math.Abs(az-bz);
+        if (double.IsInfinity(x) || double.IsInfinity(y) || double.IsInfinity(z)) return double.PositiveInfinity;
+        if (double.IsNaN(x) || double.IsNaN(y) || double.IsNaN(z)) return double.NaN;
+        return Norm([x,y,z],Math.Max(x,Math.Max(y,z)));
+    }
+
+    /// <summary>Build-209: Python's float floor division a // b (fmod, then the quotient snapped to the nearest
+    /// integer), which can differ from floor(a / b).</summary>
+    public static double FloorDiv(double a,double b)
+    {
+        double mod = a%b; // C's fmod: the sign of the dividend.
+        double div = (a-mod)/b;
+        if (mod != 0 && (b < 0) != (mod < 0)) div -= 1.0;
+        if (div == 0) return Math.CopySign(0.0,a/b);
+        double floor = Math.Floor(div);
+        if (div-floor > 0.5) floor += 1.0;
+        return floor;
+    }
+
     private static double Norm(double[] vec,double max)
     {
         if (max == 0.0 || vec.Length <= 1) return max;

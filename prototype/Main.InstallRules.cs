@@ -23,7 +23,7 @@ public partial class Main
     private const string CombatRulesFile = "combat/rules.json", BloodFile = "combat/blood.json";
 
     /// <summary>The install's archives and database, open for the session, and the models built from them.</summary>
-    private static (string Install,Reforged.Formats.GameArchives Archives,Reforged.Formats.LqrDatabase Db,PackModels Models,PackAudio Audio,PackImages Images)? _installModels;
+    private static (string Install,Reforged.Formats.GameArchives Archives,Reforged.Formats.LqrDatabase Db,PackModels Models,PackAudio Audio,PackImages Images,PackMap Maps)? _installModels;
 
     /// <summary>Build-205: the audio index built from the install, as JSON text, in the background from startup.</summary>
     private static Task<string?>? _installAudio;
@@ -160,6 +160,7 @@ public partial class Main
         if (install != null && _installModels?.Install == install) return;
         _installModels?.Archives.Dispose();
         _installModels = null;
+        _installMap = null;
         _installAudio = null;
         InstallFiles.Use(null);
         if (install == null) return;
@@ -173,7 +174,7 @@ public partial class Main
             var audio = new PackAudio(db,archives);
             var images = new PackImages(db,archives);
             images.AddCorruptionTiles();
-            _installModels = (install,archives,db,models,audio,images);
+            _installModels = (install,archives,db,models,audio,images,new PackMap(db,archives));
             UseInstallPictures(images);
             _installAudio = Task.Run<string?>(() =>
             {
