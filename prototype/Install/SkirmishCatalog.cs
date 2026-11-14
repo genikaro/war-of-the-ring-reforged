@@ -25,6 +25,11 @@ public static class SkirmishCatalog
     public static readonly string[] SkirmishUnits = [.. GoodUnits, .. EvilUnits];
     /// <summary>combat_rules.UNITS, the first combat demo units.</summary>
     public static readonly string[] CombatDemoUnits = ["UNIT_G_HERO_ARAGORN", "UNIT_G_ELF_KNIGHT", "UNIT_E_URUK_HAI", "UNIT_G_ELVEN_ARCHER"];
+    /// <summary>combat_rules.RANGED_UNITS: units with a missile weapon; their exported models get centred pivots.</summary>
+    public static readonly string[] RangedUnits = ["UNIT_G_ELVEN_ARCHER", "UNIT_G_DWARVEN_AXETHROWER", "UNIT_G_ELVEN_LIGHTBRINGER", "UNIT_G_HERO_LEGOLAS",
+        "UNIT_G_GIANT_ENT", "UNIT_E_ORC_BOWMAN", "UNIT_E_URUK_HAI", "UNIT_E_TROLL_STONEHURLER", "UNIT_E_HERO_QAMARA"];
+    /// <summary>skirmish_production.RALLY_BANNER: the rally point's flag.</summary>
+    public const string RallyBanner = "MODEL_G_GATHER_POINT";
     /// <summary>prepare_prototype.SKIRMISH_ROSTER: every unit the content pack exports, the Fate giants included.</summary>
     public static readonly string[] Roster = [.. CombatDemoUnits.Concat(SkirmishUnits).Concat(["UNIT_G_GIANT_ENT", "UNIT_E_HERO_BALROG"]).Distinct()];
 

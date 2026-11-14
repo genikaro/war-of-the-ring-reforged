@@ -253,7 +253,11 @@ public partial class Main : Node3D
         => JsonDocument.Parse(System.IO.File.ReadAllText(CachePath(relative))).RootElement.Clone();
 
     private Node3D LoadGlb(string relative, Color? teamColor = null)
-        => _presentation.Load(CachePath(relative), relative, teamColor);
+        => InstallModel(relative) is { } glb ? _presentation.Load(glb, relative, teamColor) : _presentation.Load(CachePath(relative), relative, teamColor);
+
+    /// <summary>A model file's extras.wotrAppearance, from the install's model when there is one (build-198).</summary>
+    private JsonElement ReadAppearance(string relative)
+        => InstallModel(relative) is { } glb ? UnitAppearance.ReadGlb(glb) : UnitAppearance.Read(CachePath(relative));
 
     /// <summary>Build-147: the cache loads in steps behind the loading screen. Reading files, checking their hashes,
     /// parsing the rules and building the navigation grid and its path regions run off the main thread; the steps
@@ -273,6 +277,7 @@ public partial class Main : Node3D
         if (_loadingScreen != null) _loadingScreen.Title = _mapName;
         await LoadingStep("Checking the map files",.03f);
         await Task.Run(_cacheFiles.Verify);
+        await PrepareInstallModels();
         _lighting = MapLighting.FromManifest(manifest,CachePath);
         ClassicLighting.Apply(_lighting);
         _presentation.Classic = true; _presentation.CloudMap = ClassicLighting.CloudMap(_lighting);
@@ -419,7 +424,7 @@ public partial class Main : Node3D
         root.AddChild(ring);
         var health = new HealthBar(Math.Max(1.1f,2.2f*unit.Definition.BodyRadiusMm/1000f),.16f) { Position = new(0,.12f,0) };
         root.AddChild(health);
-        if (!_appearanceData.ContainsKey(modelKey.Item1)) _appearanceData[modelKey.Item1] = UnitAppearance.Read(CachePath(modelKey.Item1));
+        if (!_appearanceData.ContainsKey(modelKey.Item1)) _appearanceData[modelKey.Item1] = ReadAppearance(modelKey.Item1);
         if (!_appearanceTables.TryGetValue(modelKey.Item1,out var appearanceTable))
             _appearanceTables[modelKey.Item1] = appearanceTable = new AppearanceTable(_appearanceData[modelKey.Item1]);
         var appearance = new UnitAppearance(visual,appearanceTable);

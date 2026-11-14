@@ -1,5 +1,20 @@
 # Godot C# skirmish sandbox
 
+**build-198:** a match's models come from the install. `PackModels` (`prototype/Install`) builds the content pack's
+model files from it: every roster unit (`units/`), skirmish building (`buildings/`), place of power (`objects/places/`)
+and the rally banner, 89 files, each as the import writes it: `ModelGltf`, then for units `prototype_assets.adapt`
+(locomotion in place, ranged units' pivots centred, hidden meshes restored and renamed) and for buildings
+`restore_building` (construction materials split); a file the import writes twice keeps the last write. With an install
+found, the game opens its archives once, and a match's loading builds those files on every core behind the loading
+screen (about 0.7 s), keeps them in memory (57 MB) and loads them with `GltfDocument.AppendFromBuffer`;
+`UnitAppearance.ReadGlb` reads their appearance. The builds' 600 MB of short-lived working data is collected at once
+(about 90 ms): left to the runtime its pauses made Bilbo's Bluffs load in 10.2 s, now 3.9 s (2.6 s from the pack's
+files). The skirmish, construction, places of power and production smokes give identical reports either way. Files a map cache holds itself (Helm's Deep) and the pack's other models (projectiles, effects,
+hero drops, global powers) still come from disk, and so does everything without an install. `gltf_fingerprint.py
+--pack` builds the same files the Python way and `tests/formats --python-pack` requires the C# ones to equal them: all
+89 do on the English and Russian installs. The content pack's files on disk, built from the Russian install, equal
+fresh Python output too, so the game shows exactly the models it showed before.
+
 **build-197:** models assembled as glTF from the install. `ModelGltf` (`prototype/Install`) ports
 `lms2gltf.convert_model` and `model_appearance.py`: every mesh part (winding chosen to agree with the stored normals,
 missing normals rebuilt, the top four skin weights), the skeleton with one animation per clip, materials with the team
@@ -1182,6 +1197,8 @@ python tools/resolve_fingerprint.py "Legacy/Game EN" artifacts/resolve-en.json
 ./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python-resolve artifacts/resolve-en.json
 python tools/gltf_fingerprint.py "Legacy/Game EN" artifacts/gltf-en.json
 ./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python-gltf artifacts/gltf-en.json
+python tools/gltf_fingerprint.py "Legacy/Game EN" artifacts/pack-en.json --pack
+./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python-pack artifacts/pack-en.json
 ./prototype/run.ps1 -Smoke
 ./prototype/run.ps1 -MotionSmoke
 ./prototype/run.ps1 -CombatSmoke

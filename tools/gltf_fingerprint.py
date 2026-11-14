@@ -4,6 +4,7 @@
 python tools/gltf_fingerprint.py "C:/Games/War of the Ring" gltf.json
 python tools/gltf_fingerprint.py "C:/Games/War of the Ring" --dump MODEL_G_ARAGORN
 
+With --pack (build-198), the content pack's files instead, post-processed as the import writes them (pack_plan).
 The models: every roster unit's, every skirmish building's, every place-of-power object's and the rally banner, each
 converted from a layout of the given install (resolve_fingerprint.lay_out, with the meshes, weights and textures read
 too). A GLB is compared by its JSON with each accessor's buffer view replaced by the SHA-256 of its bytes and each
@@ -46,6 +47,49 @@ def model_names(db):
             names.append(db['Models'].get(event['AssociatedModelResource1']).name)
     names.append(skirmish_production.RALLY_BANNER)
     return list(dict.fromkeys(names))
+
+
+def pack_plan(db):
+    """Pack file -> (model, post-processing) as content_pack.build writes them (build-198): roster units adapted
+    (ranged ones with centred pivots), skirmish buildings restored, places of power and the rally banner as converted.
+    A file written twice keeps the last write."""
+    import combat_rules
+    import prepare_prototype
+    import skirmish_map
+    import skirmish_production
+    plan = {}
+    for unit in prepare_prototype.SKIRMISH_ROSTER:
+        model = db['Models'].get(db['Units'].get(unit)['Model']).name
+        plan['units/%s.glb' % model] = (model, 'ranged' if unit in combat_rules.RANGED_UNITS else 'unit')
+    for building in skirmish_map.SKIRMISH_BUILDINGS:
+        model = db['Models'].get(db['Buildings'].get(building)['Model']).name
+        plan['buildings/%s.glb' % model] = (model, 'building')
+    for record in db['Objects'].records:
+        if record.name.startswith('OBJECT_PLACE_OF_POWER_'):
+            event = db['ModelEvents'].get(record['ModelEvent'])
+            model = db['Models'].get(event['AssociatedModelResource1']).name
+            plan['objects/places/%s.glb' % model] = (model, 'plain')
+    plan[skirmish_production.RALLY_BANNER_FILE] = (skirmish_production.RALLY_BANNER, 'plain')
+    return plan
+
+
+def _pack_file(item):
+    import lms2gltf
+    import prototype_assets
+    relative, (model, kind) = item
+    path = os.path.join(tempfile.gettempdir(), 'reforged-pack-%d-%s' % (os.getpid(), relative.replace('/', '_')))
+    try:
+        lms2gltf.convert_model(_resolver, model, path)
+        if kind in ('unit', 'ranged'):
+            prototype_assets.adapt(path, center_pivot=kind == 'ranged')
+        elif kind == 'building':
+            prototype_assets.restore_building(path)
+        return relative, resolve_fingerprint.canonical_hash(normalized(Path(path).read_bytes()))
+    except Exception as failure:  # noqa: BLE001
+        return relative, 'error: %s: %s' % (type(failure).__name__, failure)
+    finally:
+        if os.path.exists(path):
+            os.remove(path)
 
 
 def normalized(glb):
@@ -96,6 +140,7 @@ def main():
     parser.add_argument('out', nargs='?')
     parser.add_argument('--dump', help='print the canonical form of one model')
     parser.add_argument('--workers', type=int)
+    parser.add_argument('--pack', action='store_true', help='the content pack files instead: post-processed as the import writes them')
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix='reforged-gltf-') as root:
         resolve_fingerprint.lay_out(args.install, root)
@@ -106,9 +151,11 @@ def main():
             lms2gltf.convert_model(_resolver, args.dump, path)
             print(''.join(models_fingerprint.canonical(normalized(Path(path).read_bytes()), [])))
             return
-        names = model_names(_resolver.db)
         with ProcessPoolExecutor(args.workers, initializer=_start, initargs=(args.install, root)) as pool:
-            models = dict(pool.map(_convert, names))
+            if args.pack:
+                models = dict(pool.map(_pack_file, pack_plan(_resolver.db).items()))
+            else:
+                models = dict(pool.map(_convert, model_names(_resolver.db)))
     Path(args.out).write_text(json.dumps({'format_version': 1, 'models': models}, indent=1) + '\n', encoding='utf-8')
     print('%d models, %d that do not convert' % (len(models), sum(v.startswith('error') for v in models.values())))
 

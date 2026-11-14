@@ -47,7 +47,7 @@ public partial class Main
             string file = files.GetProperty(start.Building).GetString()!;
             var model = TurnModel(LoadGlb(file,_teamColors[team]),start.Building); root.AddChild(model);
             // Restored building models carry every source state; show the healthy one.
-            var appearance = Reforged.Rendering.UnitAppearance.Read(CachePath(file));
+            var appearance = ReadAppearance(file);
             new Reforged.Rendering.UnitAppearance(model,appearance).Apply(BuildingStateClips(appearance)[3],0);
             AddChild(root); _buildingViews.Add(root);
             int obstacle = start.Footprint;

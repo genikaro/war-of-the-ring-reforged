@@ -280,7 +280,7 @@ public partial class Main
     private Node3D BuildingGhost(string building,StandardMaterial3D material)
     {
         var ghost = TurnModel(LoadGlb(_constructionFiles[building],TeamColor(Math.Max(0,PlayerTeam))),building); AddChild(ghost);
-        var data = UnitAppearance.Read(CachePath(_constructionFiles[building]));
+        var data = ReadAppearance(_constructionFiles[building]);
         new UnitAppearance(ghost,data).Apply(BuildingStateClips(data)[3],0);
         foreach (var mesh in Descendants(ghost).OfType<MeshInstance3D>()) mesh.MaterialOverride = material;
         return ghost;
@@ -386,7 +386,7 @@ public partial class Main
     {
         view.Model.QueueFree();
         var model = TurnModel(LoadGlb(_constructionFiles[building],_teamColors[site.Team]),building); view.Root.AddChild(model);
-        var data = UnitAppearance.Read(CachePath(_constructionFiles[building]));
+        var data = ReadAppearance(_constructionFiles[building]);
         view.Model = model; view.Appearance = new UnitAppearance(model,data); view.Clips = BuildingStateClips(data);
         view.Player = Descendants(model).OfType<AnimationPlayer>().FirstOrDefault(); view.Speed = null;
         view.Building = building; view.Stage = -1; view.DamageStage = 0; view.Live = false; view.BarVertices = []; view.BarAnchorValid = false;
@@ -426,7 +426,7 @@ public partial class Main
                 var model = TurnModel(LoadGlb(_constructionFiles[rules.Name],_teamColors[site.Team]),rules.Name);
                 var root = new Node3D { Position = PositionOf(x,z),Name = "Building_"+site.Id };
                 root.AddChild(model); AddChild(root);
-                var appearanceData = UnitAppearance.Read(CachePath(_constructionFiles[rules.Name]));
+                var appearanceData = ReadAppearance(_constructionFiles[rules.Name]);
                 var clips = BuildingStateClips(appearanceData);
                 var (barWidth,barHeight) = SiteBarSize(site);
                 var bar = new HealthBar(barWidth,barHeight) { Position = new(0,.14f,0) };

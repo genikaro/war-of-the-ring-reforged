@@ -93,6 +93,33 @@ public static class GltfChecks
             +string.Concat(differences.Take(25).Select(d => "\n  "+d))+(differences.Count > 25 ? $"\n  ... {differences.Count} in all" : ""));
     }
 
+    /// <summary>Build-198: the content pack's model files built from the install (PackModels), post-processed as the
+    /// import writes them, against gltf_fingerprint.py --pack.</summary>
+    public static void Pack(string install,string python,Action<bool,string> check)
+    {
+        using var archives = GameArchives.OpenInstall(install);
+        var models = new PackModels(LqrDatabase.OpenInstall(install),archives);
+        using var document = JsonDocument.Parse(File.ReadAllBytes(python));
+        var expected = document.RootElement.GetProperty("models").EnumerateObject().ToDictionary(p => p.Name,p => p.Value.GetString()!);
+        var differences = new System.Collections.Concurrent.ConcurrentBag<string>();
+        if (!expected.Keys.Order(StringComparer.OrdinalIgnoreCase).SequenceEqual(models.Plan.Keys.Order(StringComparer.OrdinalIgnoreCase),StringComparer.OrdinalIgnoreCase))
+            differences.Add("pack files: "+string.Join(", ",models.Plan.Keys.Except(expected.Keys,StringComparer.OrdinalIgnoreCase)
+                .Concat(expected.Keys.Except(models.Plan.Keys,StringComparer.OrdinalIgnoreCase))));
+        var clock = Stopwatch.StartNew();
+        Parallel.ForEach(expected,file =>
+        {
+            string hash;
+            try { hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.ASCII.GetBytes(ResolveChecks.Canonical(Normalized(models.Build(file.Key)))))); }
+            catch (Exception error) when (error is InvalidDataException or KeyNotFoundException or FileNotFoundException or InvalidCastException)
+            { hash = "error: "+error.Message; }
+            if (hash != file.Value) differences.Add($"{file.Key}: {(hash.StartsWith("error") ? hash : "differs")}");
+        });
+        Console.WriteLine($"Built the {expected.Count} pack model files on all cores in {clock.ElapsedMilliseconds} ms");
+        var shown = differences.Order(StringComparer.Ordinal).ToList();
+        check(shown.Count == 0,$"Every content pack model file built from the install equals the import's, post-processing included ({expected.Count} files)"
+            +string.Concat(shown.Take(25).Select(d => "\n  "+d)));
+    }
+
     public static void Dump(string install,string model)
     {
         using var archives = GameArchives.OpenInstall(install);

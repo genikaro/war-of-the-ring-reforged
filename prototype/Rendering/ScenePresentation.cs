@@ -21,6 +21,21 @@ public sealed class ScenePresentation
         using var state = new GltfState();
         var error = document.AppendFromFile(path, state);
         if (error != Error.Ok) throw new InvalidOperationException($"Cannot load {name}: {error}");
+        return Finish(document, state, name, teamColor);
+    }
+
+    /// <summary>Build-198: a GLB held in memory (a model built from the install), presented as a file is.</summary>
+    public Node3D Load(byte[] glb, string name, Color? teamColor = null)
+    {
+        using var document = new GltfDocument();
+        using var state = new GltfState();
+        var error = document.AppendFromBuffer(glb, "", state);
+        if (error != Error.Ok) throw new InvalidOperationException($"Cannot load {name}: {error}");
+        return Finish(document, state, name, teamColor);
+    }
+
+    private Node3D Finish(GltfDocument document, GltfState state, string name, Color? teamColor)
+    {
         int textures = 0, before = 0, after = 0;
         foreach (var texture in state.GetImages())
         {

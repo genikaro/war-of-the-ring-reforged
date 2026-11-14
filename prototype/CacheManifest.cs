@@ -73,6 +73,10 @@ public sealed class CacheManifest
         }
     }
 
+    /// <summary>Build-198: whether a file comes from the content pack (a map cache that names one and has no such file
+    /// of its own), the files a model built from the install can stand in for.</summary>
+    public bool FromPack(string relative) => Content != Cache && !File.Exists(Path.Combine(Cache,relative));
+
     /// <summary>The file in the map cache, or else in the content pack.</summary>
     public string Resolve(string relative)
     {

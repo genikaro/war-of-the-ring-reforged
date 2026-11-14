@@ -61,7 +61,7 @@ assets, previews, validation reports and portable tools stay in ignored
 | `prepare_prototype.py` | Build a hashed local runtime cache for the Godot C# sandbox; optionally extract the owner's install. |
 | `formats_fingerprint.py` | Build-192: every archive file's path, size, packing, CRC and SHA-256 and every table as `lqr.py export` writes it, for `tests/formats --python` to check the C# readers against (see below). |
 | `models_fingerprint.py` | Build-195: every .lms (plain and with the strict footer), .lsk, .lwt and .lmd parse, hashed in a canonical form, for `tests/formats --python-models`; `--dump` prints one file's form. |
-| `gltf_fingerprint.py` | Build-197: every model the content pack exports converted by `lms2gltf.convert_model` from the given install, compared by JSON with accessor bytes and image pixels in place of offsets, for `tests/formats --python-gltf`; `--dump` prints one. |
+| `gltf_fingerprint.py` | Build-197 (`--pack` build-198: the pack's model files post-processed as the import writes them): every model the content pack exports converted by `lms2gltf.convert_model` from the given install, compared by JSON with accessor bytes and image pixels in place of offsets, for `tests/formats --python-gltf`; `--dump` prints one. |
 | `resolve_fingerprint.py` | Build-196: every Models record resolved by `resolve_model.py` from the given install (its own extracted layout in a temporary folder), hashed in the canonical form, for `tests/formats --python-resolve`; `--dump` prints one. |
 | `rules_fingerprint.py` | Build-194: the content pack's seven database-only rule sections as the import builds them, for `tests/formats --python-rules` to check `PackRules` against. |
 | `import_install.py` | Build-188, the launcher's import: check an install parses (`--check`), then extract it, build the content pack, menu art and every map (in parallel) and record it in `converted/install.json`. Progress lines start with `@reforged `. |
@@ -82,6 +82,7 @@ the checks share them:
 | `LmsMesh`, `LskSkeleton`, `LwtWeights`, `LmdModel` | `lms.py`, `lsk.py`, `lwt.py`, `lmd.py`, `lmd_states.py` | Build-195: meshes (footer on request), skeletons with clips, skin weights, and models with their states, tracks, attachments, boxes, cloth volumes and clip events. Field names follow the Python's in the checks' canonical form. |
 | `Install/ModelResolver`, `PresentationAssets`, `Install/PyMath` | `resolve_model.py`, `cth.py`, `texture_animation.parse_uva` | Build-196: a model record to its files, states, attachments, events and cloth, as nested dictionaries with the Python's keys and `extracted/` file names; cloth grids and texture animations; Python's `round(x, n)`. |
 | `Install/ModelGltf`, `Images` | `lms2gltf.convert_model`, `model_appearance.py`, Pillow's DDS and TGA decoding | Build-197: a resolved model as glTF (JSON as dictionaries, the binary buffer, each image's pixels; `Glb()` writes the file), and DXT1/DXT5/TGA decoding with PNG encoding. |
+| `Install/PackModels` | `content_pack.build`'s model exports, `prototype_assets.adapt` and `restore_building` | Build-198: the pack's unit, building, place-of-power and rally banner files built from the install as the import writes them; the game loads them from memory. |
 | `Install/OriginalText` | `game_text.py` `build` | Build-193: the original text as the game reads it, built from the install at startup ([LOCALIZATION.md](LOCALIZATION.md)). |
 | `Install/PackRules`, `Install/SkirmishCatalog` | `content_pack.faction_data`, `prepare_prototype.team_colors`, `skirmish_production`, `skirmish_research`, `places_of_power.export`, `skirmish_ai.export`, the `skirmish_map` lists | Build-194: the content pack's database-only rule sections, built from the install at startup in place of the pack's. Python's rounding is kept (`round` halves to even, `quantize` halves away from zero on the shortest decimal form, `//` floors). While the import still builds the pack, a change to these Python modules or lists needs the same change here; `--python-rules` fails until it is made. |
 
@@ -102,6 +103,8 @@ python tools/resolve_fingerprint.py "Legacy/Game EN" artifacts/resolve-en.json
 dotnet run --project tests/formats -c Release -- --install "Legacy/Game EN" --python-resolve artifacts/resolve-en.json
 python tools/gltf_fingerprint.py "Legacy/Game EN" artifacts/gltf-en.json
 dotnet run --project tests/formats -c Release -- --install "Legacy/Game EN" --python-gltf artifacts/gltf-en.json
+python tools/gltf_fingerprint.py "Legacy/Game EN" artifacts/pack-en.json --pack
+dotnet run --project tests/formats -c Release -- --install "Legacy/Game EN" --python-pack artifacts/pack-en.json
 ```
 
 The first runs 48 checks on synthetic archives, tables, text, rule rounding, model files, model resolution, DDS and PNG. `--install` reads and CRC-checks every archive file and
@@ -116,7 +119,8 @@ model file and requires each reading to hash as `models_fingerprint.py`'s does: 
 match on both installs (about 35 s in Python on all cores, 0.1 s in C# on one thread). `--python-resolve` resolves
 every Models record and requires it to hash as `resolve_fingerprint.py`'s does: all 2,108 match on both installs.
 `--python-gltf` builds the 89 exported models as glTF and requires each to compare as `gltf_fingerprint.py`'s does: all
-match on both installs.
+match on both installs. `--python-pack` does the same for the 89 content pack files with their post-processing, as the
+game builds them (about 1 s on all cores).
 
 Extract the archives once:
 

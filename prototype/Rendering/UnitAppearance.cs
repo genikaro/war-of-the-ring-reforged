@@ -31,9 +31,11 @@ public sealed class UnitAppearance
     public bool HasWeaponBlood => _table.HasWeaponBlood;
     public bool WeaponBloodVisible { get; private set; }
 
-    public static JsonElement Read(string path)
+    public static JsonElement Read(string path) => ReadGlb(System.IO.File.ReadAllBytes(path));
+
+    /// <summary>Build-198: the appearance of a GLB held in memory.</summary>
+    public static JsonElement ReadGlb(byte[] bytes)
     {
-        var bytes = System.IO.File.ReadAllBytes(path);
         int length = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(12,4));
         using var document = JsonDocument.Parse(bytes.AsMemory(20,length));
         return document.RootElement.GetProperty("extras").GetProperty("wotrAppearance").Clone();
