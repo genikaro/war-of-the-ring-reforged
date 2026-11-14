@@ -64,6 +64,7 @@ assets, previews, validation reports and portable tools stay in ignored
 | `gltf_fingerprint.py` | Build-197 (`--pack` build-198: the pack's model files post-processed as the import writes them): every model the content pack exports converted by `lms2gltf.convert_model` from the given install, compared by JSON with accessor bytes and image pixels in place of offsets, for `tests/formats --python-gltf`; `--dump` prints one. |
 | `resolve_fingerprint.py` | Build-196: every Models record resolved by `resolve_model.py` from the given install (its own extracted layout in a temporary folder), hashed in the canonical form, for `tests/formats --python-resolve`; `--dump` prints one. |
 | `pack_fingerprint.py` | Build-205: the whole content pack built the Python way from the given install (archives extracted into a temporary folder), every file it writes recorded: a PNG by its decoded pixels, a GLB in `gltf_fingerprint`'s form, anything else by its bytes; and the audio and interface indexes whole. For `tests/formats --python-files`. |
+| `world_fingerprint.py` | Build-208: every level of Levels.H2O read by `world_scene.parse` and resolved against the install's database, the part the game reads hashed in the canonical form, for `tests/formats --python-worlds`; `--dump` prints one. |
 | `combat_fingerprint.py` | Build-203: `combat/rules.json` and `combat/blood.json` as `combat_rules.export` and `blood_effects.export` build them from the given install (its own extracted layout in a temporary folder), for `tests/formats --python-combat` to check `PackCombat` against. |
 | `rules_fingerprint.py` | Build-194: the content pack's seven database-only rule sections as the import builds them, for `tests/formats --python-rules` to check `PackRules` against. Build-199: also the sections that need models (the `models` list, `skirmish.economy`, `skirmish.construction` key by key; build-204 its defenses), from a layout of the install, for `PackModelRules` and `PackCombat.Defenses`. |
 | `import_install.py` | Build-188, the launcher's import: check an install parses (`--check`), then extract it, build the content pack, menu art and every map (in parallel) and record it in `converted/install.json`. Progress lines start with `@reforged `. |
@@ -83,6 +84,7 @@ the checks share them:
 | `Ltx` | `game_text.py` `parse_ltx` | Build-193: LIQDTEXT text tables. `H2OArchive.ReadPrefix` decompresses only the start of a file, for headers. |
 | `LmsMesh`, `LskSkeleton`, `LwtWeights`, `LmdModel` | `lms.py`, `lsk.py`, `lwt.py`, `lmd.py`, `lmd_states.py` | Build-195: meshes (footer on request), skeletons with clips, skin weights, and models with their states, tracks, attachments, boxes, cloth volumes and clip events. Field names follow the Python's in the checks' canonical form. |
 | `PresentationAssets.Lfx`, `.Lpo` | `lfx.py`, `lpo.py` | Build-200: effects (tracks, transforms, atlas descriptors, emitters) and projectiles (keys, behaviour, actions, events, launch sounds), as dictionaries with the Python's keys and value types. |
+| `World` | `wor.py`, `world_scene.py` `parse`, `resolve_objects`, `region_cells` | Build-208: a level: header, terrain vertices and heights, name table, terrain layers and environment, placed objects and effects with what they resolve to, pathing bitsets and region graphs, lakes, the tail's lighting, grass, markers and decals. |
 | `Install/ModelResolver`, `PresentationAssets`, `Install/PyMath` | `resolve_model.py`, `cth.py`, `texture_animation.parse_uva` | Build-196: a model record to its files, states, attachments, events and cloth, as nested dictionaries with the Python's keys and `extracted/` file names; cloth grids and texture animations; Python's `round(x, n)`. |
 | `Install/ModelGltf`, `Images` | `lms2gltf.convert_model`, `model_appearance.py`, Pillow's DDS and TGA decoding | Build-197: a resolved model as glTF (JSON as dictionaries, the binary buffer, each image's pixels; `Glb()` writes the file), and DXT1/DXT5/TGA decoding with PNG encoding. |
 | `Install/PackModels` | `content_pack.build`'s model exports, `prototype_assets.adapt` and `restore_building` | Build-198: the pack's unit, building, place-of-power and rally banner files built from the install as the import writes them; the game loads them from memory. Build-207: also the projectile, effect and dropped-object models the combat rules name. |
@@ -116,6 +118,8 @@ python tools/combat_fingerprint.py "Legacy/Game EN" artifacts/combat-en.json
 dotnet run --project tests/formats -c Release -- --install "Legacy/Game EN" --python-combat artifacts/combat-en.json
 python tools/pack_fingerprint.py "Legacy/Game EN" artifacts/files-en.json
 dotnet run --project tests/formats -c Release -- --install "Legacy/Game EN" --python-files artifacts/files-en.json
+python tools/world_fingerprint.py "Legacy/Game EN" artifacts/worlds-en.json
+dotnet run --project tests/formats -c Release -- --install "Legacy/Game EN" --python-worlds artifacts/worlds-en.json
 ```
 
 The first runs 50 checks on synthetic archives, tables, text, rule rounding, model files, model resolution, DDS and PNG. `--install` reads and CRC-checks every archive file and
@@ -136,7 +140,8 @@ game builds them (about 1 s on all cores). `--python-combat` builds the combat r
 them to equal `combat_fingerprint.py`'s, section by section: they do on both installs, in about 0.75 s.
 `--python-files` builds the pack's files the game builds from the install and requires each to equal what
 `pack_fingerprint.py` recorded: the audio index and all 2,514 audio files do on both installs, and (build-206) the
-interface index and all 1,265 pictures, and (build-207) all 110 model files.
+interface index and all 1,265 pictures, and (build-207) all 110 model files. `--python-worlds` (build-208) reads every
+level and requires it to hash as `world_fingerprint.py`'s does: all 54 do on both installs.
 
 Extract the archives once:
 

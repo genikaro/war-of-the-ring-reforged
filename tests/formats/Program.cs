@@ -20,6 +20,8 @@
 //       build-203: the combat rules built from the install, compared with python tools/combat_fingerprint.py
 //   ... --install "<install>" --python-files <files.json>
 //       build-205: the content pack's files built from the install, compared with python tools/pack_fingerprint.py
+//   ... --install "<install>" --python-worlds <worlds.json> [--dump-world Multiplayer/MP02_Sorrow.wor]
+//       build-208: every level read and resolved, compared with python tools/world_fingerprint.py
 System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 int passed = 0;
@@ -46,6 +48,8 @@ if (Array.IndexOf(args,"--install") is int install && install >= 0)
     if (Array.IndexOf(args,"--python-pack") is int pack && pack >= 0) GltfChecks.Pack(args[install+1],args[pack+1],Check);
     if (Array.IndexOf(args,"--python-combat") is int combat && combat >= 0) CombatChecks.Install(args[install+1],args[combat+1],RepositoryRoot(),Check);
     if (Array.IndexOf(args,"--python-files") is int packFiles && packFiles >= 0) FilesChecks.Install(args[install+1],args[packFiles+1],Check);
+    if (Array.IndexOf(args,"--python-worlds") is int worlds && worlds >= 0) WorldChecks.Install(args[install+1],args[worlds+1],Check);
+    if (Array.IndexOf(args,"--dump-world") is int dumpWorld && dumpWorld >= 0) WorldChecks.Dump(args[install+1],args[dumpWorld+1]);
 }
 Console.WriteLine($"{passed} format checks passed");
 

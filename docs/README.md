@@ -1,5 +1,16 @@
 # Godot C# skirmish sandbox
 
+**build-208:** a C# reader for the levels, the first step to playing the maps straight from the install. `World`
+(`prototype/Formats`) ports `wor.py` and `world_scene.py`: the header, the Blast-packed terrain vertices with their CRC
+and heights, the name table (found as the Python finds it, by its repeated size and printable names, never guessed),
+the terrain layers, coordinates and environment, the placed objects and effects, the pathing categories with their
+bitsets and region graphs (`RegionCells` is `region_cells`), the lakes with their surface vertices and the tail (time
+of day, Sun/Moon keys, grass, markers, decals; lights and fog are read past). `Resolve` is `resolve_objects`: each
+object's database row, model, walkable flag and mesh path lookup, each effect's name. Every check the Python makes
+fails the same way. `tools/world_fingerprint.py` records what the Python makes of each level, and `tests/formats
+--python-worlds` requires the C# reading to hash the same: all 54 levels of the English and Russian installs do
+(about 4.4 s with the hashing). Nothing in the game uses it yet; the map caches still come from the import.
+
 **build-207:** the pack's other models come from the install, so every model the game shows from the pack does: the
 projectiles (`combat/projectile_*.glb`, each with its projectile reading in `extras.wotrProjectile`), the Huorn's roots
 and the brambles (`combat/nature-effects/roots.glb`, `combat/global-effects/brambles.glb`), Saleme's trap, Grishnakh's
