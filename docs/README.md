@@ -1,5 +1,17 @@
 # Godot C# skirmish sandbox
 
+**build-196:** a model resolved from the install. `ModelResolver` (`prototype/Install`) ports `resolve_model.py`: a
+Models record (or a unit's model) becomes its skeleton, every mesh part with its weights and its diffuse and team-colour
+mask textures, the animation states with their state and clip names, attached models (resolved four deep) and effects
+with joint names, clip events with the sounds, voices, effects, projectiles, joints and attachments they name, and cloth
+with its grid and texture animations. It reads the archives in place and names files as the import's `extracted/` tree
+does, in nested dictionaries with the Python's keys, so the glTF assembly can follow the Python line by line.
+`PresentationAssets` reads `.cth` cloth and `.uva` texture animation files; `PyMath.Round` is Python's `round(x, n)`
+on the exact binary value. `tools/resolve_fingerprint.py` resolves every record from the install (laying out its own
+extracted tree, so `extracted/` cannot stand in for another install), and `tests/formats --python-resolve` requires each
+C# resolution to hash the same: all 2,108 Models records match on the English and Russian installs, resolved in 1.2 s
+(30 s in Python). Nothing in the game uses the resolver yet.
+
 **build-195:** C# parsers for the model formats, the start of building models and the model-based rules from the
 install. `prototype/Formats` gains `LmsMesh` (meshes, with the strict group and triangle-flag footer navigation needs),
 `LskSkeleton` (joints and animation clips), `LwtWeights` (skin weights) and `LmdModel` (model slots, animation states
@@ -1153,6 +1165,8 @@ python tools/rules_fingerprint.py "Legacy/Game EN" artifacts/rules-en.json
 ./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python-rules artifacts/rules-en.json
 python tools/models_fingerprint.py "Legacy/Game EN" artifacts/models-en.json
 ./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python-models artifacts/models-en.json
+python tools/resolve_fingerprint.py "Legacy/Game EN" artifacts/resolve-en.json
+./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python-resolve artifacts/resolve-en.json
 ./prototype/run.ps1 -Smoke
 ./prototype/run.ps1 -MotionSmoke
 ./prototype/run.ps1 -CombatSmoke

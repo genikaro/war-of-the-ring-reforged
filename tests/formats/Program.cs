@@ -10,6 +10,8 @@
 //       build-194: the rule sections built from the install, compared with python tools/rules_fingerprint.py
 //   ... --install "<install>" --python-models <models.json> [--dump-model Models/Units/Good/Aragorn/G_Aragorn.lmd]
 //       build-195: every mesh, skeleton, weight and model file parsed, compared with python tools/models_fingerprint.py
+//   ... --install "<install>" --python-resolve <resolve.json> [--dump-resolved MODEL_G_ARAGORN]
+//       build-196: every Models record resolved, compared with python tools/resolve_fingerprint.py
 System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 int passed = 0;
@@ -29,6 +31,8 @@ if (Array.IndexOf(args,"--install") is int install && install >= 0)
     if (Array.IndexOf(args,"--python-rules") is int rules && rules >= 0) RulesChecks.Install(args[install+1],args[rules+1],RepositoryRoot(),Check);
     if (Array.IndexOf(args,"--python-models") is int models && models >= 0) ModelChecks.Install(args[install+1],args[models+1],Check);
     if (Array.IndexOf(args,"--dump-model") is int dump && dump >= 0) ModelChecks.Dump(args[install+1],args[dump+1]);
+    if (Array.IndexOf(args,"--python-resolve") is int resolve && resolve >= 0) ResolveChecks.Install(args[install+1],args[resolve+1],Check);
+    if (Array.IndexOf(args,"--dump-resolved") is int resolved && resolved >= 0) ResolveChecks.Dump(args[install+1],args[resolved+1]);
 }
 Console.WriteLine($"{passed} format checks passed");
 

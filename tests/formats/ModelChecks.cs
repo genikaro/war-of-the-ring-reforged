@@ -17,7 +17,7 @@ public static class ModelChecks
     /// <summary>A dict in the canonical form: its fields are written in key order.</summary>
     private sealed class Dict(params (string Key,object? Value)[] fields) { public readonly (string Key,object? Value)[] Fields = fields; }
 
-    private static void Write(StringBuilder s,object? value)
+    internal static void Write(StringBuilder s,object? value)
     {
         switch (value)
         {
@@ -30,6 +30,14 @@ public static class ModelChecks
             case Dict dict:
                 s.Append('{');
                 foreach (var (key,item) in dict.Fields.OrderBy(f => f.Key,StringComparer.Ordinal)) { Write(s,key); s.Append(':'); Write(s,item); s.Append(','); }
+                s.Append('}');
+                break;
+            case IDictionary map:
+                // Python sorts a dict's keys: strings by code point, integers by value (the resolver's states).
+                s.Append('{');
+                foreach (object key in map.Keys.Cast<object>().OrderBy(k => k is string ? 0 : 1).ThenBy(k => k as string,StringComparer.Ordinal)
+                             .ThenBy(k => k is string ? 0L : Convert.ToInt64(k,CultureInfo.InvariantCulture)))
+                { Write(s,key); s.Append(':'); Write(s,map[key]); s.Append(','); }
                 s.Append('}');
                 break;
             case IEnumerable list:
