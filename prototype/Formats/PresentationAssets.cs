@@ -8,7 +8,7 @@ namespace Reforged.Formats;
 /// dictionaries with the Python's keys (values int, long, float, string, lists, dictionaries or null), the form the
 /// resolver and the glTF assembly pass on. Reads are bounds-checked and, as tools/asset_io.py does, reject a
 /// non-finite float.</summary>
-public static class PresentationAssets
+public static partial class PresentationAssets
 {
     /// <summary>tools/asset_io.Reader.</summary>
     private sealed class AssetReader(byte[] data)
@@ -45,6 +45,21 @@ public static class PresentationAssets
             uint value = U32();
             if (value > (Data.Length-Position)/stride) throw new InvalidDataException($"asset count exceeds remaining data at 0x{Position-4:x}");
             return value;
+        }
+
+        /// <summary>asset_io.Reader.version: a float version rounded to four places (Python's round), one of those allowed.</summary>
+        public double Version(params double[] allowed)
+        {
+            double value = Reforged.Install.PyMath.Round(F32(),4);
+            if (!allowed.Contains(value)) throw new InvalidDataException($"unsupported version {value} at 0x{Position-4:x}");
+            return value;
+        }
+
+        /// <summary>asset_io.Reader.header: the eight-byte magic, then the version.</summary>
+        public double Header(string magic,params double[] versions)
+        {
+            if (!Take(8).SequenceEqual(Encoding.ASCII.GetBytes(magic))) throw new InvalidDataException($"not a {magic} asset");
+            return Version(versions);
         }
 
         public void Expect(uint value)
@@ -132,24 +147,7 @@ public static class PresentationAssets
     {
         var r = new AssetReader(data);
         Dictionary<string,object?> result;
-        if (data.Length >= 8 && data.AsSpan(0,8).SequenceEqual("LIQDUVAD"u8))
-        {
-            r.Take(8);
-            double version = Math.Round((double)r.F32(),4);
-            if (version is not (1 or 2 or 3)) throw new InvalidDataException($"unsupported version {version}");
-            int texture = r.I32();
-            long frames = r.U32(), perRow = r.U32(), frameMs = r.U32(), parameter = r.U32();
-            var rect = r.F32s(4);
-            var parameters = r.U32s(11);
-            List<object?> flags = version >= 2 ? [.. r.Take(4).ToArray().Select(b => (object?)(int)b)] : [1,0,0,0];
-            if (frames == 0 || perRow == 0) throw new InvalidDataException("empty UVA grid");
-            result = new()
-            {
-                ["version"] = version, ["texture"] = texture, ["frame_count"] = frames, ["frames_per_row"] = perRow, ["frame_ms"] = frameMs,
-                ["parameter"] = parameter, ["rect"] = rect, ["start_mode"] = parameters[4], ["playback_mode"] = parameters[6],
-                ["tiling_mode"] = parameters[8], ["primitive_mode"] = parameters[10], ["parameters"] = parameters, ["flags"] = flags.Take(2).ToList(),
-            };
-        }
+        if (data.Length >= 8 && data.AsSpan(0,8).SequenceEqual("LIQDUVAD"u8)) result = ReadUva(r);
         else
         {
             r.Expect(3);

@@ -60,7 +60,7 @@ assets, previews, validation reports and portable tools stay in ignored
 | `verify_walker_masks.py` | Audit every map's ground bitsets against its original walker region graph (`converted/walker-mask-report.json`). |
 | `prepare_prototype.py` | Build a hashed local runtime cache for the Godot C# sandbox; optionally extract the owner's install. |
 | `formats_fingerprint.py` | Build-192: every archive file's path, size, packing, CRC and SHA-256 and every table as `lqr.py export` writes it, for `tests/formats --python` to check the C# readers against (see below). |
-| `models_fingerprint.py` | Build-195: every .lms (plain and with the strict footer), .lsk, .lwt and .lmd parse, hashed in a canonical form, for `tests/formats --python-models`; `--dump` prints one file's form. |
+| `models_fingerprint.py` | Build-195: every .lms (plain and with the strict footer), .lsk, .lwt and .lmd parse (build-200: and every .lfx and .lpo), hashed in a canonical form, for `tests/formats --python-models`; `--dump` prints one file's form. |
 | `gltf_fingerprint.py` | Build-197 (`--pack` build-198: the pack's model files post-processed as the import writes them): every model the content pack exports converted by `lms2gltf.convert_model` from the given install, compared by JSON with accessor bytes and image pixels in place of offsets, for `tests/formats --python-gltf`; `--dump` prints one. |
 | `resolve_fingerprint.py` | Build-196: every Models record resolved by `resolve_model.py` from the given install (its own extracted layout in a temporary folder), hashed in the canonical form, for `tests/formats --python-resolve`; `--dump` prints one. |
 | `rules_fingerprint.py` | Build-194: the content pack's seven database-only rule sections as the import builds them, for `tests/formats --python-rules` to check `PackRules` against. Build-199: also the sections that need models (the `models` list, `skirmish.economy`, `skirmish.construction` but its defenses, key by key), from a layout of the install, for `PackModelRules`. |
@@ -80,6 +80,7 @@ the checks share them:
 | `LqrTable`, `LqrDatabase` | `lqr.py` | Database tables with their schema, the Rings.lrp table ids and reference/enum resolution. Tables load when first asked for. |
 | `Ltx` | `game_text.py` `parse_ltx` | Build-193: LIQDTEXT text tables. `H2OArchive.ReadPrefix` decompresses only the start of a file, for headers. |
 | `LmsMesh`, `LskSkeleton`, `LwtWeights`, `LmdModel` | `lms.py`, `lsk.py`, `lwt.py`, `lmd.py`, `lmd_states.py` | Build-195: meshes (footer on request), skeletons with clips, skin weights, and models with their states, tracks, attachments, boxes, cloth volumes and clip events. Field names follow the Python's in the checks' canonical form. |
+| `PresentationAssets.Lfx`, `.Lpo` | `lfx.py`, `lpo.py` | Build-200: effects (tracks, transforms, atlas descriptors, emitters) and projectiles (keys, behaviour, actions, events, launch sounds), as dictionaries with the Python's keys and value types. |
 | `Install/ModelResolver`, `PresentationAssets`, `Install/PyMath` | `resolve_model.py`, `cth.py`, `texture_animation.parse_uva` | Build-196: a model record to its files, states, attachments, events and cloth, as nested dictionaries with the Python's keys and `extracted/` file names; cloth grids and texture animations; Python's `round(x, n)`. |
 | `Install/ModelGltf`, `Images` | `lms2gltf.convert_model`, `model_appearance.py`, Pillow's DDS and TGA decoding | Build-197: a resolved model as glTF (JSON as dictionaries, the binary buffer, each image's pixels; `Glb()` writes the file), and DXT1/DXT5/TGA decoding with PNG encoding. |
 | `Install/PackModels` | `content_pack.build`'s model exports, `prototype_assets.adapt` and `restore_building` | Build-198: the pack's unit, building, place-of-power and rally banner files built from the install as the import writes them; the game loads them from memory. |
@@ -117,8 +118,8 @@ text from the install and requires it to equal `game_text.py --out`'s, key for k
 about 90 ms. `--python-rules` does the same for the rule sections against `rules_fingerprint.py`'s (an integer
 there must be an integer here too): all 19 equal on both installs, the seven database-only ones built in about 50 ms
 and the twelve that need models (build-199) in about 0.35 s. `--python-models` parses every
-model file and requires each reading to hash as `models_fingerprint.py`'s does: all 7,307 readings of the 4,912 files
-match on both installs (about 35 s in Python on all cores, 0.1 s in C# on one thread). `--python-resolve` resolves
+model, effect and projectile file and requires each reading to hash as `models_fingerprint.py`'s does: all 7,749
+readings of the 5,354 files match on both installs (about 35 s in Python on all cores, 0.1 s in C# on one thread). `--python-resolve` resolves
 every Models record and requires it to hash as `resolve_fingerprint.py`'s does: all 2,108 match on both installs.
 `--python-gltf` builds the 89 exported models as glTF and requires each to compare as `gltf_fingerprint.py`'s does: all
 match on both installs. `--python-pack` does the same for the 89 content pack files with their post-processing, as the

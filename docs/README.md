@@ -1,5 +1,14 @@
 # Godot C# skirmish sandbox
 
+**build-200:** effects and projectiles read from the install. `PresentationAssets.Lfx` and `.Lpo`
+(`prototype/Formats`) port `lfx.py` and `lpo.py`: an effect's texture, trail, beam and auxiliary tracks with their
+transforms and atlas descriptors, and its particle and mesh emitters; a projectile's control, resource and motion
+keys, behaviour, collision actions and events, and `launch_sound_events`. Results are dictionaries with the Python's
+keys and value types, versions rounded as Python's `round(f, 4)`, since the combat rules carry these readings whole.
+`.uva` descriptors and those inside effects share one reader. `models_fingerprint.py` now parses the 405 effects and 37
+projectiles too, and `tests/formats --python-models` requires all 5,354 files to read as the Python reads them: they
+do on the English and Russian installs. Nothing in the game uses them yet; the combat rules are next.
+
 **build-199:** the rule sections that need the models come from the install too. `PackModelRules`
 (`prototype/Install`) builds, beside `PackRules` at startup and from the same open archives as the models: the pack's
 `models` list (each roster unit's file, the run and walk clips moved in place, its idle, walk, attack and death clips:

@@ -7,12 +7,15 @@ using System.Text;
 using System.Text.Json;
 using Reforged.Formats;
 
-/// <summary>Build-195: the model parsers (Lms, Lsk, Lwt, Lmd) against tools/models_fingerprint.py on every model file
-/// of an install. Both sides write each parse in the same canonical form (that script's docstring has it) under the
+/// <summary>Build-195: the model parsers (Lms, Lsk, Lwt, Lmd; build-200 the effect and projectile readers) against
+/// tools/models_fingerprint.py on every such file of an install. Both sides write each parse in the same canonical form (that script's docstring has it) under the
 /// Python's field names, and hash it; a file one side cannot read the other must not read either.</summary>
 public static class ModelChecks
 {
-    private static readonly Dictionary<string,string> Archives = new() { ["Meshes"] = ".lms", ["Skeletons"] = ".lsk", ["Weights"] = ".lwt", ["Models"] = ".lmd" };
+    private static readonly Dictionary<string,string> Archives = new()
+    {
+        ["Meshes"] = ".lms", ["Skeletons"] = ".lsk", ["Weights"] = ".lwt", ["Models"] = ".lmd", ["Effects"] = ".lfx", ["Projectiles"] = ".lpo",
+    };
 
     /// <summary>A dict in the canonical form: its fields are written in key order.</summary>
     private sealed class Dict(params (string Key,object? Value)[] fields) { public readonly (string Key,object? Value)[] Fields = fields; }
@@ -134,6 +137,8 @@ public static class ModelChecks
             ".lms" => new (string,Func<object>)[] { ("plain",() => Mesh(LmsMesh.Parse(data))),("footer",() => Mesh(LmsMesh.Parse(data,readFooter: true))) },
             ".lsk" => [("plain",() => Skeleton(LskSkeleton.Parse(data)))],
             ".lwt" => [("plain",() => Weights(LwtWeights.Parse(data)))],
+            ".lfx" => [("plain",() => PresentationAssets.Lfx(data))],
+            ".lpo" => [("plain",() => PresentationAssets.Lpo(data))],
             _ => [("plain",() => Model(LmdModel.Parse(data)))],
         })
         {
@@ -152,8 +157,10 @@ public static class ModelChecks
             "Canonical model form: keys in order, ints, float bit patterns, UTF-8 hex, null and true");
         check(Throws(() => LmsMesh.Parse([.. "LIQD0LMS"u8, .. new byte[4]])) && Throws(() => LskSkeleton.Parse([.. "LIQD0LSK"u8, .. BitConverter.GetBytes(3f)]))
             && Throws(() => LwtWeights.Parse([.. "LIQD0LWT"u8, .. BitConverter.GetBytes(1f), .. BitConverter.GetBytes(5u), .. new byte[8]]))
-            && Throws(() => LmdModel.Parse([.. "LIQD0LMD"u8, .. BitConverter.GetBytes(1.9f), .. new byte[8]])),
-            "Model parsers reject cut or unknown files as damaged data");
+            && Throws(() => LmdModel.Parse([.. "LIQD0LMD"u8, .. BitConverter.GetBytes(1.9f), .. new byte[8]]))
+            && Throws(() => PresentationAssets.Lfx([.. "LIQDEFTD"u8, .. BitConverter.GetBytes(2f)]))
+            && Throws(() => PresentationAssets.Lpo([.. "LIQDPROJ"u8, .. BitConverter.GetBytes(1f), .. new byte[4]])),
+            "Model, effect and projectile parsers reject cut or unknown files as damaged data");
     }
 
     private static bool Throws(Action action)
@@ -194,7 +201,7 @@ public static class ModelChecks
         int missing = expected.EnumerateObject().Count() - entries.Length;
         if (missing != 0) differences.Add($"{missing} files in the Python's list are not read here");
         var shown = differences.Order(StringComparer.Ordinal).ToList();
-        check(shown.Count == 0,$"Every mesh, skeleton, weight and model file parses as the Python parsers read it ({entries.Length} files)"
+        check(shown.Count == 0,$"Every mesh, skeleton, weight, model, effect and projectile file parses as the Python parsers read it ({entries.Length} files)"
             +string.Concat(shown.Take(25).Select(d => "\n  "+d))+(shown.Count > 25 ? $"\n  ... {shown.Count} in all" : ""));
 
         // Timing of the parsers alone, the files already read.
@@ -204,7 +211,11 @@ public static class ModelChecks
         {
             try
             {
-                _ = suffix switch { ".lms" => (object)LmsMesh.Parse(data), ".lsk" => LskSkeleton.Parse(data), ".lwt" => LwtWeights.Parse(data), _ => LmdModel.Parse(data) };
+                _ = suffix switch
+                {
+                    ".lms" => (object)LmsMesh.Parse(data), ".lsk" => LskSkeleton.Parse(data), ".lwt" => LwtWeights.Parse(data),
+                    ".lfx" => PresentationAssets.Lfx(data), ".lpo" => PresentationAssets.Lpo(data), _ => LmdModel.Parse(data),
+                };
             }
             catch (InvalidDataException) { }
         }

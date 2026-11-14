@@ -1,11 +1,11 @@
-"""What the Python model parsers make of every model file in an install (build-195), for tests/formats --python-models
-to check the C# parsers (prototype/Formats) against.
+"""What the Python model parsers make of every model file in an install (build-195; effects and projectiles since
+build-200), for tests/formats --python-models to check the C# parsers (prototype/Formats) against.
 
 python tools/models_fingerprint.py "C:/Games/War of the Ring" models.json
 python tools/models_fingerprint.py "C:/Games/War of the Ring" --dump "Models/Units/Good/Aragorn/G_Aragorn.lmd"
 
-Every .lms (read plain and with the strict footer), .lsk, .lwt and .lmd in the archives is parsed with lms.py, lsk.py,
-lwt.py and lmd.py. Each result is written in a canonical form both languages produce the same way and hashed (SHA-256):
+Every .lms (read plain and with the strict footer), .lsk, .lwt, .lmd, .lfx and .lpo in the archives is parsed with
+lms.py, lsk.py, lwt.py, lmd.py, lfx.py and lpo.py. Each result is written in a canonical form both languages produce the same way and hashed (SHA-256):
 None n, booleans t/f, integers i<decimal>, floats r<the 8 hex digits of their 32-bit pattern>, strings s<UTF-8 hex>,
 lists [items,], dicts {key:value,} in key order, dataclasses as their fields. A file that does not parse records the
 error instead. --dump prints one file's canonical form, to find where two parsers part. The install is only read.
@@ -19,12 +19,15 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 
 import h2o
+import lfx
 import lmd
 import lms
+import lpo
 import lsk
 import lwt
 
-ARCHIVES = {'Meshes': '.lms', 'Skeletons': '.lsk', 'Weights': '.lwt', 'Models': '.lmd'}
+# Build-200: effects and projectiles too; the combat rules carry their readings whole.
+ARCHIVES = {'Meshes': '.lms', 'Skeletons': '.lsk', 'Weights': '.lwt', 'Models': '.lmd', 'Effects': '.lfx', 'Projectiles': '.lpo'}
 
 
 def canonical(value, out):
@@ -65,7 +68,7 @@ def readings(suffix, data):
     """(reading name, parse) for one file: meshes are read plain and with the strict footer."""
     if suffix == '.lms':
         return [('plain', lambda: lms.parse(data)), ('footer', lambda: lms.parse(data, read_footer=True))]
-    parse = {'.lsk': lsk.parse, '.lwt': lwt.parse, '.lmd': lmd.parse}[suffix]
+    parse = {'.lsk': lsk.parse, '.lwt': lwt.parse, '.lmd': lmd.parse, '.lfx': lfx.parse, '.lpo': lpo.parse}[suffix]
     return [('plain', lambda: parse(data))]
 
 
