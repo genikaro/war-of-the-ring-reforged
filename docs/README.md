@@ -1,5 +1,18 @@
 # Godot C# skirmish sandbox
 
+**build-197:** models assembled as glTF from the install. `ModelGltf` (`prototype/Install`) ports
+`lms2gltf.convert_model` and `model_appearance.py`: every mesh part (winding chosen to agree with the stored normals,
+missing normals rebuilt, the top four skin weights), the skeleton with one animation per clip, materials with the team
+colour as emissive and translucent overlays blended, cloth's initial grid, rigid parts in their joints' bind frames,
+attached models with their relative scale, and `extras.wotrAppearance` with the default scene's hidden nodes. Python's
+double arithmetic and its first-smallest min and max are kept, so every number matches. `Images` decodes DXT1 and DXT5
+as Pillow does (its integer interpolation included) and TGA, and encodes the PNG a glTF image holds.
+`tools/gltf_fingerprint.py` converts every model the content pack exports (89: roster units, skirmish buildings,
+places of power, the rally banner) from the given install and compares a GLB by its JSON with each accessor's bytes and
+each image's decoded pixels in place of offsets, since PNG bytes differ between encoders. `tests/formats --python-gltf`
+requires the C# models to compare the same: all 89 do on the English and Russian installs, 57 MB of GLB in 2.7 s on one
+thread (34 s in Python on all cores). The game still loads the content pack's files.
+
 **build-196:** a model resolved from the install. `ModelResolver` (`prototype/Install`) ports `resolve_model.py`: a
 Models record (or a unit's model) becomes its skeleton, every mesh part with its weights and its diffuse and team-colour
 mask textures, the animation states with their state and clip names, attached models (resolved four deep) and effects
@@ -1167,6 +1180,8 @@ python tools/models_fingerprint.py "Legacy/Game EN" artifacts/models-en.json
 ./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python-models artifacts/models-en.json
 python tools/resolve_fingerprint.py "Legacy/Game EN" artifacts/resolve-en.json
 ./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python-resolve artifacts/resolve-en.json
+python tools/gltf_fingerprint.py "Legacy/Game EN" artifacts/gltf-en.json
+./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python-gltf artifacts/gltf-en.json
 ./prototype/run.ps1 -Smoke
 ./prototype/run.ps1 -MotionSmoke
 ./prototype/run.ps1 -CombatSmoke

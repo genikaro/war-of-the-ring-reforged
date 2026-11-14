@@ -12,6 +12,8 @@
 //       build-195: every mesh, skeleton, weight and model file parsed, compared with python tools/models_fingerprint.py
 //   ... --install "<install>" --python-resolve <resolve.json> [--dump-resolved MODEL_G_ARAGORN]
 //       build-196: every Models record resolved, compared with python tools/resolve_fingerprint.py
+//   ... --install "<install>" --python-gltf <gltf.json> [--dump-gltf MODEL_G_ARAGORN]
+//       build-197: every model the content pack exports built as glTF, compared with python tools/gltf_fingerprint.py
 System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 int passed = 0;
@@ -33,6 +35,8 @@ if (Array.IndexOf(args,"--install") is int install && install >= 0)
     if (Array.IndexOf(args,"--dump-model") is int dump && dump >= 0) ModelChecks.Dump(args[install+1],args[dump+1]);
     if (Array.IndexOf(args,"--python-resolve") is int resolve && resolve >= 0) ResolveChecks.Install(args[install+1],args[resolve+1],Check);
     if (Array.IndexOf(args,"--dump-resolved") is int resolved && resolved >= 0) ResolveChecks.Dump(args[install+1],args[resolved+1]);
+    if (Array.IndexOf(args,"--python-gltf") is int gltf && gltf >= 0) GltfChecks.Install(args[install+1],args[gltf+1],Check);
+    if (Array.IndexOf(args,"--dump-gltf") is int dumpGltf && dumpGltf >= 0) GltfChecks.Dump(args[install+1],args[dumpGltf+1]);
 }
 Console.WriteLine($"{passed} format checks passed");
 

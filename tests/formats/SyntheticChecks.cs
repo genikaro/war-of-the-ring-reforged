@@ -23,6 +23,7 @@ public static class SyntheticChecks
             RulesChecks.Synthetic(check);
             ModelChecks.Synthetic(check);
             ResolveChecks.Synthetic(check);
+            GltfChecks.Synthetic(check);
         }
         finally { Directory.Delete(folder,true); }
     }
