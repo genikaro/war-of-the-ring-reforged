@@ -18,6 +18,9 @@ public sealed class PackModels(LqrDatabase db,GameArchives archives)
 
     private readonly ConcurrentDictionary<string,Lazy<byte[]>> _built = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string,(string Model,Kind Kind)>? _plan;
+    /// <summary>Build-207: files the combat rules name as they are built (projectiles, effect models, dropped objects),
+    /// each a model converted as it is with its extras.</summary>
+    private readonly ConcurrentDictionary<string,(string Model,Dictionary<string,object?>? Extras)> _named = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Pack file path -> (model, post-processing), in the import's order.</summary>
     public IReadOnlyDictionary<string,(string Model,Kind Kind)> Plan => _plan ??= MakePlan(db);
@@ -45,11 +48,24 @@ public sealed class PackModels(LqrDatabase db,GameArchives archives)
         return plan;
     }
 
-    public bool Has(string relative) => Plan.ContainsKey(relative.Replace('\\','/'));
+    public bool Has(string relative) => Plan.ContainsKey(relative.Replace('\\','/')) || _named.ContainsKey(relative.Replace('\\','/'));
+
+    /// <summary>Every file this builds: the plan's and those named since.</summary>
+    public IEnumerable<string> Files => Plan.Keys.Concat(_named.Keys.Where(k => !Plan.ContainsKey(k)));
+
+    /// <summary>Build-207: a file the combat rules name, the model (a name or a Models id) converted as it is, with extras
+    /// (a projectile's reading). A file named twice keeps the last.</summary>
+    public void Name(string relative,string model,Dictionary<string,object?>? extras = null)
+    {
+        _named[relative] = (model,extras);
+        _built.TryRemove(relative,out _);
+    }
 
     /// <summary>A pack file's model as glTF, post-processed as the import does.</summary>
     public GltfModel Build(string relative)
     {
+        if (!Plan.ContainsKey(relative.Replace('\\','/')) && _named.TryGetValue(relative.Replace('\\','/'),out var named))
+            return Convert(new ModelResolver(db,archives),named.Model,extras: named.Extras);
         var (model,kind) = Plan[relative.Replace('\\','/')];
         var gltf = Convert(new ModelResolver(db,archives),model);
         if (kind is Kind.Unit or Kind.RangedUnit) Adapt(gltf,kind == Kind.RangedUnit);

@@ -24,16 +24,20 @@ public sealed partial class PackCombat
 
     /// <summary>Build-206: where the pictures the rules name are recorded, so they can be made (null: not recorded).</summary>
     private readonly PackImages? _images;
+    /// <summary>Build-207: where the model files the rules name are recorded (null: not recorded).</summary>
+    private readonly PackModels? _models;
 
     /// <param name="root">The folder database paths are given relative to (the data folder), as the import names them
     /// relative to the repository.</param>
     /// <param name="images">Records how to make each sprite frame, blood grid and decal the rules name.</param>
-    public PackCombat(LqrDatabase db,GameArchives archives,string root,PackImages? images = null)
+    /// <param name="models">Records each projectile, effect and dropped object model file the rules name.</param>
+    public PackCombat(LqrDatabase db,GameArchives archives,string root,PackImages? images = null,PackModels? models = null)
     {
         _db = db;
         _resolver = new ModelResolver(db,archives);
         _root = Path.GetFullPath(root);
         _images = images;
+        _models = models;
     }
 
     // combat_rules.RANGED_UNITS and friends.
@@ -417,7 +421,12 @@ public sealed partial class PackCombat
         if (modelId == null) visual = null;
         else
         {
-            try { ModelGltf.Convert(_resolver,modelId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),extras: new() { ["wotrProjectile"] = projectile }); }
+            string key = modelId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            try
+            {
+                ModelGltf.Convert(_resolver,key,extras: new() { ["wotrProjectile"] = projectile });
+                _models?.Name(visual,key,new() { ["wotrProjectile"] = projectile });
+            }
             catch (InvalidDataException) { visual = null; } // The Lightbearer's bolt holds no mesh; the game draws a stand-in.
         }
         Trace(path);

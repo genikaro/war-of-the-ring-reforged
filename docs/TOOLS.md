@@ -85,7 +85,7 @@ the checks share them:
 | `PresentationAssets.Lfx`, `.Lpo` | `lfx.py`, `lpo.py` | Build-200: effects (tracks, transforms, atlas descriptors, emitters) and projectiles (keys, behaviour, actions, events, launch sounds), as dictionaries with the Python's keys and value types. |
 | `Install/ModelResolver`, `PresentationAssets`, `Install/PyMath` | `resolve_model.py`, `cth.py`, `texture_animation.parse_uva` | Build-196: a model record to its files, states, attachments, events and cloth, as nested dictionaries with the Python's keys and `extracted/` file names; cloth grids and texture animations; Python's `round(x, n)`. |
 | `Install/ModelGltf`, `Images` | `lms2gltf.convert_model`, `model_appearance.py`, Pillow's DDS and TGA decoding | Build-197: a resolved model as glTF (JSON as dictionaries, the binary buffer, each image's pixels; `Glb()` writes the file), and DXT1/DXT5/TGA decoding with PNG encoding. |
-| `Install/PackModels` | `content_pack.build`'s model exports, `prototype_assets.adapt` and `restore_building` | Build-198: the pack's unit, building, place-of-power and rally banner files built from the install as the import writes them; the game loads them from memory. |
+| `Install/PackModels` | `content_pack.build`'s model exports, `prototype_assets.adapt` and `restore_building` | Build-198: the pack's unit, building, place-of-power and rally banner files built from the install as the import writes them; the game loads them from memory. Build-207: also the projectile, effect and dropped-object models the combat rules name. |
 | `Install/OriginalText` | `game_text.py` `build` | Build-193: the original text as the game reads it, built from the install at startup ([LOCALIZATION.md](LOCALIZATION.md)). |
 | `Install/PackModelRules`, `PyDecimal` | `prepare_prototype.export_units`' models list, `skirmish_economy.economy_data`, `skirmish_construction.construction_data` and `placement_data`, `skirmish_map.building_footprint`, Python's `decimal` | Build-199: the rule sections that need the models: clip names and in-place clips from a walk of the resolved model's skeletons (no glTF is built), worker clip lengths in ticks, building footprints from the oriented-collision boxes. `PyDecimal` is `Decimal(str(x))` with the default context's 28 digits. |
 | `Install/PackImages` | `prototype_interface.export`, `healing_visual.export_sprite_effect`'s and `blood_effects`' pictures, `content_pack.export_corruption_tiles` | Build-206: the pack's pictures (crops of atlases decoded as Pillow does) and the interface index, made on request; the game reads them through `InstallFiles`. |
@@ -125,8 +125,8 @@ archives open in about 25 ms, 678 MB of files read in 1.0 s on one thread, the 1
 all 13,666 files and 264,243 values match (13,654 files on the Russian install). `--python-text` builds the original
 text from the install and requires it to equal `game_text.py --out`'s, key for key: it does on both installs, built in
 about 90 ms. `--python-rules` does the same for the rule sections against `rules_fingerprint.py`'s (an integer
-there must be an integer here too): all 20 equal on both installs, the seven database-only ones built in about 50 ms
-and the thirteen that need models (builds 199 and 204) in about 0.3 s. `--python-models` parses every
+there must be an integer here too): all 21 equal on both installs, the seven database-only ones built in about 50 ms
+and the fourteen that need models (builds 199, 204 and 207) in about 0.3 s. `--python-models` parses every
 model, effect and projectile file and requires each reading to hash as `models_fingerprint.py`'s does: all 7,749
 readings of the 5,354 files match on both installs (about 35 s in Python on all cores, 0.1 s in C# on one thread). `--python-resolve` resolves
 every Models record and requires it to hash as `resolve_fingerprint.py`'s does: all 2,108 match on both installs.
@@ -136,7 +136,7 @@ game builds them (about 1 s on all cores). `--python-combat` builds the combat r
 them to equal `combat_fingerprint.py`'s, section by section: they do on both installs, in about 0.75 s.
 `--python-files` builds the pack's files the game builds from the install and requires each to equal what
 `pack_fingerprint.py` recorded: the audio index and all 2,514 audio files do on both installs, and (build-206) the
-interface index and all 1,265 pictures.
+interface index and all 1,265 pictures, and (build-207) all 110 model files.
 
 Extract the archives once:
 

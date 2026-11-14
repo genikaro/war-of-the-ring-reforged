@@ -1,5 +1,21 @@
 # Godot C# skirmish sandbox
 
+**build-207:** the pack's other models come from the install, so every model the game shows from the pack does: the
+projectiles (`combat/projectile_*.glb`, each with its projectile reading in `extras.wotrProjectile`), the Huorn's roots
+and the brambles (`combat/nature-effects/roots.glb`, `combat/global-effects/brambles.glb`), Saleme's trap, Grishnakh's
+satchel (`objects/hero-drops/`) and the Obelisk (`objects/global-powers/`). `PackCombat` names each to `PackModels` as
+it builds the rules and defenses, and a match's loading builds them with the rest behind the loading screen. The main
+menu's army takes the models list built from the install (build-199) and its unit models from `PackModels`, built off
+the main thread (`InstallFiles.Models` and `Glb`; the log says how many). `skirmish.building_files`, each building's
+model file, comes from the install too, the last rule section the pack gave but `bodies`. `tests/formats
+--python-files` now requires every one of the pack's 110 model files to equal the import's in gltf_fingerprint's
+form, and `--python-rules` all 21 sections: they do on the English and Russian installs. With this every file the
+import writes into the pack (3,893: audio, pictures, models, the rules, blood and index files) is built from the
+install and checked equal. The pack folder is still needed: `content.json` (with `bodies`) and its file hashes. A
+match now builds all 110 model files from the install, and the menu's army (65 soldiers of 4 models) takes its models
+from it. The menu, global power, Nature, hero skill, defense, Evil, construction and skirmish smokes pass and give the
+same reports with and without the install (the menu's load time aside).
+
 **build-206:** the pack's pictures come from the install: the combat rules' sprite frames and blood grids and decals,
 the corruption tiles and the interface art with its index. `PackImages` (`prototype/Install`) makes each as the
 import writes it, a crop of an atlas `Images` decodes as Pillow does (pasted into a grid for blood, white with the

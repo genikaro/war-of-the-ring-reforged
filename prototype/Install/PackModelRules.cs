@@ -15,12 +15,15 @@ public static class PackModelRules
 {
     public static readonly string[] ConstructionKeys = ["definitions", "faction_definitions", "buildings", "order", "palettes", "corruption", "placeable",
         "upgrades", "placement_radius_mm", "placement_adapter"];
-    public static readonly string[] Sections = ["models", "skirmish.economy", .. ConstructionKeys.Select(k => "skirmish.construction."+k)];
+    public static readonly string[] Sections = ["models", "skirmish.economy", "skirmish.building_files", .. ConstructionKeys.Select(k => "skirmish.construction."+k)];
 
     public static Dictionary<string,JsonNode> Build(LqrDatabase db,GameArchives archives)
     {
         var resolver = new ModelResolver(db,archives);
-        var result = new Dictionary<string,JsonNode> { ["models"] = Models(resolver), ["skirmish.economy"] = Economy(resolver) };
+        var result = new Dictionary<string,JsonNode>
+        {
+            ["models"] = Models(resolver), ["skirmish.economy"] = Economy(resolver), ["skirmish.building_files"] = BuildingFiles(db),
+        };
         foreach (var (key,value) in Construction(resolver)) result["skirmish.construction."+key] = value!;
         return result;
     }
@@ -122,6 +125,15 @@ public static class PackModelRules
             });
         }
         return models;
+    }
+
+    /// <summary>Build-207: skirmish_construction.export_buildings' file names: each skirmish building's model file.</summary>
+    public static JsonObject BuildingFiles(LqrDatabase db)
+    {
+        var files = new JsonObject();
+        foreach (string name in SkirmishCatalog.SkirmishBuildings)
+            files[name] = "buildings/"+ById(db["Models"],I(Named(db["Buildings"],name),"Model")).Name+".glb";
+        return files;
     }
 
     // ---- skirmish.economy: skirmish_economy.economy_data --------------------------------------------------------

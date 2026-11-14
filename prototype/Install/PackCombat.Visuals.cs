@@ -134,7 +134,7 @@ public sealed partial class PackCombat
             if (i == 363)
             {
                 var track = data["Source"]!["Data"]!["texture_tracks"]!.AsArray().First(t => t!["name"]!.GetValue<string>() == "shard_one");
-                _ = ById(T("Models"),Int(track!["keys"]![0]!["texture"]));
+                _models?.Name("combat/nature-effects/roots.glb",ById(T("Models"),Int(track!["keys"]![0]!["texture"])).Name);
                 data["RootModel"] = "combat/nature-effects/roots.glb";
             }
             result[Key(i)] = data;
@@ -168,6 +168,7 @@ public sealed partial class PackCombat
     {
         var e = ById(T("ModelEvents"),I(obj,"ModelEvent"));
         var model = ById(T("Models"),I(e,"AssociatedModelResource1"));
+        _models?.Name(folder+model.Name+".glb",model.Name);
         return new JsonObject { ["File"] = folder+model.Name+".glb", ["Object"] = objectId, ["Model"] = model.Name, ["Invisible"] = B(obj,"IsInvisible") };
     }
 
@@ -302,7 +303,7 @@ public sealed partial class PackCombat
             {
                 var obj = ById(T("Objects"),556);
                 var e = ById(T("ModelEvents"),I(obj,"ModelEvent"));
-                _ = ById(T("Models"),I(e,"AssociatedModelResource1"));
+                _models?.Name("combat/global-effects/brambles.glb",ById(T("Models"),I(e,"AssociatedModelResource1")).Name);
                 data["AreaModel"] = "combat/global-effects/brambles.glb";
                 data["Source"]!["Object"] = Values(obj);
                 data["Source"]!["ModelEvent"] = Values(e);

@@ -43,6 +43,34 @@ public static class FilesChecks
         var shown = mismatched.Order(StringComparer.Ordinal).ToList();
         check(shown.Count == 0,$"Every audio file equals the Python import's ({audioFiles.Count} files)"+string.Concat(shown.Take(20).Select(d => "\n  "+d)));
         Pictures(files,expected,db,archives,check);
+        ModelFiles(files,db,archives,check);
+    }
+
+    /// <summary>Build-207: every model file of the pack (the plan's and those the combat rules name) by
+    /// gltf_fingerprint's canonical form.</summary>
+    private static void ModelFiles(JsonObject files,LqrDatabase db,GameArchives archives,Action<bool,string> check)
+    {
+        var models = new PackModels(db,archives);
+        var combat = new PackCombat(db,archives,Directory.GetCurrentDirectory(),models: models);
+        combat.Rules(SkirmishCatalog.Roster);
+        combat.Defenses();
+        var glbs = files.Select(p => p.Key).Where(f => f.EndsWith(".glb",StringComparison.Ordinal)).ToList();
+        var mismatched = new System.Collections.Concurrent.ConcurrentBag<string>();
+        var clock = Stopwatch.StartNew();
+        Parallel.ForEach(glbs,file =>
+        {
+            try
+            {
+                if (!models.Has(file)) { mismatched.Add(file+": not built here"); return; }
+                string hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.ASCII.GetBytes(ResolveChecks.Canonical(GltfChecks.Normalized(models.Build(file))))));
+                if (hash != files[file]!["gltf"]!.GetValue<string>()) mismatched.Add(file+": differs");
+            }
+            catch (Exception error) when (error is InvalidDataException or FileNotFoundException or KeyNotFoundException) { mismatched.Add($"{file}: {error.Message}"); }
+        });
+        Console.WriteLine($"Built {glbs.Count} model files from the install in {clock.ElapsedMilliseconds} ms");
+        var extra = models.Files.Where(f => !files.ContainsKey(f)).ToList();
+        var shown = mismatched.Order(StringComparer.Ordinal).Concat(extra.Select(f => f+": built here, not by the Python")).ToList();
+        check(shown.Count == 0,$"Every model file equals the Python import's ({glbs.Count} files)"+string.Concat(shown.Take(25).Select(d => "\n  "+d)));
     }
 
     /// <summary>Build-206: the interface index whole, and every picture of the pack by its pixels, size and mode.</summary>

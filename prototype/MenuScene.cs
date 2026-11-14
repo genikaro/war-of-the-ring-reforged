@@ -64,8 +64,10 @@ public partial class MenuScene : Node3D
         var models = new Dictionary<string,(string File,string Idle)>();
         try
         {
-            using var content = JsonDocument.Parse(System.IO.File.ReadAllText(System.IO.Path.Combine(pack,"content.json")));
-            foreach (var model in content.RootElement.GetProperty("models").EnumerateArray())
+            // Build-207: the install's models list when it gives one, the pack's otherwise.
+            using var content = JsonDocument.Parse(InstallFiles.Models()?.ToJsonString() ?? System.IO.File.ReadAllText(System.IO.Path.Combine(pack,"content.json")));
+            var list = content.RootElement.ValueKind == JsonValueKind.Array ? content.RootElement : content.RootElement.GetProperty("models");
+            foreach (var model in list.EnumerateArray())
             {
                 string file = model.GetProperty("file").GetString()!;
                 models.TryAdd(System.IO.Path.GetFileNameWithoutExtension(file),(file,model.GetProperty("idle").GetString()!));
@@ -73,6 +75,7 @@ public partial class MenuScene : Node3D
         }
         catch (Exception error) when (error is JsonException or IOException or KeyNotFoundException) { GD.PushWarning("Menu army stays still: "+error.Message); return; }
         var templates = new Dictionary<string,Node3D?>();
+        int fromInstall = 0;
         var random = new Random(147);
         foreach (var placement in scene.GetChildren().OfType<Node3D>().ToArray())
         {
@@ -83,7 +86,10 @@ public partial class MenuScene : Node3D
             if (!templates.TryGetValue(model.File,out var template))
             {
                 string path = System.IO.Path.Combine(pack,model.File);
-                template = System.IO.File.Exists(path) ? presentation.Load(path,model.File,EvilRed) : null;
+                // Build-207: the install's model, built off the main thread, when it gives the pack's file.
+                byte[]? glb = await Task.Run(() => InstallFiles.Glb(path));
+                if (glb != null) fromInstall++;
+                template = glb != null ? presentation.Load(glb,model.File,EvilRed) : System.IO.File.Exists(path) ? presentation.Load(path,model.File,EvilRed) : null;
                 templates[model.File] = template;
                 await step(null,null);
             }
@@ -101,6 +107,7 @@ public partial class MenuScene : Node3D
             AnimatedUnits++;
         }
         foreach (var template in templates.Values) template?.QueueFree();
+        GD.Print($"Menu army: {AnimatedUnits} soldiers from {templates.Count} models, {fromInstall} built from the install");
     }
 
     private static WorldEnvironment Environment(string? sky)

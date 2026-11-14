@@ -108,7 +108,10 @@ def model_sections(install, workers=None):
                 defense['sources'] = combat_fingerprint.import_names(defense['sources'], _resolver)
         if set(construction) != set(CONSTRUCTION_KEYS):
             raise ValueError('construction keys changed: %s' % sorted(construction))
-        result = {'skirmish.economy': skirmish_economy.economy_data(_resolver)}
+        result = {'skirmish.economy': skirmish_economy.economy_data(_resolver),
+                  # Build-207: the files export_buildings names (each building's model, buildings/<model>.glb).
+                  'skirmish.building_files': {name: 'buildings/%s.glb' % _resolver.db['Models'].get(_resolver.db['Buildings'].get(name)['Model']).name
+                                              for name in skirmish_map.SKIRMISH_BUILDINGS}}
         result.update({'skirmish.construction.' + key: construction[key] for key in CONSTRUCTION_KEYS})
         with ProcessPoolExecutor(workers, initializer=_start, initargs=(install, root)) as pool:
             result['models'] = list(pool.map(_unit, prepare_prototype.SKIRMISH_ROSTER))

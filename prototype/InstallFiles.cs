@@ -10,13 +10,23 @@ public static class InstallFiles
     private static Func<string,bool>? _has;
     private static Func<string,Picture?>? _pictures;
     private static Func<string,string?>? _texts;
+    private static Func<System.Text.Json.Nodes.JsonArray?>? _models;
+    private static Func<string,byte[]?>? _glbs;
 
-    /// <summary>Serves the pack folder's files from the given builders (pack-relative paths); null stops it.</summary>
-    public static void Use(string? pack,Func<string,bool>? has = null,Func<string,Picture?>? pictures = null,Func<string,string?>? texts = null)
+    /// <summary>Serves the pack folder's files from the given builders (pack-relative paths); null stops it. Build-207:
+    /// also the pack's models list and its model files (the menu's army).</summary>
+    public static void Use(string? pack,Func<string,bool>? has = null,Func<string,Picture?>? pictures = null,Func<string,string?>? texts = null,
+        Func<System.Text.Json.Nodes.JsonArray?>? models = null,Func<string,byte[]?>? glbs = null)
     {
         _pack = pack == null ? null : System.IO.Path.GetFullPath(pack).TrimEnd(System.IO.Path.DirectorySeparatorChar)+System.IO.Path.DirectorySeparatorChar;
-        (_has,_pictures,_texts) = (has,pictures,texts);
+        (_has,_pictures,_texts,_models,_glbs) = (has,pictures,texts,models,glbs);
     }
+
+    /// <summary>Build-207: the pack's models list (content.json "models") the install gives, or null.</summary>
+    public static System.Text.Json.Nodes.JsonArray? Models() => _models?.Invoke();
+
+    /// <summary>Build-207: a pack model file's GLB the install gives, or null.</summary>
+    public static byte[]? Glb(string path) => Relative(path) is { } relative ? _glbs?.Invoke(relative) : null;
 
     /// <summary>The pack-relative path of a file in the pack folder, or null.</summary>
     private static string? Relative(string path)

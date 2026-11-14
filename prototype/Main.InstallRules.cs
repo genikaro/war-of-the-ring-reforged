@@ -49,7 +49,9 @@ public partial class Main
         InstallFiles.Use(GamePaths.Data("converted/content/good"),
             has: relative => Ready(relative) && images.Has(relative),
             pictures: relative => Ready(relative) && images.Has(relative) ? Guard(() => images.Picture(relative),relative) : null,
-            texts: relative => relative == "interface/index.json" ? interfaceText.Value : null);
+            texts: relative => relative == "interface/index.json" ? interfaceText.Value : null,
+            models: () => CacheManifest.InstallRules?.GetValueOrDefault("models") as System.Text.Json.Nodes.JsonArray,
+            glbs: relative => _installModels is { } install && install.Models.Has(relative) ? Guard(() => install.Models.Glb(relative),relative) : null);
     }
 
     /// <summary>A build from the install, or null with a warning when the install cannot give it.</summary>
@@ -111,7 +113,7 @@ public partial class Main
             try
             {
                 var clock = System.Diagnostics.Stopwatch.StartNew();
-                var combat = new PackCombat(models.Db,models.Archives,GamePaths.Root,models.Images);
+                var combat = new PackCombat(models.Db,models.Archives,GamePaths.Root,models.Images,models.Models);
                 string rules = combat.Rules(SkirmishCatalog.Roster).ToJsonString(), blood = combat.Blood(SkirmishCatalog.Roster).ToJsonString();
                 GD.Print($"Combat: rules and blood built from the install in {clock.ElapsedMilliseconds} ms");
                 return (rules,blood);
@@ -143,7 +145,7 @@ public partial class Main
         {
             foreach (var (path,value) in PackModelRules.Build(models.Db,models.Archives)) rules[path] = value;
             // Build-204: the construction section's defenses (projectiles, sounds, trails) complete it.
-            rules[PackCombat.DefensesSection] = new PackCombat(models.Db,models.Archives,GamePaths.Root).Defenses();
+            rules[PackCombat.DefensesSection] = new PackCombat(models.Db,models.Archives,GamePaths.Root,models: models.Models).Defenses();
         }
         catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException
             or InvalidCastException or IndexOutOfRangeException or ArgumentException or InvalidOperationException or NullReferenceException)
@@ -215,7 +217,9 @@ public partial class Main
     {
         if (_installModels is not { } install) return;
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        var files = install.Models.Plan.Keys.Where(_cacheFiles.FromPack).ToList();
+        // Build-207: the combat rules name the projectile, effect and dropped object models; they are built in the background.
+        if (_installCombat is { } combat) await combat.Build;
+        var files = install.Models.Files.Where(_cacheFiles.FromPack).ToList();
         try
         {
             await Task.Run(() => install.Models.Prepare(files));
