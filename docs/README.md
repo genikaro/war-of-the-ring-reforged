@@ -1,5 +1,16 @@
 # Godot C# skirmish sandbox
 
+**build-201:** the research smoke passes again (31 of 31, last seen passing at build-83). Its stage-352 axe target
+copies the worker's rules with `DpsMilli = 0`, but since build-95 the worker also carries a fixed 5-damage punch
+(`DamagePerHitMilli`), which `UnitDefinition.Validate` rightly refuses without a rate: the dummy now clears both. The final
+report no longer indexes a target that was never spawned, which had thrown before the smoke could exit and left Godot
+running. With that out of the way the smoke showed what had drifted behind it. The trained Axethrower no longer walks to
+a rally point: on its way it stalled for good behind an idle builder and used up the 4000-frame hold budget the later
+stages wait on (that movement deadlock is its own bug). Stage 400 waits for an axe to land. Thrown axes count as
+flaming only when one is drawn (build-171's `projectile-33` tag draws the plain axe). The attack tooltip check reads the
+damage-per-hit line (its damage per second is now 11.43), and the Ranger checks read "20 m", "40 m" and the countdown's
+"s" through `GameText`, so they pass in the install's language too.
+
 **build-200:** effects and projectiles read from the install. `PresentationAssets.Lfx` and `.Lpo`
 (`prototype/Formats`) port `lfx.py` and `lpo.py`: an effect's texture, trail, beam and auxiliary tracks with their
 transforms and atlas descriptors, and its particle and mesh emitters; a projectile's control, resource and motion

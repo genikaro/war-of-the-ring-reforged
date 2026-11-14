@@ -65,7 +65,8 @@ public partial class Main
             if (arrow.Target == _researchUnitAxeTarget && _researchUnitAxeTarget >= 0)
             {
                 _researchUnitAxeSamples++;
-                _researchUnitAxeHasFlames |= arrow.Style != "" || _projectileFlames.ContainsKey(arrow.Id);
+                // Build-171 tags researched missiles projectile-33; with no style of its own that still draws the plain axe.
+                _researchUnitAxeHasFlames |= _projectileStyles.ContainsKey(arrow.Style) || _projectileFlames.ContainsKey(arrow.Id);
                 if (!_researchUnitFlightCaptured) { _researchUnitFlightCaptured = true; CaptureStage("unit-axe-flight"); }
             }
         }
@@ -143,8 +144,10 @@ public partial class Main
             case 29:
                 // Captured baseline Attack 10 (local skirmish-005); Iron Blades adds the source TechniqueUnitModifiers +1.
                 // Build-62: the panel shows that 11 per second as 11 per hit (10.6 rounded). Build-70: as the base 10 and a green +1.
+                // Build-199: the tooltip's damage per second is that hit over the swing time (11.43), so read its hit line.
                 _researchChecks["swordsman_panel_shows_attack_11"] = _selected.SetEquals([_researchSwordsman]) && _commands.DisplayedName == Shown("UNIT_G_GONDOR_SWORDSMAN","Gondor Swordsman")
-                    && _commands.DisplayedAttack == "10" && _commands.DisplayedAttackBonus == "+1" && _commands.DisplayedAttackTip.Contains(GameText.Labeled("stat.damage_per_second",11)+"\n")
+                    && _commands.DisplayedAttack == "10" && _commands.DisplayedAttackBonus == "+1"
+                    && _commands.DisplayedAttackTip.StartsWith(GameText.Labeled("stat.damage_per_hit",11)+" "+GameText.T("stat.hit_split","10","+1")+"\n")
                     && _commands.DisplayedArmor == "0" && _commands.DisplayedArmorBonus == "";
                 if (_capture != "") _ = CaptureFrame(false);
                 break;
@@ -154,9 +157,9 @@ public partial class Main
             case 33:
                 if (Hold(PlaceInTurn(SmokeCamp,SmokeDwarfHall))) break;
                 Select(SmokeDwarfHall); break;
-            case 35:
-                Click(_camera.UnprojectPosition(PositionOf(start.X-6000,start.Z+12000)),MouseButton.Right);
-                PushGridKey(0); break;
+            // Build-199: the Axethrower stays at the Dwarf Hall's exit. Sent to start.X-6 m, start.Z+12 m it stalled for good
+            // behind an idle builder, and waiting for it used up the whole hold budget the later stages need.
+            case 35: PushGridKey(0); break;
             case 37:
                 if (Hold(world.Units.FirstOrDefault(u => u.Team == 0 && u.Definition.Name == SmokeAxethrower) is not { Order: OrderKind.Idle,Goal: < 0 })) break;
                 _researchAxe = world.Units.First(u => u.Team == 0 && u.Definition.Name == SmokeAxethrower).Id;
@@ -256,12 +259,15 @@ public partial class Main
                 // Use the original recruit at home, clear of the enemy workers engaging the siege shooter in melee.
                 _researchFireShooter = _researchAxe;
                 var shooter = world.Units[_researchFireShooter]; shooter.Cooldown = 0;
-                var targetRules = world.Rules.Units["UNIT_G_HUMAN_WORKER"] with { Passive = true,MaxHealth = 10000,DpsMilli = 0 };
+                // A harmless dummy: the worker's per-hit punch (build-95) needs a weapon rate, so clear both.
+                var targetRules = world.Rules.Units["UNIT_G_HUMAN_WORKER"] with { Passive = true,MaxHealth = 10000,DpsMilli = 0,DamagePerHitMilli = 0 };
                 int unitCell = SkirmishSpawnCell(1,targetRules,world.Navigation.Cell(shooter.X-6000,shooter.Z));
                 var unitTarget = world.Spawn(1,unitCell,targetRules); _researchUnitAxeTarget = unitTarget.Id;
                 world.Enqueue(0,[shooter.Id],OrderKind.Attack,target:unitTarget.Id);
                 SelectUnit(shooter.Id); break;
             case 400:
+                // The first axe can leave later than 2.4 s after the order: wait until one has been seen in flight and has landed.
+                if (Hold(_researchUnitAxeSamples == 0 || world.Projectiles.Any(p => p.Target == _researchUnitAxeTarget))) break;
                 _researchChecks["unit_axe_keeps_normal_visuals_after_flaming_upgrade"] = _researchUnitAxeSamples > 0 && !_researchUnitAxeHasFlames;
                 _researchChecks["normal_axe_rotates_after_flaming_research"] = _researchUnitSpinObserved;
                 world.Enqueue(0,[_researchFireShooter],OrderKind.HoldGround);
@@ -270,7 +276,7 @@ public partial class Main
                 SelectUnit(_researchRanger); break;
             case 402:
                 _researchChecks["ranger_locked_tech_and_innate_detection_icons"] = _commands.AbilityButton(0) is { Visible:true,Disabled:true,Icon:not null }
-                    && LockedPassive(2) && ResearchedPassive(3) && _commands.AbilityButton(3).TooltipText.Contains("20 m")
+                    && LockedPassive(2) && ResearchedPassive(3) && _commands.AbilityButton(3).TooltipText.Contains(GameText.T("ability.detection",20))
                     && _commands.AbilityButton(0).TooltipText == $"{ShownAbility(14,"Camouflage")}\n"+(GameText.Ability(14,"description") ?? "Hides the Ranger from enemies until he moves or attacks. Enemy detectors can reveal him.");
                 CaptureStage("ranger-locked"); break;
             case 404: Select(SmokeArmory); break;
@@ -288,7 +294,7 @@ public partial class Main
                 SelectUnit(_researchRanger); break;
             case 412:
                 _researchChecks["ranger_researched_buttons_and_extended_detection"] = _commands.AbilityButton(0) is { Visible:true,Disabled:false,Icon:not null }
-                    && ResearchedPassive(2) && ResearchedPassive(3) && _commands.AbilityButton(3).TooltipText.Contains("40 m");
+                    && ResearchedPassive(2) && ResearchedPassive(3) && _commands.AbilityButton(3).TooltipText.Contains(GameText.T("ability.detection",40));
                 PushGridKey(0); break;
             case 414:
                 _researchChecks["camouflage_has_pose_opacity_sound_and_status"] = world.Units[_researchRanger].Camouflaged
@@ -302,7 +308,7 @@ public partial class Main
             case 420:
                 _researchChecks["moving_ranger_reappears_with_cooldown"] = !world.Units[_researchRanger].Camouflaged
                     && !_views[_researchRanger].Translucent && !_commands.DisplayedStatuses.Contains(ShownAbility(14,"Camouflage"))
-                    && _commands.AbilityButton(0).Disabled && _commands.AbilityLabel(0).EndsWith("s");
+                    && _commands.AbilityButton(0).Disabled && _commands.AbilityLabel(0).EndsWith(GameText.T("tip.seconds_short"));
                 world.Enqueue(0,[_researchRanger],OrderKind.Stop); break;
             case 430:
                 if (Hold(world.Units[_researchRanger].AbilityReadyAt[0] > world.Tick)) break;
@@ -336,7 +342,7 @@ public partial class Main
                     fixture = "Bank credited 1500 food/ore for each phase; instant base build and Dwarf/Ranger research, full timed Iron Blades; extra Rangers for visibility checks",held_frames = _researchHold,
                     unit_axe = new { samples = _researchUnitAxeSamples,flames = _researchUnitAxeHasFlames,
                         shooter = world.Units[_researchFireShooter] is var source ? new { source.Order,source.Cooldown,source.Target,source.Health,source.X,source.Z } : null,
-                        target = world.Units[_researchUnitAxeTarget] is var victim ? new { victim.Health,victim.X,victim.Z,victim.Present } : null },
+                        target = _researchUnitAxeTarget >= 0 && world.Units[_researchUnitAxeTarget] is var victim ? new { victim.Health,victim.X,victim.Z,victim.Present } : null },
                     researched = world.Researched.GetValueOrDefault(0)?.ToArray(),attack = _commands.DisplayedAttack,status = _status,digest = world.StateDigest() };
                 System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"research-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("RESEARCH_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
