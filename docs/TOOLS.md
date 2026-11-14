@@ -74,6 +74,8 @@ the checks share them:
 | `H2OArchive`, `GameArchives` | `h2o.py` | One archive or every archive of an install. A file is read on request, CRC-checked, by its archive path or by its `extracted/` path (`Models/Units/...`), in any case and with either separator. Reads are positional, so threads can share an archive. |
 | `Blast`, `Crc32` | `blast.py`, `zlib.crc32` | DCL-imploded data and zlib's CRC-32. |
 | `LqrTable`, `LqrDatabase` | `lqr.py` | Database tables with their schema, the Rings.lrp table ids and reference/enum resolution. Tables load when first asked for. |
+| `Ltx` | `game_text.py` `parse_ltx` | Build-193: LIQDTEXT text tables. `H2OArchive.ReadPrefix` decompresses only the start of a file, for headers. |
+| `Install/OriginalText` | `game_text.py` `build` | Build-193: the original text as the game reads it, built from the install at startup ([LOCALIZATION.md](LOCALIZATION.md)). |
 
 ```powershell
 dotnet run --project tests/formats -c Release
@@ -81,11 +83,18 @@ python tools/formats_fingerprint.py "Legacy/Game EN" artifacts/fingerprint-en.js
 dotnet run --project tests/formats -c Release -- --install "Legacy/Game EN" --python artifacts/fingerprint-en.json
 ```
 
-The first runs 26 checks on synthetic archives and tables. `--install` reads and CRC-checks every archive file and
+```powershell
+python tools/game_text.py --install "Legacy/Game EN" --out artifacts/text-en.json
+dotnet run --project tests/formats -c Release -- --install "Legacy/Game EN" --python-text artifacts/text-en.json
+```
+
+The first runs 38 checks on synthetic archives, tables and text. `--install` reads and CRC-checks every archive file and
 parses every table, with timings (`--sequential` for one thread); `--python` then requires every file's bytes and
 record and every table's columns, records and values to equal the Python readers'. On the English install: 23
 archives open in about 25 ms, 678 MB of files read in 1.0 s on one thread, the 154 tables parse in under 0.1 s, and
-all 13,666 files and 264,243 values match (13,654 files on the Russian install).
+all 13,666 files and 264,243 values match (13,654 files on the Russian install). `--python-text` builds the original
+text from the install and requires it to equal `game_text.py --out`'s, key for key: it does on both installs, built in
+about 90 ms.
 
 Extract the archives once:
 

@@ -273,7 +273,8 @@ public partial class Launcher : Control
 
     // ---- Folder choice and check ----------------------------------------------------------------------------------
 
-    private static string? SavedFolder()
+    /// <summary>The install folder the launcher last checked and kept (also where the game reads its text, build-193).</summary>
+    internal static string? SavedFolder()
     {
         var config = new ConfigFile();
         return config.Load(SettingsPath) == Error.Ok && config.GetValue("launcher","folder","").AsString() is { Length: > 0 } folder ? folder : null;

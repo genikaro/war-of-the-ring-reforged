@@ -15,6 +15,41 @@ public static class GamePaths
     public static string Data(string relative) => System.IO.Path.GetFullPath(System.IO.Path.Combine(Root,relative));
     public static bool Exported => !OS.HasFeature("editor");
 
+    /// <summary>Build-193: the original game the data is read from at startup, or null when none is known: --install=
+    /// on the command line (run.ps1 -Install), the folder the launcher last checked, the install the last import read
+    /// (converted/install.json), REFORGED_INSTALL, then the tools' default `TLOTR - War of the Ring` beside the data.
+    /// The first that has Archives and Database folders wins. Looked up anew each time, since the launcher can change it.</summary>
+    public static string? FindInstall()
+    {
+        IEnumerable<string?> Candidates()
+        {
+            foreach (string arg in OS.GetCmdlineUserArgs())
+                if (arg.StartsWith("--install=")) yield return arg[10..];
+            yield return Launcher.SavedFolder();
+            yield return InstallRecordFolder();
+            yield return System.Environment.GetEnvironmentVariable("REFORGED_INSTALL");
+            yield return System.IO.Path.Combine(Root,"TLOTR - War of the Ring");
+        }
+        foreach (string? folder in Candidates())
+            if (folder is { Length: > 0 } && IsInstall(folder)) return System.IO.Path.GetFullPath(folder);
+        return null;
+    }
+
+    public static bool IsInstall(string folder)
+        => System.IO.Directory.Exists(System.IO.Path.Combine(folder,"Archives")) && System.IO.Directory.Exists(System.IO.Path.Combine(folder,"Database"));
+
+    private static string? InstallRecordFolder()
+    {
+        try
+        {
+            string record = System.IO.Path.Combine(Converted,"install.json");
+            if (!System.IO.File.Exists(record)) return null;
+            using var document = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(record));
+            return document.RootElement.TryGetProperty("install",out var install) ? install.GetString() : null;
+        }
+        catch (Exception error) when (error is System.Text.Json.JsonException or System.IO.IOException or InvalidOperationException) { return null; }
+    }
+
     private static string FindRoot()
     {
         foreach (string arg in OS.GetCmdlineUserArgs())

@@ -6,4 +6,5 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup><Compile Include="../../prototype/Formats/*.cs" Link="Formats/%(Filename)%(Extension)" /></ItemGroup>
+  <ItemGroup><Compile Include="../../prototype/Install/*.cs" Link="Install/%(Filename)%(Extension)" /></ItemGroup>
 </Project>

@@ -45,17 +45,36 @@ public static class Blast
 
     /// <summary>Decompresses <paramref name="source"/> into all of <paramref name="destination"/>. Throws when the data
     /// is malformed, ends early (the end code before the destination is full) or would run past the destination.</summary>
-    public static void Explode(ReadOnlySpan<byte> source,Span<byte> destination)
+    public static void Explode(ReadOnlySpan<byte> source,Span<byte> destination) => Explode(source,destination,false,true);
+
+    /// <summary>Build-193: only the first <c>destination.Length</c> bytes (a file's header): decoding stops once they are
+    /// written, the last match cut short. Returns how many were written, fewer when the data ends first. When
+    /// <paramref name="sourceComplete"/> is false the source is only the start of the compressed data, and -1 says the
+    /// decoder reached its end before the destination was full, so more of it is needed.</summary>
+    public static int ExplodePrefix(ReadOnlySpan<byte> source,Span<byte> destination,bool sourceComplete = true)
+        => Explode(source,destination,true,sourceComplete);
+
+    private static int Explode(ReadOnlySpan<byte> source,Span<byte> destination,bool prefix,bool sourceComplete)
     {
         var input = new BitReader(source);
+        // Past the end of a partial source the zero bytes read are not the data: what they decoded to is discarded, and a
+        // fault they cause only means more of the source is needed.
+        try { return Decode(ref input,destination,prefix,sourceComplete); }
+        catch (InvalidDataException) when (!sourceComplete && input.Overran) { return -1; }
+    }
+
+    private static int Decode(ref BitReader input,Span<byte> destination,bool prefix,bool sourceComplete)
+    {
         int written = 0;
         uint literals = input.Bits(8);
-        if (literals > 1) throw new InvalidDataException($"DCL: bad literal flag {literals}");
         int dictionaryBits = (int)input.Bits(8);
+        if (!sourceComplete && input.Overran) return -1;
+        if (literals > 1) throw new InvalidDataException($"DCL: bad literal flag {literals}");
         if (dictionaryBits is < 4 or > 6) throw new InvalidDataException($"DCL: bad dictionary size {dictionaryBits}");
         while (written < destination.Length)
         {
-            if (input.Position > source.Length+4) throw new InvalidDataException("DCL: input exhausted");
+            if (!sourceComplete && input.Overran) return -1;
+            if (input.Position > input.Length+4) throw new InvalidDataException("DCL: input exhausted");
             if (input.Bits(1) != 0)
             {
                 int symbol = input.Decode(Len), length = Base[symbol]+(int)input.Bits(Extra[symbol]);
@@ -63,7 +82,11 @@ public static class Blast
                 int shift = length == 2 ? 2 : dictionaryBits;
                 int distance = (input.Decode(Dist) << shift)+(int)input.Bits(shift)+1;
                 if (distance > written) throw new InvalidDataException("DCL: distance too far back");
-                if (written+length > destination.Length) throw new InvalidDataException("DCL: data runs past the expected size");
+                if (written+length > destination.Length)
+                {
+                    if (!prefix) throw new InvalidDataException("DCL: data runs past the expected size");
+                    length = destination.Length-written;
+                }
                 int start = written-distance;
                 if (distance >= length) destination.Slice(start,length).CopyTo(destination[written..]);
                 else for (int i = 0; i < length; i++) destination[written+i] = destination[start+i];
@@ -71,7 +94,9 @@ public static class Blast
             }
             else destination[written++] = (byte)(literals != 0 ? input.Decode(Lit) : (int)input.Bits(8));
         }
-        if (written != destination.Length) throw new InvalidDataException($"DCL: {written} bytes, expected {destination.Length}");
+        if (!sourceComplete && input.Overran) return -1;
+        if (!prefix && written != destination.Length) throw new InvalidDataException($"DCL: {written} bytes, expected {destination.Length}");
+        return written;
     }
 
     /// <summary>Bits least significant first; past the end of the input it reads zero bytes, as blast.py does.</summary>
@@ -81,10 +106,18 @@ public static class Blast
         private uint _buffer;
         private int _count;
         public int Position;
+        /// <summary>A byte past the end of the source was read (as zero).</summary>
+        public bool Overran;
+        public readonly int Length => _source.Length;
 
         private void Need(int k)
         {
-            while (_count < k) { _buffer |= (uint)(Position < _source.Length ? _source[Position] : 0) << _count; Position++; _count += 8; }
+            while (_count < k)
+            {
+                if (Position < _source.Length) _buffer |= (uint)_source[Position] << _count;
+                else Overran = true;
+                Position++; _count += 8;
+            }
         }
 
         public uint Bits(int k)

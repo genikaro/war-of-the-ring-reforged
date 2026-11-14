@@ -1,14 +1,14 @@
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
+using Reforged.Install;
 
 namespace Reforged.Presentation;
 
 /// <summary>Build-183: every string a player sees, in the language of the player's own install. Original text comes
-/// from the install's tables (tools/game_text.py writes converted/content/good/text/original.json; the repository never
-/// holds it) and is addressed as `Table:id` (`GameConsole:30`) or by its InterfaceTextIDs symbol without the
-/// INTERFACE_TEXT_ID_ prefix (`TOOLTIPS_LEVEL`). Strings the original never had live in prototype/Locale/strings.csv
+/// from the install's tables (read from the install at startup since build-193, else from the content pack's
+/// text/original.json that tools/game_text.py writes; the repository never holds it) and is addressed as `Table:id`
+/// (`GameConsole:30`) or by its InterfaceTextIDs symbol without the INTERFACE_TEXT_ID_ prefix (`TOOLTIPS_LEVEL`). Strings the original never had live in prototype/Locale/strings.csv
 /// (key, original, en, ru, note): a row with `original` set uses the install's text, the others are custom text in
 /// English and Russian, and an install in any other language gets the English. The language is the install's
 /// (detected from the text itself); there is no setting. Developer text (debug panel, bot journal, logs) stays English
@@ -35,36 +35,33 @@ public static class GameText
     /// <summary>Told once per missing text (Main logs it to the Godot console).</summary>
     public static Action<string>? Warn { get; set; }
 
-    /// <summary>Loads the original tables (null or a missing file: none) and the catalog text. Replaces what was loaded.</summary>
+    /// <summary>Loads the original tables from a content pack's text/original.json (null or a missing file: none) and
+    /// the catalog text. Replaces what was loaded.</summary>
     public static void Load(string? originalPath,string catalogCsv)
+        => LoadText(originalPath != null && File.Exists(originalPath) ? OriginalText.FromJson(File.ReadAllText(originalPath,Encoding.UTF8)) : null,catalogCsv);
+
+    /// <summary>Build-193: loads original text built straight from the install (OriginalText.FromInstall), or none, and
+    /// the catalog text. Replaces what was loaded.</summary>
+    public static void LoadText(OriginalText? original,string catalogCsv)
     {
         Tables.Clear(); Symbols.Clear(); Records.Clear(); Maps.Clear(); Abilities.Clear(); GlobalPowers.Clear(); Placeholders.Clear();
         Catalog.Clear(); MissingSet.Clear(); HasOriginal = false; Language = "en";
-        if (originalPath != null && File.Exists(originalPath)) LoadOriginal(File.ReadAllText(originalPath,Encoding.UTF8));
+        if (original != null) LoadOriginal(original);
         foreach (var row in ParseCatalog(catalogCsv)) Catalog[row.Key] = row;
         try { Culture = CultureInfo.GetCultureInfo(Language); } catch (CultureNotFoundException) { Culture = CultureInfo.InvariantCulture; }
     }
 
-    private static void LoadOriginal(string json)
+    private static void LoadOriginal(OriginalText original)
     {
-        using var document = JsonDocument.Parse(json); var root = document.RootElement;
-        if (root.GetProperty("format_version").GetInt32() != 1) throw new FormatException("Unsupported original text format");
-        Language = root.GetProperty("language").GetString() ?? "en";
-        foreach (var table in root.GetProperty("tables").EnumerateObject())
+        Language = original.Language;
+        foreach (var (name,entries) in original.Tables) Tables[name] = new Dictionary<int,string>(entries);
+        foreach (var (symbol,reference) in original.Symbols) Symbols[symbol] = reference;
+        void Fields(SortedDictionary<string,Dictionary<string,string>> from,Dictionary<string,Dictionary<string,string>> into)
         {
-            var entries = new Dictionary<int,string>();
-            foreach (var entry in table.Value.EnumerateObject()) entries[int.Parse(entry.Name,CultureInfo.InvariantCulture)] = entry.Value.GetString() ?? "";
-            Tables[table.Name] = entries;
+            foreach (var (key,fields) in from) into[key] = new Dictionary<string,string>(fields);
         }
-        foreach (var symbol in root.GetProperty("symbols").EnumerateObject()) Symbols[symbol.Name] = symbol.Value.GetString()!;
-        void Fields(string name,Dictionary<string,Dictionary<string,string>> into)
-        {
-            if (!root.TryGetProperty(name,out var section)) return;
-            foreach (var item in section.EnumerateObject())
-                into[item.Name] = item.Value.EnumerateObject().ToDictionary(f => f.Name,f => f.Value.GetString()!);
-        }
-        Fields("records",Records); Fields("maps",Maps); Fields("abilities",Abilities); Fields("global_powers",GlobalPowers);
-        foreach (var item in root.GetProperty("placeholders").EnumerateArray()) Placeholders.Add(item.GetString()!);
+        Fields(original.Records,Records); Fields(original.Maps,Maps); Fields(original.Abilities,Abilities); Fields(original.GlobalPowers,GlobalPowers);
+        foreach (string reference in original.Placeholders) Placeholders.Add(reference);
         HasOriginal = true;
     }
 

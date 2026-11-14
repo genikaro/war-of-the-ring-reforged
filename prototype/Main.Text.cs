@@ -1,19 +1,45 @@
 using Godot;
+using Reforged.Install;
 using Reforged.Presentation;
 
 /// <summary>Build-183: the game's text (GameText) loads first, before any menu or HUD label is made: the install's own
-/// tables from the content pack and the repository's catalog of strings the original never had.</summary>
+/// tables and the repository's catalog of strings the original never had. Since build-193 the tables are read straight
+/// from the install (GamePaths.FindInstall) when one is known, and from the content pack's text/original.json otherwise.</summary>
 public partial class Main
 {
     public const string TextCatalog = "res://Locale/strings.csv";
 
+    /// <summary>The text last built from an install, and what it was built from: every scene change reloads the text, and
+    /// the same install's unchanged files need not be read again.</summary>
+    private static (string Key,OriginalText Text)? _installText;
+
     public static void LoadGameText()
     {
         GameText.Warn = message => GD.PushWarning(message);
-        string original = GamePaths.Data("converted/content/good/text/original.json");
-        GameText.Load(original,Godot.FileAccess.GetFileAsString(TextCatalog));
-        GD.Print(GameText.HasOriginal ? $"Text: {GameText.Language} from the install ({GameText.Rows.Count} catalog rows)"
-            : $"Text: no install text at {original} (python tools/game_text.py --pack converted/content/good); English catalog only");
+        string catalog = Godot.FileAccess.GetFileAsString(TextCatalog);
+        if (GamePaths.FindInstall() is { } install)
+        {
+            try
+            {
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                string Stamp(params string[] parts) => System.IO.File.GetLastWriteTimeUtc(System.IO.Path.Combine([install,.. parts])).Ticks.ToString();
+                string key = string.Join("|",install,Stamp("Archives","Text.H2O"),Stamp("Archives","Levels.H2O"),Stamp("Database","InterfaceTextIDs.lqr"));
+                bool reused = _installText?.Key == key;
+                if (!reused) _installText = (key,OriginalText.FromInstall(install));
+                GameText.LoadText(_installText!.Value.Text,catalog);
+                GD.Print($"Text: {GameText.Language} {(reused ? "kept" : "read")} from the install {install} in {clock.ElapsedMilliseconds} ms ({GameText.Rows.Count} catalog rows)");
+                return;
+            }
+            catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException
+                or UnauthorizedAccessException or InvalidCastException or FormatException)
+            {
+                GD.PushWarning($"Text: cannot read the install {install} ({error.Message}); using the content pack's text");
+            }
+        }
+        string original = GamePaths.Data("converted/content/good/"+OriginalText.PackFile);
+        GameText.Load(original,catalog);
+        GD.Print(GameText.HasOriginal ? $"Text: {GameText.Language} from the content pack ({GameText.Rows.Count} catalog rows)"
+            : $"Text: no install found and no text at {original}; English catalog only");
     }
 
     // The smokes expect what the game shows, in whatever language the install is: a record's name by symbol, an

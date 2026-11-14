@@ -5,12 +5,13 @@ using Reforged.Formats;
 public static class SyntheticChecks
 {
     // blast.c's own example: "AIAIAIAIAIAIA" imploded.
-    private static readonly byte[] Imploded = [0x00, 0x04, 0x82, 0x24, 0x25, 0x8f, 0x80, 0x7f];
-    private static readonly byte[] Exploded = "AIAIAIAIAIAIA"u8.ToArray();
+    internal static readonly byte[] Imploded = [0x00, 0x04, 0x82, 0x24, 0x25, 0x8f, 0x80, 0x7f];
+    internal static readonly byte[] Exploded = "AIAIAIAIAIAIA"u8.ToArray();
 
     public static void Run(Action<bool,string> check)
     {
         BlastChecks(check);
+        TextChecks.Prefixes(check,Imploded,Exploded);
         CrcChecks(check);
         string folder = Path.Combine(Path.GetTempPath(),"reforged-formats-"+Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
@@ -18,6 +19,7 @@ public static class SyntheticChecks
         {
             ArchiveChecks(check,folder);
             TableChecks(check,folder);
+            TextChecks.Synthetic(check);
         }
         finally { Directory.Delete(folder,true); }
     }
@@ -111,6 +113,8 @@ public static class SyntheticChecks
             check(archive.Read("ai.txt").AsSpan().SequenceEqual(Exploded),"H2O reads a packed file, CRC-checked");
             check(archive.Contains("units\\GOOD\\Hello.TXT") && !archive.Contains("Units\\hello.txt"),"H2O paths match in any case, with either separator");
             check(Throws(() => archive.Read("missing.txt")),"H2O reports a missing file");
+            check(archive.ReadPrefix(archive.Entries[1],5).AsSpan().SequenceEqual("AIAIA"u8) && archive.ReadPrefix(archive.Entries[1],100).Length == 13
+                && archive.ReadPrefix(archive.Entries[0],2).AsSpan().SequenceEqual("he"u8),"H2O reads the start of a packed or stored file");
         }
         using (var game = GameArchives.OpenInstall(folder))
         {

@@ -1,5 +1,18 @@
 # Godot C# skirmish sandbox
 
+**build-193:** the game reads its text straight from the install. `OriginalText` (`prototype/Install`) is a C# port
+of `game_text.py`: Text.H2O's 49 tables, the database records, maps, abilities and Fate powers that name a text, the
+stub entries and the language read from the text itself. At startup the game finds the install (`--install=`,
+`run.ps1 -Install`, the folder the launcher last kept, `converted/install.json`, `REFORGED_INSTALL`, then
+`TLOTR - War of the Ring` beside the data) and builds the text from it in about 150 ms the first time; later scene
+changes reuse it while the files are unchanged. Without an install, or when it cannot be read, the content pack's
+`text/original.json` is used as before. So the text now follows the install chosen, not the one the content pack was
+built from: started with `-Install "Legacy/Game EN"`, a pack built from the Russian install shows English. The import
+still writes `text/original.json`. New format pieces: `Ltx` reads LIQDTEXT tables, and `H2OArchive.ReadPrefix`
+decompresses only a file's start (the map headers). `tests/formats --python-text` compares the text with
+`game_text.py --out` on a real install: on the English and Russian installs every table, symbol, record, map,
+ability, stub and the language evidence match (44 format checks).
+
 **build-192:** the first step towards playing straight from the install, without the import: the game can now read
 the original archives and database itself. `prototype/Formats` holds C# readers for H2O archives (with the DCL
 decompressor and CRC-32) and `.lqr` database tables, ported from `h2o.py`, `blast.py` and `lqr.py`. An archive opens
@@ -1110,6 +1123,8 @@ a normal viewport capture with `-CapturePath`.
 ./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release
 python tools/formats_fingerprint.py "Legacy/Game EN" artifacts/fingerprint-en.json
 ./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python artifacts/fingerprint-en.json
+python tools/game_text.py --install "Legacy/Game EN" --out artifacts/text-en.json
+./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python-text artifacts/text-en.json
 ./prototype/run.ps1 -Smoke
 ./prototype/run.ps1 -MotionSmoke
 ./prototype/run.ps1 -CombatSmoke

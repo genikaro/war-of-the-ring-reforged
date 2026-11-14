@@ -89,6 +89,8 @@ param(
     # Build-190: the normal interface even in a smoke or capture; it answers before -Debug and the automated run.
     [switch]$NoDebug,
     [string]$CapturePath,
+    # Build-193: the original game to read the text from (else the launcher's folder, converted/install.json, REFORGED_INSTALL).
+    [string]$Install,
     [ValidatePattern('^[1-9][0-9]{2,4}x[1-9][0-9]{2,4}$')]
     [string]$Resolution,
     [string]$CachePath
@@ -106,10 +108,10 @@ if (-not $GodotPath) {
     else { $GodotPath = (Get-Command godot -ErrorAction Stop).Source }
 }
 # -Skirmish with nothing else that chooses the match opens the setup screen; -Setup always does.
-$launchOnly = @('Skirmish','GodotPath','DotnetPath','Resolution','HideHud','DebugMenu','Debug','NoDebug','View','Unmuted','Mute')
+$launchOnly = @('Skirmish','GodotPath','DotnetPath','Resolution','HideHud','DebugMenu','Debug','NoDebug','View','Unmuted','Mute','Install')
 $setupMode = $Setup -or $SetupSmoke -or ($Skirmish -and -not ($PSBoundParameters.Keys | Where-Object { $_ -notin $launchOnly }))
 # Build-147: nothing that chooses a scene (or -Menu) opens the main menu; -View, -CapturePath and the like keep Helm's Deep.
-$menuMode = $Menu -or $MenuSmoke -or $Launcher -or $LauncherSmoke -or -not ($PSBoundParameters.Keys | Where-Object { $_ -notin @('GodotPath','DotnetPath','Resolution','Unmuted','Mute','DebugMenu','Debug','NoDebug') })
+$menuMode = $Menu -or $MenuSmoke -or $Launcher -or $LauncherSmoke -or -not ($PSBoundParameters.Keys | Where-Object { $_ -notin @('GodotPath','DotnetPath','Resolution','Unmuted','Mute','DebugMenu','Debug','NoDebug','Install') })
 $env:DOTNET_ROOT = Split-Path -Parent $DotnetPath
 $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
@@ -155,6 +157,7 @@ if ($Unmuted) { $arguments += '--unmuted' }
 if ($DebugMenu) { $arguments += '--debug-menu' }
 if ($Debug) { $arguments += '--debug' }
 if ($NoDebug) { $arguments += '--no-debug' }
+if ($Install) { $arguments += "--install=$($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Install))" }
 if ($Smoke -or $MotionSmoke) { $arguments += '--smoke' }
 if ($MotionSmoke) { $arguments += '--motion-smoke' }
 if ($CombatSmoke) { $arguments += '--combat-smoke' }

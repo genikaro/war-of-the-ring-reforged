@@ -2,7 +2,8 @@
 
 From build-183 the game shows the original game's own text, taken from the player's install, in whatever language that
 install is. Strings the original never had live in this repository in English and Russian. Original text is never
-copied into the repository: `tools/game_text.py` reads it from the install into `converted/`, which git ignores.
+copied into the repository: since build-193 the game reads it straight from the install at startup, and
+`tools/game_text.py` still writes it into `converted/` (which git ignores) for a game started without one.
 
 - **The language follows the install's text tables.** There is no language setting. A Russian install shows Russian;
   an English install shows English. An install in any other language shows its own original text, with the custom
@@ -11,15 +12,30 @@ copied into the repository: `tools/game_text.py` reads it from the install into 
   smoke output. Since build-183 names are resolved as the rules load, so the journal shows unit and building names in
   the install's language inside English sentences.
 
-## Refreshing the text
+## Where the game gets the text
+
+Build-193: at startup `Main.LoadGameText` looks for the install, the first of these with `Archives` and `Database`
+folders:
+
+1. `--install=<folder>` on the command line (`./prototype/run.ps1 -Install "C:/Games/War of the Ring"`),
+2. the folder the launcher last checked and kept,
+3. the install the last import read (`converted/install.json`),
+4. `REFORGED_INSTALL`,
+5. `TLOTR - War of the Ring` beside the data, the tools' default.
+
+It builds the text from that install with `OriginalText.FromInstall` (`prototype/Install/OriginalText.cs`, a C# port of
+`game_text.py` that gives the same result) in about 150 ms, and keeps it for later scene changes while the install's
+Text.H2O, Levels.H2O and InterfaceTextIDs.lqr are unchanged. The log says which: `Text: en read from the install ...`.
+So the text follows the install chosen, even when the content pack was built from another one.
+
+Without an install, or when it cannot be read, the game reads the content pack's `text/original.json`, which
 
 ```bash
 python tools/game_text.py --pack converted/content/good
 ```
 
-This writes `converted/content/good/text/original.json` and prints the detected language and its evidence. A full
-`python tools/content_pack.py` writes the same file. The game reads it on start (`Main.Text.cs`). Without the file the
-game runs with the catalog's English and logs where the file should be.
+writes, printing the detected language and its evidence (a full `python tools/content_pack.py` writes the same file).
+Without either, the game runs with the catalog's English and logs where the file should be.
 
 ## Where the original keeps its text
 

@@ -114,6 +114,26 @@ public sealed class H2OArchive : IDisposable
     public byte[] Read(string path,bool verify = true) =>
         TryGet(path,out var entry) ? Read(entry,verify) : throw new FileNotFoundException($"{Name} has no {path}",path);
 
+    /// <summary>Build-193: a file's first <paramref name="length"/> bytes (all of a shorter file), for headers. A packed
+    /// file decompresses only that far. A part cannot be CRC-checked.</summary>
+    public byte[] ReadPrefix(H2OEntry entry,int length)
+    {
+        length = Math.Min(length,entry.RawSize);
+        if (!entry.Packed) return ReadAt(entry.Offset,length);
+        var head = ReadAt(entry.Offset,12);
+        int compressed = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(head)), raw = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(head.AsSpan(4)));
+        if (raw != entry.RawSize) throw new InvalidDataException($"{Name}\\{entry.Path}: {raw} bytes, expected {entry.RawSize}");
+        if (compressed == raw) return ReadAt(entry.Offset+12,length);
+        // Start with as much compressed data as the part would take stored and read four times more while that is short.
+        for (int input = Math.Min(compressed,length+64); ; input = (int)Math.Min(compressed,input*4L))
+        {
+            var data = new byte[length];
+            int written = Blast.ExplodePrefix(ReadAt(entry.Offset+12,input),data,input == compressed);
+            if (written == length) return data;
+            if (input == compressed) throw new InvalidDataException($"{Name}\\{entry.Path}: ends after {written} of {length} bytes");
+        }
+    }
+
     /// <summary>The archive's own form of a path: backslashes, no leading separator.</summary>
     public static string Normalize(string path) => path.Replace('/','\\').TrimStart('\\');
 
