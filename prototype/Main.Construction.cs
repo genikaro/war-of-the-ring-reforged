@@ -87,7 +87,7 @@ public partial class Main
         // build-25 adds the Watchtower's source defenses, build-44 the upgrades.
         if (!data.TryGetProperty("construction",out var construction) || !construction.TryGetProperty("placeable",out var placeable)
             || !construction.TryGetProperty("defenses",out var defenses) || !construction.TryGetProperty("upgrades",out var upgrades))
-            throw new InvalidOperationException("Refresh construction: python tools/skirmish_construction.py --cache converted/skirmish");
+            throw new InvalidOperationException("The rules give no construction");
         var world = _world!;
         foreach (var start in StartBases(data))
             world.StartBuildings.Add(start.Team,[start.Building]);

@@ -54,7 +54,7 @@ public partial class Main
             max_step_ms=_engagementStepTimes.Max(),navigation_warmup_ms=_navigationWarmMs,digest=world.StateDigest(),
             slowest_steps=_engagementStepTimes.Select((ms,tick)=>new {tick,ms}).OrderByDescending(t=>t.ms).Take(5).ToArray(),
             passed=_engagementSelected && _engagementOrdered && _engagementSafe && _engagementHitters.All(h=>h.Count>=14)};
-        System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,_attackMoveEngagementSmoke?"attack-move-engagement-smoke-report.json":"engagement-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented=true}));
+        System.IO.File.WriteAllText(GamePaths.Report(_attackMoveEngagementSmoke?"attack-move-engagement-smoke-report.json":"engagement-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented=true}));
         GD.Print("ENGAGEMENT_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed?0:1);
     }
 }

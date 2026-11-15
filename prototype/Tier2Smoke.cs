@@ -141,7 +141,7 @@ public partial class Main
                     citadel_health = new { before = _tier2CitadelHealth,after = world.ConstructionSites[10000].Health },
                     attacks = new[] {SmokeRider,SmokeShieldbreaker,SmokeRanger}.Select(n => Trained(n)?.AttackSerial ?? -1).ToArray(),
                     population = new { used = world.PopulationUsed(0),capacity = world.PopulationCapacity(0) },status = _status,digest = world.StateDigest() };
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"tier2-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
+                System.IO.File.WriteAllText(GamePaths.Report("tier2-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("TIER2_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
         }
     }

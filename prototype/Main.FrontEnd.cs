@@ -27,7 +27,7 @@ public partial class Main
     private void LoadMenuAudio()
     {
         var install = InstallAudio();
-        _audio.Load(GamePaths.Data("converted/content/good/audio/index.json"),install?.Index,install?.Files,null);
+        _audio.Load(GamePaths.Installed("content/good/audio/index.json"),install?.Index,install?.Files,null);
         _audio.PlayMusic(MusicContext.Menu);
     }
 

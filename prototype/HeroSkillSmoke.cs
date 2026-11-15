@@ -151,7 +151,7 @@ public partial class Main
                 CaptureSkill("captured-tower");break;
             case 330:
                 var report=new {build=BuildInfo.Label,checks=_heroSkillChecks,passed=_heroSkillChecks.Values.All(v=>v)};
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"hero-skill-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions{WriteIndented=true}));
+                System.IO.File.WriteAllText(GamePaths.Report("hero-skill-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions{WriteIndented=true}));
                 GD.Print("HERO_SKILL_SMOKE "+JsonSerializer.Serialize(report));_=FinishCombatAudio(report.passed?0:1);break;
         }
     }

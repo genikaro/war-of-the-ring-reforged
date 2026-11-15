@@ -31,5 +31,8 @@ __pycache__/
 # Smoke/debug captures (prototype/run.ps1 -CapturePath artifacts/...)
 /artifacts/
 
+# Smoke reports (prototype/run.ps1, build-217)
+/reports/
+
 # Local legacy material, kept out of the repository
 /Legacy/

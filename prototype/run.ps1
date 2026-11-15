@@ -88,12 +88,15 @@ param(
     # Build-190: the normal interface even in a smoke or capture; it answers before -Debug and the automated run.
     [switch]$NoDebug,
     [string]$CapturePath,
-    # Build-193: the original game to read the text from (else the launcher's folder, converted/install.json, REFORGED_INSTALL).
+    # Build-193: the original game the game reads (else the launcher's folder, REFORGED_INSTALL). Build-217: the game reads
+    # nothing else; with none found a smoke stops and an interactive run opens the launcher.
     [string]$Install,
-    # Build-210: the data folder (--data), in place of the repository; the default map caches are looked for under it.
+    # Build-210: the data folder (--data), in place of the repository; build-217: the reports go to its reports/ folder.
     [string]$Data,
     [ValidatePattern('^[1-9][0-9]{2,4}x[1-9][0-9]{2,4}$')]
     [string]$Resolution,
+    # A developer's cache folder on disk (e.g. a fresh Python demo, tools/demo_fingerprint.py --keep) in place of the
+    # install's map; the install is still needed.
     [string]$CachePath
 )
 $ErrorActionPreference = 'Stop'
@@ -229,15 +232,12 @@ if ($SurfaceSmoke) { $arguments += '--surface-smoke' }
 if ($ObstacleSmoke) { $arguments += '--obstacle-smoke' }
 if ($CapturePath) { $arguments += "--capture=$([System.IO.Path]::GetFullPath($CapturePath))" }
 if ($CapturePath -and $Resolution) { $arguments += "--capture-resolution=$Resolution" }
-# Bilbo's Bluffs lives in converted/skirmish; -Map MP04_Wasteland uses converted/skirmish-maps/MP04_Wasteland.
-if ($Map -and -not $CachePath) { $CachePath = Join-Path $dataRoot "converted/skirmish-maps/$Map" }
-# The Sandbox test map (build-56): an empty field where you command both players; python tools/prepare_prototype.py --sandbox builds it.
-if (($Sandbox -or $SandboxSmoke) -and -not $CachePath) { $CachePath = Join-Path $dataRoot 'converted/skirmish-maps/Sandbox' }
-if ($Skirmish -and -not $CachePath) { $CachePath = Join-Path $dataRoot 'converted/skirmish' }
+# Build-217: the map is the install's, named by its stem (-Map MP04_Wasteland); -Skirmish alone plays Bilbo's Bluffs and
+# the Sandbox test map (build-56) is cut from it. Nothing else chooses the Helm's Deep demo. The reports go to reports/.
 if ($CachePath) { $arguments += "--cache=$([System.IO.Path]::GetFullPath($CachePath))" }
-# Build-215: another data folder may be empty: a map built from the install writes only the smokes' reports to its folder.
-$reportFolder = if ($CachePath) { $CachePath } else { Join-Path $dataRoot 'converted/prototype' }
-if ($Data -and -not (Test-Path -LiteralPath $reportFolder)) { New-Item -ItemType Directory -Force -Path $reportFolder | Out-Null }
+elseif ($Map) { $arguments += "--map=$Map" }
+elseif ($Sandbox -or $SandboxSmoke) { $arguments += '--map=Sandbox' }
+elseif ($Skirmish) { $arguments += '--map=MP02_Bilbos_Bluffs' }
 if ($AudioSmoke) {
     # Godot can report a signal connection error while still returning exit code zero. Build-215: its warnings on stderr
     # (a run without an install warns of the unit names it has no text for) must not stop the script.

@@ -103,7 +103,7 @@ public partial class Main
                     citadel = new { before = _dwarfCitadelHealth,after = world.ConstructionSites[SmokeOwnCitadel].Health,aimSamples = _dwarfSiegeAimSamples },
                     releases = _arrowReleases,visuals = _arrowVisuals,launches = _launchSamples,trails = _trailCreated,hits = _arrowHits,
                     bank = new { world.Economies[0].FoodMilli,world.Economies[0].OreMilli },status = _status,commands = world.Commands,digest = world.StateDigest() };
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"dwarf-hall-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
+                System.IO.File.WriteAllText(GamePaths.Report("dwarf-hall-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("DWARF_HALL_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
         }
     }

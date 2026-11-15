@@ -293,7 +293,7 @@ public partial class Main
     {
         var report = new { build = BuildInfo.Number,checks = _interactionChecks,
             passed = _interactionChecks.Count == expected && _interactionChecks.Values.All(v => v) };
-        System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"interaction-smoke-report.json"),
+        System.IO.File.WriteAllText(GamePaths.Report("interaction-smoke-report.json"),
             JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
         GD.Print("INTERACTION_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1);
     }

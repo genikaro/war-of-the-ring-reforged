@@ -30,17 +30,16 @@ public partial class SetupScreen : Control
         int WidthMm,int HeightMm,Color[] Colors,AiBotOption[] Personalities,string DefaultPersonality,bool Sandbox = false,
         Reforged.Install.MapPreview? Preview = null)
     {
-        public bool Imported => Cache != null;
+        /// <summary>Whether the install gives the map (build-217: a map it cannot preview is listed but cannot start).</summary>
+        public bool Available => Cache != null;
     }
 
     public event Action<SkirmishSetup>? Started;
     /// <summary>Back to the main menu (Quit when the screen was opened on its own with --setup).</summary>
     public event Action? BackChosen;
-    /// <summary>Set before the screen enters the tree: which screen, the converted caches, the source map folder, the
-    /// speeds, the last match chosen here (to start from its choices) and the Back button's caption.</summary>
+    /// <summary>Set before the screen enters the tree: which screen, the speeds, the last match chosen here (to start
+    /// from its choices) and the Back button's caption.</summary>
     public SetupKind Kind { get; set; }
-    public string ConvertedPath { get; set; } = "";
-    public string SourcesPath { get; set; } = "";
     public int[] Speeds { get; set; } = [1];
     public SkirmishSetup? Previous { get; set; }
     public string BackText { get; set; } = "Back";
@@ -184,20 +183,20 @@ public partial class SetupScreen : Control
         _quit = Place(ActionButton(BackText),669,698,154,42); _quit.Pressed += () => BackChosen?.Invoke();
         _start = Place(ActionButton("Start"),829,698,167,42); _start.AddThemeFontSizeOverride("font_size",20); _start.Pressed += Start;
 
-        _maps.AddRange(FindMaps(ConvertedPath,SourcesPath).Where(m => m.Sandbox == sandbox));
+        _maps.AddRange(FindMaps().Where(m => m.Sandbox == sandbox));
         foreach (var map in _maps.Where(_ => !sandbox))
         {
             var button = new Button { Text = map.Title,ToggleMode = true,FocusMode = FocusModeEnum.None,Alignment = HorizontalAlignment.Left,
-                CustomMinimumSize = new(300,24),TooltipText = map.Imported ? map.Title : $"Not imported yet\n{ImportCommand(map.Stem)}" };
-            StyleListItem(button,map.Imported);
-            var count = Caption($"{map.Players}",14,map.Imported ? Dim : Edge); count.HorizontalAlignment = HorizontalAlignment.Right;
+                CustomMinimumSize = new(300,24),TooltipText = map.Available ? map.Title : $"{map.Title}\n{Unavailable}" };
+            StyleListItem(button,map.Available);
+            var count = Caption($"{map.Players}",14,map.Available ? Dim : Edge); count.HorizontalAlignment = HorizontalAlignment.Right;
             count.SetAnchorsAndOffsetsPreset(LayoutPreset.RightWide); count.OffsetLeft = -40; count.OffsetRight = -10; button.AddChild(count);
             button.Pressed += () => Select(map); list.AddChild(button); _mapButtons[map.Stem] = button;
         }
         _speed.Labels = Speeds.Select(s => s+"x").ToArray();
         _speed.Index = Math.Max(0,Array.IndexOf(Speeds,Previous?.Speed ?? 1));
-        var first = _maps.FirstOrDefault(m => m.Imported && m.Cache == Previous?.Cache) ?? _maps.FirstOrDefault(m => m.Imported && m.Stem.Contains("Bilbo"))
-            ?? _maps.FirstOrDefault(m => m.Imported) ?? _maps.FirstOrDefault();
+        var first = _maps.FirstOrDefault(m => m.Available && m.Cache == Previous?.Cache) ?? _maps.FirstOrDefault(m => m.Available && m.Stem.Contains("Bilbo"))
+            ?? _maps.FirstOrDefault(m => m.Available) ?? _maps.FirstOrDefault();
         if (first != null) Select(first,Previous);
         else Refresh();
         Resize(); GetViewport().SizeChanged += Resize;
@@ -233,14 +232,14 @@ public partial class SetupScreen : Control
         _selected = map;
         foreach (var (stem,button) in _mapButtons) button.SetPressedNoSignal(stem == map.Stem);
         _mapTitle.Text = map.Title;
-        _mapDetail.Text = !map.Imported ? $"{map.Players} start positions · not imported"
+        _mapDetail.Text = !map.Available ? $"{map.Players} start positions · unavailable"
             : map.Sandbox ? $"Test map · empty level field · {map.WidthMm/1000} × {map.HeightMm/1000} m"
             : $"{map.Players} start positions · {map.WidthMm/1000} × {map.HeightMm/1000} m";
         for (int slot = 0; slot < Slots; slot++)
         {
             var (row,swatch,name,choice,_) = _slots[slot];
             _traits[slot].Clear();
-            row.Visible = map.Imported && slot < map.Players;
+            row.Visible = map.Available && slot < map.Players;
             if (!row.Visible) continue;
             swatch.Color = slot < map.Colors.Length ? map.Colors[slot] : Dim;
             choice.Clear();
@@ -264,7 +263,7 @@ public partial class SetupScreen : Control
             }
             choice.Select(pick);
         }
-        if (map.Imported && map.Cache != null && !_terrain.ContainsKey(map.Cache)) _terrain[map.Cache] = Terrain(map);
+        if (map.Available && map.Cache != null && !_terrain.ContainsKey(map.Cache)) _terrain[map.Cache] = Terrain(map);
         _cardSlot = -1;
         Refresh();
     }
@@ -369,7 +368,7 @@ public partial class SetupScreen : Control
     private void Refresh()
     {
         var map = _selected;
-        int players = map?.Imported == true ? map.Players : 0;
+        int players = map?.Available == true ? map.Players : 0;
         int open = Enumerable.Range(0,players).Count(s => Choice(s) != Closed);
         int human = Enumerable.Range(0,players).FirstOrDefault(s => Choice(s) == You,-1);
         _preview.Display(map,map?.Cache is { } cache ? _terrain.GetValueOrDefault(cache) : null,Enumerable.Range(0,players).Select(Choice).ToArray());
@@ -380,9 +379,9 @@ public partial class SetupScreen : Control
         }
         RefreshCard(map,players);
         string speed = _speed.Labels.ElementAtOrDefault(_speed.Index) ?? "";
-        _start.Disabled = _loading || map is not { Imported: true } || open < 2;
-        _status.Text = map == null ? (Kind == SetupKind.Sandbox ? $"The Sandbox is not imported yet. Run: {ImportCommand(SandboxStem)}" : "No multiplayer maps found.")
-            : !map.Imported ? $"Not imported yet. Run: {ImportCommand(map.Stem)}"
+        _start.Disabled = _loading || map is not { Available: true } || open < 2;
+        _status.Text = map == null ? (Kind == SetupKind.Sandbox ? "The Sandbox is made from Bilbo's Bluffs, which the install does not give." : "The install gives no multiplayer maps.")
+            : !map.Available ? Unavailable
             : open < 2 ? "At least two start positions must be open."
             : map.Sandbox ? $"Sandbox: you command Player 1 and Player 2 · Tab switches · {speed} speed"
                 + (_instantBuild.ButtonPressed ? "" : " · building and training take their time") + (_trainingDummies.ButtonPressed ? "" : " · no training dummies")
@@ -408,8 +407,7 @@ public partial class SetupScreen : Control
         + "no bots play and nothing ends the match. "
         + "Tab or the console tabs switch players; clicking the other player's unit or building does too.";
 
-    private static string ImportCommand(string stem) => stem == SandboxStem ? "python tools/prepare_prototype.py --sandbox"
-        : $"python tools/prepare_prototype.py --skirmish --map {stem}";
+    private const string Unavailable = "This map cannot be read from the install (see the log).";
 
     /// <summary>Freezes the screen while the chosen map loads.</summary>
     public void ShowLoading()
@@ -421,27 +419,17 @@ public partial class SetupScreen : Control
     /// <summary>Build-210: the install's maps and their previews, when an install is open (Main sets it).</summary>
     public static Func<IReadOnlyDictionary<string,Reforged.Install.MapPreview?>?>? InstallMaps { get; set; }
 
-    /// <summary>Every source multiplayer map (extracted/Levels/Multiplayer) and every imported cache. Bilbo's Bluffs
-    /// lives in converted/skirmish, the others in converted/skirmish-maps/&lt;stem&gt;. Sorted by player count, then title.
-    /// Build-210: with an install, its maps, previewed from it; their folders need not exist.</summary>
-    private static List<MapEntry> FindMaps(string converted,string sources)
+    /// <summary>The install's multiplayer maps and the Sandbox, previewed from the install (build-210), sorted by player
+    /// count, then title. Build-217: only the install's; nothing imported is listed or read. A map the install cannot
+    /// preview is listed as unavailable.</summary>
+    private static List<MapEntry> FindMaps()
     {
-        const string bilbo = "MP02_Bilbos_Bluffs";
-        var stems = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-        var previews = InstallMaps?.Invoke();
-        if (previews != null) stems.UnionWith(previews.Keys);
-        if (Directory.Exists(sources)) foreach (var file in Directory.GetFiles(sources,"MP*.wor")) stems.Add(Path.GetFileNameWithoutExtension(file));
-        var imported = Path.Combine(converted,"skirmish-maps");
-        if (Directory.Exists(imported)) foreach (var folder in Directory.GetDirectories(imported)) stems.Add(Path.GetFileName(folder));
-        if (File.Exists(Path.Combine(converted,"skirmish","manifest.json"))) stems.Add(bilbo);
-        // The Sandbox test map (build-56) heads the list, imported or not.
-        stems.Add(SandboxStem);
+        var previews = InstallMaps?.Invoke() ?? new Dictionary<string,Reforged.Install.MapPreview?>();
+        var stems = new SortedSet<string>(previews.Keys,StringComparer.OrdinalIgnoreCase) { SandboxStem };
         return [.. stems.Select(stem => {
-            string cache = stem.Equals(bilbo,StringComparison.OrdinalIgnoreCase) ? Path.Combine(converted,"skirmish") : Path.Combine(imported,stem);
             try
             {
-                if (previews?.GetValueOrDefault(stem) is { } preview) return Read(stem,cache,preview);
-                if (File.Exists(Path.Combine(cache,"manifest.json"))) return Read(stem,cache);
+                if (previews.GetValueOrDefault(stem) is { } preview) return Read(stem,Main.MapFolder(stem),preview);
             }
             catch (Exception error) when (error is JsonException or IOException or KeyNotFoundException or InvalidOperationException or FormatException) { GD.PushWarning($"Skipping {stem}: {error.Message}"); }
             return stem == SandboxStem ? new MapEntry(stem,MapTitle(stem,stem),null,2,[],[],0,0,[],[],"",Sandbox: true)
@@ -454,10 +442,10 @@ public partial class SetupScreen : Control
 
     private static int Players(string stem) => Regex.Match(stem,@"^MP(\d\d)") is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
 
-    private static MapEntry Read(string stem,string cache,Reforged.Install.MapPreview? preview = null)
+    private static MapEntry Read(string stem,string cache,Reforged.Install.MapPreview preview)
     {
-        // Team colours and AI personalities come from the content pack the map cache names (build-48).
-        var manifest = CacheManifest.Load(cache,preview?.Manifest.ToJsonString()).Root;
+        // Team colours and AI personalities come from the content pack the map names (build-48), built from the install.
+        var manifest = CacheManifest.Load(cache,preview.Manifest.ToJsonString()).Root;
         var skirmish = manifest.GetProperty("skirmish");
         (int,int) Ground(JsonElement at) => ((int)Math.Round(at[0].GetDouble()*1000),(int)Math.Round(at[1].GetDouble()*1000));
         var bases = skirmish.GetProperty("bases").EnumerateArray().OrderBy(b => b.GetProperty("team").GetInt32()).Select(b => Ground(b.GetProperty("position"))).ToArray();
@@ -471,39 +459,21 @@ public partial class SetupScreen : Control
                 .Select(p => new AiBotOption(p.GetProperty("id").GetString()!,p.GetProperty("difficulty").GetInt32())));
             fallback = ai.GetProperty("default_personality").GetString()!;
         }
-        if (preview != null)
-            return new(stem,MapTitle(stem,manifest.GetProperty("name").GetString()!.Split(" — ")[0]),cache,bases.Length,bases,resources,
-                preview.Width*preview.CellSizeMm,preview.Height*preview.CellSizeMm,colors,personalities,fallback,
-                Sandbox: manifest.TryGetProperty("sandbox",out var previewSandbox) && previewSandbox.GetBoolean(),Preview: preview);
-        // The navigation file opens with its size; reading the head spares parsing megabytes for every map.
-        using var reader = new StreamReader(Path.Combine(cache,"navigation.json"));
-        var head = new char[400]; string start = new(head,0,reader.Read(head,0,head.Length));
-        int Field(string name) => int.Parse(Regex.Match(start,$"\"{name}\"\\s*:\\s*(\\d+)").Groups[1].Value);
-        string title = MapTitle(stem,manifest.GetProperty("name").GetString()!.Split(" — ")[0]);
-        return new(stem,title,cache,bases.Length,bases,resources,Field("width")*Field("cell_size_mm"),Field("height")*Field("cell_size_mm"),colors,personalities,fallback,
-            Sandbox: manifest.TryGetProperty("sandbox",out var sandbox) && sandbox.GetBoolean());
+        return new(stem,MapTitle(stem,manifest.GetProperty("name").GetString()!.Split(" — ")[0]),cache,bases.Length,bases,resources,
+            preview.Width*preview.CellSizeMm,preview.Height*preview.CellSizeMm,colors,personalities,fallback,
+            Sandbox: manifest.TryGetProperty("sandbox",out var sandbox) && sandbox.GetBoolean(),Preview: preview);
     }
 
-    /// <summary>The map's walkable ground shaded by height, north up like the in-game minimap; build-210: from the
-    /// install's preview when it has one.</summary>
+    /// <summary>The map's walkable ground shaded by height, north up like the in-game minimap, from the install's
+    /// preview (build-210).</summary>
     private static ImageTexture? Terrain(MapEntry map)
     {
         string cache = map.Cache!;
+        if (map.Preview is not { } preview) return null;
         try
         {
-            int width, height; byte[] allowed, heights;
-            if (map.Preview is { } preview)
-            {
-                (width,height) = (preview.Width,preview.Height);
-                (allowed,heights) = preview.Ground();
-            }
-            else
-            {
-                var nav = JsonDocument.Parse(File.ReadAllText(Path.Combine(cache,"navigation.json"))).RootElement;
-                width = nav.GetProperty("width").GetInt32(); height = nav.GetProperty("height").GetInt32();
-                allowed = Convert.FromBase64String(nav.GetProperty("allowed_base64").GetString()!);
-                heights = File.ReadAllBytes(Path.Combine(cache,"heights.bin"));
-            }
+            var (width,height) = (preview.Width,preview.Height);
+            var (allowed,heights) = preview.Ground();
             using var image = Image.CreateEmpty(width,height,false,Image.Format.Rgba8);
             for (int z = 0; z < height; z++) for (int x = 0; x < width; x++)
             {
@@ -670,7 +640,7 @@ public partial class MapPreview : Control
     {
         var frame = new Rect2(Vector2.Zero,Size);
         DrawRect(frame,new Color(.02f,.025f,.02f));
-        if (_map is not { Imported: true } map || map.WidthMm <= 0 || map.HeightMm <= 0) { DrawRect(frame,new Color("6f6040"),false,1); Drawn = false; return; }
+        if (_map is not { Available: true } map || map.WidthMm <= 0 || map.HeightMm <= 0) { DrawRect(frame,new Color("6f6040"),false,1); Drawn = false; return; }
         // Fit the map's aspect inside the square.
         float aspect = map.WidthMm/(float)map.HeightMm;
         var area = aspect >= 1 ? new Rect2(0,(Size.Y-Size.X/aspect)/2,Size.X,Size.X/aspect) : new Rect2((Size.X-Size.Y*aspect)/2,0,Size.Y*aspect,Size.Y);

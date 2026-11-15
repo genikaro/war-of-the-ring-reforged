@@ -65,7 +65,7 @@ public partial class Main
         if (_frames != 30) return;
         var report = new {build=BuildInfo.Label,checks=_performanceChecks,snapshots=_performanceSnapshots,
             passed=_performanceChecks.Count == 10 && _performanceChecks.Values.All(v => v)};
-        System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"performance-smoke-report.json"),
+        System.IO.File.WriteAllText(GamePaths.Report("performance-smoke-report.json"),
             JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented=true}));
         GD.Print("PERFORMANCE_SMOKE "+JsonSerializer.Serialize(report));
         _ = FinishCombatAudio(report.passed ? 0 : 1);

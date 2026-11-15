@@ -11,7 +11,7 @@ public partial class Main
     private void LoadSkirmishProduction(JsonElement data)
     {
         if (!data.TryGetProperty("production",out var production))
-            throw new InvalidOperationException("Refresh production: python tools/skirmish_production.py --cache converted/skirmish");
+            throw new InvalidOperationException("The rules give no production");
         if (production.GetProperty("format_version").GetInt32() != 1 || production.GetProperty("ticks_per_second").GetInt32() != SimWorld.TicksPerSecond)
             throw new InvalidOperationException("Unsupported production cache");
         var world = _world!;
@@ -23,7 +23,7 @@ public partial class Main
                 rules.TryGetProperty("unique",out var unique) && unique.GetBoolean(),
                 // Build-44 exports each unit's source BuildingRequired list.
                 rules.TryGetProperty("prerequisites",out var required) ? required.EnumerateArray().Select(p => p.GetString()!).ToArray()
-                    : throw new InvalidOperationException("Refresh production: python tools/skirmish_production.py --cache converted/skirmish"),
+                    : throw new InvalidOperationException("The rules give no production"),
                 // Build-58 adds the Fate heroes and their group.
                 rules.TryGetProperty("fate_cost",out var fate) ? fate.GetInt32() : 0,
                 rules.TryGetProperty("unique_group",out var group) ? group.GetInt32() : -1));

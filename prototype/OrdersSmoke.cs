@@ -151,7 +151,7 @@ public partial class Main
                     && world.IsWalking(0) && world.Units.Where(u => u.Team == 0 && u.Health > 0).All(u => u.Walking);
                 var report = new { checks = _ordersChecks,passed = _ordersChecks.Count == 28 && _ordersChecks.Values.All(v => v),commands = world.Commands,
                     final_digest = world.StateDigest() };
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"orders-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
+                System.IO.File.WriteAllText(GamePaths.Report("orders-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("ORDERS_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
         }
     }

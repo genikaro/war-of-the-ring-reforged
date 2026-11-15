@@ -8,7 +8,7 @@ read the original archives, database, models, maps, audio and text.
 Unofficial, non-commercial fan project. It ships no game content and needs a legally obtained
 installation of the original game — see [NOTICE.md](NOTICE.md).
 
-**Status (build-216):** a playable skirmish and sandbox prototype — original maps, economy,
+**Status (build-217):** a playable skirmish and sandbox prototype — original maps, economy,
 construction, research, heroes, abilities, places of power, bots, fog of war, a main menu,
 setup screens and an exported Windows executable with a launcher. Not the original campaign,
 and not a finished game. [docs/README.md](docs/README.md) is the build log and the detailed
@@ -50,10 +50,11 @@ launcher. The smokes and captures are listed in [docs/README.md](docs/README.md)
 ./prototype/run.ps1 -Install "C:/Games/War of the Ring"
 ```
 
-The game reads everything straight from the install (builds 192-214): text, rules, models, audio, pictures, the maps
-with their navigation and scenes, and the menu art. The install is the one `-Install` names, else the folder the
-launcher kept. `-Data <folder>` runs on another data folder; it may be empty. Without an install the game falls back
-to the developer tools' caches in `converted/`, where they exist.
+The game reads everything straight from the install (builds 192-215): text, rules, models, audio, pictures, the maps
+with their navigation and scenes, and the menu art. It reads nothing else (build-217): the install is the one
+`-Install` names, else the folder the launcher kept, else `REFORGED_INSTALL`; with none, `run.ps1` opens the launcher
+and a smoke stops with an error. `-Map <stem>` plays one of the install's multiplayer maps. The smokes write their
+reports to `reports/`; `-Data <folder>` runs on another data folder, which may be empty.
 
 Checks:
 
@@ -73,9 +74,9 @@ python -m pytest tools
 | `docs/` | All project documentation, starting with [docs/README.md](docs/README.md) |
 | `LICENSE`, `NOTICE.md` | GPL-3.0-or-later, and what it does and does not cover |
 
-Local only, never committed: the original installation, `extracted/`, `converted/`,
-`prototype/Assets/`, `build/`, `artifacts/`, and `references/` (original-game research notes
-and captures).
+Local only, never committed: the original installation, `extracted/`, `converted/` (the
+developer tools' output, which the game no longer reads), `reports/`, `prototype/Assets/`,
+`build/`, `artifacts/`, and `references/` (original-game research notes and captures).
 
 ## Documentation
 

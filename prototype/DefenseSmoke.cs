@@ -127,7 +127,7 @@ public partial class Main
                     tower = _defenseTower,hits = _defenseHits,kills = _defenseKills,provoked = _defenseProvoked,origin_error_m = _defenseOriginError,
                     first_wave = _defenseSnapshot,ruin_tick = _defenseRuinTick,last_release = _defenseLastRelease,
                     ticks = world.Tick,status = _status,digest = world.StateDigest() };
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"defense-smoke-report.json"),
+                System.IO.File.WriteAllText(GamePaths.Report("defense-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("DEFENSE_SMOKE "+JsonSerializer.Serialize(report)); _defensePhase = 6;
                 _ = FinishCombatAudio(report.passed ? 0 : 1); break;

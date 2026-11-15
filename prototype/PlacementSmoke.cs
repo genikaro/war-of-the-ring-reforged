@@ -200,7 +200,7 @@ public partial class Main
                     bank = new { world.Economies[0].FoodMilli,world.Economies[0].OreMilli },population = new { used = world.PopulationUsed(0),capacity = world.PopulationCapacity(0) },
                     selected = _selected,display = new { _commands.DisplayedName,_commands.DisplayedHealth,_commands.SingleUnitDetailsVisible },
                     status = _status,commands = world.Commands,digest = world.StateDigest() };
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"placement-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
+                System.IO.File.WriteAllText(GamePaths.Report("placement-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("PLACEMENT_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
         }
     }

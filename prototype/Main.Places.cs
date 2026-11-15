@@ -18,10 +18,10 @@ public partial class Main
     private void LoadPlacesOfPower(JsonElement data)
     {
         if (!data.TryGetProperty("places_of_power",out var places))
-            throw new InvalidOperationException("Refresh places of power: python tools/content_pack.py");
+            throw new InvalidOperationException("The rules give no places of power");
         var world = _world!; world.MatchSeed = _matchSeed;
         if (places.GetProperty("format_version").GetInt32() < 3)
-            throw new InvalidOperationException("Refresh Places of Power skirmish rules: python tools/content_pack.py");
+            throw new InvalidOperationException("The rules give no skirmish places of power");
         world.ExcludedSkirmishPlaces.UnionWith(places.GetProperty("skirmish_excluded_objects").EnumerateArray().Select(p => p.GetString()!));
         foreach (var place in places.GetProperty("places").EnumerateArray())
         {

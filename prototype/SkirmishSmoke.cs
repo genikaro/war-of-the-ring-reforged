@@ -120,7 +120,7 @@ public partial class Main
                     start_state = new { _startState.Population,_startState.Capacity,_startState.Food,_startState.Ore },
                     workers = world.Units.Where(u => u.Team == 0).Select(u => new { u.Id,u.Order,u.X,u.Z,u.Goal,u.OrderTarget,u.CargoMilli,u.ReturningCargo }),
                     source = world.Resources.GetValueOrDefault(_smokeOreId),deliveries = _smokeDeliveries,max_still_ticks = _smokeMaxStillTicks,digest = world.StateDigest() };
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"skirmish-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
+                System.IO.File.WriteAllText(GamePaths.Report("skirmish-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("SKIRMISH_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
         }
     }

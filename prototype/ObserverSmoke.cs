@@ -230,7 +230,7 @@ public partial class Main
                     journals = world.AiPlayers.Values.ToDictionary(BotKey,a => a.Journal.Entries.Select(e =>
                         $"{TimeSpan.FromSeconds(e.Tick/SimWorld.TicksPerSecond):mm\\:ss} {e.Kind} {e.Text}").ToArray()),
                     ticks = world.Tick,status = _status,digest = world.StateDigest() };
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"observer-smoke-report.json"),
+                System.IO.File.WriteAllText(GamePaths.Report("observer-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("OBSERVER_SMOKE "+JsonSerializer.Serialize(report)); _observerPhase = 6;
                 _ = FinishCombatAudio(report.passed ? 0 : 1); break;

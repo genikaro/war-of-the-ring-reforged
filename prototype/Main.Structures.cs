@@ -20,14 +20,14 @@ public partial class Main
     private void LoadStructureDefinitions(JsonElement data)
     {
         if (!data.GetProperty("construction").TryGetProperty("buildings",out var buildings))
-            throw new InvalidOperationException("Refresh structure data: python tools/skirmish_construction.py --cache converted/skirmish");
+            throw new InvalidOperationException("The rules give no structure data");
         foreach (var item in buildings.EnumerateObject()) _structureDefinitions.Add(item.Name,item.Value.Clone());
     }
 
     private void LoadNeutralStructures(JsonElement data)
     {
         if (!data.TryGetProperty("selectable_objects",out var objects))
-            throw new InvalidOperationException("Refresh neutral selection: python tools/skirmish_construction.py --cache converted/skirmish");
+            throw new InvalidOperationException("The rules give no neutral selection");
         foreach (var item in objects.GetProperty("definitions").EnumerateObject()) _structureDefinitions[item.Name] = item.Value.Clone();
         // Build-161: the landmarks the map names are known before any random marker draws, whatever the placement order.
         _world!.ReserveMapPlaces(objects.GetProperty("placements").EnumerateArray().Select(p => p.GetProperty("type").GetString()!));

@@ -40,7 +40,7 @@ public partial class Main
                     _placesChecks["map_has_place_objectives"] = w.PlacesOfPower.Count>0;
                     var mapReport=new {build=BuildInfo.Label,checks=_placesChecks,passed=_placesChecks.Values.All(v=>v),
                         places=w.PlacesOfPower.Select(p=>new {p.Id,p.Type,p.Name})};
-                    System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"places-map-smoke-report.json"),JsonSerializer.Serialize(mapReport,new JsonSerializerOptions {WriteIndented=true}));
+                    System.IO.File.WriteAllText(GamePaths.Report("places-map-smoke-report.json"),JsonSerializer.Serialize(mapReport,new JsonSerializerOptions {WriteIndented=true}));
                     GD.Print("PLACES_MAP_SMOKE "+JsonSerializer.Serialize(mapReport)); _=FinishCombatAudio(mapReport.passed?0:1); break;
                 }
                 // This developer gallery also exercises the original landmarks excluded from normal skirmishes.
@@ -109,7 +109,7 @@ public partial class Main
             case 31:
                 var report=new {build=BuildInfo.Label,checks=_placesChecks,passed=_placesChecks.Values.All(v=>v),
                     places=w.PlacesOfPower.Select(p=>new {p.Id,p.Name,p.Type,model=_placeModels[p.Type],rules=p.Rules.Select(r=>r.Id)})};
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"places-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented=true}));
+                System.IO.File.WriteAllText(GamePaths.Report("places-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented=true}));
                 GD.Print("PLACES_SMOKE "+JsonSerializer.Serialize(report)); _=FinishCombatAudio(report.passed?0:1); break;
         }
     }

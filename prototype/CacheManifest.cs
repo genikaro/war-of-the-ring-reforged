@@ -42,6 +42,8 @@ public sealed class CacheManifest
         string content = Path.GetFullPath(Path.Combine(cache,relative));
         JsonNode? pack = InstallPack?.Invoke();
         bool fromInstall = pack != null;
+        // Build-217: the game reads no imported pack; only the developer tools' checks (no install) read one from disk.
+        if (InstallPack != null && pack == null) throw new InvalidOperationException("The install's content could not be built (see the warnings above)");
         if (pack == null && !Packs.TryGetValue(content,out pack))
         {
             string path = Path.Combine(content,"content.json");

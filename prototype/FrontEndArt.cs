@@ -2,13 +2,13 @@ using Godot;
 using System.Text.Json;
 
 /// <summary>The original art and lettering of the menus (build-147): the content pack's interface pieces (the menu
-/// frame, the Settings frame, the gold-edged boxes) and converted/frontend from tools/frontend_assets.py (the main
+/// frame, the Settings frame, the gold-edged boxes) and the menu art (frontend_assets.export, built from the install: the main
 /// menu's logo, parchment buttons and bullets, the loading screen and its rings, the stone game-creation frame and the
 /// Immortal font). Images load on first use and stay for the session, across the scene reloads between screens.</summary>
 public sealed class FrontEndArt
 {
     private static FrontEndArt? _shared;
-    public static FrontEndArt Shared => _shared ??= new(GamePaths.Converted);
+    public static FrontEndArt Shared => _shared ??= new(GamePaths.Installed());
 
     private readonly Dictionary<string,string> _files = [];
     private readonly Dictionary<string,Texture2D?> _textures = [];

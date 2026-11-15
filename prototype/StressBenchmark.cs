@@ -96,7 +96,7 @@ public partial class Main
                 // A capture blocks its frame on reading the image back: those frames stay out of the statistics.
                 for (int f = _frames; f <= _frames+3; f++) _stressCaptureFrames.Add(f);
                 _stressCapturesPending++;
-                _ = StressCapture(System.IO.Path.Combine(_cache,$"stress-{_stressUnits}-{BuildInfo.Label}-{phase}.png"));
+                _ = StressCapture(GamePaths.Report($"stress-{_stressUnits}-{BuildInfo.Label}-{phase}.png"));
             }
         if (_frames == StressEndFrame) { StressEndPhase(); StressFinish(world); }
     }
@@ -230,7 +230,7 @@ public partial class Main
             ["final_digest"] = world.StateDigest(),
             ["phases"] = _stressPhases,
         };
-        string path = System.IO.Path.Combine(_cache,$"stress-benchmark-{_stressUnits}{(SimProfiler.Enabled ? "-profiled" : "")}.json");
+        string path = GamePaths.Report($"stress-benchmark-{_stressUnits}{(SimProfiler.Enabled ? "-profiled" : "")}.json");
         System.IO.File.WriteAllText(path,JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
         GD.Print("STRESS_BENCHMARK report "+path);
         _ = FinishCombatAudio(0);

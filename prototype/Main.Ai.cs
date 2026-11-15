@@ -21,7 +21,7 @@ public partial class Main
     {
         // build-27 adds the AI rules.
         if (!data.TryGetProperty("ai",out var ai))
-            throw new InvalidOperationException("Refresh AI rules: python tools/skirmish_ai.py --cache converted/skirmish");
+            throw new InvalidOperationException("The rules give no AI tables");
         var world = _world!;
         foreach (var item in ai.GetProperty("buildings").EnumerateObject().Where(b => Loaded(b.Name)))
             world.AiBuildings.Add(item.Name,new(item.Value.GetProperty("class").GetString()!,item.Value.GetProperty("must_have_first_pass").GetBoolean(),

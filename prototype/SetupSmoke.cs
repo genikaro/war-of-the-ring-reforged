@@ -48,8 +48,8 @@ public partial class Main
                     SetupChecks["setup_plays_menu_cue"] = _audio.MusicPlaying && _audio.MusicContext == Reforged.Presentation.MusicContext.Menu
                         && _audio.MusicTrackName == "MUSIC_TRACK_HOBBIT_MAIN_INTRO_ENDING";
                     var big = maps.FirstOrDefault(m => m.Stem == SetupBigMap);
-                    SetupChecks["setup_lists_every_map"] = maps.Count >= 32 && big is { Imported: true,Players: 8 }
-                        && maps.Any(m => m.Stem == SetupSmallMap && m.Imported && m.Players == 2)
+                    SetupChecks["setup_lists_every_map"] = maps.Count >= 32 && big is { Available: true,Players: 8 }
+                        && maps.Any(m => m.Stem == SetupSmallMap && m.Available && m.Players == 2)
                         && screen.SelectedMap?.Stem == SetupSmallMap && screen.SlotChoice(0).Selected == 0;
                     _setupBigTitle = big?.Title ?? "";
                     // Build-147: the Sandbox has its own setup screen (the menu smoke covers it), so the Skirmish list leaves it out.
@@ -216,7 +216,7 @@ public partial class Main
         var report = new { build = BuildInfo.Label,checks = SetupChecks,passed = SetupChecks.Count == SetupSmokeChecks && SetupChecks.Values.All(v => v),
             fixture = $"--setup: {SetupBigMap} with you in slot 3, named and Easy/Hard random bots, slots 6-8 closed, 2x; return retains random choices and sides; then Bilbo's Bluffs observed with a Normal random bot at 16x, both sides Random" };
         string json = JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true });
-        System.IO.File.WriteAllText(System.IO.Path.Combine(ProjectSettings.GlobalizePath("res://../converted"),"setup-smoke-report.json"),json);
+        System.IO.File.WriteAllText(GamePaths.Report("setup-smoke-report.json"),json);
         GD.Print("SETUP_SMOKE "+JsonSerializer.Serialize(report));
         _ = FinishCombatAudio(report.passed ? 0 : 1);
     }

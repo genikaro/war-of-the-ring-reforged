@@ -5,12 +5,12 @@ using Reforged.Install;
 
 /// <summary>Build-209: a skirmish map's own manifest (start layout, resources, construction sites, selectable objects,
 /// lighting), its navigation and its heights are built from the install while the match loads (PackMap,
-/// MapNavigation) in place of the cache folder's files: converted/skirmish is Bilbo's Bluffs and
-/// converted/skirmish-maps/&lt;stem&gt; the others. The bodies' clearance profiles, the costly part, are built on all
+/// MapNavigation). Build-217: a map is named by MapFolder under GamePaths.Installed (skirmish is Bilbo's Bluffs,
+/// skirmish-maps/&lt;stem&gt; the others), a folder that is never on disk. The bodies' clearance profiles, the costly part, are built on all
 /// cores for the bodies the content pack lists, as the import did. Build-210: the scene (MapScene) and the lighting
 /// pictures (MapPictures) too, on worker threads from the moment the layout is known, so a map needs no cache folder at
 /// all; the setup screen lists the install's maps and previews them (PackMap.Preview). The map last built is kept, so
-/// Restart builds nothing again. Build-215: the Helm's Deep demo (converted/prototype) too, as prepare_prototype.prepare
+/// Restart builds nothing again. Build-215: the Helm's Deep demo (prototype) too, as prepare_prototype.prepare
 /// builds it (PackMap.Demo): a self-contained cache whose every file, its own combat rules, audio, interface and unit
 /// models included, then comes from the install.</summary>
 public partial class Main
@@ -41,21 +41,21 @@ public partial class Main
     /// any file of the demo built from the install.</summary>
     private bool FromInstall(string relative) => DemoFromInstall || _cacheFiles.FromPack(relative);
 
-    /// <summary>The map cache folder a stem stands for: converted/skirmish for Bilbo's Bluffs, else converted/skirmish-maps/&lt;stem&gt;.</summary>
+    /// <summary>The name a stem's map has under GamePaths.Installed: skirmish for Bilbo's Bluffs, else skirmish-maps/&lt;stem&gt;.</summary>
     public static string MapFolder(string stem) => stem.Equals(PackMap.BilboStem,StringComparison.OrdinalIgnoreCase)
-        ? GamePaths.Data("converted/skirmish") : GamePaths.Data("converted/skirmish-maps/"+stem);
-    // The Sandbox's folder is converted/skirmish-maps/Sandbox, as the import's was (MapFolder gives it too).
+        ? GamePaths.Installed("skirmish") : GamePaths.Installed("skirmish-maps/"+stem);
+    // The Sandbox's is skirmish-maps/Sandbox, as the import's folder was (MapFolder gives it too).
 
     /// <summary>The install's map a cache folder stands for, or null (another folder): a multiplayer map, the Sandbox
-    /// (build-211) or the Helm's Deep demo, converted/prototype (build-215).</summary>
+    /// (build-211) or the Helm's Deep demo, prototype (build-215).</summary>
     private static string? InstallMapStem(string cache)
     {
         if (_installModels is not { } install) return null;
         string full = System.IO.Path.GetFullPath(cache).TrimEnd(System.IO.Path.DirectorySeparatorChar,System.IO.Path.AltDirectorySeparatorChar);
-        if (full.Equals(GamePaths.Data("converted/prototype"),StringComparison.OrdinalIgnoreCase)) return install.Maps.HasDemo ? PackMap.DemoStem : null;
+        if (full.Equals(GamePaths.Installed("prototype"),StringComparison.OrdinalIgnoreCase)) return install.Maps.HasDemo ? PackMap.DemoStem : null;
         string? stem = null;
-        if (full.Equals(GamePaths.Data("converted/skirmish"),StringComparison.OrdinalIgnoreCase)) stem = PackMap.BilboStem;
-        else if (System.IO.Path.GetDirectoryName(full) is { } parent && parent.Equals(GamePaths.Data("converted/skirmish-maps"),StringComparison.OrdinalIgnoreCase))
+        if (full.Equals(GamePaths.Installed("skirmish"),StringComparison.OrdinalIgnoreCase)) stem = PackMap.BilboStem;
+        else if (System.IO.Path.GetDirectoryName(full) is { } parent && parent.Equals(GamePaths.Installed("skirmish-maps"),StringComparison.OrdinalIgnoreCase))
             stem = System.IO.Path.GetFileName(full);
         if (stem == null) return null;
         // Build-211: the Sandbox is cut from Bilbo's Bluffs.
@@ -63,16 +63,19 @@ public partial class Main
         return install.Maps.Stems.FirstOrDefault(s => s.Equals(stem,StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string PackFrom(string cache) => System.IO.Path.GetRelativePath(cache,GamePaths.Data("converted/content/good")).Replace('\\','/');
+    private static string PackFrom(string cache) => System.IO.Path.GetRelativePath(cache,GamePaths.Installed("content/good")).Replace('\\','/');
 
     private static bool MapError(Exception error) => error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException or InvalidOperationException
         or InvalidCastException or IndexOutOfRangeException or NullReferenceException or ArgumentException;
 
-    /// <summary>The map's manifest built from the install, as text, or null: the folder's manifest.json is read then.
-    /// Nothing is read from the folder, so its file list is empty.</summary>
+    /// <summary>The map's manifest built from the install, as text, or null for a developer's cache folder on disk
+    /// (run.ps1 -CachePath): its manifest.json is read then. Nothing is read from the folder, so its file list is empty.
+    /// Build-217: a map named under GamePaths.Installed that the install cannot give fails the load.</summary>
     private static string? InstallMapManifest(string cache)
     {
-        if (InstallMapStem(cache) is not { } stem || _installModels is not { } install) return null;
+        bool named = System.IO.Path.GetFullPath(cache).StartsWith(GamePaths.Installed(),StringComparison.OrdinalIgnoreCase);
+        if (InstallMapStem(cache) is not { } stem || _installModels is not { } install)
+            return named ? throw new InvalidOperationException($"The install gives no map {System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(cache))}") : null;
         string content = PackFrom(cache);
         string key = string.Join("|",install.Install,stem,content);
         if (_installMap?.Key != key)
@@ -82,8 +85,7 @@ public partial class Main
             try { map = PackMap.IsDemo(stem) ? install.Maps.Demo(DemoRules(install.Db,install.Archives,install.Images,install.Models)) : install.Maps.Layout(stem,content); }
             catch (Exception error) when (MapError(error))
             {
-                GD.PushWarning($"Map: cannot build {stem} from the install ({error.Message}); using the cache folder's");
-                return null;
+                throw new InvalidOperationException($"Map: cannot build {stem} from the install: {error.Message}",error);
             }
             GD.Print($"Map: {stem} laid out from the install in {clock.ElapsedMilliseconds} ms");
             var (db,archives) = (install.Db,install.Archives);

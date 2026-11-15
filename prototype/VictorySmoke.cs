@@ -94,7 +94,7 @@ public partial class Main
                     fixture = "Squads spawn beside the Citadel they raze; round two follows the Restart button",
                     round = _victoryRound,winner = world.Winner,defeated = world.DefeatedTeams.ToArray(),outcome_tick = world.OutcomeTick,
                     ticks = world.Tick,status = _status,digest = world.StateDigest() };
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"victory-smoke-report.json"),
+                System.IO.File.WriteAllText(GamePaths.Report("victory-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("VICTORY_SMOKE "+JsonSerializer.Serialize(report)); _victoryPhase = 11;
                 _ = FinishCombatAudio(report.passed ? 0 : 1); break;

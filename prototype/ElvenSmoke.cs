@@ -111,7 +111,7 @@ public partial class Main
                 _elvenChecks["source_ability_animations_played"]=_views[_elvenBearer].CastSerial>=3;
                 var report=new { build=BuildInfo.Label,checks=_elvenChecks,passed=_elvenChecks.Values.All(v=>v),
                     fixture="Sandbox centre, source Lightbearer/Archer and a high-health passive Uruk; research grants enabled after checking locked buttons" };
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"elven-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented=true }));
+                System.IO.File.WriteAllText(GamePaths.Report("elven-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented=true }));
                 GD.Print("ELVEN_SMOKE "+JsonSerializer.Serialize(report)); _=FinishCombatAudio(report.passed?0:1); break;
         }
     }

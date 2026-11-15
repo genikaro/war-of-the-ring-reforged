@@ -83,7 +83,7 @@ public partial class Main
             average_step_ms=_engagementStepTimes.Average(),p95_step_ms=_engagementStepTimes.Order().ElementAt((int)(_engagementStepTimes.Count*.95)),digest=world.StateDigest(),
             passed=_engagementSelected && _formationMoveDispatch && _formationFirstArrival && _formationMarchDispatch && _formationEngaged
                 && arrived && allies.Length>=16 && _formationWidth<=18 && _engagementSafe};
-        System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"formation-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented=true}));
+        System.IO.File.WriteAllText(GamePaths.Report("formation-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented=true}));
         GD.Print("FORMATION_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed?0:1);
     }
 }

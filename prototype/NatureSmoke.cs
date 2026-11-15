@@ -122,7 +122,7 @@ public partial class Main
             case 747:
                 _natureChecks["manual_target_overrides_automatic_heal"]=w.Units[_natureManualTarget].Health==500 && w.Units[_natureRedirectTarget].Health==725;
                 var report=new{build=BuildInfo.Label,checks=_natureChecks,passed=_natureChecks.Values.All(v=>v)};
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"nature-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions{WriteIndented=true}));
+                System.IO.File.WriteAllText(GamePaths.Report("nature-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions{WriteIndented=true}));
                 GD.Print("NATURE_SMOKE "+JsonSerializer.Serialize(report));_=FinishCombatAudio(report.passed?0:1);break;
         }
     }

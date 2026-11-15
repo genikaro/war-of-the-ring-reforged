@@ -313,8 +313,7 @@ public partial class Launcher : Control
         SmokeChecks["start_opens_main_menu"] = menuOpened == true;
         var report = new { build = BuildInfo.Label,checks = SmokeChecks,passed = SmokeChecks.Values.All(v => v),folder = SmokeFolder ?? "" };
         string json = JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true });
-        System.IO.Directory.CreateDirectory(GamePaths.Converted);
-        System.IO.File.WriteAllText(System.IO.Path.Combine(GamePaths.Converted,"launcher-smoke-report.json"),json);
+        System.IO.File.WriteAllText(GamePaths.Report("launcher-smoke-report.json"),json);
         GD.Print("LAUNCHER_SMOKE "+JsonSerializer.Serialize(report));
         ((SceneTree)Engine.GetMainLoop()).Quit(report.passed ? 0 : 1);
     }

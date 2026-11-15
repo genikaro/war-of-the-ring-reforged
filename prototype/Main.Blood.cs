@@ -293,7 +293,7 @@ public partial class Main
                     building_hits = _bloodSiegeHits,building_sounds = _bloodSiegeSounds,
                     rolls = _bloodRolls.Select(r => new {health = Math.Round(r.Health,3),r.Bled,damage = r.DamageMilli/1000.0,r.Particles}).ToArray(),
                     checks = _bloodChecks,passed = _bloodChecks.Count == 15 && _bloodChecks.Values.All(v => v)};
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"blood-smoke-report.json"),
+                System.IO.File.WriteAllText(GamePaths.Report("blood-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("BLOOD_SMOKE "+JsonSerializer.Serialize(report));
                 _ = FinishCombatAudio(report.passed ? 0 : 1);

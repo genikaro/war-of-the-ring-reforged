@@ -88,7 +88,7 @@ public partial class Main
         _profileLog.Add(line); GD.Print(line);
         try
         {
-            _profileLogPath ??= System.IO.Path.Combine(_cache,$"profile-{DateTime.Now:yyyyMMdd-HHmmss}.log");
+            _profileLogPath ??= GamePaths.Report($"profile-{DateTime.Now:yyyyMMdd-HHmmss}.log");
             System.IO.File.AppendAllText(_profileLogPath,line+"\n");
         }
         catch (Exception error) when (error is System.IO.IOException or UnauthorizedAccessException) { GD.PushWarning("Profile log not written: "+error.Message); }

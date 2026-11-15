@@ -157,7 +157,7 @@ public partial class Main
                 var report = new { build = BuildInfo.Label,checks = _minimapChecks,passed = _minimapChecks.Count == 21 && _minimapChecks.Values.All(v => v),
                     markers = _minimapMarkers.Select(m => new { m.Type,m.X,m.Z }),view = _commands.Minimap.View.Select(p => new[] { p.X,p.Y }),
                     focus = new[] { _focus.X,_focus.Y,_focus.Z },yaw = _yaw,distance = _distance };
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"minimap-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
+                System.IO.File.WriteAllText(GamePaths.Report("minimap-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("MINIMAP_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
         }
     }

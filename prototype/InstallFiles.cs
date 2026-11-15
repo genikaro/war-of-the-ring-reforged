@@ -3,7 +3,9 @@ using Reforged.Install;
 
 /// <summary>Build-206: content pack files the install gives in place of the pack's on disk, by the path the game would
 /// read them from. Main points it at the pack folder and the install's builders when an install is open; a path
-/// outside the pack folder, or one the install does not give, is read from disk as before.</summary>
+/// outside the pack folder, or one the install does not give, is read from disk as before. Build-217: the folders the
+/// game names are under GamePaths.Installed, which is never on disk, so only a developer's cache folder (run.ps1
+/// -CachePath) is still read from disk.</summary>
 public static class InstallFiles
 {
     private static string? _pack;

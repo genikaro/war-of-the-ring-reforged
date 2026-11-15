@@ -118,21 +118,40 @@ public partial class Main : Node3D
         public Dictionary<string,string?> AnimationNames = [],StateClips = [];
     }
 
+    /// <summary>Hands the window to the launcher.</summary>
+    private void OpenLauncher()
+    {
+        ProcessMode = ProcessModeEnum.Disabled;
+        Callable.From(() => GetTree().ChangeSceneToNode(new Launcher())).CallDeferred();
+    }
+
     public override void _Ready()
     {
-        // Build-188: the exported game opens on the launcher, which imports the original game; Start Reforged returns here.
-        if (Launcher.Wanted)
-        {
-            ProcessMode = ProcessModeEnum.Disabled;
-            Callable.From(() => GetTree().ChangeSceneToNode(new Launcher())).CallDeferred();
-            return;
-        }
+        // Build-188: the exported game opens on the launcher, which checks the original game; Start Reforged returns here.
+        if (Launcher.Wanted) { OpenLauncher(); return; }
         GetTree().AutoAcceptQuit = false;
         LoadGameText();
+        // Build-217: the game reads only the install. Without one it can show nothing, so the launcher asks for it; a
+        // run that nobody can answer (a smoke, a capture, a headless run) stops and says how to name one.
+        if (_installModels == null)
+        {
+            string? install = GamePaths.FindInstall();
+            if (AutomatedRun || DisplayServer.GetName() == "headless")
+            {
+                GD.PushError(install == null ? "No original game found: pass run.ps1 -Install <folder>, set REFORGED_INSTALL, or choose it in the launcher (run.ps1 -Launcher)"
+                    : $"The original game at {install} cannot be read (see the warnings above)");
+                GetTree().Quit(1);
+                return;
+            }
+            GD.PushWarning(install == null ? "No original game found; opening the launcher" : $"The original game at {install} cannot be read; opening the launcher");
+            OpenLauncher();
+            return;
+        }
         CreateUi(); WatchPointer();
         foreach (string arg in OS.GetCmdlineUserArgs())
         {
             if (arg.StartsWith("--cache=")) _cache = arg[8..];
+            if (arg.StartsWith("--map=")) _cache = MapFolder(arg[6..]); // Build-217: the install's map by its stem.
             if (arg.StartsWith("--capture=")) _capture = arg[10..];
             if (arg == "--no-ai") _noAi = true;
             if (arg == "--audio-smoke") _audioSmoke = true;
@@ -213,7 +232,7 @@ public partial class Main : Node3D
         _setupButton.Visible = _outcomeSetup.Visible = FromSetup;
         _commands.PlayerTeam = PlayerTeam;
         if (!Speeds.Contains(_speed)) throw new ArgumentOutOfRangeException(nameof(_speed),"Game speed is 1, 2, 4, 8 or 16");
-        if (_cache == "") _cache = GamePaths.Data("converted/prototype");
+        if (_cache == "") _cache = GamePaths.Installed("prototype");
         _ = LoadMatch();
     }
 
@@ -237,7 +256,7 @@ public partial class Main : Node3D
             _loadFailed = true;
             _hud.Visible = true;
             _toolsPanel.Visible = true;
-            // Build-215: nothing is imported any more; a load fails on the install (or, without one, the developer caches).
+            // Build-215: nothing is imported any more; build-217: a load fails only on the install (or a developer cache folder).
             _status = GameText.T("match.load_failed",error.Message);
             RefreshDebugMenu();
             GD.PushError(error.ToString());
@@ -1406,7 +1425,7 @@ public partial class Main : Node3D
     {
         if (_finishing) return;
         _finishing = true;
-        if (_meleeSmoke) System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"body-combat-state.json"),JsonSerializer.Serialize(
+        if (_meleeSmoke) System.IO.File.WriteAllText(GamePaths.Report("body-combat-state.json"),JsonSerializer.Serialize(
             _world!.Units.Select(u => new {u.Id,u.Team,u.X,u.Y,u.Z,u.Health,u.Target,u.Goal,u.Node,u.TransitNode,u.BlockedTicks,
                 u.AttackNode,u.CombatWaiting,u.Attacking,u.FreeMovement,u.Waypoint,Path=u.Path,Radius=u.Definition.BodyRadiusMm}),
             new JsonSerializerOptions { WriteIndented = true }));
@@ -1445,10 +1464,10 @@ public partial class Main : Node3D
             friendly_squads_fought = _squadsFought.Count, combat_spacing = _combatSpacingPassed, input_squad_keys = _squadKeysPassed,
             body_sizes = _world.Units.Select(u => new {u.Definition.Name,u.Definition.BodyRadiusMm,u.Definition.BodyHeightMm,u.Definition.ModelScalePpm,u.Definition.FriendlyCompressionPpm}).Distinct().ToArray(),
             map_loaded = true, initial_digest = _initialDigest, final_digest = _world.StateDigest() };
-        string path = System.IO.Path.Combine(_cache, _meleeSmoke ? "melee-smoke-report.json" : _combatSmoke ? "combat-smoke-report.json" : _motionSmoke ? "motion-smoke-report.json" : "smoke-report.json");
+        string path = GamePaths.Report(_meleeSmoke ? "melee-smoke-report.json" : _combatSmoke ? "combat-smoke-report.json" : _motionSmoke ? "motion-smoke-report.json" : "smoke-report.json");
         System.IO.File.WriteAllText(path, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
         string traceName = _meleeSmoke ? "melee-hit-trace.json" : _motionSmoke ? "motion-hit-trace.json" : "combat-hit-trace.json";
-        System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,traceName),JsonSerializer.Serialize(_combatTrace));
+        System.IO.File.WriteAllText(GamePaths.Report(traceName),JsonSerializer.Serialize(_combatTrace));
         bool passed = report.units == _spawnCount && report.moving_samples > 0 && report.attack_samples > 0 && report.damage > 0 && report.animated_units == _spawnCount
             && report.input_selection && report.input_move && report.input_attack && report.input_camera && report.input_pause
             && report.input_map_views && report.camera_shortcuts_removed && report.presentation_import && report.free_movement_samples > 0;

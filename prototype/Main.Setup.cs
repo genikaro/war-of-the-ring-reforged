@@ -32,8 +32,7 @@ public partial class Main
 
     private void ShowSetupScreen(SetupScreen.SetupKind kind)
     {
-        _setupScreen = new SetupScreen { Kind = kind,ConvertedPath = GamePaths.Converted,SourcesPath = GamePaths.Data("extracted/Levels/Multiplayer"),
-            Speeds = Speeds,Previous = kind == SetupScreen.SetupKind.Sandbox ? _lastSandboxSetup : _lastSetup,BackText = _menuMode || _mainMenuSeen ? "Back" : "Quit" };
+        _setupScreen = new SetupScreen { Kind = kind,Speeds = Speeds,Previous = kind == SetupScreen.SetupKind.Sandbox ? _lastSandboxSetup : _lastSetup,BackText = _menuMode || _mainMenuSeen ? "Back" : "Quit" };
         _frontEndLayer!.AddChild(_setupScreen);
         _audio.HookControls(_setupScreen);
         _setupScreen.Started += setup => _ = StartSetupMatch(setup,kind);

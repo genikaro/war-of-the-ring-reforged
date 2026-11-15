@@ -81,7 +81,7 @@ public partial class Main
                 food=world.Economies[a.Team].Food,ore=world.Economies[a.Team].Ore,
                 gathered_food=world.Economies[a.Team].GatheredFoodMilli/1000,
                 soldiers=world.ActiveUnits.Count(u=>u.Team==a.Team && u.Health>0 && !u.Definition.Hero && !world.Workers.ContainsKey(u.Definition.Name))}).ToArray()};
-        System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"economy-recovery-smoke-report.json"),
+        System.IO.File.WriteAllText(GamePaths.Report("economy-recovery-smoke-report.json"),
             JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented=true}));
         GD.Print("ECONOMY_RECOVERY_SMOKE "+JsonSerializer.Serialize(report));
         _recoveryFinished=true; _=FinishCombatAudio(passed ? 0 : 1);

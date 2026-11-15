@@ -62,20 +62,20 @@ public partial class MenuScene : Node3D
     /// <summary>Each soldier's rest-pose model becomes the pack's animated one, idling from a random point.</summary>
     private async Task AnimateArmy(Node3D scene,ScenePresentation presentation,Func<string?,float?,Task> step)
     {
-        string pack = GamePaths.Data("converted/content/good");
+        string pack = GamePaths.Installed("content/good");
         var models = new Dictionary<string,(string File,string Idle)>();
         try
         {
-            // Build-207: the install's models list when it gives one, the pack's otherwise.
-            using var content = JsonDocument.Parse(InstallFiles.Models()?.ToJsonString() ?? System.IO.File.ReadAllText(System.IO.Path.Combine(pack,"content.json")));
-            var list = content.RootElement.ValueKind == JsonValueKind.Array ? content.RootElement : content.RootElement.GetProperty("models");
+            // Build-207: the install's models list (build-217: no pack's is read).
+            using var content = JsonDocument.Parse(InstallFiles.Models()?.ToJsonString() ?? throw new InvalidOperationException("the install gives no models list"));
+            var list = content.RootElement;
             foreach (var model in list.EnumerateArray())
             {
                 string file = model.GetProperty("file").GetString()!;
                 models.TryAdd(System.IO.Path.GetFileNameWithoutExtension(file),(file,model.GetProperty("idle").GetString()!));
             }
         }
-        catch (Exception error) when (error is JsonException or IOException or KeyNotFoundException) { GD.PushWarning("Menu army stays still: "+error.Message); return; }
+        catch (Exception error) when (error is JsonException or IOException or KeyNotFoundException or InvalidOperationException) { GD.PushWarning("Menu army stays still: "+error.Message); return; }
         var templates = new Dictionary<string,Node3D?>();
         int fromInstall = 0;
         var random = new Random(147);
@@ -88,10 +88,10 @@ public partial class MenuScene : Node3D
             if (!templates.TryGetValue(model.File,out var template))
             {
                 string path = System.IO.Path.Combine(pack,model.File);
-                // Build-207: the install's model, built off the main thread, when it gives the pack's file.
+                // Build-207: the install's model, built off the main thread.
                 byte[]? glb = await Task.Run(() => InstallFiles.Glb(path));
                 if (glb != null) fromInstall++;
-                template = glb != null ? presentation.Load(glb,model.File,EvilRed) : System.IO.File.Exists(path) ? presentation.Load(path,model.File,EvilRed) : null;
+                template = glb != null ? presentation.Load(glb,model.File,EvilRed) : null;
                 templates[model.File] = template;
                 await step(null,null);
             }

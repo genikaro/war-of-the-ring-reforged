@@ -62,7 +62,7 @@ public partial class Main
                 .Select(s=>new {s.Id,s.X,s.Z,s.Complete,s.ProgressMicroTicks,s.Health}),
             workers=w.Units.Where(u=>u.Team==AiTeam && w.Workers.ContainsKey(u.Definition.Name))
                 .Select(u=>new {u.Id,u.X,u.Z,order=u.Order.ToString(),u.OrderTarget,u.Goal,u.PlacementCell})};
-        System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"expansion-smoke-report.json"),
+        System.IO.File.WriteAllText(GamePaths.Report("expansion-smoke-report.json"),
             JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented=true}));
         GD.Print("EXPANSION_SMOKE "+JsonSerializer.Serialize(report));_expansionFinished=true;_=FinishCombatAudio(passed?0:1);
     }

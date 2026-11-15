@@ -12,7 +12,7 @@ public partial class Main
         // Build-46 adds research.
         if (!data.TryGetProperty("research",out var research) || research.GetProperty("format_version").GetInt32() != 1
             || research.GetProperty("ticks_per_second").GetInt32() != SimWorld.TicksPerSecond)
-            throw new InvalidOperationException("Refresh research: python tools/skirmish_research.py --cache converted/skirmish");
+            throw new InvalidOperationException("The rules give no research");
         foreach (var item in research.GetProperty("techniques").EnumerateObject().Where(t => Loaded(t.Value.GetProperty("building").GetString()!)))
         {
             var rules = item.Value;

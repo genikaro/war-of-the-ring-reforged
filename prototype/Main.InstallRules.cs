@@ -5,8 +5,8 @@ using Reforged.Presentation;
 /// <summary>Build-194: the rule sections the database gives (factions, team colours, start state, production and Fate,
 /// research, places of power, AI tables) are built from the install at startup with PackRules and replace the content
 /// pack's (CacheManifest.InstallRules). Build-198: so do the pack's unit, building, place-of-power and rally banner
-/// models (PackModels), built in memory while a match loads. Without an install, or when it cannot be read, the pack's
-/// own are used. Build-199: the sections that need the models too (the models list, skirmish.economy and
+/// models (PackModels), built in memory while a match loads. Build-217: there is no pack on disk to fall back to; what
+/// the install cannot give fails the load (and without an install the game opens the launcher). Build-199: the sections that need the models too (the models list, skirmish.economy and
 /// skirmish.construction but its defenses: PackModelRules) are built beside them from the open archives. Build-201:
 /// the combat rules and blood table (combat/rules.json and combat/blood.json: PackCombat) are built in the background
 /// from startup and read in place of the pack's files.</summary>
@@ -62,7 +62,7 @@ public partial class Main
             if (relative.StartsWith("combat/",StringComparison.OrdinalIgnoreCase)) return _installCombat?.Build.Result != null;
             return !relative.StartsWith("interface/",StringComparison.OrdinalIgnoreCase) || interfaceText.Value != null;
         }
-        InstallFiles.Use(GamePaths.Data("converted/content/good"),
+        InstallFiles.Use(GamePaths.Installed("content/good"),
             has: relative => relative == "interface/index.json" ? interfaceText.Value != null : Ready(relative) && images.Has(relative),
             pictures: relative => Ready(relative) && images.Has(relative) ? Guard(() => images.Picture(relative),relative) : null,
             texts: relative => relative == "interface/index.json" ? interfaceText.Value : null,
@@ -77,12 +77,12 @@ public partial class Main
         catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException
             or InvalidCastException or NullReferenceException or InvalidOperationException or ArgumentException)
         {
-            GD.PushWarning($"Install: cannot build {what} ({error.Message}); using the content pack's");
+            GD.PushWarning($"Install: cannot build {what} ({error.Message})");
             return null;
         }
     }
 
-    /// <summary>A combat sound (combat/sounds/) the install gives for a pack file, or null: it then comes from disk.</summary>
+    /// <summary>A combat sound (combat/sounds/) the install gives for a pack file, or null (build-217: then it is missing).</summary>
     private byte[]? InstallSound(string relative)
     {
         // Combat sounds do not depend on the roster, so the pack's builder gives the demo's too (build-215).
@@ -90,7 +90,7 @@ public partial class Main
         try { return install.Audio.File(relative,SkirmishCatalog.Roster); }
         catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException)
         {
-            GD.PushWarning($"Audio: cannot build {relative} from the install ({error.Message}); using the content pack's");
+            GD.PushWarning($"Audio: cannot build {relative} from the install ({error.Message})");
             return null;
         }
     }
@@ -99,7 +99,7 @@ public partial class Main
     {
         CacheManifest.InstallRules = null;
         LoadInstallModels(install);
-        if (install == null) { _installCombat = null; CacheManifest.InstallPack = null; GD.Print("Rules: no install found; using the content pack's"); return; }
+        if (install == null) { _installCombat = null; CacheManifest.InstallPack = null; GD.Print("Rules: no install found"); return; }
         try
         {
             var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -119,7 +119,7 @@ public partial class Main
         {
             _installCombat = null;
             CacheManifest.InstallPack = null;
-            GD.PushWarning($"Rules: cannot build them from the install {install} ({error.Message}); using the content pack's");
+            GD.PushWarning($"Rules: cannot build them from the install {install} ({error.Message})");
         }
     }
 
@@ -154,7 +154,7 @@ public partial class Main
             catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException or InvalidCastException
                 or FormatException or IndexOutOfRangeException or ArgumentException or InvalidOperationException or NullReferenceException)
             {
-                GD.PushWarning($"Combat: cannot build the rules from the install ({error.Message}); using the content pack's");
+                GD.PushWarning($"Combat: cannot build the rules from the install ({error.Message})");
                 return null;
             }
         }));
@@ -185,7 +185,7 @@ public partial class Main
         catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException
             or InvalidCastException or IndexOutOfRangeException or ArgumentException or InvalidOperationException or NullReferenceException)
         {
-            GD.PushWarning($"Rules: cannot build the model sections from the install ({error.Message}); using the content pack's");
+            GD.PushWarning($"Rules: cannot build the model sections from the install ({error.Message})");
         }
         return rules;
     }
@@ -217,7 +217,7 @@ public partial class Main
             SetupScreen.InstallMaps = InstallMapPreviews; // Build-210: the setup screens list the install's maps.
             // Build-212: the menus' art, font, scene and sky; the index is made in the background, the files on request.
             var frontEnd = Task.Run(() => { var front = new PackFrontEnd(db,archives); front.Index(); return front; });
-            InstallFiles.UseFrontEnd(GamePaths.Data("converted/frontend"),() => Guard(() => frontEnd.Result,"the menu art"));
+            InstallFiles.UseFrontEnd(GamePaths.Installed("frontend"),() => Guard(() => frontEnd.Result,"the menu art"));
             UseInstallPictures(images);
             _installAudio = Task.Run<string?>(() =>
             {
@@ -231,7 +231,7 @@ public partial class Main
                 catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException
                     or InvalidCastException or NullReferenceException or InvalidOperationException)
                 {
-                    GD.PushWarning($"Audio: cannot build the index from the install ({error.Message}); using the content pack's");
+                    GD.PushWarning($"Audio: cannot build the index from the install ({error.Message})");
                     return null;
                 }
             });
@@ -240,18 +240,18 @@ public partial class Main
             or KeyNotFoundException or InvalidCastException or NullReferenceException)
         {
             archives?.Dispose();
-            GD.PushWarning($"Models: cannot open the install {install} ({error.Message}); using the content pack's");
+            GD.PushWarning($"Models: cannot open the install {install} ({error.Message})");
         }
     }
 
-    /// <summary>The GLB the install gives for a content pack model file, or null: the file then comes from disk.</summary>
+    /// <summary>The GLB the install gives for a content pack model file, or null (build-217: then it is missing).</summary>
     private byte[]? InstallModel(string relative)
     {
         if (_installModels is not { } install || !FromInstall(relative) || !install.Models.Has(relative)) return null;
         try { return install.Models.Glb(relative); }
         catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException or InvalidCastException)
         {
-            GD.PushWarning($"Models: cannot build {relative} from the install ({error.Message}); using the content pack's");
+            GD.PushWarning($"Models: cannot build {relative} from the install ({error.Message})");
             return null;
         }
     }
@@ -281,7 +281,7 @@ public partial class Main
         }
         catch (AggregateException error)
         {
-            GD.PushWarning($"Models: building from the install failed ({error.InnerExceptions[0].Message}); the rest come from the content pack");
+            GD.PushWarning($"Models: building from the install failed ({error.InnerExceptions[0].Message})");
         }
     }
 }

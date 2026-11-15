@@ -163,7 +163,7 @@ public partial class Main
                     fixture = "Both squads spawn beside their target; the first wave is removed before the repair pass",
                     citadel = own == null ? null : new { own.Id,own.Team,own.Health,max = ownMax,own.Prebuilt },
                     damaged_to = _siegeDamaged,facing_samples = _siegeFacingSamples,ticks = world.Tick,status = _status,digest = world.StateDigest() };
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"siege-smoke-report.json"),
+                System.IO.File.WriteAllText(GamePaths.Report("siege-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("SIEGE_SMOKE "+JsonSerializer.Serialize(report)); _siegePhase = 7;
                 _ = FinishCombatAudio(report.passed ? 0 : 1); break;

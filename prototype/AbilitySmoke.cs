@@ -181,7 +181,7 @@ public partial class Main
                 _abilityChecks["stop_interrupts_without_heal_or_cooldown"] = !hero.Casting && hero.Health == 100 && hero.AbilityReadyAt[0] <= world.Tick;
                 var report = new { build = BuildInfo.Label,checks = _abilityChecks,passed = _abilityChecks.Count == 45 && _abilityChecks.Values.All(v => v),
                     commands = world.Commands,cooldown_snapshot = _abilityCooldownSnapshot,final_digest = world.StateDigest() };
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"ability-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
+                System.IO.File.WriteAllText(GamePaths.Report("ability-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("ABILITY_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1); break;
         }
     }

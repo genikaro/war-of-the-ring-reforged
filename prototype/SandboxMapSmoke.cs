@@ -371,7 +371,7 @@ public partial class Main
                         population = new { used = world.PopulationUsed(t),capacity = world.PopulationCapacity(t) },food = world.Economies[t].Food,ore = world.Economies[t].Ore,
                         fate = world.Economies[t].Fate,heroes = world.Units.Where(u => u.Team == t && u.Present && u.Definition.Hero).Select(u => u.Definition.Name) }),
                     status = _status,digest = world.StateDigest() };
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"sandbox-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
+                System.IO.File.WriteAllText(GamePaths.Report("sandbox-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("SANDBOX_MAP_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(passed ? 0 : 1); break;
         }
     }

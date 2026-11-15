@@ -210,7 +210,7 @@ public partial class Main
         var report = new { build = BuildInfo.Label,checks = MenuChecks,passed = MenuChecks.Count == MenuSmokeChecks && MenuChecks.Values.All(v => v),
             loading_steps = _menuLoadingSteps,load_ms = Math.Round(_lastLoadMs),fixture = "--menu: main menu, settings, Sandbox and Skirmish setup and back, Sandbox start (Player 2 Evil, no dummies, no instant build), Exit to Main Menu" };
         string json = JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true });
-        System.IO.File.WriteAllText(System.IO.Path.Combine(GamePaths.Converted,"menu-smoke-report.json"),json);
+        System.IO.File.WriteAllText(GamePaths.Report("menu-smoke-report.json"),json);
         GD.Print("MENU_SMOKE "+JsonSerializer.Serialize(report));
         _ = FinishCombatAudio(report.passed ? 0 : 1);
     }

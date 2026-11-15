@@ -521,7 +521,7 @@ public partial class Main
                 if (!EvilUpgradeResearchSmoke()) break;
                 _evilChecks["both_knockback_skills_play_both_poses"] = _evilPoseSamples.Count == 4;
                 var report = new { build = BuildInfo.Label,checks = _evilChecks,passed = _evilChecks.Values.All(v => v),notes = _evilNotes,digest = world.StateDigest() };
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"evil-sandbox-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
+                System.IO.File.WriteAllText(GamePaths.Report("evil-sandbox-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
                 GD.Print("EVIL_SANDBOX_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1);
                 _evilStep = 1000; Next(); break;
         }
@@ -604,7 +604,7 @@ public partial class Main
                 armies = w.AiPlayers.Values.ToDictionary(a => $"Player {a.Team+1} {a.Personality.Id}",a => string.Join(",",w.Units.Where(u => u.Team == a.Team && u.Health > 0)
                     .GroupBy(u => u.Definition.DisplayName).OrderBy(g => g.Key).Select(g => g.Key+" "+g.Count()))),
                 winner = w.Winner,tick = w.Tick,digest = w.StateDigest() };
-            System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"evil-bot-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
+            System.IO.File.WriteAllText(GamePaths.Report("evil-bot-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
             GD.Print("EVIL_BOT_SMOKE "+JsonSerializer.Serialize(report)); _evilStep = 1000; _ = FinishCombatAudio(report.passed ? 0 : 1);
         }
     }
@@ -769,7 +769,7 @@ public partial class Main
         {
             var report = new { build = BuildInfo.Label,checks = _evilChecks,passed = _evilChecks.Count >= 24 && _evilChecks.Values.All(v => v),notes = _evilNotes,
                 population = new { used = world.PopulationUsed(0),capacity = world.PopulationCapacity(0) },status = _status,tick = world.Tick,digest = world.StateDigest() };
-            System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"evil-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
+            System.IO.File.WriteAllText(GamePaths.Report("evil-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented = true}));
             GD.Print("EVIL_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1);
         }
     }

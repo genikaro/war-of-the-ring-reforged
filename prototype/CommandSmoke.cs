@@ -306,7 +306,7 @@ public partial class Main
             case 246:
                 var report = new { ticks = world.Tick, checks = _commandChecks, commands = world.Commands,
                     final_digest = world.StateDigest(), passed = _commandChecks.Count == 60 && _commandChecks.Values.All(v => v) };
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"command-smoke-report.json"),
+                System.IO.File.WriteAllText(GamePaths.Report("command-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("COMMAND_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed ? 0 : 1);
                 break;

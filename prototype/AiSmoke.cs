@@ -72,7 +72,7 @@ public partial class Main
                     fixture = "Player issues no orders; enemy runs the default personality",
                     timeline_ticks = _aiTimeline,max_workers = _aiMaxWorkers,party_at_launch = _aiArmyAtLaunch,
                     ai = ai?.Status,ticks = world.Tick,status = _status,digest = world.StateDigest() };
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"ai-smoke-report.json"),
+                System.IO.File.WriteAllText(GamePaths.Report("ai-smoke-report.json"),
                     JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true }));
                 GD.Print("AI_SMOKE "+JsonSerializer.Serialize(report)); _aiPhase = 4;
                 _ = FinishCombatAudio(report.passed ? 0 : 1); break;

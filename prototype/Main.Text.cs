@@ -4,7 +4,7 @@ using Reforged.Presentation;
 
 /// <summary>Build-183: the game's text (GameText) loads first, before any menu or HUD label is made: the install's own
 /// tables and the repository's catalog of strings the original never had. Since build-193 the tables are read straight
-/// from the install (GamePaths.FindInstall) when one is known, and from the content pack's text/original.json otherwise.</summary>
+/// from the install (GamePaths.FindInstall); build-217: without one, only the catalog (the launcher's).</summary>
 public partial class Main
 {
     public const string TextCatalog = "res://Locale/strings.csv";
@@ -41,13 +41,12 @@ public partial class Main
             catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException
                 or UnauthorizedAccessException or InvalidCastException or FormatException)
             {
-                GD.PushWarning($"Text: cannot read the install {install} ({error.Message}); using the content pack's text");
+                GD.PushWarning($"Text: cannot read the install {install} ({error.Message}); English catalog only");
             }
         }
-        string original = GamePaths.Data("converted/content/good/"+OriginalText.PackFile);
-        GameText.Load(original,catalog);
-        GD.Print(GameText.HasOriginal ? $"Text: {GameText.Language} from the content pack ({GameText.Rows.Count} catalog rows)"
-            : $"Text: no install found and no text at {original}; English catalog only");
+        // Build-217: no imported text is read; without an install the launcher speaks from the catalog alone.
+        GameText.LoadText(null,catalog);
+        if (found == null) GD.Print($"Text: no install found; English catalog only ({GameText.Rows.Count} catalog rows)");
     }
 
     // The smokes expect what the game shows, in whatever language the install is: a record's name by symbol, an

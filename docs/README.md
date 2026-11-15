@@ -1,5 +1,30 @@
 # Godot C# skirmish sandbox
 
+**build-217:** the game reads nothing but the install. Build-215 made every file come from the install when one was
+open, but the game still named its data by the import's folders (`converted/content/good`, `converted/skirmish`,
+`converted/skirmish-maps/<stem>`, `converted/prototype`, `converted/frontend`), and anything the install did not give,
+or every file without an install, was read from those folders. Now the game names that data under
+`GamePaths.Installed`, a root that is never a folder on disk (`<install>`: no Windows file name can hold `<` or `>`),
+laid out as `converted/` was, so the install's builders serve every file by the same names and whatever they cannot
+give fails the load with its reason instead of being read from an old import. With no install found (`-Install`, the
+launcher's folder, `REFORGED_INSTALL`, then `TLOTR - War of the Ring` beside the data; `converted/install.json` is no
+longer asked), a run opens the launcher, and a smoke, capture or headless run stops with an error that says how to
+name one. The pack's text (`text/original.json`) is no longer read: without an install the launcher speaks from the
+catalog alone. The setup screens list only the install's maps (a map it cannot preview is shown as unavailable) and
+preview them only from it. The fallback warnings no longer promise the content pack, the missing-rules errors no
+longer send you to the Python scripts, and a map the install cannot build (or does not have) fails its load.
+`run.ps1 -Map <stem>`, `-Skirmish` and `-Sandbox` pass the map's stem (`--map=`) instead of a folder under
+`converted/`; `-CachePath` still loads a developer's cache folder from disk (a fresh Python demo, say), with the
+install open. Every smoke, the launcher's, menu's and setup's included, writes its report to `reports/` in the data
+folder (made when first written; ignored by git), as do the profile logs, combat traces and stress benchmark, instead
+of into the cache folders. `converted/` is now only the developer tools' output: the format checks compare the C#
+builders with it and `tests/simulation`'s `--cache` modes read it.
+Thirteen smokes pass on the Russian install (demo, menu, setup, Sandbox, launcher, placement, construction, audio,
+interaction, Elven, minimap, command, observer), with the same reports as build-216 gives on the same install (the
+observer's frame-sampled timeline aside); the demo, skirmish, menu, setup and Sandbox smokes pass on the English one.
+Without an install the skirmish smoke stops with the error, a windowed run opens the launcher, and the launcher smoke
+(`-LauncherFolder "Legacy/Game EN"`) starts the main menu from it. The 2,745 simulation checks pass.
+
 **build-216:** the placement and Sandbox smokes pass again (both checks had failed since well before build-208, with
 the same report with and without an install). Neither was a fault in the game; each check had stayed behind a HUD
 change. The placement smoke's `swordsman_selectable_with_source_stats` wanted the Swordsman's attack tooltip to give
@@ -1215,13 +1240,15 @@ From the repository root, with the current local cache and portable tools:
 
 With no scene-choosing parameters it opens the main menu (build-147,
 [MENUS.md](MENUS.md)); `-View squad` (or `-View fortress`, `-CapturePath`, the
-smokes) loads the Helm's Deep scene described below, as a bare run did before (build-215: built from the install
-when one is open, else read from `converted/prototype`).
+smokes) loads the Helm's Deep scene described below, as a bare run did before (build-215: built from the install).
 `./prototype/export.ps1` builds the stand-alone `build/WarOfTheRingReforged.exe`, which opens on the launcher
 (build-188): it checks the original install chosen there and starts the main menu, which reads that install in place
 (build-214: nothing is imported). `-Launcher` opens the launcher from the project; `-LauncherSmoke -LauncherFolder
 <install>` checks the folder, presses Start Reforged and waits for the main menu. `-Install <folder>` plays from an
-install without the launcher, and `-Data <folder>` (build-210) uses another data folder, which may be empty.
+install without the launcher, and `-Data <folder>` (build-210) uses another data folder, which may be empty. Build-217:
+the game reads only the install (`-Install`, else the launcher's folder, else `REFORGED_INSTALL`); without one a run
+opens the launcher and a smoke stops with an error. `-Map <stem>` plays one of its maps, and the smokes write their
+reports to `reports/` in the data folder.
 
 The steps below make the developer tools' caches in `converted/`, which the game no longer needs; the format checks
 compare the C# builders with them.
@@ -1370,9 +1397,10 @@ units, buried bodies, native nodes/resources, managed heap, private memory,
 allocated bytes and GC counts. [Performance notes](PERFORMANCE.md) explain the
 retention checks, allocation sampler and remaining large-match costs.
 
-All generated game data stays in ignored `converted/prototype/`, `converted/skirmish/` and `converted/skirmish-maps/`. The source
-project contains no game assets. At launch the manifest's content hashes are
-checked before loading. Never distribute the local cache with the project.
+The source project contains no game assets, and since build-217 the game reads nothing but the install: what it builds
+from it is kept in memory. The developer tools' caches in ignored `converted/prototype/`, `converted/skirmish/` and
+`converted/skirmish-maps/` are read only by `run.ps1 -CachePath` and the simulation checks' `--cache` modes, which
+check a cache's content hashes before loading. Never distribute a local cache with the project.
 
 Since build-48 a skirmish map cache holds only its map (terrain, navigation,
 resources, start layout) and names the shared Good content pack in
@@ -1573,15 +1601,15 @@ The headless Godot smoke test loads
 the actual map and 36 animated units, dispatches mouse/key events through the
 viewport, and checks selection, move/attack picking, zoom, pause/resume,
 animation and damage over 420 fixed ticks. Its report is
-`converted/prototype/smoke-report.json`.
+`reports/smoke-report.json`.
 It also checks map-view keys, selected-ring visibility, mipmaps, vertex-colour
 bindings and team-mask adaptation on the imported scene.
 The motion smoke test renders at 80 FPS while simulation stays at 20 Hz. It
 requires interpolated positions and gradual turns as well as the normal input
-and combat checks, writing `converted/prototype/motion-smoke-report.json`.
+and combat checks, writing `reports/motion-smoke-report.json`.
 The combat smoke test selects squads with number keys, sends all three friendly
 squads into combat through actual mouse input, and requires all three to fight
-without physical overlaps. Its report is `converted/prototype/combat-smoke-report.json`.
+without physical overlaps. Its report is `reports/combat-smoke-report.json`.
 The melee smoke test adds source stats, exact hit timing, animation seeks,
 equipment changes and impact playback. It writes `melee-smoke-report.json` and
 `melee-hit-trace.json`; source-unit duel evidence is in `melee-duels-report.json`.
@@ -1591,20 +1619,20 @@ the four bottom-row actions, target-dependent
 Attack/A, hidden Move/Stop controls, targeted and immediate orders, disabled
 commands, cancellation, mixed unit types, combat interruption, pause/resume,
 drag release over the panel and removal of dead selected units. Its report is
-`converted/prototype/command-smoke-report.json`.
+`reports/command-smoke-report.json`.
 The interaction check (`./prototype/run.ps1 -InteractionSmoke`) covers animated
 ground feedback, fixed-size owner-colored target blips, faded hover rings,
 partial-body drags, dragging onto the HUD, and both health bar toggles.
 It also verifies that player colors leave the HUD bars unchanged. Add `-Skirmish -NoAi`
 to cover building bars and structure hover/blip feedback for move, attack, repair,
-gather and rally targets too; add `-CapturePath converted/prototype/interaction.png`
+gather and rally targets too; add `-CapturePath artifacts/interaction.png`
 to render the overhead bars and target blip, plus `.ground.png` and `.hover.png` captures.
 Skirmish captures also include `.structure-hover.png`, `.structure-blip.png`, and
 `.structure-hp.png`; checks cover building bar alignment during camera rotation.
-It writes `interaction-smoke-report.json` in the chosen cache.
+It writes `reports/interaction-smoke-report.json`.
 The orders smoke test adds 27 actual input checks for control groups, centering,
 new commands, queues, HUD adjustment and debug pause/step/open/close controls,
-writing `converted/prototype/orders-smoke-report.json`. It also checks F2 and the
+writing `reports/orders-smoke-report.json`. It also checks F2 and the
 run-icon button, original walk/run clip selection, unchanged camera/targeting,
 paused toggles and empty selection.
 Unit scenes share imported resources while each instance keeps its own skeleton
@@ -1613,7 +1641,7 @@ The minimap smoke test (build-18, skirmish cache) checks the original ore, well 
 place-of-power markers against the source objects, the view outline, minimap
 press-and-drag, release, edge and corner scrolling, and that scrolling stops when
 the pointer leaves the window, and (build-42) that every start Citadel is drawn at
-its footprint's size in its team's colour. It writes `converted/skirmish/minimap-smoke-report.json`.
+its footprint's size in its team's colour. It writes `reports/minimap-smoke-report.json`.
 The surface smoke test places six units on an elevated deck, dispatches a
 right-click order, then checks Ctrl + Alt + right-click terrain picking with the same
 screen position. The obstacle smoke test removes and restores an obstacle
@@ -1622,11 +1650,11 @@ through actual Alt + right-click input and verifies its visibility each time.
 For a rendered capture (opens the engine, saves a frame, then exits):
 
 ```powershell
-./prototype/run.ps1 -CapturePath converted/prototype/preview.png
-./prototype/run.ps1 -View fortress -HideHud -CapturePath converted/prototype/reference-fortress-after.png
-./prototype/run.ps1 -Smoke -CapturePath converted/prototype/reference-selected-after.png
-./prototype/run.ps1 -CommandSmoke -CapturePath converted/prototype/command-panel.png
-./prototype/run.ps1 -OrdersSmoke -Resolution 3840x2160 -CapturePath converted/prototype/hud-4k.png
+./prototype/run.ps1 -CapturePath artifacts/preview.png
+./prototype/run.ps1 -View fortress -HideHud -CapturePath artifacts/reference-fortress-after.png
+./prototype/run.ps1 -Smoke -CapturePath artifacts/reference-selected-after.png
+./prototype/run.ps1 -CommandSmoke -CapturePath artifacts/command-panel.png
+./prototype/run.ps1 -OrdersSmoke -Resolution 3840x2160 -CapturePath artifacts/hud-4k.png
 ```
 
 Each capture writes a companion JSON with its camera, viewport, map hash,

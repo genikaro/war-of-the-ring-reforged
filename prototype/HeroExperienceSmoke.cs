@@ -139,7 +139,7 @@ public partial class Main
                 CaptureLevel("revived");break;
             case 145:
                 var report=new{build=BuildInfo.Label,checks=_experienceChecks,passed=_experienceChecks.Values.All(v=>v)};
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"hero-experience-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions{WriteIndented=true}));
+                System.IO.File.WriteAllText(GamePaths.Report("hero-experience-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions{WriteIndented=true}));
                 GD.Print("HERO_EXPERIENCE_SMOKE "+JsonSerializer.Serialize(report));_=FinishCombatAudio(report.passed?0:1);break;
         }
     }

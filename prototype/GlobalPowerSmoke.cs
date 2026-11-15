@@ -135,7 +135,7 @@ public partial class Main
                 _globalChecks["ent_dies_with_particles_and_no_blood_pool"] = _bloodPools == _globalBloodPools
                     && _elvenBursts.Any(b => b.Effect.Root.Name == "SpellEffect_227" && b.Effect.VisibleSprites > 0);
                 var report=new {build=BuildInfo.Label,checks=_globalChecks,passed=_globalChecks.Values.All(v=>v)};
-                System.IO.File.WriteAllText(System.IO.Path.Combine(_cache,"global-power-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions{WriteIndented=true}));
+                System.IO.File.WriteAllText(GamePaths.Report("global-power-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions{WriteIndented=true}));
                 GD.Print("GLOBAL_POWER_SMOKE "+JsonSerializer.Serialize(report));_=FinishCombatAudio(report.passed?0:1);break;
         }
     }
