@@ -403,6 +403,10 @@ public partial class Main
         // shut down crashes the process. Before the audio stops, so nothing (the menu's music and fires) starts a voice
         // again between the stop and the quit.
         await Task.WhenAny(InstallBuilds(),Task.Delay(30_000));
+        // And let a loading screen finish (the menu scene, or a match loading behind it): its steps run on after a quit
+        // otherwise and race the engine's shutdown, which crashed now and then.
+        var loading = System.Diagnostics.Stopwatch.StartNew();
+        while (_loadingLayer != null && loading.Elapsed.TotalSeconds < 30) await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
         _paused = true; StopCombatAudio();
         // Let the audio thread retire stopped voices before the headless
         // fixed-FPS harness shuts down AudioServer.

@@ -15,10 +15,13 @@ Two fixes came out of that: the menu and setup smokes gave up after a number of 
 headless release build runs in under a second while the install's rules are still being built in the background, so
 they now give up after two minutes of their scene; and a quit now waits (at most 30 s) for the install's background
 builds (combat rules, audio index, map scene), since one that logged after the engine had shut down crashed the
-process. It waits before the audio stops, not after: closing the window right after start-up showed that a wait
-between the stop and the quit let the loading menu start its music and fires again, and quitting with live voices
-crashed (access violation or heap corruption, every time); in this order the release build closes cleanly right after
-start-up and from the loaded menu, on both installs.
+process. Closing the release build's window right after start-up found two more crashes behind that: the wait must
+come before the audio stops (a wait between the stop and the quit let the loading menu start its music and fires
+again, and quitting with live voices crashed every time, with an access violation or heap corruption), and the quit
+must also wait (at most 30 s) for a loading screen to finish (the menu scene was still loading when the close came,
+and its steps ran on after the quit, racing the shutdown: a crash now and then). Now a quit waits for the builds, then
+for the loading screen, then stops the audio and quits 100 ms later as before; the release build closed cleanly in 22
+of 22 runs right after start-up and from the loaded menu, on the English and Russian installs.
 
 **build-219:** the formation smoke passes again; it had failed since before build-156 (`attack_move_dispatch`, and
 its survivor bound with it). Neither was a fault in the game. The smoke dates from build-72, when the Uruk-hai it
