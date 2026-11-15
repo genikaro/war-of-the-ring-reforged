@@ -23,9 +23,11 @@ software works with, not as a claim to any right in them.
 - Nothing from the original game is distributed here: no art, text, sound, models, maps,
   campaign or database files.
 - You need your own legally obtained installation of the original game. The launcher asks
-  for its folder and imports from it on your machine.
-- Everything the importers produce stays local and is excluded from version control:
-  the install itself, `extracted/`, `converted/`, `prototype/Assets/` and `build/`.
+  for its folder, and the game reads it in place on your machine; nothing is copied out of it
+  or written into it.
+- Release builds hold only the engine. Everything the developer tools produce stays local and
+  is excluded from version control: the install itself, `extracted/`, `converted/`,
+  `prototype/Assets/`, `build/` and `reports/`.
 - `references/` holds the owner's own research: captures, observations, data dumps and
   third-party reference material about the original game. It is local-only and excluded
   from version control as well.
@@ -38,7 +40,7 @@ in `tools/`, the checks in `tests/`, the build scripts, and the documentation in
 
 It does not, and cannot, apply to:
 
-- the original game's data, text, art, sound, or anything the importers derive from it;
+- the original game's data, text, art, sound, or anything the engine or the tools derive from it;
 - field names, descriptions, numbers and other facts quoted from the original game where
   they appear in `docs/` for documentation and interoperability — those stay with their
   owners;
@@ -47,8 +49,8 @@ It does not, and cannot, apply to:
 
 ## Interoperability
 
-The tools read the original game's own file formats so that data you already own can be
-loaded by this engine. Those formats were worked out from files on the owner's own
+The engine and the tools read the original game's own file formats so that data you already
+own can be played by this engine. Those formats were worked out from files on the owner's own
 installation, for interoperability and preservation. No original executable code is copied,
 modified or redistributed here.
 

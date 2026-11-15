@@ -9,7 +9,7 @@ Python tools are the reference the C# readers are checked against.
 Unofficial, non-commercial fan project. It ships no game content and needs a legally obtained
 installation of the original game — see [NOTICE.md](NOTICE.md).
 
-**Status (build-219):** a playable skirmish and sandbox prototype — original maps, economy,
+**Status (build-220):** a playable skirmish and sandbox prototype — original maps, economy,
 construction, research, heroes, abilities, places of power, bots, fog of war, a main menu,
 setup screens and an exported Windows executable with a launcher. Not the original campaign,
 and not a finished game. [docs/README.md](docs/README.md) is the build log and the detailed
@@ -28,14 +28,18 @@ setup and controls.
 The launcher is how Reforged is played: it finds your copy of the game, checks it and starts the main menu. Reforged
 reads the original game in place as it plays; nothing is imported or copied, and the install is only read.
 
-1. Build the game once. The first time, `-DownloadTemplates` fetches Godot's official export templates (about
-   1.2 GB) and checks their SHA-512:
+1. Download `WarOfTheRingReforged-build-<N>-win64.zip` from the repository's
+   [Releases](https://github.com/genikaro/war-of-the-ring-reforged/releases) and unzip it anywhere, or build the game
+   yourself. The first time, `-DownloadTemplates` fetches Godot's official export templates (about 1.2 GB) and checks
+   their SHA-512; `-Release` makes the same zip as a release, in `build/release/` (build-220):
 
    ```powershell
    ./prototype/export.ps1 -DownloadTemplates
+   ./prototype/export.ps1 -Release
    ```
 
-2. Start `build/WarOfTheRingReforged.exe`. The launcher opens with your War of the Ring folder already filled in if
+2. Start `WarOfTheRingReforged.exe` (`build/WarOfTheRingReforged.exe` when built here; the `.console.exe` beside it
+   shows the log). The launcher opens with your War of the Ring folder already filled in if
    the game is in one of the usual install folders. If it isn't, click **Browse** and pick the folder that holds
    `Database` and `Archives`. The launcher then checks that the install reads correctly (a second or two).
 3. Click **Start Reforged**. Next time the launcher remembers the folder, so Start is ready at once.

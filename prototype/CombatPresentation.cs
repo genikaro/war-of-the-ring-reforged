@@ -403,6 +403,9 @@ public partial class Main
         // Let the audio thread retire stopped voices before the headless
         // fixed-FPS harness shuts down AudioServer.
         await Task.Delay(100);
+        // Build-220: and let the install's background builds finish (at most 30 s): one that logs after the engine has
+        // shut down crashes the process.
+        await Task.WhenAny(InstallBuilds(),Task.Delay(30_000));
         GetTree().Quit(exitCode);
     }
 }

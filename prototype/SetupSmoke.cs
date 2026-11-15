@@ -36,7 +36,7 @@ public partial class Main
 
     private void SetupSmokeInput()
     {
-        if (_frames > 900) { SetupChecks["phase_"+_setupPhase+"_finished"] = false; FinishSetupSmoke(); return; }
+        if (FrontEndSmokeTimedOut) { SetupChecks["phase_"+_setupPhase+"_finished"] = false; FinishSetupSmoke(); return; }
         var screen = _setupScreen;
         switch (_setupPhase)
         {

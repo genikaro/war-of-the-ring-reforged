@@ -32,6 +32,11 @@ public partial class Main
     /// pack's and the demo's alike).</summary>
     private static Lazy<string?>? _installInterface;
 
+    /// <summary>Build-220: the install's builds still running in the background (the combat rules, the audio index, the
+    /// map's scene), which a quit waits for; a faulted one counts as finished.</summary>
+    private static Task InstallBuilds() => Task.WhenAll(new Task?[] { _installCombat?.Build,_installAudio,_installMap?.Scene }
+        .OfType<Task>().Select(task => task.ContinueWith(_ => { },TaskScheduler.Default)));
+
     /// <summary>Build-215: the audio a match's cache takes from the install: the pack's for a map, the demo's own (an
     /// index for its four units, built when first asked for) for the Helm's Deep demo; null when the install gives none.</summary>
     private (string Index,Func<string,byte[]?> Files)? MatchInstallAudio()

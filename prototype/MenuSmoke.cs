@@ -35,9 +35,14 @@ public partial class Main
         }
     }
 
+    /// <summary>Build-220: the front-end smokes give up after two minutes of this scene, not a number of frames: a
+    /// headless release build runs thousands of frames while the install's rules and models are still being built.</summary>
+    private readonly System.Diagnostics.Stopwatch _frontEndSmokeClock = System.Diagnostics.Stopwatch.StartNew();
+    private bool FrontEndSmokeTimedOut => _frontEndSmokeClock.Elapsed.TotalMinutes > 2;
+
     private void MenuSmokeInput()
     {
-        if (_frames > 4000) { MenuChecks["phase_"+_menuPhase+"_finished"] = false; FinishMenuSmoke(); return; }
+        if (FrontEndSmokeTimedOut) { MenuChecks["phase_"+_menuPhase+"_finished"] = false; FinishMenuSmoke(); return; }
         switch (_menuPhase)
         {
             case 0: MenuSmokeFrontEnd(); break;

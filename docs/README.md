@@ -1,5 +1,22 @@
 # Godot C# skirmish sandbox
 
+**build-220:** the first test release. `prototype/export.ps1 -Release` exports into
+`build/release/WarOfTheRingReforged-build-<N>-win64/` and zips it beside the folder with its SHA-256
+(`.zip.sha256`): the game (`WarOfTheRingReforged.exe`, the project packed inside), its console twin
+(`WarOfTheRingReforged.console.exe`, which the export now makes for release builds too, for the log), the .NET runtime
+and assemblies (`data_Reforged_windows_x86_64`), a plain-text README for players (`docs/release/README.txt`, the build
+number filled in), `LICENSE` and `NOTICE.md`; 196 files, 73 MB zipped. Nothing from the original game is in it: the
+project packs only code, the main scene and the string catalog, and the game reads the install chosen in its launcher.
+The zip is written entry by entry with `/` separators (Windows PowerShell's `ZipFile.CreateFromDirectory` writes `\`,
+which the ZIP format forbids and other unzippers warn about). `NOTICE.md` no longer says the launcher imports the game.
+Extracted into an empty folder outside the repository (so the data folder is the extracted one), the release's
+console executable passes the launcher, demo, skirmish, setup, menu and Sandbox smokes against the English install.
+Two fixes came out of that: the menu and setup smokes gave up after a number of frames (4,000 and 900), which a
+headless release build runs in under a second while the install's rules are still being built in the background, so
+they now give up after two minutes of their scene; and a quit now waits (at most 30 s) for the install's background
+builds (combat rules, audio index, map scene), since one that logged after the engine had shut down crashed the
+process (a player closing the window at once was not affected: the close is handled once the menu has loaded).
+
 **build-219:** the formation smoke passes again; it had failed since before build-156 (`attack_move_dispatch`, and
 its survivor bound with it). Neither was a fault in the game. The smoke dates from build-72, when the Uruk-hai it
 marches on fought in melee; with their source weapon (`WEAPON_URUK_HAI_MISSILE`, 13 m) they shoot from Hold Ground,

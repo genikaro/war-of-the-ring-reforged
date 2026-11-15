@@ -1,7 +1,10 @@
 # Exports the game as a Windows executable (build-147): build/WarOfTheRingReforged.exe, a release build with the game
-# packed inside (the .NET assemblies sit beside it in data_Reforged_windows_x86_64). Double-clicked, it opens on the main
-# menu. The owner's converted game data is never packed: the executable finds converted/ beside itself or in a folder
-# above it, so a build in the repository's build/ folder uses the repository's data (--data=<folder> names another).
+# packed inside (the .NET runtime and assemblies sit beside it in data_Reforged_windows_x86_64), and
+# WarOfTheRingReforged.console.exe, the same game with a console for the log. Double-clicked, it opens on the launcher,
+# which asks for the original game's folder; the game reads that install in place (build-217), so nothing from the
+# original game is packed or needed beside the executable.
+# Build-220: -Release exports into build/release/WarOfTheRingReforged-build-<N>-win64/ with the release README,
+# LICENSE and NOTICE.md, and zips it beside the folder with its SHA-256 (.zip.sha256), ready for a GitHub release.
 # Godot reads export templates from %APPDATA%\Godot; this script points APPDATA at converted/tooling/appdata for the
 # export only. -DownloadTemplates fetches the official templates once (about 1.2 GB) and checks their SHA-512.
 param(
@@ -9,7 +12,8 @@ param(
     [string]$DotnetPath,
     [string]$Output,
     [switch]$DebugBuild,
-    [switch]$DownloadTemplates
+    [switch]$DownloadTemplates,
+    [switch]$Release
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
@@ -63,6 +67,16 @@ if (-not (Test-Path -LiteralPath (Join-Path $templates 'windows_release_x86_64.e
     Remove-Item -LiteralPath $archive
 }
 
+if ($Release) {
+    if ($DebugBuild -or $Output) { throw '-Release makes a release build in build/release; leave out -DebugBuild and -Output' }
+    $build = [regex]::Match((Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'BuildInfo.cs')),'Number\s*=\s*(\d+)').Groups[1].Value
+    if (-not $build) { throw 'No build number in BuildInfo.cs' }
+    $releaseName = "WarOfTheRingReforged-build-$build-win64"
+    $releaseRoot = Join-Path $repo 'build/release'
+    $stage = Join-Path $releaseRoot $releaseName
+    if (Test-Path -LiteralPath $stage) { Remove-Item -Recurse -Force -LiteralPath $stage }
+    $Output = Join-Path $stage 'WarOfTheRingReforged.exe'
+}
 if (-not $Output) { $Output = Join-Path $repo 'build/WarOfTheRingReforged.exe' }
 $Output = [System.IO.Path]::GetFullPath($Output)
 New-Item -ItemType Directory -Force (Split-Path -Parent $Output) | Out-Null
@@ -76,4 +90,23 @@ try {
     $exportExit = $LASTEXITCODE
 } finally { $env:APPDATA = $previousAppData }
 if ($exportExit -ne 0 -or -not (Test-Path -LiteralPath $Output)) { throw "Export failed (exit $exportExit)" }
-Write-Output "Exported $Output; it reads the game data from $(Join-Path $repo 'converted')."
+Write-Output "Exported $Output; it reads the original game from the folder chosen in its launcher."
+if ($Release) {
+    $readme = (Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo 'docs/release/README.txt')).Replace('{BUILD}',"build-$build")
+    [System.IO.File]::WriteAllText((Join-Path $stage 'README.txt'),$readme.Replace("`r`n","`n").Replace("`n","`r`n"),(New-Object System.Text.UTF8Encoding $true))
+    Copy-Item -LiteralPath (Join-Path $repo 'LICENSE'),(Join-Path $repo 'NOTICE.md') -Destination $stage
+    $zip = Join-Path $releaseRoot "$releaseName.zip"
+    if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip }
+    Add-Type -AssemblyName System.IO.Compression,System.IO.Compression.FileSystem
+    # Entry by entry: Windows PowerShell's ZipFile.CreateFromDirectory writes backslashes, which the ZIP format forbids.
+    $archive = [System.IO.Compression.ZipFile]::Open($zip,[System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        foreach ($file in Get-ChildItem -LiteralPath $stage -Recurse -File) {
+            $entry = "$releaseName/" + $file.FullName.Substring($stage.Length + 1).Replace('\','/')
+            [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,$file.FullName,$entry,[System.IO.Compression.CompressionLevel]::Optimal)
+        }
+    } finally { $archive.Dispose() }
+    $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLowerInvariant()
+    [System.IO.File]::WriteAllText("$zip.sha256","$hash  $releaseName.zip`n")
+    Write-Output "Packaged $zip ($([math]::Round((Get-Item -LiteralPath $zip).Length/1MB)) MB, SHA-256 $hash)"
+}
