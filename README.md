@@ -2,8 +2,9 @@
 
 A real-time strategy engine, written from scratch, that plays **The Lord of the Rings: War of
 the Ring** (Liquid Entertainment, 2003) from your own installed copy of the game: a
-deterministic integer simulation core and a Godot 4 C# front end, plus the Python tools that
-read the original archives, database, models, maps, audio and text.
+deterministic integer simulation core and a Godot 4 C# front end that read the original
+archives, database, models, maps, audio and text in place, with nothing imported or copied.
+Python tools are the reference the C# readers are checked against.
 
 Unofficial, non-commercial fan project. It ships no game content and needs a legally obtained
 installation of the original game — see [NOTICE.md](NOTICE.md).
@@ -56,11 +57,14 @@ with their navigation and scenes, and the menu art. It reads nothing else (build
 and a smoke stops with an error. `-Map <stem>` plays one of the install's multiplayer maps. The smokes write their
 reports to `reports/`; `-Data <folder>` runs on another data folder, which may be empty.
 
-Checks:
+Checks (the simulation checks need no install; with `--install` the caches they name, such as `prototype`,
+`skirmish` or `skirmish-maps/<stem>`, are built from it, build-218):
 
 ```powershell
+dotnet run --project tests/simulation -c Release
 dotnet run --project tests/simulation -c Release -- --install "C:/Games/War of the Ring" --cache prototype
 dotnet run --project tests/formats -c Release -- --install "C:/Games/War of the Ring"
+./prototype/run.ps1 -SkirmishSmoke
 python -m pytest tools
 ```
 
@@ -68,9 +72,9 @@ python -m pytest tools
 
 | Path | Contents |
 | --- | --- |
-| `prototype/` | Godot 4 C# project: simulation core, rendering, HUD, launcher, readers for the original formats (`Formats/`), `run.ps1`, `export.ps1` |
-| `tools/` | Python and JavaScript importers and analysis for the original game's formats |
-| `tests/` | C# simulation, movement, combat and repeatability checks, and checks for the C# format readers |
+| `prototype/` | Godot 4 C# project: simulation core, rendering, HUD, launcher, readers for the original formats (`Formats/`), the builders that make the game's rules, models, pictures, audio and maps from the install in memory (`Install/`), `run.ps1`, `export.ps1` |
+| `tools/` | Python and JavaScript readers and analysis for the original game's formats: the reference the C# is checked against, and the fingerprint tools that record it |
+| `tests/` | C# simulation, movement, combat and repeatability checks, and checks that the C# readers and builders equal the Python's |
 | `docs/` | All project documentation, starting with [docs/README.md](docs/README.md) |
 | `LICENSE`, `NOTICE.md` | GPL-3.0-or-later, and what it does and does not cover |
 
