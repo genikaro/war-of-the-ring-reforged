@@ -43,12 +43,11 @@ param(
     [switch]$SetupSmoke,
     [switch]$Menu,
     [switch]$MenuSmoke,
-    # Build-188: the launcher (the exported game's first screen); -LauncherSmoke checks -LauncherFolder, imports it
-    # with -LauncherImport, presses Start Reforged and waits for the main menu.
+    # Build-188: the launcher (the exported game's first screen); -LauncherSmoke checks -LauncherFolder, presses Start
+    # Reforged and waits for the main menu (build-214: nothing is imported).
     [switch]$Launcher,
     [switch]$LauncherSmoke,
     [string]$LauncherFolder,
-    [switch]$LauncherImport,
     [switch]$Sandbox,
     [switch]$SandboxSmoke,
     [switch]$Observe,
@@ -204,7 +203,6 @@ if ($menuMode) { $arguments += '--menu' }
 if ($Launcher -or $LauncherSmoke) { $arguments += '--launcher' }
 if ($LauncherSmoke) { $arguments += '--launcher-smoke' }
 if ($LauncherFolder) { $arguments += "--launcher-folder=$($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($LauncherFolder))" }
-if ($LauncherImport) { $arguments += '--launcher-import' }
 if ($LauncherSmoke -and $CapturePath) { $arguments += "--launcher-capture=$($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($CapturePath))"; $CapturePath = $null }
 if ($MenuSmoke) { $arguments += '--menu-smoke' }
 if ($SandboxSmoke) { $arguments += '--sandbox-smoke' }

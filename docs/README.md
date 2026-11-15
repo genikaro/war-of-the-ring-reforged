@@ -1,5 +1,22 @@
 # Godot C# skirmish sandbox
 
+**build-214:** the launcher's import is retired: Reforged reads the original game in place, so there is nothing to
+import and no Python to install to play. The launcher now checks the chosen folder in C# (`InstallCheck`, a port of
+`import_install.py --check`: every database table and archive directory parses, the archives the game reads are all
+there, the text gives a language, the AI players parse; Reforged's own folder is refused) on a worker thread, and
+**Start Reforged** opens the main menu as soon as the folder checks out. The folder is kept for the next start, and the
+session starts with the folder chosen (`Launcher.Chosen`, which `GamePaths.FindInstall` tries after `--install=`).
+**Import game data**, its progress bar (`LauncherProgress`), the import record and the Python lookup are gone, with
+`tools/import_install.py` and its test; the catalog loses the import's 25 rows and gains a line saying the folder is
+only read. The exported game finds the repository by `prototype/project.godot` instead of the import script. What the
+game still computes, it builds at load (navigation, build-209) or in the background (the rules, models, pictures and
+sounds) and keeps in memory; nothing is cached on disk. The developer tools that wrote `converted/` (`prepare_prototype.py`,
+`content_pack.py`, `frontend_assets.py`) stay as the reference the `tests/formats` fingerprints compare the C# with.
+The launcher smoke (`run.ps1 -LauncherSmoke -LauncherFolder <install>`) passes on the English and Russian installs:
+the check parses, Start is offered, and Start opens the main menu in the install's language, also from an empty data
+folder (`-Data`), where the launcher starts on the English catalog alone and the menu then reads everything from the
+install. The simulation and text checks pass.
+
 **build-213:** the game runs from an install alone. With an install open, the content pack's manifest is built from it
 too, so `converted/content` is no longer read: `CacheManifest.InstallPack` gives `content.json` without the sections
 the install's rules already give (the format, the faction, the files' names, the rules' note and `bodies`), and none
@@ -1157,15 +1174,13 @@ With no scene-choosing parameters it opens the main menu (build-147,
 [MENUS.md](MENUS.md)); `-View squad` (or `-View fortress`, `-CapturePath`, the
 smokes) loads the Helm's Deep scene described below, as a bare run did before.
 `./prototype/export.ps1` builds the stand-alone `build/WarOfTheRingReforged.exe`, which opens on the launcher
-(build-188): it imports the original install chosen there and then starts the main menu. `-Launcher` opens the
-launcher from the project; `-LauncherSmoke -LauncherFolder <install>` checks the folder, presses Start Reforged and
-waits for the main menu (`-LauncherImport` imports first, which replaces this checkout's game data).
+(build-188): it checks the original install chosen there and starts the main menu, which reads that install in place
+(build-214: nothing is imported). `-Launcher` opens the launcher from the project; `-LauncherSmoke -LauncherFolder
+<install>` checks the folder, presses Start Reforged and waits for the main menu. `-Install <folder>` plays from an
+install without the launcher, and `-Data <folder>` (build-210) uses another data folder, which may be empty.
 
-On a new machine, or for another install, the launcher's import replaces the steps below in one go:
-
-```powershell
-python tools/import_install.py "C:/Games/War of the Ring"
-```
+The steps below make the developer tools' caches in `converted/`, which the game no longer needs; the format checks
+compare the C# builders with them.
 
 The launcher builds C# first. It uses portable tools in ignored
 `converted/tooling`, or accepts `-GodotPath` and `-DotnetPath` explicitly.

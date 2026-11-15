@@ -70,7 +70,6 @@ assets, previews, validation reports and portable tools stay in ignored
 | `world_fingerprint.py` | Build-208: every level of Levels.H2O read by `world_scene.parse` and resolved against the install's database, the part the game reads hashed in the canonical form, for `tests/formats --python-worlds`; `--dump` prints one. |
 | `combat_fingerprint.py` | Build-203: `combat/rules.json` and `combat/blood.json` as `combat_rules.export` and `blood_effects.export` build them from the given install (its own extracted layout in a temporary folder), for `tests/formats --python-combat` to check `PackCombat` against. Build-213: also the pack's `bodies` (`content_pack.faction_bodies` and the rules' unit bodies). |
 | `rules_fingerprint.py` | Build-194: the content pack's seven database-only rule sections as the import builds them, for `tests/formats --python-rules` to check `PackRules` against. Build-199: also the sections that need models (the `models` list, `skirmish.economy`, `skirmish.construction` key by key; build-204 its defenses), from a layout of the install, for `PackModelRules` and `PackCombat.Defenses`. |
-| `import_install.py` | Build-188, the launcher's import: check an install parses (`--check`), then extract it, build the content pack, menu art and every map (in parallel) and record it in `converted/install.json`. Progress lines start with `@reforged `. |
 | `viewer.html` | three.js viewer with unit and clip pickers (`?clip=Name`, `?t=0.5` freezes a frame). |
 
 ## C# readers (build-192)

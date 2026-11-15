@@ -8,7 +8,7 @@ read the original archives, database, models, maps, audio and text.
 Unofficial, non-commercial fan project. It ships no game content and needs a legally obtained
 installation of the original game — see [NOTICE.md](NOTICE.md).
 
-**Status (build-213):** a playable skirmish and sandbox prototype — original maps, economy,
+**Status (build-214):** a playable skirmish and sandbox prototype — original maps, economy,
 construction, research, heroes, abilities, places of power, bots, fog of war, a main menu,
 setup screens and an exported Windows executable with a launcher. Not the original campaign,
 and not a finished game. [docs/README.md](docs/README.md) is the build log and the detailed
@@ -20,11 +20,12 @@ setup and controls.
 - Your own installation of the original game.
 - [Godot 4.7.2 .NET](https://godotengine.org/download/windows/) and the .NET 10 SDK
   (the project targets `net10.0`).
-- Python 3.13 with Pillow and NumPy, for the import tools.
+- Python 3.13 with Pillow and NumPy, only for the developer tools and their format checks (not to play).
 
 ## Getting started
 
-The launcher is how Reforged is played: it finds your copy of the game, imports it and starts the main menu.
+The launcher is how Reforged is played: it finds your copy of the game, checks it and starts the main menu. Reforged
+reads the original game in place as it plays; nothing is imported or copied, and the install is only read.
 
 1. Build the game once. The first time, `-DownloadTemplates` fetches Godot's official export templates (about
    1.2 GB) and checks their SHA-512:
@@ -35,14 +36,8 @@ The launcher is how Reforged is played: it finds your copy of the game, imports 
 
 2. Start `build/WarOfTheRingReforged.exe`. The launcher opens with your War of the Ring folder already filled in if
    the game is in one of the usual install folders. If it isn't, click **Browse** and pick the folder that holds
-   `Database` and `Archives`. The launcher then checks that the install reads correctly.
-3. Click **Import game data**. A progress bar shows each step, the time taken and the time left. A full English
-   install takes about 17 minutes on a 16-thread machine, mostly for the maps, which import several at a time.
-   The install itself is only read.
-4. Click **Start Reforged**. Next time the launcher remembers the folder and the import, so Start is ready at once.
-   It says when the data came from an older build and should be imported again.
-
-Importing needs Python 3.13 with Pillow and NumPy, from `converted/tooling/python` or on PATH.
+   `Database` and `Archives`. The launcher then checks that the install reads correctly (a second or two).
+3. Click **Start Reforged**. Next time the launcher remembers the folder, so Start is ready at once.
 
 ### Development
 
@@ -55,17 +50,10 @@ launcher. The smokes and captures are listed in [docs/README.md](docs/README.md)
 ./prototype/run.ps1 -Install "C:/Games/War of the Ring"
 ```
 
-The game reads its text (build-193), the rule tables the database gives (build-194), its unit and building models
-(build-198), the rules that need them (build-199), the combat rules (build-203), its audio (build-205) and its interface
-art and effect pictures (build-206) straight from the install: the one
-`-Install` names, else the
-folder the launcher kept, else the last import's. Without one it uses the imported copy.
-
-The launcher's import without the launcher (`--check` only checks the install):
-
-```powershell
-python tools/import_install.py "C:/Games/War of the Ring"
-```
+The game reads everything straight from the install (builds 192-214): text, rules, models, audio, pictures, the maps
+with their navigation and scenes, and the menu art. The install is the one `-Install` names, else the folder the
+launcher kept. `-Data <folder>` runs on another data folder; it may be empty. Without an install the game falls back
+to the developer tools' caches in `converted/`, where they exist.
 
 Checks:
 
