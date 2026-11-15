@@ -98,9 +98,11 @@ public partial class Main
                 _sandboxMapChecks["flags_mark_both_rally_points"] = _sandboxRallyFlags.Count == 2 && teams.All(t => rallies[t] is [var cell]
                     && _sandboxRallyFlags.TryGetValue((t,cell),out var flag) && flag.Root.Visible && flag.Banner.Visible && world.Navigation.Center(cell) is var (fx,fz)
                     && flag.Root.Position.DistanceTo(new(-fx/1000f,world.Navigation.NodeHeight(cell)/1000f,fz/1000f)) < .01f);
+                // Build-216: since build-180 a ring is coloured only while it is shown, in its player's colour (lightened when
+                // selected) with the default player-coloured selectors, not build-56's colour lightened by a quarter on every ring.
                 _sandboxMapChecks["player_1_tab_pressed_and_rings_in_team_colours"] = PlayerTeam == 0
                     && _commands.SandboxTab(0) is { Visible: true,ButtonPressed: true } && _commands.SandboxTab(1) is { Visible: true,ButtonPressed: false }
-                    && world.Units.Where(u => u.Team >= 0).All(u => ((StandardMaterial3D)_views[u.Id].Ring.MaterialOverride).AlbedoColor == TeamColor(u.Team).Lightened(.25f));
+                    && world.Units.Where(u => u.Team >= 0).All(u => UnitRingTint(u) == TeamColor(u.Team));
                 PushKey(Key.Tab); break;
             }
             case 4:

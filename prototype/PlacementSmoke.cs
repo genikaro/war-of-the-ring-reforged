@@ -185,10 +185,13 @@ public partial class Main
                 var stats = selected == null ? null : Reforged.Presentation.UnitHudStats.From(selected,_rules);
                 _placementChecks["swordsman_selectable_with_source_stats"] = selected != null && _selected.SetEquals([selected.Id]) && _commands.SingleUnitDetailsVisible
                     && _commands.DisplayedName == Shown("UNIT_G_GONDOR_SWORDSMAN","Gondor Swordsman") && _commands.DisplayedHealth == "155/155" && stats is { Attack: "10",Armor: "0" }
-                    // Build-62: Attack is damage per hit; the row's tooltip has the source 10 damage per second.
+                    // Build-62: Attack is damage per hit. Build-216: the row's tooltip gives the hit's 10 over the swing as its
+                    // damage per second (10.39: the swing lasts about 0.9625 s, shown as 0.96), as the research smoke's axe has since build-201, so its
+                    // per-hit and attack speed lines are checked; a Swordsman has no Build page, so no Camp button either.
                     && _commands.DisplayedAttack == "10"
-                    && _commands.DisplayedAttackTip == string.Join("\n",GameText.Labeled("stat.damage_per_hit",10),GameText.Labeled("stat.damage_per_second",10),GameText.T("stat.attack_speed",GameText.T("stat.speed.very_fast"),GameText.Number(0.96m,"0.##")))
-                    && !_commands.ConstructionButton(SmokeCamp).Visible && !_commands.BuildButton.Visible;
+                    && _commands.DisplayedAttackTip.Split('\n') is [var hitLine,_,var speedLine] && hitLine == GameText.Labeled("stat.damage_per_hit",10)
+                    && speedLine == GameText.T("stat.attack_speed",GameText.T("stat.speed.very_fast"),GameText.Number(0.96m,"0.##"))
+                    && !_commands.ConstructionShown(SmokeCamp) && !_commands.BuildButton.Visible;
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-swordsman.png");
                 break;
             case 1906:

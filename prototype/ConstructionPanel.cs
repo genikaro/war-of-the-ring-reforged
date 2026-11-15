@@ -19,6 +19,8 @@ public partial class CommandPanel
     /// <summary>Set by the owner before each refresh: show the building page instead of unit commands.</summary>
     public bool BuildMenuOpen { get; set; }
     public Button ConstructionButton(string building) => _constructionButtons[Array.IndexOf(_constructionNames,building)];
+    /// <summary>Build-216: whether the Build page offers the building now (a selection without workers lists none).</summary>
+    public bool ConstructionShown(string building) => Array.IndexOf(_constructionNames,building) is int slot && slot >= 0 && _constructionButtons[slot].Visible;
     public Button ConstructionButton(ResourceKind kind) => _constructionButtons[_resourceSlots[kind]];
     public Button BuildButton => _buildButton;
     public Button AdvancedBuildButton => _advancedBuildButton;

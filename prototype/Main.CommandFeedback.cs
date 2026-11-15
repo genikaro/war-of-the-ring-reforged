@@ -119,13 +119,18 @@ public partial class Main
     private static Color LegacyUnitRingColor(int owner,int viewpoint)
         => viewpoint >= 0 && owner >= 0 && owner != viewpoint ? LegacyEnemyUnitRing : LegacyFriendlyUnitRing;
 
+    /// <summary>The colour a unit's ring is drawn in (build-180): its player's with player-coloured selectors (the default),
+    /// else the classic gold for friends and red for enemies; selected and hovered rings lighten it.</summary>
+    private Color UnitRingTint(SimUnit unit)
+        => _settings.PlayerColoredUnitSelectors ? TeamColor(unit.Team) : LegacyUnitRingColor(unit.Team,_observing ? _visionTeam : PlayerTeam);
+
     private void PresentCommandRing(SimUnit unit,UnitView view,float dt)
     {
         view.CommandBlip = Math.Max(0,view.CommandBlip-dt);
         bool flashing = view.CommandBlip > 0;
         bool selected = _selected.Contains(unit.Id), hovered = _hoveredUnit == unit.Id;
         bool hoverOnly = hovered && !selected, playerColors = _settings.PlayerColoredUnitSelectors;
-        var tint = playerColors ? TeamColor(unit.Team) : LegacyUnitRingColor(unit.Team,_observing ? _visionTeam : PlayerTeam);
+        var tint = UnitRingTint(unit);
         var normal = playerColors ? tint.Lightened(hoverOnly ? HoverUnitRingLightening : SelectedUnitRingLightening) : tint;
         var color = CommandRingColor(view.CommandBlip,tint,new Color(normal,hoverOnly ? .5f : 1),selected || hovered);
         bool ring = unit.Present && (flashing ? color.A > .001f : selected || hovered);

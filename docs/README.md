@@ -1,5 +1,18 @@
 # Godot C# skirmish sandbox
 
+**build-216:** the placement and Sandbox smokes pass again (both checks had failed since well before build-208, with
+the same report with and without an install). Neither was a fault in the game; each check had stayed behind a HUD
+change. The placement smoke's `swordsman_selectable_with_source_stats` wanted the Swordsman's attack tooltip to give
+the source's 10 damage per second, but the tooltip gives the fixed 10 per hit over the swing (10.39: the swing lasts
+about 0.9625 s, shown as 0.96), as the research smoke's axe has since build-201; the check now reads the per-hit and
+attack speed lines, and asks whether the Build page offers the Camp (`ConstructionShown`) instead of taking its
+button, which threw once the page listed nothing for a selection without workers. The Sandbox smoke's
+`player_1_tab_pressed_and_rings_in_team_colours` wanted every ring's material in build-56's team colour lightened by a
+quarter, but since build-180 a ring is coloured only while shown and lightens its player's colour by .4 when selected,
+so every hidden ring stayed white; the check now asks each unit's ring colour (`UnitRingTint`, which the rings use) to
+be its player's. Both smokes pass with the Russian install and without one, with the same digests; the interaction and
+menu smokes, which check the shown rings, and the simulation checks pass.
+
 **build-215:** the Helm's Deep demo comes from the install too, so with an install open nothing the game or its smokes
 read comes from `converted/`. `PackMap.Demo` (`prototype/Install/DemoMap.cs`) ports `prepare_prototype.prepare`:
 Helm's Deep's navigation with plain footprints (not the skirmish maps' swept circles) and the walker audit, the squads'
