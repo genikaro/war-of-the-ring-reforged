@@ -113,7 +113,8 @@ public static class PackRules
         return result;
     }
 
-    private static JsonArray TeamColors(LqrDatabase db)
+    /// <summary>prepare_prototype.team_colors: each slot's colour as red, green and blue fractions.</summary>
+    public static JsonArray TeamColors(LqrDatabase db)
         => new([.. SkirmishCatalog.SlotColors.Select(name => (JsonNode?)new JsonArray([.. new[] { "Red","Green","Blue" }
             .Select(channel => (JsonNode?)(F(Named(db["TeamColors"],name),channel)/255))]))]);
 

@@ -28,6 +28,22 @@ public partial class Main
     /// <summary>Build-205: the audio index built from the install, as JSON text, in the background from startup.</summary>
     private static Task<string?>? _installAudio;
 
+    /// <summary>Build-206: the interface index built from the install, as JSON text, when first asked for (build-215: the
+    /// pack's and the demo's alike).</summary>
+    private static Lazy<string?>? _installInterface;
+
+    /// <summary>Build-215: the audio a match's cache takes from the install: the pack's for a map, the demo's own (an
+    /// index for its four units, built when first asked for) for the Helm's Deep demo; null when the install gives none.</summary>
+    private (string Index,Func<string,byte[]?> Files)? MatchInstallAudio()
+    {
+        if (!DemoFromInstall) return InstallAudio();
+        if (_installModels is not { } install || _installMap is not { } built) return null;
+        var audio = built.Audio ??= new PackAudio(install.Db,install.Archives);
+        var roster = SkirmishCatalog.CombatDemoUnits;
+        string? index = Guard(() => audio.Index(roster).ToJsonString(),"the demo's audio index");
+        return index == null ? null : (index,relative => audio.Has(relative,roster) ? audio.File(relative,roster) : null);
+    }
+
     /// <summary>The audio the install gives in place of the pack's: the index text and the files by pack path, or null.
     /// Waits for the index when it has not been built.</summary>
     private static (string Index,Func<string,byte[]?> Files)? InstallAudio()
@@ -40,7 +56,7 @@ public partial class Main
     /// for the combat rules, which name it; an interface one for the interface index.</summary>
     private static void UseInstallPictures(PackImages images)
     {
-        var interfaceText = new Lazy<string?>(() => Guard(() => images.Interface().ToJsonString(),"the interface index"));
+        var interfaceText = _installInterface = new Lazy<string?>(() => Guard(() => images.Interface().ToJsonString(),"the interface index"));
         bool Ready(string relative)
         {
             if (relative.StartsWith("combat/",StringComparison.OrdinalIgnoreCase)) return _installCombat?.Build.Result != null;
@@ -69,7 +85,8 @@ public partial class Main
     /// <summary>A combat sound (combat/sounds/) the install gives for a pack file, or null: it then comes from disk.</summary>
     private byte[]? InstallSound(string relative)
     {
-        if (_installModels is not { } install || !_cacheFiles.FromPack(relative) || !install.Audio.Has(relative,SkirmishCatalog.Roster)) return null;
+        // Combat sounds do not depend on the roster, so the pack's builder gives the demo's too (build-215).
+        if (_installModels is not { } install || !FromInstall(relative) || !install.Audio.Has(relative,SkirmishCatalog.Roster)) return null;
         try { return install.Audio.File(relative,SkirmishCatalog.Roster); }
         catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException)
         {
@@ -144,9 +161,11 @@ public partial class Main
     }
 
     /// <summary>The text of a combat file the install gives in place of the pack's, or null: the file then comes from
-    /// disk. Waits for the background build when it has not finished.</summary>
+    /// disk. Waits for the background build when it has not finished. Build-215: the demo's own rules (it has no blood
+    /// table) when the demo is built from the install.</summary>
     private string? InstallCombatText(string relative)
     {
+        if (DemoFromInstall) return relative == CombatRulesFile ? _installMap!.Rules ??= _installMap.Map.Demo!.Rules.ToJsonString() : null;
         if (_installCombat is not { } combat || relative is not (CombatRulesFile or BloodFile) || !_cacheFiles.FromPack(relative)) return null;
         var built = combat.Build.Result;
         return built == null ? null : relative == CombatRulesFile ? built.Value.Rules : built.Value.Blood;
@@ -228,7 +247,7 @@ public partial class Main
     /// <summary>The GLB the install gives for a content pack model file, or null: the file then comes from disk.</summary>
     private byte[]? InstallModel(string relative)
     {
-        if (_installModels is not { } install || !_cacheFiles.FromPack(relative) || !install.Models.Has(relative)) return null;
+        if (_installModels is not { } install || !FromInstall(relative) || !install.Models.Has(relative)) return null;
         try { return install.Models.Glb(relative); }
         catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException or InvalidCastException)
         {
@@ -242,9 +261,15 @@ public partial class Main
     {
         if (_installModels is not { } install) return;
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        // Build-207: the combat rules name the projectile, effect and dropped object models; they are built in the background.
-        if (_installCombat is { } combat) await combat.Build;
-        var files = install.Models.Files.Where(_cacheFiles.FromPack).ToList();
+        List<string> files;
+        // Build-215: the demo's unit models; the few its rules name (the Elven Archer's arrow) are built when first shown.
+        if (DemoFromInstall) files = [.. _cacheFiles.Root.GetProperty("models").EnumerateArray().Select(m => m.GetProperty("file").GetString()!)];
+        else
+        {
+            // Build-207: the combat rules name the projectile, effect and dropped object models; they are built in the background.
+            if (_installCombat is { } combat) await combat.Build;
+            files = [.. install.Models.Files.Where(_cacheFiles.FromPack)];
+        }
         try
         {
             await Task.Run(() => install.Models.Prepare(files));

@@ -74,8 +74,15 @@ public static class MapChecks
     {
         var differences = new List<string>();
         JsonCompare.Compare(expected["manifest"],Located(map.Manifest),"manifest",differences);
-        if (Convert.ToHexStringLower(SHA256.HashData(map.Navigation.HeightsBin())) != expected["heights"]!.GetValue<string>()) differences.Add("heights.bin differs");
-        using var nav = JsonDocument.Parse(map.Navigation.Write());
+        Navigation(map.Navigation,expected,differences);
+        return differences;
+    }
+
+    /// <summary>Build-215: heights.bin and navigation.json against a record's "heights" and "navigation" pieces.</summary>
+    public static void Navigation(MapNavigation navigation,JsonObject expected,List<string> differences)
+    {
+        if (Convert.ToHexStringLower(SHA256.HashData(navigation.HeightsBin())) != expected["heights"]!.GetValue<string>()) differences.Add("heights.bin differs");
+        using var nav = JsonDocument.Parse(navigation.Write());
         var want = expected["navigation"]!.AsObject();
         var root = nav.RootElement;
         foreach (var property in root.EnumerateObject())
@@ -98,7 +105,6 @@ public static class MapChecks
             if (Hashed(p.GetProperty("edges")) != w["edges"]!.GetValue<string>()) differences.Add(at+".edges differ");
             Layers(p.GetProperty("obstacles"),w["obstacles"]!.AsArray(),at+".obstacles",differences);
         }
-        return differences;
     }
 
     private static void Layers(JsonElement layers,JsonArray want,string at,List<string> differences)

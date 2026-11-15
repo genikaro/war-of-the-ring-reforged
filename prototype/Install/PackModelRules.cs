@@ -109,10 +109,11 @@ public static class PackModelRules
         return ([.. animations.Select(a => a.Name)],[.. changed.Where(Locomotion).Distinct().Order(StringComparer.Ordinal)]);
     }
 
-    public static JsonArray Models(ModelResolver resolver)
+    /// <summary>prepare_prototype.export_units' list for a roster (the pack's by default; build-215: the demo's).</summary>
+    public static JsonArray Models(ModelResolver resolver,IEnumerable<string>? roster = null)
     {
         var models = new JsonArray();
-        foreach (string unit in SkirmishCatalog.Roster)
+        foreach (string unit in roster ?? SkirmishCatalog.Roster)
         {
             string model = ById(resolver.Db["Models"],I(Named(resolver.Db["Units"],unit),"Model")).Name;
             var (clips,inPlace) = Clips(resolver,model,SkirmishCatalog.RangedUnits.Contains(unit));

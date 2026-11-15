@@ -56,6 +56,7 @@ public static class InstallFiles
     }
 
     public static bool Exists(string path) => System.IO.File.Exists(path) || Relative(path) is { } relative && _has?.Invoke(relative) == true
+        || MapRelative(path) is { } map && _mapHas?.Invoke(map) == true
         || Front<string>(path,front => relative => front.Has(relative) ? "" : null) != null;
 
     /// <summary>How many pictures the install has given so far.</summary>
@@ -64,21 +65,27 @@ public static class InstallFiles
 
     private static string? _map;
     private static Func<string,Picture?>? _mapPictures;
+    private static Func<string,string?>? _mapTexts;
+    private static Func<string,bool>? _mapHas;
 
     /// <summary>Build-210: serves a map cache folder's pictures (map/clouds.png, map/sky-*.png) from the install's
-    /// builders, by their path in the folder; null stops it.</summary>
-    public static void UseMap(string? cache,Func<string,Picture?>? pictures = null)
+    /// builders, by their path in the folder; null stops it. Build-215: for the Helm's Deep demo, its interface art and
+    /// index and its combat pictures too (<paramref name="texts"/> the index, <paramref name="has"/> what it gives).</summary>
+    public static void UseMap(string? cache,Func<string,Picture?>? pictures = null,Func<string,string?>? texts = null,Func<string,bool>? has = null)
     {
         _map = cache == null ? null : System.IO.Path.GetFullPath(cache).TrimEnd(System.IO.Path.DirectorySeparatorChar)+System.IO.Path.DirectorySeparatorChar;
-        _mapPictures = pictures;
+        (_mapPictures,_mapTexts,_mapHas) = (pictures,texts,has);
     }
 
-    private static Picture? MapPicture(string path)
+    /// <summary>The folder-relative path of a file in the map cache served, or null.</summary>
+    private static string? MapRelative(string path)
     {
-        if (_map == null || _mapPictures == null) return null;
+        if (_map == null) return null;
         string full = System.IO.Path.GetFullPath(path);
-        return full.StartsWith(_map,StringComparison.OrdinalIgnoreCase) ? _mapPictures(full[_map.Length..].Replace('\\','/')) : null;
+        return full.StartsWith(_map,StringComparison.OrdinalIgnoreCase) ? full[_map.Length..].Replace('\\','/') : null;
     }
+
+    private static Picture? MapPicture(string path) => _mapPictures != null && MapRelative(path) is { } relative ? _mapPictures(relative) : null;
 
     /// <summary>A picture: the install's pixels when it gives the pack's file (or the map's, build-210), else the file.</summary>
     public static Image LoadImage(string path)
@@ -93,6 +100,7 @@ public static class InstallFiles
     }
 
     /// <summary>A text file (an index): the install's when it gives the pack's, else the file.</summary>
-    public static string ReadText(string path) => (Relative(path) is { } relative ? _texts?.Invoke(relative) : null) ?? Front<string>(path,front => front.Text)
+    public static string ReadText(string path) => (Relative(path) is { } relative ? _texts?.Invoke(relative) : null)
+        ?? (MapRelative(path) is { } map ? _mapTexts?.Invoke(map) : null) ?? Front<string>(path,front => front.Text)
         ?? System.IO.File.ReadAllText(path);
 }

@@ -6,7 +6,7 @@ namespace Reforged.Install;
 
 /// <summary>A map built from the install: its manifest (the map cache's own manifest.json, without the file hashes)
 /// and its navigation.</summary>
-public sealed record MapBuild(string Stem,World World,JsonObject Manifest,MapNavigation Navigation);
+public sealed record MapBuild(string Stem,World World,JsonObject Manifest,MapNavigation Navigation,DemoContent? Demo = null);
 
 /// <summary>Build-210: a map as the setup screen shows it (PackMap.Preview): the manifest's name, bases and resources,
 /// the grid's size and cell, and its ground and heights made on request.</summary>
@@ -17,7 +17,7 @@ public sealed record MapPreview(string Stem,JsonObject Manifest,int Width,int He
 /// ground, the construction sites on every ore pile and well, the navigation with every body's clearance, the start
 /// workers on the ground each base stands on, the resources with their nearest base, the selectable neutral objects,
 /// the camera cell and the map's classic lighting (map_lighting.lighting).</summary>
-public sealed class PackMap(LqrDatabase db,GameArchives archives)
+public sealed partial class PackMap(LqrDatabase db,GameArchives archives)
 {
     public const string BilboStem = "MP02_Bilbos_Bluffs";
     public const int CitadelObjectBase = 10000, SiteObstacleBase = 20000;
@@ -51,7 +51,7 @@ public sealed class PackMap(LqrDatabase db,GameArchives archives)
     /// <summary>A map's level parsed and resolved (the Sandbox's is Bilbo's Bluffs, not yet flattened).</summary>
     public World Read(string stem)
     {
-        var world = World.Parse(archives.Read("Levels/"+MapFile(IsSandbox(stem) ? BilboStem : stem)));
+        var world = World.Parse(archives.Read("Levels/"+LevelFile(stem)));
         world.Resolve(db,out _);
         return world;
     }

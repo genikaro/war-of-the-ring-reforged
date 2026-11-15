@@ -252,6 +252,7 @@ launcher.log,,Log,Журнал,
 launcher.game_data,,Game data,Данные игры,
 launcher.data.in_place,,"Reforged reads the original game from this folder as it plays: nothing is imported or copied, and the folder is only read.","Reforged читает оригинальную игру из этой папки во время игры: ничего не импортируется и не копируется, папка только читается.",Build-214
 launcher.start,,Start Reforged,Запустить Reforged,
+match.load_failed,,"The map could not be loaded ({0}). Start Reforged from its launcher with the folder War of the Ring is installed in.","Не удалось загрузить карту ({0}). Запустите Reforged через его окно запуска и выберите папку, в которую установлена Война Кольца.","Build-215: a match that fails to load; {0} = the error"
 launcher.exit,Menu:8006,Exit,,Leaves the launcher
 launcher.language.en,,English,английский,
 launcher.language.ru,,Russian,русский,

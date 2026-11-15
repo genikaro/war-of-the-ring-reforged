@@ -235,9 +235,14 @@ if ($Map -and -not $CachePath) { $CachePath = Join-Path $dataRoot "converted/ski
 if (($Sandbox -or $SandboxSmoke) -and -not $CachePath) { $CachePath = Join-Path $dataRoot 'converted/skirmish-maps/Sandbox' }
 if ($Skirmish -and -not $CachePath) { $CachePath = Join-Path $dataRoot 'converted/skirmish' }
 if ($CachePath) { $arguments += "--cache=$([System.IO.Path]::GetFullPath($CachePath))" }
+# Build-215: another data folder may be empty: a map built from the install writes only the smokes' reports to its folder.
+$reportFolder = if ($CachePath) { $CachePath } else { Join-Path $dataRoot 'converted/prototype' }
+if ($Data -and -not (Test-Path -LiteralPath $reportFolder)) { New-Item -ItemType Directory -Force -Path $reportFolder | Out-Null }
 if ($AudioSmoke) {
-    # Godot can report a signal connection error while still returning exit code zero.
-    $audioOutput = @(& $GodotPath @arguments 2>&1)
+    # Godot can report a signal connection error while still returning exit code zero. Build-215: its warnings on stderr
+    # (a run without an install warns of the unit names it has no text for) must not stop the script.
+    $ErrorActionPreference = 'Continue'
+    $audioOutput = @(& $GodotPath @arguments 2>&1 | ForEach-Object { "$_" })
     $audioExit = $LASTEXITCODE
     $audioOutput | ForEach-Object { Write-Output $_ }
     if ($audioExit -eq 0 -and ($audioOutput -match '^ERROR:')) {

@@ -1,5 +1,35 @@
 # Godot C# skirmish sandbox
 
+**build-215:** the Helm's Deep demo comes from the install too, so with an install open nothing the game or its smokes
+read comes from `converted/`. `PackMap.Demo` (`prototype/Install/DemoMap.cs`) ports `prepare_prototype.prepare`:
+Helm's Deep's navigation with plain footprints (not the skirmish maps' swept circles) and the walker audit, the squads'
+anchor nearest cell (215, 160) of the largest connected ground (`connected`), `refresh_demo`'s six separated squads
+(`demo_layout`: Aragorn and Elven Knights, Elven Knights and Elven Archers for Blue, Uruk-hai for Red), the four
+units' models list (`PackModelRules.Models` now takes a roster), the slot colours and the map's classic lighting. The
+demo stays self-contained, as the Python makes it: its combat rules (`PackCombat.Rules` for its four units, so the
+smokes' rules hash is the demo's, not the pack's), its audio index (`PackAudio` for the same roster), its interface and
+its unit models are its own, and its clearance profiles are built for its rules' four bodies. With an install that holds
+`Levels/Helms Deep.wor`, `converted/prototype` is built while the match loads (about 1.2 s; the scene and lighting
+pictures on a worker thread, as for every map) and every file of it is served from the install: the rules text,
+navigation and heights, scene and pictures, the interface index and pictures and the combat pictures
+(`InstallFiles.UseMap` now serves a cache folder's texts as well), the unit and projectile models and the sounds;
+nothing is read from the folder, which only takes the smokes' reports. `tools/demo_fingerprint.py` builds the demo the
+Python way from a layout of an install (about 2 minutes) and records it (`--keep` copies the built folder, a fresh
+Python demo to run the smokes on); `tests/formats --python-demo` requires the C# demo to equal it: the manifest,
+heights, navigation, scene, the combat rules, interface and audio indexes and all 1,319 other files do on the English
+and Russian installs. The fourteen smokes that load the demo (`-Smoke`, `-MotionSmoke`, `-CombatSmoke`,
+`-CommandSmoke`, `-InteractionSmoke`, `-OrdersSmoke`, `-AbilitySmoke`, `-AudioSmoke`, `-MeleeSmoke`,
+`-EngagementSmoke`, `-AttackMoveEngagementSmoke`, `-FormationSmoke`, `-SurfaceSmoke`, `-ObstacleSmoke`) give the same
+reports with the Russian install, the demo built from it, as with the same install's fresh Python demo read from disk
+(the engagement smokes' slowest-step samples aside, which are timings); the formation smoke's `attack_move_dispatch`
+fails either way, as in the repository's report of November 7. The repository's own `converted/prototype` predates the
+current Python tools (no slot colours; older rules, navigation, Uruk-hai model and audio), so a run without an install
+reports another rules hash and digests until `prepare_prototype.py` rebuilds it. A load that fails now says so in the
+install's language and points to the launcher (`match.load_failed`), not to `prepare_prototype.py`. `run.ps1
+-AudioSmoke` no longer stops on Godot's warnings, which a run without an install prints for the unit names it has no
+text for. `tests/simulation`'s `--cache` modes keep reading the caches the developer tools write: they check the
+simulation against that data, and `tests/formats` holds the data built from the install equal to it file by file.
+
 **build-214:** the launcher's import is retired: Reforged reads the original game in place, so there is nothing to
 import and no Python to install to play. The launcher now checks the chosen folder in C# (`InstallCheck`, a port of
 `import_install.py --check`: every database table and archive directory parses, the archives the game reads are all
@@ -1172,7 +1202,8 @@ From the repository root, with the current local cache and portable tools:
 
 With no scene-choosing parameters it opens the main menu (build-147,
 [MENUS.md](MENUS.md)); `-View squad` (or `-View fortress`, `-CapturePath`, the
-smokes) loads the Helm's Deep scene described below, as a bare run did before.
+smokes) loads the Helm's Deep scene described below, as a bare run did before (build-215: built from the install
+when one is open, else read from `converted/prototype`).
 `./prototype/export.ps1` builds the stand-alone `build/WarOfTheRingReforged.exe`, which opens on the launcher
 (build-188): it checks the original install chosen there and starts the main menu, which reads that install in place
 (build-214: nothing is imported). `-Launcher` opens the launcher from the project; `-LauncherSmoke -LauncherFolder

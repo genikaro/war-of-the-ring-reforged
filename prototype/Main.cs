@@ -237,7 +237,8 @@ public partial class Main : Node3D
             _loadFailed = true;
             _hud.Visible = true;
             _toolsPanel.Visible = true;
-            _status = "Asset cache unavailable. Run tools/prepare_prototype.py, then restart.";
+            // Build-215: nothing is imported any more; a load fails on the install (or, without one, the developer caches).
+            _status = GameText.T("match.load_failed",error.Message);
             RefreshDebugMenu();
             GD.PushError(error.ToString());
             if (_placesSmoke || _economyRecoverySmoke || _performanceSmoke || _stressBenchmark || _audioSmoke || _smoke || _surfaceSmoke || _obstacleSmoke || _commandSmoke || _interactionSmoke || _ordersSmoke || _abilitySmoke || _skirmishSmoke || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _minimapSmoke || _frodoSmoke || _techSmoke || _tier2Smoke || _evilSmoke || _researchSmoke || _siegeSmoke || _defenseSmoke || _victorySmoke || _aiSmoke || _observerSmoke || _setupSmoke || _engagementSmoke || _sandboxMapSmoke || _menuSmoke || _capture != "") GetTree().Quit(1);
@@ -398,7 +399,7 @@ public partial class Main : Node3D
         _initialDigest = _world.StateDigest();
         await LoadingStep("Loading sounds",.97f);
         string audioPath = manifest.TryGetProperty("audio",out var audioIndex) ? audioIndex.GetString()! : "audio/index.json";
-        var installAudio = _cacheFiles.FromPack(audioPath) ? await Task.Run(InstallAudio) : null;
+        var installAudio = FromInstall(audioPath) ? await Task.Run(MatchInstallAudio) : null;
         _audio.Load(CachePath(audioPath),installAudio?.Index,installAudio?.Files,CachePath,_cache,_cacheFiles.Content);
         if (_installModels is { } installed)
         {

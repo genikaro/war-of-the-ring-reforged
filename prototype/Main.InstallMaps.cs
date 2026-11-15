@@ -10,7 +10,9 @@ using Reforged.Install;
 /// cores for the bodies the content pack lists, as the import did. Build-210: the scene (MapScene) and the lighting
 /// pictures (MapPictures) too, on worker threads from the moment the layout is known, so a map needs no cache folder at
 /// all; the setup screen lists the install's maps and previews them (PackMap.Preview). The map last built is kept, so
-/// Restart builds nothing again.</summary>
+/// Restart builds nothing again. Build-215: the Helm's Deep demo (converted/prototype) too, as prepare_prototype.prepare
+/// builds it (PackMap.Demo): a self-contained cache whose every file, its own combat rules, audio, interface and unit
+/// models included, then comes from the install.</summary>
 public partial class Main
 {
     /// <summary>The map last built from the install and what it was built from.</summary>
@@ -22,6 +24,9 @@ public partial class Main
         /// <summary>The navigation file once a match has asked for it with these bodies.</summary>
         public byte[]? Navigation;
         public string? Bodies;
+        /// <summary>Build-215: the demo's combat rules as text and its audio (an index for its own roster), once asked for.</summary>
+        public string? Rules;
+        public PackAudio? Audio;
     }
 
     private static InstallMap? _installMap;
@@ -29,16 +34,25 @@ public partial class Main
     /// <summary>Whether this load reads the map from the install.</summary>
     private bool _mapFromInstall;
 
+    /// <summary>Build-215: whether this load is the Helm's Deep demo built from the install, so every file of its cache is.</summary>
+    private bool DemoFromInstall => _mapFromInstall && _installMap?.Map.Demo != null;
+
+    /// <summary>Whether a cache file comes from the install: a content pack file the map cache does not hold, or (build-215)
+    /// any file of the demo built from the install.</summary>
+    private bool FromInstall(string relative) => DemoFromInstall || _cacheFiles.FromPack(relative);
+
     /// <summary>The map cache folder a stem stands for: converted/skirmish for Bilbo's Bluffs, else converted/skirmish-maps/&lt;stem&gt;.</summary>
     public static string MapFolder(string stem) => stem.Equals(PackMap.BilboStem,StringComparison.OrdinalIgnoreCase)
         ? GamePaths.Data("converted/skirmish") : GamePaths.Data("converted/skirmish-maps/"+stem);
     // The Sandbox's folder is converted/skirmish-maps/Sandbox, as the import's was (MapFolder gives it too).
 
-    /// <summary>The install's multiplayer map a cache folder stands for, or null (the Sandbox, Helm's Deep, another folder).</summary>
+    /// <summary>The install's map a cache folder stands for, or null (another folder): a multiplayer map, the Sandbox
+    /// (build-211) or the Helm's Deep demo, converted/prototype (build-215).</summary>
     private static string? InstallMapStem(string cache)
     {
         if (_installModels is not { } install) return null;
         string full = System.IO.Path.GetFullPath(cache).TrimEnd(System.IO.Path.DirectorySeparatorChar,System.IO.Path.AltDirectorySeparatorChar);
+        if (full.Equals(GamePaths.Data("converted/prototype"),StringComparison.OrdinalIgnoreCase)) return install.Maps.HasDemo ? PackMap.DemoStem : null;
         string? stem = null;
         if (full.Equals(GamePaths.Data("converted/skirmish"),StringComparison.OrdinalIgnoreCase)) stem = PackMap.BilboStem;
         else if (System.IO.Path.GetDirectoryName(full) is { } parent && parent.Equals(GamePaths.Data("converted/skirmish-maps"),StringComparison.OrdinalIgnoreCase))
@@ -65,7 +79,7 @@ public partial class Main
         {
             var clock = System.Diagnostics.Stopwatch.StartNew();
             MapBuild map;
-            try { map = install.Maps.Layout(stem,content); }
+            try { map = PackMap.IsDemo(stem) ? install.Maps.Demo(DemoRules(install.Db,install.Archives,install.Images,install.Models)) : install.Maps.Layout(stem,content); }
             catch (Exception error) when (MapError(error))
             {
                 GD.PushWarning($"Map: cannot build {stem} from the install ({error.Message}); using the cache folder's");
@@ -76,7 +90,7 @@ public partial class Main
             var scene = Task.Run(() =>
             {
                 var started = System.Diagnostics.Stopwatch.StartNew();
-                var gltf = MapScene.Build(map.World,db,() => new ModelResolver(db,archives),"extracted/Levels/"+PackMap.MapFile(PackMap.IsSandbox(stem) ? PackMap.BilboStem : stem));
+                var gltf = MapScene.Build(map.World,db,() => new ModelResolver(db,archives),"extracted/Levels/"+PackMap.LevelFile(stem));
                 var glb = gltf.Glb();
                 var pictures = MapPictures.Build(map.World,db,new ModelResolver(db,archives));
                 GD.Print($"Map: {stem} scene built from the install in {started.ElapsedMilliseconds} ms ({glb.Length/1e6:F0} MB, {pictures.Count} pictures)");
@@ -89,11 +103,18 @@ public partial class Main
         return manifest.ToJsonString();
     }
 
+    /// <summary>Build-215: combat_rules.export for the demo's four units (the pictures and models they name are given to
+    /// the install's builders, as the pack's are).</summary>
+    private static System.Text.Json.Nodes.JsonObject DemoRules(Reforged.Formats.LqrDatabase db,Reforged.Formats.GameArchives archives,PackImages images,PackModels models)
+        => new PackCombat(db,archives,GamePaths.Root,images,models).Rules(SkirmishCatalog.CombatDemoUnits);
+
     /// <summary>The navigation file of the map built from the install, with a clearance profile for every body the
-    /// content pack lists, built when first asked for; null when this load reads the folder's.</summary>
+    /// content pack lists, built when first asked for; null when this load reads the folder's. Build-215: the demo's
+    /// profiles are its own rules' bodies', built with its layout.</summary>
     private byte[]? InstallNavigation()
     {
         if (!_mapFromInstall || _installMap is not { } built) return null;
+        if (built.Map.Demo != null) return built.Navigation ??= built.Map.Navigation.Write();
         var bodiesJson = _cacheFiles.Root.GetProperty("bodies");
         string bodies = bodiesJson.GetRawText();
         if (built.Navigation == null || built.Bodies != bodies)
@@ -120,11 +141,18 @@ public partial class Main
         catch (AggregateException error) { throw new InvalidOperationException($"Map: cannot build the scene of {built.Map.Stem} from the install: {error.InnerExceptions[0].Message}",error.InnerExceptions[0]); }
     }
 
-    /// <summary>Build-210: serves this load's map pictures (map/clouds.png, map/sky-*.png) from the install's build.</summary>
+    /// <summary>Build-210: serves this load's map pictures (map/clouds.png, map/sky-*.png) from the install's build.
+    /// Build-215: the demo's interface art and index and its combat pictures too, as the pack's are served.</summary>
     private void UseInstallMapPictures()
     {
         if (!_mapFromInstall || _installMap is not { } built) { InstallFiles.UseMap(null); return; }
-        InstallFiles.UseMap(_cache,relative => built.Scene.Result.Pictures.GetValueOrDefault(relative));
+        Reforged.Install.Picture? Map(string relative) => relative.StartsWith("map/",StringComparison.Ordinal) ? built.Scene.Result.Pictures.GetValueOrDefault(relative) : null;
+        if (built.Map.Demo == null || _installModels is not { } install) { InstallFiles.UseMap(_cache,Map); return; }
+        var images = install.Images;
+        InstallFiles.UseMap(_cache,
+            relative => Map(relative) ?? (images.Has(relative) ? Guard(() => images.Picture(relative),relative) : null),
+            texts: relative => relative == "interface/index.json" ? _installInterface?.Value : null,
+            has: relative => relative == "interface/index.json" ? _installInterface?.Value != null : Map(relative) != null || images.Has(relative));
     }
 
     // ---- Setup screen --------------------------------------------------------------------------------------------
