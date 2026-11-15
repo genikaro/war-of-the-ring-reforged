@@ -1,6 +1,13 @@
 using Reforged.Simulation;
 using System.Text.Json;
 
+// Build-218: --install <folder> builds every cache the other arguments name (prototype, skirmish, skirmish-maps/<stem>,
+// content/good, with or without converted/) from the original game, as the game does; without it they are read from disk.
+if (Array.IndexOf(args,"--install") is int installArg && installArg >= 0 && installArg+1 < args.Length)
+{
+    InstallCache.Use(args[installArg+1]);
+    args = [.. args.Take(installArg), .. args.Skip(installArg+2).Select(InstallCache.Resolve)];
+}
 using var allocations = args.Contains("--allocation-profile") ? new AllocationProbe() : null;
 // Build-184: the HUD text the checks read comes from the repository's catalog in English (no install tables here).
 GameTextChecks.LoadRepositoryCatalog();

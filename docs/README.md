@@ -1,5 +1,20 @@
 # Godot C# skirmish sandbox
 
+**build-218:** the simulation checks need no `converted/` either. `tests/simulation --install <folder>` builds every
+cache the other arguments name from the original game with the game's own builders: `prototype` (the Helm's Deep demo,
+`PackMap.Demo` with its own rules, interface and audio indexes and unit models), `skirmish` (Bilbo's Bluffs),
+`skirmish-maps/<stem>` (a multiplayer map or the Sandbox, with a clearance profile for every body of the pack) and
+`content/good` (the content pack: `content.json` whole, the combat rules and blood table, the interface and audio
+indexes and the unit and building models), each named with or without `converted/` in front, so the documented
+commands work unchanged with `--install` added (`InstallCache`). A cache is written to a temporary folder when first
+named, with a manifest that lists no files as the game's does, and the folder is deleted when the checks end; besides
+the files the checks read, a map's `map/scene.json` lists its placed objects as `world_scene` does, for the check that
+keeps buildings off the ground grid. Without `--install` the caches are read from disk as before. The pack's
+`content.json` is made by `InstallPack` (`prototype/Install`), which the game now shares: its base (build-213) and the
+rule sections at their dotted paths (`CacheManifest` puts the install's sections into a map's manifest with it).
+`RegenerationChecks` reads the pack's rules from the install too, and the melee duels' report goes to
+`reports/melee-duels-report.json`, beside the smokes', instead of into the cache.
+
 **build-217:** the game reads nothing but the install. Build-215 made every file come from the install when one was
 open, but the game still named its data by the import's folders (`converted/content/good`, `converted/skirmish`,
 `converted/skirmish-maps/<stem>`, `converted/prototype`, `converted/frontend`), and anything the install did not give,
@@ -1399,8 +1414,9 @@ retention checks, allocation sampler and remaining large-match costs.
 
 The source project contains no game assets, and since build-217 the game reads nothing but the install: what it builds
 from it is kept in memory. The developer tools' caches in ignored `converted/prototype/`, `converted/skirmish/` and
-`converted/skirmish-maps/` are read only by `run.ps1 -CachePath` and the simulation checks' `--cache` modes, which
-check a cache's content hashes before loading. Never distribute a local cache with the project.
+`converted/skirmish-maps/` are read only by `run.ps1 -CachePath` and by the simulation checks' cache modes without
+`--install` (build-218: with it they build the caches they name from the install), which check a cache's content
+hashes before loading. Never distribute a local cache with the project.
 
 Since build-48 a skirmish map cache holds only its map (terrain, navigation,
 resources, start layout) and names the shared Good content pack in
@@ -1488,9 +1504,9 @@ a normal viewport capture with `-CapturePath`.
 
 ```powershell
 ./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj
-./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --cache converted/prototype
-./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --worker-cache converted/skirmish
-./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --crossing-probe converted/skirmish-maps/MP04_Wasteland
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --install "Legacy/Game EN" --cache prototype
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --install "Legacy/Game EN" --worker-cache skirmish
+./converted/tooling/dotnet/dotnet.exe run --project tests/simulation/SimulationTests.csproj -- --install "Legacy/Game EN" --crossing-probe skirmish-maps/MP04_Wasteland
 ./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release
 python tools/formats_fingerprint.py "Legacy/Game EN" artifacts/fingerprint-en.json
 ./converted/tooling/dotnet/dotnet.exe run --project tests/formats/FormatsChecks.csproj -c Release -- --install "Legacy/Game EN" --python artifacts/fingerprint-en.json
@@ -1612,7 +1628,7 @@ squads into combat through actual mouse input, and requires all three to fight
 without physical overlaps. Its report is `reports/combat-smoke-report.json`.
 The melee smoke test adds source stats, exact hit timing, animation seeks,
 equipment changes and impact playback. It writes `melee-smoke-report.json` and
-`melee-hit-trace.json`; source-unit duel evidence is in `melee-duels-report.json`.
+`melee-hit-trace.json`; source-unit duel evidence is in `reports/melee-duels-report.json` (the simulation checks' cache mode).
 The command smoke test exercises actual panel buttons and hotkeys across all
 three blue squads. Its checks cover enemy inspection and command protection,
 the four bottom-row actions, target-dependent

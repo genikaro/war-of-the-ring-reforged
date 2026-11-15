@@ -63,8 +63,9 @@ static class RegenerationChecks
         ring.EnqueueAbility(0,[bearer.Id],0,-1); Advance(ring,20);
         check(bearer.RingActive && bearer.HealthMilli == 300_000-2000,"the One Ring disables regeneration: only its drain counts");
 
-        // The shared content pack's rules (when built) carry the source rates and the heroes' multiplier.
-        string pack = Path.Combine(AppContext.BaseDirectory,"../../../../../converted/content/good/combat/rules.json");
+        // The shared content pack's rules (when built; build-218: from the install with --install) carry the source rates
+        // and the heroes' multiplier.
+        string pack = Path.Combine(InstallCache.Resolve(Path.Combine(InstallCache.Root,"converted","content","good")),"combat","rules.json");
         if (File.Exists(pack))
         {
             var rules = CombatRules.Parse(File.ReadAllText(pack));

@@ -20,7 +20,7 @@ public partial class Main
     private static (string Key,Task<(string Rules,string Blood,System.Text.Json.Nodes.JsonArray Bodies)?> Build)? _installCombat;
 
     /// <summary>The pack files PackCombat gives in place of the pack's (content_pack writes them under these names).</summary>
-    private const string CombatRulesFile = "combat/rules.json", BloodFile = "combat/blood.json";
+    private const string CombatRulesFile = InstallPack.CombatRulesFile, BloodFile = InstallPack.BloodFile;
 
     /// <summary>The install's archives and database, open for the session, and the models built from them.</summary>
     private static (string Install,Reforged.Formats.GameArchives Archives,Reforged.Formats.LqrDatabase Db,PackModels Models,PackAudio Audio,PackImages Images,PackMap Maps)? _installModels;
@@ -112,7 +112,7 @@ public partial class Main
             GD.Print($"Rules: {_installRules.Value.Rules.Count} sections {(reused ? "kept" : "built")} from the install in {clock.ElapsedMilliseconds} ms");
             StartInstallCombat(string.Join("|",install,GamePaths.Root,newest));
             // Build-213: the pack's manifest itself (content.json) from the install, once its bodies are built.
-            CacheManifest.InstallPack = () => _installCombat?.Build.Result is { } built ? InstallPackBase(built.Bodies) : null;
+            CacheManifest.InstallPack = () => _installCombat?.Build.Result is { } built ? InstallPack.Base(built.Bodies) : null;
         }
         catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException
             or UnauthorizedAccessException or InvalidCastException or FormatException or IndexOutOfRangeException or ArgumentException)
@@ -122,16 +122,6 @@ public partial class Main
             GD.PushWarning($"Rules: cannot build them from the install {install} ({error.Message})");
         }
     }
-
-    /// <summary>Build-213: content.json without the sections the install's rules give (CacheManifest.InstallRules puts
-    /// those in): the format, the faction, the files' names, the bodies and the rules' note, as content_pack.build writes them.</summary>
-    private static System.Text.Json.Nodes.JsonObject InstallPackBase(System.Text.Json.Nodes.JsonArray bodies) => new()
-    {
-        ["format_version"] = 1, ["faction"] = "good", ["combat_rules"] = CombatRulesFile, ["blood"] = BloodFile, ["interface"] = "interface/index.json",
-        ["audio"] = "audio/index.json", ["bodies"] = bodies.DeepClone(),
-        ["rules"] = "Imported combat stats, construction, upgrades, training and research of the Good faction.",
-        ["skirmish"] = new System.Text.Json.Nodes.JsonObject(),
-    };
 
     /// <summary>Starts building the combat rules and blood table on a worker thread, unless the same install's are built.</summary>
     private static void StartInstallCombat(string key)

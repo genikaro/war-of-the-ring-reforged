@@ -54,23 +54,11 @@ public sealed class CacheManifest
         var merged = pack.DeepClone().AsObject();
         merged.Remove("files");
         if (InstallRules != null)
-            foreach (var (path,value) in InstallRules) Replace(merged,path,value);
+            foreach (var (path,value) in InstallRules) Reforged.Install.InstallPack.Put(merged,path,value);
         Merge(merged,manifest);
         var root = JsonDocument.Parse(merged.ToJsonString()).RootElement.Clone();
         var packFiles = JsonDocument.Parse(fromInstall ? "{}" : pack["files"]!.ToJsonString()).RootElement.Clone();
         return new(cache,content,root,root.GetProperty("files"),packFiles);
-    }
-
-    /// <summary>Puts <paramref name="value"/> at a dotted path ("skirmish.ai"), making the objects on the way.</summary>
-    private static void Replace(JsonObject target,string path,JsonNode value)
-    {
-        string[] keys = path.Split('.');
-        foreach (string key in keys[..^1])
-        {
-            if (target[key] is not JsonObject child) target[key] = child = new JsonObject();
-            target = child;
-        }
-        target[keys[^1]] = value.DeepClone();
     }
 
     /// <summary>Objects merge key by key; anything else in the map's manifest replaces the pack's value.</summary>

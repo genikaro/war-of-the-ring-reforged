@@ -230,7 +230,9 @@ static class MeleeChecks
                 winner = first.World.Units.Single(u => u.Health > 0).Definition.Name,
                 remaining_millihealth = first.World.Units.Select(u => u.HealthMilli),digest = first.World.StateDigest(),events = first.Events });
         }
-        File.WriteAllText(Path.Combine(cache,"melee-duels-report.json"),JsonSerializer.Serialize(new { rules_sha256 = rules.Hash,
+        // Build-218: beside the smokes' reports (reports/), not in the cache, which --install builds in a temporary folder.
+        string reportFolder = Path.Combine(InstallCache.Root,"reports"); Directory.CreateDirectory(reportFolder);
+        File.WriteAllText(Path.Combine(reportFolder,"melee-duels-report.json"),JsonSerializer.Serialize(new { rules_sha256 = rules.Hash,
             original_formula_verified = false,duels = reports },new JsonSerializerOptions { WriteIndented = true }));
     }
 }

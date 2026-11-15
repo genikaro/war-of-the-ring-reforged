@@ -8,7 +8,7 @@ read the original archives, database, models, maps, audio and text.
 Unofficial, non-commercial fan project. It ships no game content and needs a legally obtained
 installation of the original game — see [NOTICE.md](NOTICE.md).
 
-**Status (build-217):** a playable skirmish and sandbox prototype — original maps, economy,
+**Status (build-218):** a playable skirmish and sandbox prototype — original maps, economy,
 construction, research, heroes, abilities, places of power, bots, fog of war, a main menu,
 setup screens and an exported Windows executable with a launcher. Not the original campaign,
 and not a finished game. [docs/README.md](docs/README.md) is the build log and the detailed
@@ -59,7 +59,7 @@ reports to `reports/`; `-Data <folder>` runs on another data folder, which may b
 Checks:
 
 ```powershell
-dotnet run --project tests/simulation -c Release -- --cache converted/prototype
+dotnet run --project tests/simulation -c Release -- --install "C:/Games/War of the Ring" --cache prototype
 dotnet run --project tests/formats -c Release -- --install "C:/Games/War of the Ring"
 python -m pytest tools
 ```
