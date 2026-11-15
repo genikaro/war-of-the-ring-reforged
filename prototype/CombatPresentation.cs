@@ -399,13 +399,14 @@ public partial class Main
     {
         if (_closing) return;
         _closing = true;
+        // Build-220: first let the install's background builds finish (at most 30 s): one that logs after the engine has
+        // shut down crashes the process. Before the audio stops, so nothing (the menu's music and fires) starts a voice
+        // again between the stop and the quit.
+        await Task.WhenAny(InstallBuilds(),Task.Delay(30_000));
         _paused = true; StopCombatAudio();
         // Let the audio thread retire stopped voices before the headless
         // fixed-FPS harness shuts down AudioServer.
         await Task.Delay(100);
-        // Build-220: and let the install's background builds finish (at most 30 s): one that logs after the engine has
-        // shut down crashes the process.
-        await Task.WhenAny(InstallBuilds(),Task.Delay(30_000));
         GetTree().Quit(exitCode);
     }
 }
