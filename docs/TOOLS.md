@@ -87,6 +87,7 @@ the checks share them:
 | `LmsMesh`, `LskSkeleton`, `LwtWeights`, `LmdModel` | `lms.py`, `lsk.py`, `lwt.py`, `lmd.py`, `lmd_states.py` | Build-195: meshes (footer on request), skeletons with clips, skin weights, and models with their states, tracks, attachments, boxes, cloth volumes and clip events. Field names follow the Python's in the checks' canonical form. |
 | `PresentationAssets.Lfx`, `.Lpo` | `lfx.py`, `lpo.py` | Build-200: effects (tracks, transforms, atlas descriptors, emitters) and projectiles (keys, behaviour, actions, events, launch sounds), as dictionaries with the Python's keys and value types. |
 | `World` | `wor.py`, `world_scene.py` `parse`, `resolve_objects`, `region_cells` | Build-208: a level: header, terrain vertices and heights, name table, terrain layers and environment, placed objects and effects with what they resolve to, pathing bitsets and region graphs, lakes, the tail's lighting, grass, markers and decals. |
+| `Install/SandboxMap`, `Install/PyRandom` | `sandbox_map.flatten`, `random.Random(str)` and `choice` | Build-211: the Sandbox field cut from Bilbo's Bluffs, its grass tiles scattered by CPython's Mersenne Twister. |
 | `Install/MapScene`, `Install/MapPictures` | `wor2gltf.export` with `map_decals`, `world_scene.resolve_decals`, `terrain_set.parse`'s checks; `map_lighting.write_images` with Pillow's Lanczos resize | Build-210: a map's scene as glTF (terrain, water, decals, placed models) and its cloud map and skybox faces, built while a match loads. |
 | `Install/PackMap`, `Install/MapNavigation`, `Install/MapGeometry` | `prepare_prototype.prepare_skirmish` (no scene), `build_navigation`, `skirmish_map`, `skirmish_construction.construction_data`'s sites, `prototype_navigation`, `prototype_obstacles`, `prototype_clearance`, `verify_walker_masks.audit_category`, `map_lighting.lighting` | Build-209: a skirmish map's manifest, heights and navigation with every body's clearance, built at load time; `PyMath.Dist` and `FloorDiv` are `math.dist` and float `//`. |
 | `Install/ModelResolver`, `PresentationAssets`, `Install/PyMath` | `resolve_model.py`, `cth.py`, `texture_animation.parse_uva` | Build-196: a model record to its files, states, attachments, events and cloth, as nested dictionaries with the Python's keys and `extracted/` file names; cloth grids and texture animations; Python's `round(x, n)`. |
@@ -154,7 +155,7 @@ builds every multiplayer map's manifest, heights and navigation and requires the
 32 do on both installs (about 12 minutes in Python on all cores, 17 s in C#). `--time-maps <content.json> [stem]` times
 the builds; `--compare-map <stem> <dump> <content.json>` lists every difference against one `--dump`. `--python-scenes`
 (build-210) builds every map's scene and lighting pictures and requires them to equal `scene_fingerprint.py`'s: all 32
-do on both installs (11 s in C#).
+do on both installs (11 s in C#). Build-211: both records hold the Sandbox too (33 maps), and both checks require it.
 
 Extract the archives once:
 

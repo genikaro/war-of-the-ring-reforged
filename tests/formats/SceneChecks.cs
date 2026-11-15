@@ -26,8 +26,8 @@ public static class SceneChecks
 
     private static (GltfModel Scene,Dictionary<string,Picture> Pictures) Build(PackMap maps,LqrDatabase db,GameArchives archives,string stem)
     {
-        var world = maps.Read(stem);
-        var scene = MapScene.Build(world,db,() => new ModelResolver(db,archives),"extracted/Levels/"+PackMap.MapFile(stem));
+        var world = maps.Scene(stem);
+        var scene = MapScene.Build(world,db,() => new ModelResolver(db,archives),"extracted/Levels/"+PackMap.MapFile(PackMap.IsSandbox(stem) ? PackMap.BilboStem : stem));
         return (scene,MapPictures.Build(world,db,new ModelResolver(db,archives)));
     }
 
@@ -37,7 +37,7 @@ public static class SceneChecks
         using var archives = GameArchives.OpenInstall(install);
         var db = LqrDatabase.OpenInstall(install);
         var maps = new PackMap(db,archives);
-        var stems = maps.Stems.ToList();
+        var stems = maps.Stems.Append(PackMap.SandboxStem).ToList();
         var failures = new List<string>();
         var clock = Stopwatch.StartNew();
         foreach (string stem in stems)

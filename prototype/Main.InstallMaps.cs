@@ -32,6 +32,7 @@ public partial class Main
     /// <summary>The map cache folder a stem stands for: converted/skirmish for Bilbo's Bluffs, else converted/skirmish-maps/&lt;stem&gt;.</summary>
     public static string MapFolder(string stem) => stem.Equals(PackMap.BilboStem,StringComparison.OrdinalIgnoreCase)
         ? GamePaths.Data("converted/skirmish") : GamePaths.Data("converted/skirmish-maps/"+stem);
+    // The Sandbox's folder is converted/skirmish-maps/Sandbox, as the import's was (MapFolder gives it too).
 
     /// <summary>The install's multiplayer map a cache folder stands for, or null (the Sandbox, Helm's Deep, another folder).</summary>
     private static string? InstallMapStem(string cache)
@@ -42,7 +43,10 @@ public partial class Main
         if (full.Equals(GamePaths.Data("converted/skirmish"),StringComparison.OrdinalIgnoreCase)) stem = PackMap.BilboStem;
         else if (System.IO.Path.GetDirectoryName(full) is { } parent && parent.Equals(GamePaths.Data("converted/skirmish-maps"),StringComparison.OrdinalIgnoreCase))
             stem = System.IO.Path.GetFileName(full);
-        return stem == null ? null : install.Maps.Stems.FirstOrDefault(s => s.Equals(stem,StringComparison.OrdinalIgnoreCase));
+        if (stem == null) return null;
+        // Build-211: the Sandbox is cut from Bilbo's Bluffs.
+        if (PackMap.IsSandbox(stem)) return install.Maps.Stems.Contains(PackMap.BilboStem,StringComparer.OrdinalIgnoreCase) ? PackMap.SandboxStem : null;
+        return install.Maps.Stems.FirstOrDefault(s => s.Equals(stem,StringComparison.OrdinalIgnoreCase));
     }
 
     private static string PackFrom(string cache) => System.IO.Path.GetRelativePath(cache,GamePaths.Data("converted/content/good")).Replace('\\','/');
@@ -72,7 +76,7 @@ public partial class Main
             var scene = Task.Run(() =>
             {
                 var started = System.Diagnostics.Stopwatch.StartNew();
-                var gltf = MapScene.Build(map.World,db,() => new ModelResolver(db,archives),"extracted/Levels/"+PackMap.MapFile(stem));
+                var gltf = MapScene.Build(map.World,db,() => new ModelResolver(db,archives),"extracted/Levels/"+PackMap.MapFile(PackMap.IsSandbox(stem) ? PackMap.BilboStem : stem));
                 var glb = gltf.Glb();
                 var pictures = MapPictures.Build(map.World,db,new ModelResolver(db,archives));
                 GD.Print($"Map: {stem} scene built from the install in {started.ElapsedMilliseconds} ms ({glb.Length/1e6:F0} MB, {pictures.Count} pictures)");
@@ -137,6 +141,7 @@ public partial class Main
         {
             var clock = System.Diagnostics.Stopwatch.StartNew();
             var stems = install.Maps.Stems.ToList();
+            if (stems.Contains(PackMap.BilboStem,StringComparer.OrdinalIgnoreCase)) stems.Add(PackMap.SandboxStem);
             var previews = new Reforged.Install.MapPreview?[stems.Count];
             Parallel.For(0,stems.Count,i =>
             {

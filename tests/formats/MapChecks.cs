@@ -11,6 +11,17 @@ using Reforged.Install;
 /// form both sides hash (numbers by double value, -0 as 0, keys sorted).</summary>
 public static class MapChecks
 {
+    /// <summary>Build-211: PyRandom gives CPython's random.Random("Sandbox") draws (values from Python 3.13).</summary>
+    public static void Synthetic(Action<bool,string> check)
+    {
+        var random = new PyRandom("Sandbox");
+        uint[] draws = [random.NextUInt32(),random.NextUInt32(),random.NextUInt32(),random.NextUInt32(),random.NextUInt32()];
+        var choices = new PyRandom("Sandbox");
+        int[] seven = [.. Enumerable.Range(0,12).Select(_ => choices.Choice(Enumerable.Range(0,7).ToArray()))];
+        check(draws.SequenceEqual([2489067918U,2774252697U,1784322554U,103309742U,2744419476U]) && seven.SequenceEqual([4,5,3,0,5,4,5,3,2,0,2,4]),
+            "Python's random.Random seeded with a string: the same draws and choices");
+    }
+
     public static string Hashed(JsonElement value)
     {
         var s = new StringBuilder();
@@ -104,7 +115,7 @@ public static class MapChecks
         var bodies = Bodies(expected["bodies"]!);
         using var archives = GameArchives.OpenInstall(install);
         var maps = new PackMap(LqrDatabase.OpenInstall(install),archives);
-        var stems = maps.Stems.ToList();
+        var stems = maps.Stems.Append(PackMap.SandboxStem).ToList();
         var want = expected["maps"]!.AsObject();
         var failures = new List<string>();
         var clock = Stopwatch.StartNew();

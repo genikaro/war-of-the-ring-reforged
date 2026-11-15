@@ -1,5 +1,20 @@
 # Godot C# skirmish sandbox
 
+**build-211:** the Sandbox comes from the install too, so every map the game offers does. `SandboxMap`
+(`prototype/Install`) ports `sandbox_map.flatten`: Bilbo's Bluffs levelled at 0 in one tint (the low median of each
+byte of the level ground's vertex colours), covered in the map's plain grass tiles scattered by Python's
+`random.Random("Sandbox")`, every cell walkable and buildable, scenery, water, editor decals and effects gone, and two
+start points 80 m apart with a well and an ore pile behind each. `PyRandom` is CPython's generator: a string seed is
+its bytes and their SHA-512 as one integer, fed to the Mersenne Twister's `init_by_array`, and `choice` draws
+`getrandbits` until one is below the length (a synthetic check holds it to Python's first draws). `PackMap` builds
+the Sandbox as `prepare_skirmish(sandbox=True)` does (no walker audit, the `sandbox` flag, Bilbo's Bluffs as the map
+file), the scene from the same flattened world, and the setup screen previews it; `converted/skirmish-maps/Sandbox`
+stands for it. `map_fingerprint.py` and `scene_fingerprint.py` record the Sandbox with the other maps, and
+`--python-maps` and `--python-scenes` require it to equal the Python's: it does on the English and Russian installs
+(33 maps each). The Elven, Nature and global power smokes on the Sandbox give the same reports with the Russian
+install as without it; the sandbox smoke's `player_1_tab_pressed_and_rings_in_team_colours` check fails either way,
+with the same report. The simulation checks pass.
+
 **build-210:** the skirmish maps come from the install whole, so a match needs no map cache folder. `MapScene`
 (`prototype/Install`) ports `wor2gltf.export`: the terrain in one primitive per texture (normals from numpy's gradient,
 the squares summed left to right as `np.linalg.norm` does, vertex colours), the lakes' painted surfaces, the editor

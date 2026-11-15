@@ -109,7 +109,9 @@ def _start(install, root, bodies):
 def build(stem):
     import prepare_prototype
     output = Path(tempfile.mkdtemp(prefix='map-', dir=_state['root']))
-    manifest = prepare_prototype.prepare_skirmish(output, None, stem, _state['content'])
+    # Build-211: the Sandbox is cut from Bilbo's Bluffs (sandbox_map.py).
+    sandbox = stem == 'Sandbox'
+    manifest = prepare_prototype.prepare_skirmish(output, None, None if sandbox else stem, _state['content'], sandbox=sandbox)
     manifest.pop('files', None)
     manifest.pop('content', None)
     nav = json.loads((output / 'navigation.json').read_text())
@@ -149,9 +151,11 @@ def main():
             manifest, nav, heights = build(args.dump[0])
             Path(args.dump[1]).write_text(json.dumps({'manifest': manifest, 'heights': heights, 'navigation': nav}, indent=1) + '\n', encoding='utf-8')
             return
-        chosen = args.maps or stems(args.install)
+        chosen = args.maps or stems(args.install) + ['Sandbox']
+        def size(stem):
+            return os.path.getsize(os.path.join(root, 'extracted', 'Levels', 'Multiplayer', ('MP02_Bilbos_Bluffs' if stem == 'Sandbox' else stem) + '.wor'))
         with ProcessPoolExecutor(args.workers, initializer=_start, initargs=(args.install, root, bodies)) as pool:
-            maps = dict(pool.map(_fingerprint, sorted(chosen, key=lambda s: -os.path.getsize(os.path.join(root, 'extracted', 'Levels', 'Multiplayer', s + '.wor')))))
+            maps = dict(pool.map(_fingerprint, sorted(chosen, key=lambda s: -size(s))))
     Path(args.out).write_text(json.dumps({'format_version': 1, 'bodies': bodies, 'maps': dict(sorted(maps.items()))}, ensure_ascii=False, indent=1) + '\n', encoding='utf-8')
     print('%d maps, %d that do not build' % (len(maps), sum('error' in m for m in maps.values())))
 

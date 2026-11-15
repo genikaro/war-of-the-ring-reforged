@@ -44,9 +44,13 @@ def normalized_scene(stem):
     import world_scene
     import wor
     import wor2gltf
+    import sandbox_map
     output = Path(tempfile.mkdtemp(prefix='scene-', dir=_state['root']))
-    source = wor.ROOT / 'extracted/Levels/Multiplayer' / (stem + '.wor')
-    wor2gltf.export(source, output / 'map', _state['resolver'])
+    # Build-211: the Sandbox is Bilbo's Bluffs flattened (sandbox_map.flatten), as prepare_skirmish exports it.
+    sandbox = stem == 'Sandbox'
+    source = wor.ROOT / 'extracted/Levels/Multiplayer' / (('MP02_Bilbos_Bluffs' if sandbox else stem) + '.wor')
+    resolver = _state['resolver']
+    wor2gltf.export(source, output / 'map', resolver, (lambda s: sandbox_map.flatten(s, resolver)) if sandbox else None)
     gltf = gltf_fingerprint.normalized((output / 'map/scene.glb').read_bytes())
     gltf['extras']['wotrWorld'].pop('source', None)
     block = map_lighting.lighting(world_scene.parse(source.read_bytes()))
@@ -90,7 +94,7 @@ def main():
             Path(args.dump[1]).write_text(json.dumps({'scene': gltf, 'pictures': pictures}, indent=1) + '\n', encoding='utf-8')
             return
         with ProcessPoolExecutor(args.workers, initializer=_start, initargs=(args.install, root)) as pool:
-            scenes = dict(pool.map(_fingerprint, args.maps or stems(args.install)))
+            scenes = dict(pool.map(_fingerprint, args.maps or stems(args.install) + ['Sandbox']))
     Path(args.out).write_text(json.dumps({'format_version': 1, 'maps': scenes}, ensure_ascii=False, indent=1) + '\n', encoding='utf-8')
     print('%d maps, %d that do not export' % (len(scenes), sum('error' in m for m in scenes.values())))
 

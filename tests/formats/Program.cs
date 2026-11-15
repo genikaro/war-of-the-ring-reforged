@@ -39,6 +39,7 @@ void Check(bool value,string name)
 }
 
 SyntheticChecks.Run(Check);
+MapChecks.Synthetic(Check);
 if (Array.IndexOf(args,"--install") is int install && install >= 0)
 {
     int python = Array.IndexOf(args,"--python");

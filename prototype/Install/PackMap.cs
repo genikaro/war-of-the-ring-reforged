@@ -43,10 +43,24 @@ public sealed class PackMap(LqrDatabase db,GameArchives archives)
 
     public static string Title(string stem) => Titles.GetValueOrDefault(stem) ?? stem.Split('_',2)[1].Replace('_',' ');
 
+    /// <summary>Build-211: the Sandbox, cut from Bilbo's Bluffs (SandboxMap).</summary>
+    public const string SandboxStem = SandboxMap.Stem;
+
+    public static bool IsSandbox(string stem) => stem.Equals(SandboxStem,StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>A map's level parsed and resolved (the Sandbox's is Bilbo's Bluffs, not yet flattened).</summary>
     public World Read(string stem)
     {
-        var world = World.Parse(archives.Read("Levels/"+MapFile(stem)));
+        var world = World.Parse(archives.Read("Levels/"+MapFile(IsSandbox(stem) ? BilboStem : stem)));
         world.Resolve(db,out _);
+        return world;
+    }
+
+    /// <summary>A map's world as its scene is exported: the Sandbox's flattened.</summary>
+    public World Scene(string stem)
+    {
+        var world = Read(stem);
+        if (IsSandbox(stem)) SandboxMap.Flatten(world,new ModelResolver(db,archives));
         return world;
     }
 
@@ -65,14 +79,20 @@ public sealed class PackMap(LqrDatabase db,GameArchives archives)
         var world = Read(stem);
         MapNavigation navigation;
         JsonObject manifest;
-        lock (_lock) (manifest,navigation) = Layout(stem,world,content);
+        lock (_lock)
+        {
+            // The Sandbox's field replaces the source world, for the layout and the scene alike.
+            var points = IsSandbox(stem) ? SandboxMap.Flatten(world,Resolver) : null;
+            (manifest,navigation) = Layout(stem,world,content,points);
+        }
         return new(stem,world,manifest,navigation);
     }
 
-    private (JsonObject,MapNavigation) Layout(string stem,World world,string content)
+    private (JsonObject,MapNavigation) Layout(string stem,World world,string content,List<Marker>? sandboxPoints)
     {
         var resolver = Resolver;
-        var (points,resources,bases) = Bases(world,resolver);
+        bool sandbox = sandboxPoints != null;
+        var (points,resources,bases) = Bases(world,resolver,sandboxPoints);
         var walker = world.Categories.First(c => c.Name == "PATHING_CATEGORY_WALKER");
         int width = (int)walker.Grid![0];
         double spacing = world.CellSize;
@@ -85,7 +105,7 @@ public sealed class PackMap(LqrDatabase db,GameArchives archives)
             sites.Add(new JsonObject { ["resource"] = node.Id, ["kind"] = node.Kind, ["obstacle"] = obstacle });
         }
         var inactive = siteFootprints.Select(f => f.ObjectId).ToList();
-        var navigation = MapNavigation.Build(world,resolver,[.. bases.Select(b => b.Footprint),.. siteFootprints],inactive,precise: true,audit: true);
+        var navigation = MapNavigation.Build(world,resolver,[.. bases.Select(b => b.Footprint),.. siteFootprints],inactive,precise: true,audit: !sandbox);
         int height = navigation.Height;
         var region = StartRegions(navigation.Allowed,width,height,spacing,[.. bases.Select(b => (b.Position[0],b.Position[1]))]);
         var ground = new byte[width*height];
@@ -111,21 +131,24 @@ public sealed class PackMap(LqrDatabase db,GameArchives archives)
         int cameraCell = (int)(bases[0].Position[1]/spacing)*width+(int)(bases[0].Position[0]/spacing);
         var manifest = new JsonObject
         {
-            ["format_version"] = 1, ["mode"] = "skirmish", ["name"] = Title(stem)+" — Good Skirmish", ["map"] = "map/scene.glb", ["map_file"] = MapFile(stem),
+            ["format_version"] = 1, ["mode"] = "skirmish", ["name"] = (sandbox ? SandboxMap.Title : Title(stem))+" — Good Skirmish", ["map"] = "map/scene.glb",
+            ["map_file"] = MapFile(sandbox ? BilboStem : stem),
             ["players"] = bases.Count, ["content"] = content, ["spawns"] = spawns, ["groups"] = groups, ["camera_cell"] = cameraCell,
             ["lighting"] = Lighting(world),
             ["skirmish"] = new JsonObject { ["resources"] = nodes, ["construction"] = new JsonObject { ["sites"] = sites },
                 ["selectable_objects"] = SelectableObjects(world), ["bases"] = baseNodes },
             ["source_sha256"] = world.Sha256,
         };
+        // The game reads this flag: both players are the person's, with every building standing (Main.SandboxMap.cs).
+        if (sandbox) manifest["sandbox"] = true;
         return (manifest,navigation);
     }
 
     /// <summary>The start points, the resources and each base: its Citadel moved off the resources and unbuildable
     /// ground, at the terrain's height, with its footprint.</summary>
-    private (List<Marker> Points,List<ResourceNode> Resources,List<(int Team,string StartPoint,double[] Position,Footprint Footprint)> Bases) Bases(World world,ModelResolver resolver)
+    private (List<Marker> Points,List<ResourceNode> Resources,List<(int Team,string StartPoint,double[] Position,Footprint Footprint)> Bases) Bases(World world,ModelResolver resolver,List<Marker>? given = null)
     {
-        var points = StartPoints(Markers(world));
+        var points = given ?? StartPoints(Markers(world));
         if (points.Count < 2 || points.Count > SlotColors.Length) throw new InvalidDataException($"expected 2 to {SlotColors.Length} start points, found {points.Count}");
         var walker = world.Categories.First(c => c.Name == "PATHING_CATEGORY_WALKER");
         int width = (int)walker.Grid![0];
@@ -155,12 +178,14 @@ public sealed class PackMap(LqrDatabase db,GameArchives archives)
     {
         var world = Read(stem);
         var resolver = new ModelResolver(db,archives);
-        var (_,resources,bases) = Bases(world,resolver);
+        var points = IsSandbox(stem) ? SandboxMap.Flatten(world,resolver) : null;
+        var (_,resources,bases) = Bases(world,resolver,points);
         var walker = world.Categories.First(c => c.Name == "PATHING_CATEGORY_WALKER");
         int width = (int)walker.Grid![0], height = (int)walker.Grid[1];
         var manifest = new JsonObject
         {
-            ["format_version"] = 1, ["mode"] = "skirmish", ["name"] = Title(stem)+" — Good Skirmish", ["map_file"] = MapFile(stem), ["players"] = bases.Count,
+            ["format_version"] = 1, ["mode"] = "skirmish", ["name"] = (points != null ? SandboxMap.Title : Title(stem))+" — Good Skirmish",
+            ["map_file"] = MapFile(points != null ? BilboStem : stem), ["players"] = bases.Count,
             ["content"] = content, ["files"] = new JsonObject(),
             ["skirmish"] = new JsonObject
             {
@@ -179,6 +204,7 @@ public sealed class PackMap(LqrDatabase db,GameArchives archives)
                 System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(heights.AsSpan(4*i),(int)Math.Round(world.Heights[i]*1000,MidpointRounding.ToEven));
             return (allowed,heights);
         }
+        if (points != null) manifest["sandbox"] = true;
         return new(stem,manifest,width,height,(int)Math.Round(world.CellSize*1000,MidpointRounding.ToEven),Ground);
     }
 
