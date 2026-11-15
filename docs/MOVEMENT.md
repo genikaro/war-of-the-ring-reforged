@@ -168,7 +168,10 @@ subsequent contextual Attack-move near stationary enemies, and requires both
 arrivals, bounded group width and body separation. It runs 2,400 simulation
 ticks to allow source-stat combat to finish; its report includes turn changes,
 participation and step timing. The inspected real-map run retained all 18 allies
-and a maximum 10.617 m group width.
+and a maximum 10.617 m group width. Build-219: the stationary enemies are the Uruk-hai
+with their source missile weapon (13 m) on Hold Ground, so the Attack-move goes to every
+living ally and must win its fight (kill more than it loses: 14 for 9) instead of keeping
+16 of 18.
 
 ## Walk/run control — October 20, 2026
 

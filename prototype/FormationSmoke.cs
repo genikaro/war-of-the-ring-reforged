@@ -37,7 +37,10 @@ public partial class Main
             var (x,z)=world.Navigation.Center(goal); var point=_camera.UnprojectPosition(PositionOf(x,z));
             foreach (bool pressed in new[] {true,false}) GetViewport().PushInput(new InputEventMouseButton {
                 ButtonIndex=MouseButton.Right,Pressed=pressed,Position=point,GlobalPosition=point,CtrlPressed=true},true);
-            _formationMarchDispatch=world.Commands.LastOrDefault() is {Kind:OrderKind.AttackMove,Units.Length:18};
+            // Build-219: the Uruk-hai shoot (WEAPON_URUK_HAI_MISSILE, 13 m) from Hold Ground, and the first Move ends about
+            // 12 m from them, so an ally can already have fallen: the march goes to every living ally.
+            _formationMarchDispatch=allies.Length>0 && world.Commands.LastOrDefault() is {Kind:OrderKind.AttackMove} march
+                && march.Units.Order().SequenceEqual(allies.Select(u=>u.Id).Order());
         }
         if (_formationStage>0)
         {
@@ -71,8 +74,12 @@ public partial class Main
         // Keep all arrival checks, with at most ten seconds for that tail to finish.
         if(!arrived && world.Tick<2600) return;
         _finishing=true;
+        // Build-219: the march fights eighteen archers holding their ground with their source weapons, so it no longer
+        // keeps 16 of 18 (a build-72 bound, when the Uruk-hai fought in melee); it must win the fight it starts.
+        int alliesLost=world.Units.Count(u=>u.Team==0 && u.Health<=0),enemiesKilled=world.Units.Count(u=>u.Team==1 && u.Health<=0);
         var report=new {completion_tick=world.Tick,selected_allies=_engagementSelected,move_dispatch=_formationMoveDispatch,first_formation_arrived=_formationFirstArrival,
             attack_move_dispatch=_formationMarchDispatch,engaged_enemies=_formationEngaged,attack_move_arrived=arrived,living_allies=allies.Length,
+            allies_lost=alliesLost,enemies_killed=enemiesKilled,
             maximum_march_width_m=_formationWidth,maximum_width_including_idle_guards_m=_formationIdleWidth,rapid_yaw_changes=_formationFastYawChanges,body_spacing=_engagementSafe,
             unsettled=allies.Where(u=>u.Goal>=0 || u.Target>=0).Select(u=>new {u.Id,u.Definition.Name,u.X,u.Z,u.Goal,u.Target,u.Order,u.AttackMoveOrigin,u.AttackMoveForward,u.AttackMoveReturning,
                 u.CombatWaiting,u.BlockedTicks,u.CombatTrafficQueued,u.AttackNode,u.CombatPlanTick,u.CombatTarget,u.CombatRequestTick,path=u.Path.Count,
@@ -82,7 +89,7 @@ public partial class Main
             unique_hitters=_engagementHitters.Select(h=>h.Count).ToArray(),
             average_step_ms=_engagementStepTimes.Average(),p95_step_ms=_engagementStepTimes.Order().ElementAt((int)(_engagementStepTimes.Count*.95)),digest=world.StateDigest(),
             passed=_engagementSelected && _formationMoveDispatch && _formationFirstArrival && _formationMarchDispatch && _formationEngaged
-                && arrived && allies.Length>=16 && _formationWidth<=18 && _engagementSafe};
+                && arrived && enemiesKilled>alliesLost && _formationWidth<=18 && _engagementSafe};
         System.IO.File.WriteAllText(GamePaths.Report("formation-smoke-report.json"),JsonSerializer.Serialize(report,new JsonSerializerOptions {WriteIndented=true}));
         GD.Print("FORMATION_SMOKE "+JsonSerializer.Serialize(report)); _ = FinishCombatAudio(report.passed?0:1);
     }

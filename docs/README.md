@@ -1,5 +1,17 @@
 # Godot C# skirmish sandbox
 
+**build-219:** the formation smoke passes again; it had failed since before build-156 (`attack_move_dispatch`, and
+its survivor bound with it). Neither was a fault in the game. The smoke dates from build-72, when the Uruk-hai it
+marches on fought in melee; with their source weapon (`WEAPON_URUK_HAI_MISSILE`, 13 m) they shoot from Hold Ground,
+and the first Move ends about 12 m from them, so an Elven Knight is hit at tick 57 and one ally has fallen by tick
+320, when the Attack-move is given. The march then went out correctly to the 17 living allies, but the check wanted
+18 units; it now wants every living ally. The march kills 14 of the 18 Uruk-hai and loses 9 (Aragorn, seven Elven
+Knights and an Elven Archer), the same fight in every run, which the old bound of 16 survivors could never allow; the
+smoke now requires the march to win the fight it starts (more enemies killed than allies lost, both in the report),
+which still fails a group fed into the archers one at a time. The arrival, width, spacing and engagement checks are
+unchanged, and so is the state digest. The formation, engagement and attack-move engagement smokes pass on the English
+and Russian installs.
+
 **build-218:** the simulation checks need no `converted/` either. `tests/simulation --install <folder>` builds every
 cache the other arguments name from the original game with the game's own builders: `prototype` (the Helm's Deep demo,
 `PackMap.Demo` with its own rules, interface and audio indexes and unit models), `skirmish` (Bilbo's Bluffs),
