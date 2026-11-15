@@ -15,6 +15,10 @@ public sealed class CacheManifest
     /// the pack's own. Main sets it; the simulation checks leave it null.</summary>
     public static IReadOnlyDictionary<string,JsonNode>? InstallRules { get; set; }
 
+    /// <summary>Build-213: the pack's manifest (content.json without the InstallRules sections) built from the install,
+    /// or null; when it gives one, the pack folder is not read at all and none of its files are checked. Main sets it.</summary>
+    public static Func<JsonObject?>? InstallPack { get; set; }
+
     public string Cache { get; }
     /// <summary>The content pack's folder, or the cache itself when it has none.</summary>
     public string Content { get; }
@@ -36,7 +40,9 @@ public sealed class CacheManifest
             return new(cache,cache,self,self.GetProperty("files"),default);
         }
         string content = Path.GetFullPath(Path.Combine(cache,relative));
-        if (!Packs.TryGetValue(content,out var pack))
+        JsonNode? pack = InstallPack?.Invoke();
+        bool fromInstall = pack != null;
+        if (pack == null && !Packs.TryGetValue(content,out pack))
         {
             string path = Path.Combine(content,"content.json");
             if (!File.Exists(path)) throw new InvalidOperationException("Missing content pack: python tools/content_pack.py");
@@ -49,7 +55,7 @@ public sealed class CacheManifest
             foreach (var (path,value) in InstallRules) Replace(merged,path,value);
         Merge(merged,manifest);
         var root = JsonDocument.Parse(merged.ToJsonString()).RootElement.Clone();
-        var packFiles = JsonDocument.Parse(pack["files"]!.ToJsonString()).RootElement.Clone();
+        var packFiles = JsonDocument.Parse(fromInstall ? "{}" : pack["files"]!.ToJsonString()).RootElement.Clone();
         return new(cache,content,root,root.GetProperty("files"),packFiles);
     }
 

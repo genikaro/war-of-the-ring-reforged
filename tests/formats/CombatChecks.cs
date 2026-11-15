@@ -22,6 +22,13 @@ public static class CombatChecks
         var bloodDifferences = new List<string>();
         JsonCompare.Compare(expected["blood"],blood,"blood",bloodDifferences);
         check(bloodDifferences.Count == 0,"The blood table equals the Python import's"+string.Concat(bloodDifferences.Take(40).Select(d => "\n  "+d)));
+        if (expected["bodies"] is { } bodies)
+        {
+            var bodyDifferences = new List<string>();
+            JsonCompare.Compare(bodies,combat.Bodies(rules),"bodies",bodyDifferences);
+            check(bodyDifferences.Count == 0,$"The pack's bodies equal the Python import's ({bodies.AsArray().Count})"
+                +string.Concat(bodyDifferences.Take(20).Select(d => "\n  "+d)));
+        }
         var wanted = expected["rules"]!.AsObject();
         var differences = new List<string>();
         foreach (var (key,value) in wanted)

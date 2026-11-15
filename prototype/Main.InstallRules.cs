@@ -17,7 +17,7 @@ public partial class Main
     private static (string Key,IReadOnlyDictionary<string,System.Text.Json.Nodes.JsonNode> Rules)? _installRules;
 
     /// <summary>The combat rules and blood table as JSON text, built in the background, and what they were built from.</summary>
-    private static (string Key,Task<(string Rules,string Blood)?> Build)? _installCombat;
+    private static (string Key,Task<(string Rules,string Blood,System.Text.Json.Nodes.JsonArray Bodies)?> Build)? _installCombat;
 
     /// <summary>The pack files PackCombat gives in place of the pack's (content_pack writes them under these names).</summary>
     private const string CombatRulesFile = "combat/rules.json", BloodFile = "combat/blood.json";
@@ -47,7 +47,7 @@ public partial class Main
             return !relative.StartsWith("interface/",StringComparison.OrdinalIgnoreCase) || interfaceText.Value != null;
         }
         InstallFiles.Use(GamePaths.Data("converted/content/good"),
-            has: relative => Ready(relative) && images.Has(relative),
+            has: relative => relative == "interface/index.json" ? interfaceText.Value != null : Ready(relative) && images.Has(relative),
             pictures: relative => Ready(relative) && images.Has(relative) ? Guard(() => images.Picture(relative),relative) : null,
             texts: relative => relative == "interface/index.json" ? interfaceText.Value : null,
             models: () => CacheManifest.InstallRules?.GetValueOrDefault("models") as System.Text.Json.Nodes.JsonArray,
@@ -82,7 +82,7 @@ public partial class Main
     {
         CacheManifest.InstallRules = null;
         LoadInstallModels(install);
-        if (install == null) { _installCombat = null; GD.Print("Rules: no install found; using the content pack's"); return; }
+        if (install == null) { _installCombat = null; CacheManifest.InstallPack = null; GD.Print("Rules: no install found; using the content pack's"); return; }
         try
         {
             var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -94,29 +94,45 @@ public partial class Main
             CacheManifest.InstallRules = _installRules!.Value.Rules;
             GD.Print($"Rules: {_installRules.Value.Rules.Count} sections {(reused ? "kept" : "built")} from the install in {clock.ElapsedMilliseconds} ms");
             StartInstallCombat(string.Join("|",install,GamePaths.Root,newest));
+            // Build-213: the pack's manifest itself (content.json) from the install, once its bodies are built.
+            CacheManifest.InstallPack = () => _installCombat?.Build.Result is { } built ? InstallPackBase(built.Bodies) : null;
         }
         catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException
             or UnauthorizedAccessException or InvalidCastException or FormatException or IndexOutOfRangeException or ArgumentException)
         {
             _installCombat = null;
+            CacheManifest.InstallPack = null;
             GD.PushWarning($"Rules: cannot build them from the install {install} ({error.Message}); using the content pack's");
         }
     }
+
+    /// <summary>Build-213: content.json without the sections the install's rules give (CacheManifest.InstallRules puts
+    /// those in): the format, the faction, the files' names, the bodies and the rules' note, as content_pack.build writes them.</summary>
+    private static System.Text.Json.Nodes.JsonObject InstallPackBase(System.Text.Json.Nodes.JsonArray bodies) => new()
+    {
+        ["format_version"] = 1, ["faction"] = "good", ["combat_rules"] = CombatRulesFile, ["blood"] = BloodFile, ["interface"] = "interface/index.json",
+        ["audio"] = "audio/index.json", ["bodies"] = bodies.DeepClone(),
+        ["rules"] = "Imported combat stats, construction, upgrades, training and research of the Good faction.",
+        ["skirmish"] = new System.Text.Json.Nodes.JsonObject(),
+    };
 
     /// <summary>Starts building the combat rules and blood table on a worker thread, unless the same install's are built.</summary>
     private static void StartInstallCombat(string key)
     {
         if (_installModels is not { } models) { _installCombat = null; return; }
         if (_installCombat?.Key == key) return;
-        _installCombat = (key,Task.Run<(string,string)?>(() =>
+        _installCombat = (key,Task.Run<(string,string,System.Text.Json.Nodes.JsonArray)?>(() =>
         {
             try
             {
                 var clock = System.Diagnostics.Stopwatch.StartNew();
                 var combat = new PackCombat(models.Db,models.Archives,GamePaths.Root,models.Images,models.Models);
-                string rules = combat.Rules(SkirmishCatalog.Roster).ToJsonString(), blood = combat.Blood(SkirmishCatalog.Roster).ToJsonString();
-                GD.Print($"Combat: rules and blood built from the install in {clock.ElapsedMilliseconds} ms");
-                return (rules,blood);
+                var rulesObject = combat.Rules(SkirmishCatalog.Roster);
+                string rules = rulesObject.ToJsonString(), blood = combat.Blood(SkirmishCatalog.Roster).ToJsonString();
+                // Build-213: the pack's bodies, every body a unit can have, which the maps' clearance profiles are built for.
+                var bodies = combat.Bodies(rulesObject);
+                GD.Print($"Combat: rules, blood and {bodies.Count} bodies built from the install in {clock.ElapsedMilliseconds} ms");
+                return (rules,blood,bodies);
             }
             catch (Exception error) when (error is System.IO.IOException or System.IO.InvalidDataException or KeyNotFoundException or InvalidCastException
                 or FormatException or IndexOutOfRangeException or ArgumentException or InvalidOperationException or NullReferenceException)

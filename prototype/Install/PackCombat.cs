@@ -144,6 +144,31 @@ public sealed partial class PackCombat
         => LskSkeleton.Parse(_resolver.Read((string)Dict(List(model["skeletons"])[0])["file"]!));
     private string SkeletonFile(Dictionary<string,object?> model) => (string)Dict(List(model["skeletons"])[0])["file"]!;
 
+    /// <summary>Build-213: the content pack's "bodies" (content_pack.build): the collision bodies of every Good and Evil
+    /// unit whose model resolves (content_pack.faction_bodies; a unit without a usable main box is left out, as it cannot
+    /// be fielded) and those the combat rules give their units (a tuned body, Aragorn's), as (radius, height) in order.</summary>
+    public JsonArray Bodies(JsonObject rules)
+    {
+        var bodies = new SortedSet<(int Radius,int Height)>();
+        foreach (var unit in T("Units").Records)
+        {
+            if (!unit.Name.StartsWith("UNIT_G_",StringComparison.Ordinal) && !unit.Name.StartsWith("UNIT_E_",StringComparison.Ordinal)) continue;
+            try
+            {
+                var model = _resolver.Resolve(unit.Name,recurse: false);
+                var skeleton = FirstSkeleton(model);
+                var record = ById(T("Models"),I(unit,"Model"));
+                double[] scale = [F(record,"ScaleX"),F(record,"ScaleY"),F(record,"ScaleZ")];
+                var (radius,height,_) = CollisionProfile(scale,skeleton,_resolver.Model((string)model["file"]!).BoundingBoxes);
+                bodies.Add((radius,height));
+            }
+            catch (Exception error) when (error is InvalidDataException or KeyNotFoundException or IndexOutOfRangeException or ArgumentOutOfRangeException
+                or FileNotFoundException) { }
+        }
+        foreach (var unit in rules["Units"]!.AsArray()) bodies.Add((unit!["BodyRadiusMm"]!.GetValue<int>(),unit["BodyHeightMm"]!.GetValue<int>()));
+        return new JsonArray([.. bodies.Select(b => (JsonNode)new JsonObject { ["BodyRadiusMm"] = b.Radius, ["BodyHeightMm"] = b.Height })]);
+    }
+
     private static Dictionary<string,double> Durations(LskSkeleton skeleton)
     {
         var durations = new Dictionary<string,double>();

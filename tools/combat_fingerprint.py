@@ -3,7 +3,8 @@ them from an install, for tests/formats --python-combat to check the C# port aga
 
 python tools/combat_fingerprint.py "C:/Games/War of the Ring" combat.json
 
-Writes {"rules": ..., "blood": ...}: combat_rules.export and blood_effects.export for the content pack's roster, run on
+Writes {"rules": ..., "blood": ..., "bodies": ...} (bodies since build-213: content_pack.build's, the factions' collision
+bodies and the rules' unit bodies): combat_rules.export and blood_effects.export for the content pack's roster, run on
 a layout of the install's archives in a temporary folder (resolve_fingerprint.lay_out), so the result is this
 install's whatever extracted/ holds. The files those exports write (sounds, sprite frames, projectile and effect
 models) are written into the temporary folder and dropped. The rules' Sources name each traced file as the import
@@ -40,8 +41,10 @@ def build(install):
         roster = prepare_prototype.SKIRMISH_ROSTER
         rules = combat_rules.export(output, resolver, roster=roster)
         blood = blood_effects.export(output, resolver, roster)
+        import content_pack
+        bodies = content_pack.faction_bodies(resolver) | {(u['BodyRadiusMm'], u['BodyHeightMm']) for u in rules['Units']}
         rules['Sources'] = import_names(rules['Sources'], resolver)
-    return {'rules': rules, 'blood': blood}
+    return {'rules': rules, 'blood': blood, 'bodies': [{'BodyRadiusMm': r, 'BodyHeightMm': h} for r, h in sorted(bodies)]}
 
 
 def import_names(sources, resolver):

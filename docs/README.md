@@ -1,5 +1,19 @@
 # Godot C# skirmish sandbox
 
+**build-213:** the game runs from an install alone. With an install open, the content pack's manifest is built from it
+too, so `converted/content` is no longer read: `CacheManifest.InstallPack` gives `content.json` without the sections
+the install's rules already give (the format, the faction, the files' names, the rules' note and `bodies`), and none
+of the pack's files are hashed at load, as every one comes from the install. `PackCombat.Bodies` ports
+`content_pack.build`'s bodies, the last section the pack gave: the collision bodies of every Good and Evil unit whose
+model resolves (`faction_bodies`) and those the combat rules give their units; they are built with the combat rules in
+the background from startup. The pack's interface index now also counts as present when only the install gives it, so
+the menu finds its pointer. `combat_fingerprint.py` records the bodies, and `tests/formats --python-combat` requires
+them to equal the Python's: all 53 do on the English and Russian installs. From a data folder holding nothing but empty
+folders for the smokes' reports (`run.ps1 -Data`, no `converted/content`, `converted/frontend` or map caches), the
+skirmish and menu smokes give the same reports with the Russian install as the repository's caches give without it.
+So do the construction, setup (all 33 maps listed and previewed from the install), Elven, Nature and global
+power smokes. The simulation checks pass without the pack too (their one pack check is skipped when it is absent).
+
 **build-212:** the menus' art comes from the install, so `converted/frontend` is no longer needed. `PackFrontEnd`
 (`prototype/Install`) ports `frontend_assets.export`: the 41 menu pieces and the quit box cut from their UVA
 rectangles, the Immortal bitmap font's sizes as RGBA pages with their glyph rectangles (Python's rounding) and the
