@@ -28,7 +28,7 @@ public sealed class FrontEndArt
         Index(System.IO.Path.Combine(converted,"content","good"),"interface/index.json");
         Available = Index(Folder,"index.json");
         if (!Available) return;
-        var root = JsonDocument.Parse(System.IO.File.ReadAllText(System.IO.Path.Combine(Folder,"index.json"))).RootElement;
+        var root = JsonDocument.Parse(InstallFiles.ReadText(System.IO.Path.Combine(Folder,"index.json"))).RootElement;
         if (root.TryGetProperty("menu_scene",out var scene))
         {
             MenuScene = Inside(Folder,scene.GetProperty("file").GetString()!);
@@ -88,13 +88,13 @@ public sealed class FrontEndArt
 
     private void LoadFonts(string path)
     {
-        if (!System.IO.File.Exists(path)) return;
-        var root = JsonDocument.Parse(System.IO.File.ReadAllText(path)).RootElement;
+        if (!InstallFiles.Exists(path)) return;
+        var root = JsonDocument.Parse(InstallFiles.ReadText(path)).RootElement; // Build-212: the install's when it gives it.
         foreach (var page in root.GetProperty("sizes").EnumerateArray())
         {
             int size = page.GetProperty("size").GetInt32(),baseline = page.GetProperty("baseline").GetInt32();
             int spacing = page.GetProperty("spacing").GetInt32();
-            using var image = Image.LoadFromFile(Inside(Folder,page.GetProperty("file").GetString()!));
+            using var image = InstallFiles.LoadImage(Inside(Folder,page.GetProperty("file").GetString()!));
             var font = new FontFile { FixedSize = size,FixedSizeScaleMode = TextServer.FixedSizeScaleMode.Enabled,
                 GenerateMipmaps = true,Fallbacks = [ThemeDB.FallbackFont] };
             var key = new Vector2I(size,0);

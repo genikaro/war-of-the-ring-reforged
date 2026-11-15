@@ -162,6 +162,7 @@ public partial class Main
         _installModels = null;
         _installMap = null;
         _installPreviews = null;
+        InstallFiles.UseFrontEnd(null);
         SetupScreen.InstallMaps = null;
         InstallFiles.UseMap(null);
         _installAudio = null;
@@ -179,6 +180,9 @@ public partial class Main
             images.AddCorruptionTiles();
             _installModels = (install,archives,db,models,audio,images,new PackMap(db,archives));
             SetupScreen.InstallMaps = InstallMapPreviews; // Build-210: the setup screens list the install's maps.
+            // Build-212: the menus' art, font, scene and sky; the index is made in the background, the files on request.
+            var frontEnd = Task.Run(() => { var front = new PackFrontEnd(db,archives); front.Index(); return front; });
+            InstallFiles.UseFrontEnd(GamePaths.Data("converted/frontend"),() => Guard(() => frontEnd.Result,"the menu art"));
             UseInstallPictures(images);
             _installAudio = Task.Run<string?>(() =>
             {

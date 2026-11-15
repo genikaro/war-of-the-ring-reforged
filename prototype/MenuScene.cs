@@ -28,7 +28,9 @@ public partial class MenuScene : Node3D
         var art = FrontEndArt.Shared;
         var presentation = new ScenePresentation();
         await step("Loading the menu scene",.05f);
-        var scene = presentation.Load(art.MenuScene!,"map/scene.glb"); AddChild(scene);
+        // Build-212: the install's menu scene, built off the main thread, when it gives it.
+        byte[]? built = await Task.Run(() => InstallFiles.Glb(art.MenuScene!));
+        var scene = built != null ? presentation.Load(built,"map/scene.glb") : presentation.Load(art.MenuScene!,"map/scene.glb"); AddChild(scene);
         await step("Placing the army",.4f);
         await AnimateArmy(scene,presentation,step);
         await step("Lighting the fires",.9f);
@@ -116,9 +118,9 @@ public partial class MenuScene : Node3D
             AmbientLightSource = Godot.Environment.AmbientSource.Color,AmbientLightColor = new Color("8c6a5c"),AmbientLightEnergy = .5f,
             FogEnabled = true,FogLightColor = new Color("6e3a1e"),FogDensity = .0045f,FogSkyAffect = .35f,
             TonemapMode = Godot.Environment.ToneMapper.Filmic,TonemapExposure = 1.05f };
-        if (sky != null && System.IO.File.Exists(sky))
+        if (sky != null && InstallFiles.Exists(sky))
         {
-            using var image = Image.LoadFromFile(sky);
+            using var image = InstallFiles.LoadImage(sky);
             environment.BackgroundMode = Godot.Environment.BGMode.Sky;
             environment.Sky = new Sky { SkyMaterial = new PanoramaSkyMaterial { Panorama = ImageTexture.CreateFromImage(image) } };
             environment.AmbientLightSource = Godot.Environment.AmbientSource.Color;

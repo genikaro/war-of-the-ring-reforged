@@ -28,6 +28,8 @@
 //       one map whole against map_fingerprint.py --dump, every difference listed
 //   ... --install "<install>" --python-scenes <scenes.json> | --compare-scene <stem> <dump.json>
 //       build-210: every map's scene and lighting pictures, compared with tools/scene_fingerprint.py
+//   ... --install "<install>" --python-frontend <frontend.json>
+//       build-212: the menu art, font, menu scene and sky, compared with tools/frontend_fingerprint.py
 System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 int passed = 0;
@@ -60,6 +62,7 @@ if (Array.IndexOf(args,"--install") is int install && install >= 0)
     if (Array.IndexOf(args,"--python-maps") is int maps && maps >= 0) MapChecks.Install(args[install+1],args[maps+1],Check);
     if (Array.IndexOf(args,"--time-maps") is int timeMaps && timeMaps >= 0) MapChecks.Time(args[install+1],args[timeMaps+1],timeMaps+2 < args.Length && !args[timeMaps+2].StartsWith("--") ? args[timeMaps+2] : null);
     if (Array.IndexOf(args,"--python-scenes") is int scenes && scenes >= 0) SceneChecks.Install(args[install+1],args[scenes+1],Check);
+    if (Array.IndexOf(args,"--python-frontend") is int frontEnd && frontEnd >= 0) FrontEndChecks.Install(args[install+1],args[frontEnd+1],Check);
     if (Array.IndexOf(args,"--compare-scene") is int compareScene && compareScene >= 0) SceneChecks.CompareDump(args[install+1],args[compareScene+1],args[compareScene+2]);
     if (Array.IndexOf(args,"--compare-map") is int compareMap && compareMap >= 0) MapChecks.CompareDump(args[install+1],args[compareMap+1],args[compareMap+2],args[compareMap+3]);
 }

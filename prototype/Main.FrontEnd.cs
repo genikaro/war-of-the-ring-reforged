@@ -62,7 +62,7 @@ public partial class Main
     private async Task OpenMainMenu()
     {
         _mainMenuSeen = true;
-        if (_menuScene == null && FrontEndArt.Shared.MenuScene is { } file && System.IO.File.Exists(file))
+        if (_menuScene == null && FrontEndArt.Shared.MenuScene is { } file && InstallFiles.Exists(file))
         {
             ShowLoadingScreen("");
             _menuScene = new MenuScene(); AddChild(_menuScene);

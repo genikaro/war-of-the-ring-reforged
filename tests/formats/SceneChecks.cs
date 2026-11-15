@@ -11,7 +11,7 @@ using Reforged.Install;
 /// extras' source path left out; each picture by its pixels, size and mode.</summary>
 public static class SceneChecks
 {
-    private static Dictionary<string,object?> Normalized(GltfModel model)
+    public static Dictionary<string,object?> Normalized(GltfModel model)
     {
         var gltf = GltfChecks.Normalized(model);
         var extras = new Dictionary<string,object?>((Dictionary<string,object?>)gltf["extras"]!);

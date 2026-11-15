@@ -25,8 +25,27 @@ public static class InstallFiles
     /// <summary>Build-207: the pack's models list (content.json "models") the install gives, or null.</summary>
     public static System.Text.Json.Nodes.JsonArray? Models() => _models?.Invoke();
 
-    /// <summary>Build-207: a pack model file's GLB the install gives, or null.</summary>
-    public static byte[]? Glb(string path) => Relative(path) is { } relative ? _glbs?.Invoke(relative) : null;
+    /// <summary>Build-207: a pack model file's GLB the install gives (build-212: or the menu scene's), or null.</summary>
+    public static byte[]? Glb(string path) => (Relative(path) is { } relative ? _glbs?.Invoke(relative) : null) ?? Front<byte[]>(path,front => front.Glb);
+
+    private static string? _frontFolder;
+    private static Func<PackFrontEnd?>? _frontEnd;
+
+    /// <summary>Build-212: serves converted/frontend's files (index, menu art, font, menu scene and sky) from the install's
+    /// builder; null stops it. The builder is asked for when a file is first wanted (null: read from disk).</summary>
+    public static void UseFrontEnd(string? folder,Func<PackFrontEnd?>? frontEnd = null)
+    {
+        _frontFolder = folder == null ? null : System.IO.Path.GetFullPath(folder).TrimEnd(System.IO.Path.DirectorySeparatorChar)+System.IO.Path.DirectorySeparatorChar;
+        _frontEnd = frontEnd;
+    }
+
+    private static T? Front<T>(string path,Func<PackFrontEnd,Func<string,T?>> get) where T : class
+    {
+        if (_frontFolder == null || _frontEnd == null) return null;
+        string full = System.IO.Path.GetFullPath(path);
+        if (!full.StartsWith(_frontFolder,StringComparison.OrdinalIgnoreCase) || _frontEnd() is not { } front) return null;
+        return get(front)(full[_frontFolder.Length..].Replace('\\','/'));
+    }
 
     /// <summary>The pack-relative path of a file in the pack folder, or null.</summary>
     private static string? Relative(string path)
@@ -36,7 +55,8 @@ public static class InstallFiles
         return full.StartsWith(_pack,StringComparison.OrdinalIgnoreCase) ? full[_pack.Length..].Replace('\\','/') : null;
     }
 
-    public static bool Exists(string path) => System.IO.File.Exists(path) || Relative(path) is { } relative && _has?.Invoke(relative) == true;
+    public static bool Exists(string path) => System.IO.File.Exists(path) || Relative(path) is { } relative && _has?.Invoke(relative) == true
+        || Front<string>(path,front => relative => front.Has(relative) ? "" : null) != null;
 
     /// <summary>How many pictures the install has given so far.</summary>
     public static int PicturesServed => _served;
@@ -63,7 +83,7 @@ public static class InstallFiles
     /// <summary>A picture: the install's pixels when it gives the pack's file (or the map's, build-210), else the file.</summary>
     public static Image LoadImage(string path)
     {
-        var picture = (Relative(path) is { } relative ? _pictures?.Invoke(relative) : null) ?? MapPicture(path);
+        var picture = (Relative(path) is { } relative ? _pictures?.Invoke(relative) : null) ?? MapPicture(path) ?? Front<Picture>(path,front => front.Picture);
         if (picture != null)
         {
             Interlocked.Increment(ref _served);
@@ -73,5 +93,6 @@ public static class InstallFiles
     }
 
     /// <summary>A text file (an index): the install's when it gives the pack's, else the file.</summary>
-    public static string ReadText(string path) => Relative(path) is { } relative && _texts?.Invoke(relative) is { } text ? text : System.IO.File.ReadAllText(path);
+    public static string ReadText(string path) => (Relative(path) is { } relative ? _texts?.Invoke(relative) : null) ?? Front<string>(path,front => front.Text)
+        ?? System.IO.File.ReadAllText(path);
 }

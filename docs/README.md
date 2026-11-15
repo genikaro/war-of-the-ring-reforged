@@ -1,5 +1,19 @@
 # Godot C# skirmish sandbox
 
+**build-212:** the menus' art comes from the install, so `converted/frontend` is no longer needed. `PackFrontEnd`
+(`prototype/Install`) ports `frontend_assets.export`: the 41 menu pieces and the quit box cut from their UVA
+rectangles, the Immortal bitmap font's sizes as RGBA pages with their glyph rectangles (Python's rounding) and the
+baseline under the ink of 'H', the Barad-dûr menu scene (`Levels/MenuScene.wor` exported by build-210's `MapScene`,
+its camera waypoint now kept by `World`), the equirectangular sky made from the Mordor skybox in numpy's double
+arithmetic on float32 texels (numpy's `sin` and `cos` were checked equal to the C library's on every angle), and the
+index naming them. `InstallFiles.UseFrontEnd` serves the folder's files to `FrontEndArt`, the font loader, the menu
+scene and its sky; the index is made in the background when the install opens (under 0.2 s) and the pictures and scene
+when first wanted. `tools/frontend_fingerprint.py` exports the menu art the Python way and records it;
+`tests/formats --python-frontend` requires the C# to equal it: the index, the font, all 47 pictures (46 on the English
+install, whose font has three sizes) and the menu scene do on the English and Russian installs. The menu smoke gives the
+same report with the Russian install as without it (its load time aside), also from a data folder that has no
+`converted/frontend` (`run.ps1 -Data`).
+
 **build-211:** the Sandbox comes from the install too, so every map the game offers does. `SandboxMap`
 (`prototype/Install`) ports `sandbox_map.flatten`: Bilbo's Bluffs levelled at 0 in one tint (the low median of each
 byte of the level ground's vertex colours), covered in the map's plain grass tiles scattered by Python's

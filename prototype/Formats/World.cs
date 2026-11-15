@@ -154,6 +154,8 @@ public sealed record WorldDecal(uint ObjectId,uint DecalId,double[] Position,dou
 
 public sealed class WorldTail
 {
+    /// <summary>Build-212: the camera waypoints, twelve words each (source position and angles as float words from 4).</summary>
+    public uint[][] CameraWaypoints { get; init; } = [];
     public required uint[] TimeOfDay { get; init; }
     public required uint[][] SunKeyframes { get; init; }
     public required uint[] Grass { get; init; }
@@ -714,7 +716,7 @@ public sealed class World
 
     private static WorldTail ReadTail(Reader r,int[] grid)
     {
-        if (r.Boolean()) r.WordRows(r.U32(),12);
+        var waypoints = r.Boolean() ? r.WordRows(r.U32(),12) : [];
         int lights = 0;
         for (uint n = r.Boolean() ? r.U32() : 0; n > 0; n--, lights++)
         {
@@ -756,6 +758,6 @@ public sealed class World
         for (uint n = r.U32(); n > 0; n--, fog++) { r.U32(); r.Floats(4); r.Read(32768); }
         uint[] final = [r.U8(),r.U32(),r.U32(),r.U32(),r.U32()];
         if (r.Pos != r.Data.Length) throw new InvalidDataException($"trailing world records at 0x{r.Pos:x}");
-        return new WorldTail { TimeOfDay = timeOfDay, SunKeyframes = keys, Grass = grass, Markers = markers, Decals = decals, Final = final, Fog = fog, Lights = lights };
+        return new WorldTail { CameraWaypoints = waypoints, TimeOfDay = timeOfDay, SunKeyframes = keys, Grass = grass, Markers = markers, Decals = decals, Final = final, Fog = fog, Lights = lights };
     }
 }
