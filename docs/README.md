@@ -1,5 +1,18 @@
 # Godot C# skirmish sandbox
 
+**build-221:** the Evil Sandbox smoke passes again (it last passed at build-178, on an English pack), and an aimed
+hero ability asks for its target in the install's language. Three checks failed, none for a fault in the game:
+`dark_arsenal_offers_its_research` wanted `TECHNIQUE_IRON_FITTINGS` among the Dark Arsenal's research, but the source
+chain starts with `TECHNIQUE_FORGED_FITTINGS` (36: `IsInitialTechnique`, no predecessor, 75 food and 75 ore; Iron
+Fittings, 37, is its second tier at 125), which the rules built from the install (build-194) offer; build-178's pack
+offered the second tier first. `shadow_bind_asks_for_a_wraith` and `blood_mark_asks_for_an_ally_or_a_war_post` looked
+for the Wraith's and the War Post's names in the targeting prompt, which was English whatever the install
+(`Власть Тени: choose one of your Wraiths`), so they failed on the Russian install. The eight targeting prompts
+(`Main.Heroes.AbilityTargetPrompt`) are now catalog rows, `ability.target.*`, in English and Russian, the Wraith and
+the War Post by their names in the install (`Bind Shadow: choose your Wraith`, `Власть Тени: выберите своего воина:
+Призрак`). The Prison of Ice and Torch checks, which looked for the English words "enemy" and "building", now compare
+with the catalog's text.
+
 **build-220:** the first test release. `prototype/export.ps1 -Release` exports into
 `build/release/WarOfTheRingReforged-build-<N>-win64/` and zips it beside the folder with its SHA-256
 (`.zip.sha256`): the game (`WarOfTheRingReforged.exe`, the project packed inside), its console twin

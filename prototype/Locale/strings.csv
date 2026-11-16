@@ -13,6 +13,14 @@ sandbox.dummy.armor_reset,,Armor 0,Защита 0,Sandbox dummy button
 sandbox.dummy.restore,,Restore health,Восстановить здоровье,Sandbox dummy button
 ai.default,,Default (medium),Стандартный (средний),Bot personality used when a map names none
 ability.research_first,,{0}: research at the {1} first,{0}: сначала изучите в здании «{1}»,"An upgrade ability not researched yet; {0} = ability, {1} = building"
+ability.target.enemy_building,,choose an enemy building,выберите вражеское здание,"Build-221: an ability's targeting prompt, after its name and a colon (Torch)"
+ability.target.enemy_tower,,choose an enemy tower,выберите вражескую башню,Targeting prompt of an ability that takes a tower
+ability.target.area,,choose an area,выберите область,Targeting prompt of an ability cast on the ground
+ability.target.enemy_unit,,choose a visible enemy unit,выберите видимого вражеского воина,Targeting prompt of an ability cast on an enemy
+ability.target.friendly_unit,,choose a friendly unit,выберите дружественного воина,Targeting prompt of Protection and Flame Shield
+ability.target.wraith,,choose your {0},выберите своего воина: {0},"Targeting prompt of Bind Shadow; {0} = the Wraith's name"
+ability.target.ally_or_war_post,,choose a friendly unit or your {0},выберите дружественного воина или здание: {0},"Targeting prompt of Blood Mark; {0} = the War Post's name"
+ability.target.injured_friend,,choose an injured friendly unit,выберите раненого дружественного воина,Targeting prompt of a healing ability
 record.OBJECT_PLACE_OF_POWER_RANDOM.name,,Random place of power,Случайное место силы,The map's random landmark before the match picks one; the source names it nowhere
 "# Build-184: tooltip labels. The original's own labels first (GameConsole 8300-8304, 8404-8414, 8450-8453), then the lines it never had."
 tip.level,GameConsole:8300,Level,,Level (hero level line and tooltip)

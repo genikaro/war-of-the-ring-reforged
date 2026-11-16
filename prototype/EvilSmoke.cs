@@ -129,7 +129,7 @@ public partial class Main
                 var arsenal = Site("BUILDING_E_ARMORY")!;
                 var offered = world.ResearchOptions(arsenal).ToArray();
                 _evilChecks["dark_arsenal_offers_its_research"] = SelectedStructureDetails() is {  } shown131 && shown131.Name == Shown("BUILDING_E_ARMORY","Dark Arsenal") && offered.Length >= 4
-                    && offered.Any(t => t.Name == "TECHNIQUE_CURVED_BLADES") && offered.Any(t => t.Name == "TECHNIQUE_IRON_FITTINGS")
+                    && offered.Any(t => t.Name == "TECHNIQUE_CURVED_BLADES") && offered.Any(t => t.Name == "TECHNIQUE_FORGED_FITTINGS")
                     && offered.Any(t => _commands.ResearchButton(t.Slot).Visible);
                 _evilNotes["arsenal_techniques"] = string.Join(", ",offered.Select(t => $"{t.DisplayName}[{t.Slot}]"));
                 if (_capture != "") _ = CaptureFrame(false,Shot("arsenal"));
@@ -268,7 +268,7 @@ public partial class Main
                 PushKey(Key.Q); Next(); break;
             case 13:
                 if (!Wait(4)) break;
-                _evilChecks["prison_of_ice_asks_for_an_enemy"] = _orders.Pending == OrderKind.UseAbility && _status.Contains("enemy");
+                _evilChecks["prison_of_ice_asks_for_an_enemy"] = _orders.Pending == OrderKind.UseAbility && _status.Contains(GameText.T("ability.target.enemy_unit"));
                 Click(_camera.UnprojectPosition(UnitPosition(world.Units[_evilVictim])+Vector3.Up)); Next(); break;
             case 14:
                 if (!Wait(100)) break;
@@ -467,7 +467,7 @@ public partial class Main
                 PushKey(Key.E); Next(); break;
             case 40:
                 if (!Wait(4)) break;
-                _evilChecks["torch_asks_for_an_enemy_building"] = _orders.Pending == OrderKind.UseAbility && _status.Contains("building");
+                _evilChecks["torch_asks_for_an_enemy_building"] = _orders.Pending == OrderKind.UseAbility && _status.Contains(GameText.T("ability.target.enemy_building"));
                 _evilTargetHealth = world.ConstructionSites[_evilTarget].Health; Click(StructureSmokePoint(world.ConstructionSites[_evilTarget].Obstacle)); Next(); break;
             case 41:
                 if (!Wait(260)) break;

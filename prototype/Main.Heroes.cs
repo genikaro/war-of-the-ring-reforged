@@ -1,5 +1,6 @@
 using Godot;
 using Reforged.Input;
+using Reforged.Presentation;
 using Reforged.Simulation;
 
 /// <summary>The right-edge hero portraits and translucent Ring/Camouflage presentation.</summary>
@@ -10,11 +11,15 @@ public partial class Main
     private int? CaptureSiteAt(Vector2 point)
         => StructureAt(point) is { } hit ? _world!.ConstructionSites.Values.FirstOrDefault(s => s.Obstacle == hit.Id)?.Id : null;
 
-    private static string AbilityTargetPrompt(AbilityDefinition ability) => ability.BuildingTarget ? (ability.Kind == AbilityKind.Torch ? ": choose an enemy building" : ": choose an enemy tower")
-        : ability.GroundTarget ? ": choose an area" : ability.EnemyTarget ? ": choose a visible enemy unit"
-        : ability.Kind is AbilityKind.Protection or AbilityKind.FlameShield ? ": choose a friendly unit"
-        : ability.Kind == AbilityKind.ShadowBind ? ": choose one of your Wraiths"
-        : ability.Kind == AbilityKind.BloodMark ? ": choose a friendly unit or one of your War Posts" : ": choose an injured friendly unit";
+    /// <summary>What an ability being aimed asks for, after its name (build-221: in the install's language, from the
+    /// catalog, the Wraith and the War Post by their names in the install).</summary>
+    private static string AbilityTargetPrompt(AbilityDefinition ability) => ": "+(ability.BuildingTarget
+            ? GameText.T(ability.Kind == AbilityKind.Torch ? "ability.target.enemy_building" : "ability.target.enemy_tower")
+        : ability.GroundTarget ? GameText.T("ability.target.area") : ability.EnemyTarget ? GameText.T("ability.target.enemy_unit")
+        : ability.Kind is AbilityKind.Protection or AbilityKind.FlameShield ? GameText.T("ability.target.friendly_unit")
+        : ability.Kind == AbilityKind.ShadowBind ? GameText.T("ability.target.wraith",GameText.Name("UNIT_E_WRAITH","Wraith"))
+        : ability.Kind == AbilityKind.BloodMark ? GameText.T("ability.target.ally_or_war_post",GameText.Name("BUILDING_E_TERRITORY_MARKER","War Post"))
+        : GameText.T("ability.target.injured_friend"));
 
     private void PresentHeroSkillEvents()
     {
