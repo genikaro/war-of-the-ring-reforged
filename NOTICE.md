@@ -25,6 +25,9 @@ software works with, not as a claim to any right in them.
 - You need your own legally obtained installation of the original game. The launcher asks
   for its folder, and the game reads it in place on your machine; nothing is copied out of it
   or written into it.
+- The one exception is a handful of screenshots in `docs/screenshots/`: the engine running with
+  the owner's installation, so they show the original game's maps, models and interface as this
+  engine renders them. They illustrate what the software does and are not game data.
 - Release builds hold only the engine. Everything the developer tools produce stays local and
   is excluded from version control: the install itself, `extracted/`, `converted/`,
   `prototype/Assets/`, `build/` and `reports/`.

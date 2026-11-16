@@ -1,5 +1,9 @@
 # War of the Ring Reforged
 
+<p align="center">
+  <img src="docs/screenshots/main-menu.jpg" alt="The main menu over the Barad-dûr scene and its orc army, rendered from the original game's files" width="100%">
+</p>
+
 A real-time strategy engine, written from scratch, that plays **The Lord of the Rings: War of
 the Ring** (Liquid Entertainment, 2003) from your own installed copy of the game: a
 deterministic integer simulation core and a Godot 4 C# front end that read the original
@@ -14,6 +18,32 @@ construction, research, heroes, abilities, places of power, bots, fog of war, a 
 setup screens and an exported Windows executable with a launcher. Not the original campaign,
 and not a finished game. [docs/README.md](docs/README.md) is the build log and the detailed
 setup and controls.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/skirmish-base.jpg" alt="A Good base on Bilbo's Bluffs eight minutes into a bot match, with the observer's unit tab"><br>
+      <sub>Bilbo's Bluffs, eight minutes into a match between two bots, watched as an observer.</sub></td>
+    <td width="50%"><img src="docs/screenshots/evil-base.jpg" alt="An Evil base on corrupted ground with a Goblin Worker selected"><br>
+      <sub>An Evil base on the ground its War Posts corrupt, with the Evil console.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/good-base.jpg" alt="A Good base with the Citadel and a Human Worker selected"><br>
+      <sub>The Good side's Citadel and buildings, a worker selected.</sub></td>
+    <td><img src="docs/screenshots/evil-skirmish.jpg" alt="Playing Evil on Bilbo's Bluffs: the base on corrupted ground, a Goblin Hovel selected"><br>
+      <sub>Playing Evil on Bilbo's Bluffs: the corruption spreads under the base.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/battle.jpg" alt="Two armies of 150 soldiers clashing in the Sandbox"><br>
+      <sub>300 soldiers in one melee: the stress benchmark in the Sandbox.</sub></td>
+    <td><img src="docs/screenshots/skirmish-setup.jpg" alt="The skirmish setup screen with the map list, slots and bot card"><br>
+      <sub>Skirmish setup: the install's 33 maps, bots with difficulty, style and traits.</sub></td>
+  </tr>
+</table>
+
+Every picture is the engine running with the owner's copy of the game; the art is the
+original's, read from the install as the game plays.
 
 ## Requirements
 
@@ -111,7 +141,8 @@ project. See [LICENSE](LICENSE) and, for the original game's content and marks,
   `git filter-repo --invert-paths --path references` and force-push before anyone else
   clones it.
 - Review what `docs/` quotes from the original game: descriptions, label text and stat
-  tables taken from the install are documentation of someone else's content.
+  tables taken from the install are documentation of someone else's content. The same goes
+  for the screenshots in `docs/screenshots/`, which show the original's art and logo.
 - Keep it non-commercial — no sales, donations or ads — and keep the engine useless without
   the buyer's own copy of the game.
 - Decide on the name. Using the game's title is honest about what the project does, but a
