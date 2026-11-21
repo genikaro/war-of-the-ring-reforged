@@ -195,5 +195,7 @@ the console and portrait tooltips, the group, walk/run and pause labels, notices
 | --- | --- |
 | 183 | Names of units, heroes, buildings, upgrades and research, abilities, Fate powers, places of power and neutral objects, and maps. The AI personalities' names come from the install's `.rai` files |
 | 184 | Tooltips: construct, train, upgrade, research, queue, ability, Fate, place power, status effect, hero bar, garrison; the stat labels and the place-of-power summary |
-| 188 (next) | Menus, setup, settings, outcome, HUD labels, messages; refusal reasons become codes |
+| 188 (next) | Outcome, HUD labels, messages; refusal reasons become codes (menus, setup and settings followed in 222-223) |
+| 222 | The main menu (the install's Skirmish, Options, Quit, exit question, OK and Cancel; catalog rows for the rest), the loading screen's steps, and the Settings camera-distance row |
+| 223 | The setup screens (headers, slots, sides, difficulties, bot names from the install, traits, bot card, status line, game settings), the in-game menu and every Settings tab, including the Controls reference |
 | Later | Campaign text, which the import already covers (briefings, objectives, hints, speakers, subtitles) |

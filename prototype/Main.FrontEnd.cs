@@ -114,8 +114,8 @@ public partial class Main
         _loadingLayer?.QueueFree(); _loadingLayer = null; _loadingScreen = null;
     }
 
-    /// <summary>Names the step now loading, moves the ring and gives the screen a frame; null keeps the step and the
-    /// ring (a frame between pieces of one step).</summary>
+    /// <summary>Names the step now loading (a loading.* catalog key), moves the ring and gives the screen a frame; null
+    /// keeps the step and the ring (a frame between pieces of one step).</summary>
     private async Task LoadingStep(string? step,float? progress)
     {
         if (step != null)
@@ -126,7 +126,8 @@ public partial class Main
         }
         if (_loadingScreen != null)
         {
-            if (step != null) _loadingScreen.Step = step;
+            // Build-222: a step is a catalog key (loading.*); the screen shows it in the install's language, the log the key.
+            if (step != null) _loadingScreen.Step = GameText.T(step);
             if (progress is { } value) _loadingScreen.Progress = value;
         }
         if (_menuSmoke) MenuSmokeLoading();
@@ -136,7 +137,7 @@ public partial class Main
     /// <summary>Fills the ring, reports how long each step took and takes the screen away.</summary>
     private async Task FinishLoadingScreen()
     {
-        await LoadingStep("Ready",1);
+        await LoadingStep("loading.ready",1);
         _loadingScreen?.Settle();
         var total = System.Diagnostics.Stopwatch.GetElapsedTime(_loadingStart).TotalMilliseconds;
         GD.Print($"LOADED {_loadingScreen?.Title} in {total:0} ms: "+string.Join(", ",_loadingTimes.Select(t => $"{t.Step} {t.Ms:0}")));

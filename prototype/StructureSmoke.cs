@@ -199,16 +199,18 @@ public partial class Main
                     && SelectedStructureDetails() is {HasHealth: false} && _commands.StructurePortraitButton.Icon != null
                     && _commands.CommandPaletteEmpty;
                 // Build-54: the random place draws one source place by the match seed (0 here), shows what it gives and its zone.
-                _structureChecks["random_place_of_power_drawn"] = PlaceAt(521) is { Rules.Length: 1 } drawn && drawn.Rules[0].Random
-                    && SelectedStructureDetails() is { } power && power.Name == drawn.Name && power.Name.StartsWith("Random Place of Power: ")
-                    && power.Place.StartsWith(GameText.T("place.of_power")+" · ") && power.Resource.Contains(PlaceBenefit(drawn.Rules[0]))
+                // Build-223: since build-161 the marker becomes the landmark it drew, by that landmark's own name, with every
+                // one of its places (the Orb of Heroes, seed 0, has three); none of them is a stand-in rule.
+                _structureChecks["random_place_of_power_drawn"] = PlaceAt(521) is { Rules.Length: > 0 } drawn && drawn.Rules.All(r => r.Random)
+                    && SelectedStructureDetails() is { } power && power.Name == drawn.Name && drawn.Type != SimWorld.RandomPlaceObject
+                    && power.Place.StartsWith(GameText.T("place.of_power")+" · ") && drawn.Rules.All(r => power.Resource.Contains(PlaceBenefit(r)))
                     && _placeZones[521].Visible && !_placeZones.Values.Except([_placeZones[521]]).Any(z => z.Visible);
                 if (_capture != "") _ = CaptureFrame(false,System.IO.Path.ChangeExtension(_capture,null)+"-power.png"); break;
             case 1980: RecallWorkers(); break;
             case 1983:
                 _structureChecks["unit_group_restores_after_neutral"] = RecalledSelection() && _selectedStructure == null && _commands.CommandsAvailable;
-                // Exercise every selectable neutral placement through actual picking,
-                // including resource sites beneath completed resource buildings.
+                // Exercise every selectable neutral placement through actual picking. Build-222: a resource site beneath
+                // a completed resource building is part of it, so a click on the source picks the building instead.
                 break;
             case 1990: Choose(3); break;
             case 1993:
@@ -258,8 +260,15 @@ public partial class Main
         {
             var neutrals = _structureViews.Values.Where(v => v.Team < 0).OrderBy(v => v.Id).ToArray();
             int index = (frame-2000)/3;
-            if ((frame-2000)%3 == 0) Choose(neutrals[index].Id);
-            if ((frame-2000)%3 == 2) _structureChecks["neutral_placement_"+neutrals[index].Id] = _selectedStructure == neutrals[index].Id && _commands.CommandPaletteEmpty;
+            var neutral = neutrals[index];
+            bool covered = UnderBuilding(neutral);
+            if ((frame-2000)%3 == 0 && !covered) Choose(neutral.Id);
+            if ((frame-2000)%3 == 0 && covered) { Focus(neutral.Id); Click(_camera.UnprojectPosition(neutral.Root.GlobalPosition+Vector3.Up)); }
+            if ((frame-2000)%3 == 2 && !covered)
+                _structureChecks["neutral_placement_"+neutral.Id] = _selectedStructure == neutral.Id && _commands.CommandPaletteEmpty;
+            if ((frame-2000)%3 == 2 && covered)
+                _structureChecks["covered_resource_"+neutral.Id+"_picks_its_building"] = _selectedStructure == world.ConstructionSites[neutral.Id].Obstacle
+                    && StructureInBox(new Rect2(_camera.UnprojectPosition(neutral.Root.GlobalPosition)-new Vector2(12,12),new Vector2(24,24))) != neutral.Id;
         }
     }
 }

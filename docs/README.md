@@ -1,5 +1,42 @@
 # Godot C# skirmish sandbox
 
+**build-223:** the setup screens, the in-game menu and its Settings page speak the install's language. Where the
+original has the words they are its own: Skirmish (Menu text 12), Side, Good, Evil and Random (1501-1505), the
+difficulties (3411-3413: an English install says Easy, Medium and Hard, a Russian one Низкая, Средняя, Высокая),
+Closed (9034), AI (9035), Game Settings (1703), Game Speed (1400), Start (9018), Quit (9007), Back (9006), Main
+Menu (4), Options (3), Resume (4803), Quit to Windows (9037), the tabs Gameplay, Controls and Sound (1600, 1700,
+1604), the four volumes (1605-1609), Mature (1603), Reset (9028) and Apply (9029). Everything else is a catalog row
+in English and Russian (`setup.*`, `menu.*`, `settings.*`): the table headers, the status line, the bot card and
+tooltips, the traits and their descriptions, the bots' descriptions, the check boxes, the Sandbox's description,
+the editions and the Controls reference. The lobby names each bot as the install does (its `.rai` file's name,
+Гимли, Мэггот), as the match already did. The English release's 9036 reads "Quit to Stats Screen", so Exit to
+Main Menu is a catalog row. `AiRoster` keeps its English labels for the simulation, its checks and the observer's
+HUD; the setup screen names the style axes through the new `AiStyle.Axes`. The setup screen's corner button is
+chosen by `SetupScreen.BackToMenu` rather than its English caption. The menu and setup smokes compare with the
+catalog's text. The structure smoke's `random_place_of_power_drawn`, failing since build-161, checks what the game
+does now: the random marker becomes the landmark it drew, by that landmark's name, with every one of its places
+(Orb of Heroes at seed 0, three).
+
+**build-222:** eight small fixes. **The console's bottom line** no longer shows a unit's English readout (a bot's job,
+where it heads, its queue) or whose structure it is during play; an observer keeps both. **Camera distance:** in a
+skirmish or the Sandbox the mouse wheel now steps, easing, between three distances: close (28 m), medium (40 m, the
+original's and the old start view) and far (60 m); Settings → Game → Camera distance picks the one a match starts at
+(`[game] camera_distance`, medium by default). An observer and the test scenes keep the free 12-450 m zoom. **Menu
+music** was the Hobbit credits theme: Rings.exe's main-menu screen (the switch at 0x48d232, case 0x1b) adds MusicTracks
+id 17 to an empty playlist in the normal theme, which is `MUSIC_TRACK_MORDOR_EVIL`, so the menu now plays
+`Mordor_Evil_Build`, which also stays in the Evil playlist. **Match music** is shuffled: every track of the side's
+playlist once per round in a random order, never the same track twice running, with a random 30-90 s silence between
+tracks (was source order and 15 s). The three Generic tracks (no clan) join both sides' playlists, so each has 13.
+**Resource buildings:** an ore pile or food well under a Mill or Foundry (built or a foundation) can no longer be
+clicked, hovered or box-selected through the building, and a finished Mill or Foundry whose source has nothing left
+for it comes down by itself once no worker is inside, as in the original; the pile or well stays, empty. **Main
+menu** labels come from the install (Skirmish, Options, Quit, the exit question, OK, Cancel) or the catalog
+(Campaign, Sandbox, tooltips), and the Sandbox item shows only in a debug session (`-Debug`, `-DebugMenu`, smokes),
+the items below it moving up. **The loading screen's steps** are catalog rows (`loading.*`) in English and Russian;
+the load log and the menu smoke name the keys. Checks: the music playlist checks cover the shuffle, its rounds and
+the random gaps; the AI worker fixture registers its Mills' obstacles, which a demolition clears; the audio, setup,
+Evil and menu smokes expect the shuffled playlists, the Generic tracks, the new menu cue and the catalog's labels.
+
 **build-221:** the Evil Sandbox smoke passes again (it last passed at build-178, on an English pack), and an aimed
 hero ability asks for its target in the install's language. Three checks failed, none for a fault in the game:
 `dark_arsenal_offers_its_research` wanted `TECHNIQUE_IRON_FITTINGS` among the Dark Arsenal's research, but the source

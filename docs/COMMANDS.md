@@ -154,7 +154,9 @@ cancels targeting. **Ctrl + right-click now issues Attack-move**, following the
 addendum's default Force-Move behavior. **Ctrl + Alt + right-click** picks terrain
 below bridges. Alt + right-click still toggles obstacles.
 
-Arrow keys and middle-drag pan the camera. Use the mouse wheel to zoom.
+Arrow keys and middle-drag pan the camera. Use the mouse wheel to zoom. Build-222: in a skirmish or the Sandbox the
+wheel steps, easing, between three distances, close (28 m), medium (40 m, the original's) and far (60 m); Settings →
+Game → Camera distance picks the one a match starts at. An observer keeps the free zoom (12-450 m).
 F4 or the top-right Debug button opens Debug tools, which includes Pause/Resume,
 a paused single-tick step, encounter restart, the unit current action toggle and
 cheats. Opening Debug tools does not pause the simulation. The console's Menu

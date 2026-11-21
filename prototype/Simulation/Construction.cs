@@ -171,6 +171,22 @@ public sealed partial class SimWorld
         Navigation.SetObstacle(site.Obstacle,false);
     }
 
+    /// <summary>Build-222: as in the original, a finished Mill or Foundry whose source has nothing left for it to give
+    /// comes down by itself once no worker is inside. The ore pile or food well stays, empty, and can be claimed again
+    /// only if it ever holds more.</summary>
+    private void DemolishExhaustedImprovements()
+    {
+        foreach (var site in ConstructionSites.Values)
+        {
+            if (site.Building != null || site.Team < 0 || !site.Complete || !Resources.TryGetValue(site.Resource,out var source)
+                || source.RemainingMilli > source.ImprovedFloorMilli || ActiveUnits.Any(u => u.InsideSite == site.Id)) continue;
+            _exhaustedSites.Add(site);
+        }
+        foreach (var site in _exhaustedSites) DestroySite(site,null);
+        _exhaustedSites.Clear();
+    }
+    private readonly List<ConstructionSite> _exhaustedSites = [];
+
     /// <summary>A builder at work: assigned to an unfinished owned site and standing within its work envelope.</summary>
     public bool IsBuilding(SimUnit unit) => unit.Present && unit.Order == OrderKind.Build
         && ConstructionSites.TryGetValue(unit.OrderTarget,out var site) && site.Team == unit.Team

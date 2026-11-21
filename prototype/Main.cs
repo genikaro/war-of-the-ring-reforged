@@ -288,7 +288,7 @@ public partial class Main : Node3D
     /// load's of before, so the match starts exactly as it did.</summary>
     private async Task LoadSandboxAsync()
     {
-        await LoadingStep("Reading the map",.01f);
+        await LoadingStep("loading.map",.01f);
         _cacheFiles = await Task.Run(() =>
         {
             string? built = InstallMapManifest(_cache); // Build-209: the map's own manifest from the install.
@@ -303,7 +303,7 @@ public partial class Main : Node3D
         _mapName = SetupScreen.MapTitle(_sandboxMap ? SetupScreen.SandboxStem : manifest.TryGetProperty("map_file",out var mapFile)
             ? System.IO.Path.GetFileNameWithoutExtension(mapFile.GetString()!) : "",manifest.GetProperty("name").GetString()!.Split(" — ")[0]);
         if (_loadingScreen != null) _loadingScreen.Title = _mapName;
-        await LoadingStep("Checking the map files",.03f);
+        await LoadingStep("loading.map_files",.03f);
         await Task.Run(_cacheFiles.Verify);
         await PrepareInstallModels();
         UseInstallMapPictures(); // Build-210: the cloud map and skybox of a map built from the install.
@@ -314,12 +314,12 @@ public partial class Main : Node3D
         if (manifest.TryGetProperty("team_colors", out var colors))
             _teamColors = colors.EnumerateArray().Select(c => new Color(c[0].GetSingle(), c[1].GetSingle(), c[2].GetSingle())).ToArray();
         string rulesPath = manifest.GetProperty("combat_rules").GetString()!;
-        await LoadingStep("Reading the rules",.16f);
+        await LoadingStep("loading.rules",.16f);
         (_rules,var rulesData) = await Task.Run(() => (CombatRules.Parse(ReadText(rulesPath)),ReadJson(rulesPath)));
         GameNames.Localize(_rules);
         LoadCombatAudio(rulesData);
         LoadBlood();
-        await LoadingStep("Building the ground",.22f);
+        await LoadingStep("loading.ground",.22f);
         var (nav,navigation,dynamic) = await Task.Run(() => {
             var nav = InstallNavigation() is { } built ? JsonDocument.Parse(built).RootElement.Clone() : ReadJson("navigation.json");
             byte[] bytes = InstallHeights() ?? System.IO.File.ReadAllBytes(CachePath("heights.bin"));
@@ -342,7 +342,7 @@ public partial class Main : Node3D
         if (nav.TryGetProperty("building_allowed_base64",out var building))
             _world.BuildingGround = Convert.FromBase64String(building.GetString()!).Select(b => b != 0).ToArray();
         _picker = NavigationPicker.FromCache(navigation, nav);
-        await LoadingStep("Loading the terrain",.32f);
+        await LoadingStep("loading.terrain",.32f);
         string mapScene = manifest.GetProperty("map").GetString()!;
         var installScene = await Task.Run(InstallSceneGlb); // Build-210: built from the install while the rest loaded.
         var map = installScene != null ? _presentation.Load(installScene,mapScene) : LoadGlb(mapScene); AddChild(map);
@@ -374,7 +374,7 @@ public partial class Main : Node3D
                 var (x,z) = navigation.Center(n); return navigation.NodeHeight(n)-navigation.GroundHeight(x,z);
             }).First() : -1;
         foreach (var model in manifest.GetProperty("models").EnumerateArray()) _unitModels[model.GetProperty("unit").GetString()!] = model;
-        await LoadingStep("Placing the armies",.52f);
+        await LoadingStep("loading.armies",.52f);
         foreach (var spawn in manifest.GetProperty("spawns").EnumerateArray())
         {
             // A model's first load takes a while: give the screen a frame after it.
@@ -396,7 +396,7 @@ public partial class Main : Node3D
         _friendlySquads.AddRange(_world.Units.Where(u => u.Team == PlayerTeam).Select(u => u.Id).Chunk(6));
         for (int slot = 0; slot < _friendlySquads.Count; slot++) _controlGroups.Assign(slot,_friendlySquads[slot],LivingFriendly);
         _commands.TeamColors = _teamColors;
-        await LoadingStep("Preparing the console",.6f);
+        await LoadingStep("loading.console",.6f);
         // HUD art is faction content: in the pack, or in a self-contained cache.
         _commands.LoadArtwork(_cacheFiles.Content,_world,EvilTeam(PlayerTeam));
         _heroBar.LoadArtwork(_commands);
@@ -404,10 +404,11 @@ public partial class Main : Node3D
         var framed = _skirmish && _world.Units.Any(u => u.Team == StartViewTeam) ? _world.Units.Where(u => u.Team == StartViewTeam).ToList() : _world.Units;
         float spanX = (framed.Max(u => u.X)-framed.Min(u => u.X))/1000f;
         float spanZ = (framed.Max(u => u.Z)-framed.Min(u => u.Z))/1000f;
-        _squadDistance = Math.Max(StartDistance,Math.Max(spanX,spanZ)*1.9f);
+        // Build-222: a player starts at the chosen camera level; an observer and the test scenes frame the start group.
+        _squadDistance = CameraLimited ? PlayCameraDistance : Math.Max(StartDistance,Math.Max(spanX,spanZ)*1.9f);
         // Build each spawned body's region cache during loading, before a
         // mouse command can trigger a full-map connectivity pass mid-frame.
-        await LoadingStep("Preparing paths",.93f);
+        await LoadingStep("loading.paths",.93f);
         long warmStart=System.Diagnostics.Stopwatch.GetTimestamp();
         var bodies = _world.Units.GroupBy(u=>(u.Definition.BodyRadiusMm,u.Definition.BodyHeightMm)).Select(t => (t.Key,t.First().Node)).ToArray();
         await Task.Run(() => { foreach (var (body,node) in bodies) navigation.ForBody(body.BodyRadiusMm,body.BodyHeightMm).WarmConnectedRegion(node); });
@@ -416,7 +417,7 @@ public partial class Main : Node3D
         if (_surfaceSmoke) _focus = UnitPosition(_world.Units[0]);
         UpdateCamera();
         _initialDigest = _world.StateDigest();
-        await LoadingStep("Loading sounds",.97f);
+        await LoadingStep("loading.sounds",.97f);
         string audioPath = manifest.TryGetProperty("audio",out var audioIndex) ? audioIndex.GetString()! : "audio/index.json";
         var installAudio = FromInstall(audioPath) ? await Task.Run(MatchInstallAudio) : null;
         _audio.Load(CachePath(audioPath),installAudio?.Index,installAudio?.Files,CachePath,_cache,_cacheFiles.Content);
@@ -577,8 +578,8 @@ public partial class Main : Node3D
         if (_outcome.Visible) { if (_observing && input is InputEventKey { Pressed: true,Echo: false } pressed) ObserverHotkey(pressed); return; }
         if (input is InputEventMouseButton mouse)
         {
-            if (mouse.ButtonIndex == MouseButton.WheelUp && mouse.Pressed) _distance = Math.Max(12, _distance * 0.88f);
-            if (mouse.ButtonIndex == MouseButton.WheelDown && mouse.Pressed) _distance = Math.Min(450, _distance * 1.12f);
+            if (mouse.ButtonIndex == MouseButton.WheelUp && mouse.Pressed) ZoomCamera(-1);
+            if (mouse.ButtonIndex == MouseButton.WheelDown && mouse.Pressed) ZoomCamera(1);
             if (mouse.ButtonIndex == MouseButton.Middle) _panning = mouse.Pressed;
             if (mouse.ButtonIndex == MouseButton.Left)
             {
@@ -1152,6 +1153,7 @@ public partial class Main : Node3D
         float right = Math.Clamp((Input.IsPhysicalKeyPressed(Key.Right) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Left) ? 1 : 0) + edge.X,-1,1);
         float forward = Math.Clamp((Input.IsPhysicalKeyPressed(Key.Down) ? 1 : 0) - (Input.IsPhysicalKeyPressed(Key.Up) ? 1 : 0) + edge.Y,-1,1);
         if (_stressBenchmark || _constructionSmoke || _structureSmoke || _productionSmoke || _placementSmoke || _dwarfHallSmoke || _gameMenu.Visible) right = forward = 0;
+        EaseZoom(dt);
         Pan(right * dt * _distance * 0.6f, forward * dt * _distance * 0.6f);
         UpdateCamera();
         _commands.SetMinimapView(ViewFootprint());
@@ -1305,7 +1307,7 @@ public partial class Main : Node3D
     private void SetCameraView(string view)
     {
         if (_world == null) return;
-        _view = view;
+        _view = view; _zoomTarget = null;
         switch (view)
         {
             case "squad":

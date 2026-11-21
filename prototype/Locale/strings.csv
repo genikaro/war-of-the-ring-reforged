@@ -264,3 +264,206 @@ match.load_failed,,"The map could not be loaded ({0}). Start Reforged from its l
 launcher.exit,Menu:8006,Exit,,Leaves the launcher
 launcher.language.en,,English,английский,
 launcher.language.ru,,Russian,русский,
+"# Build-222: the main menu (MainMenu.cs) and the loading screen's steps (LoadingScreen.cs). The original's own labels where it has them."
+button.ok,Menu:9015,OK,,OK
+mainmenu.campaign,,Campaign,Кампания,
+mainmenu.campaign.tip,,The Good and Evil campaigns are not built yet.,Кампании Света и Тьмы еще не готовы.,
+mainmenu.skirmish,Menu:12,Skirmish,,Skirmish
+mainmenu.skirmish.tip,,Battle bots on any of the 32 multiplayer maps.,Сражение с ботами на любой из 32 карт сетевой игры.,
+mainmenu.sandbox,,Sandbox,Песочница,Shown in a debug session only
+mainmenu.sandbox.tip,,"Try every unit out on an empty field, commanding both players.","Испытайте любые войска на пустом поле, командуя обоими игроками.",
+mainmenu.settings,Menu:3,Settings,,Options
+mainmenu.exit,Menu:8006,Exit,,Quit
+mainmenu.quit_question,Menu:3100,Confirm exit from the game.,,Asks before quitting
+mainmenu.no_art,,Menu art not exported yet: python tools/frontend_assets.py,Оформление меню еще не экспортировано: python tools/frontend_assets.py,
+loading.menu_scene,,Loading the menu scene,Загрузка сцены меню,
+loading.army,,Placing the army,Расстановка армии,
+loading.fires,,Lighting the fires,Разжигание огней,
+loading.map,,Reading the map,Чтение карты,
+loading.map_files,,Checking the map files,Проверка файлов карты,
+loading.rules,,Reading the rules,Чтение правил,
+loading.ground,,Building the ground,Построение местности,
+loading.terrain,,Loading the terrain,Загрузка ландшафта,
+loading.armies,,Placing the armies,Расстановка армий,
+loading.console,,Preparing the console,Подготовка интерфейса,
+loading.bases,,Placing the bases,Расстановка баз,
+loading.resources,,Placing resources,Размещение ресурсов,
+loading.places,,Placing places of power,Размещение мест силы,
+loading.production,,Preparing training and research,Подготовка обучения и исследований,
+loading.sandbox_bases,,Building the Sandbox bases,Постройка баз Песочницы,
+loading.bots,,Preparing the bots,Подготовка ботов,
+loading.paths,,Preparing paths,Подготовка путей,
+loading.sounds,,Loading sounds,Загрузка звуков,
+loading.ready,,Ready,Готово,
+"# Build-222: Settings → Game, the camera distance a match starts at."
+settings.camera_distance,,Camera distance,Расстояние камеры,
+settings.camera_distance.tip,,"The camera distance a match starts at. In play the mouse wheel steps between close, medium (the original's) and far.","Расстояние камеры в начале матча. В игре колесо мыши переключает близкое, среднее (как в оригинале) и дальнее.",
+settings.camera.close,,Close,Близко,
+settings.camera.medium,,Medium,Средне,
+settings.camera.far,,Far,Далеко,
+"# Build-223: the setup screens (SetupScreen.cs). The original's own labels where it has them; bot names come from the install's .rai files."
+setup.title.skirmish,Menu:12,Skirmish,,Skirmish
+setup.header.player,,Player,Игрок,
+setup.header.controller,,Controller,Управляет,"Who plays a start position: you, a bot or nobody"
+setup.header.commander,,Commander,Командир,Sandbox
+setup.header.side,Menu:1501,Side,,Side
+setup.header.traits,,Traits,Черты,
+setup.header.bot,Menu:9035,Bot,,AI
+setup.player,,Player {0},Игрок {0},{0} = start position
+setup.you,,You,Вы,
+setup.closed,Menu:9034,Closed,,Closed
+setup.side.good,Menu:1502,Good,,Good
+setup.side.evil,Menu:1503,Evil,,Evil
+setup.side.random,Menu:1505,Random,,Random
+setup.side.tip,,"The side this player commands: the Free Peoples (Good), the Minions of Sauron (Evil) or Random","Сторона игрока: Свободные народы (Свет), прислужники Саурона (Тьма) или случайная",
+setup.side.random.tip,,"Good or Evil, drawn when the match starts; Restart keeps the draw","Свет или Тьма, выбирается в начале матча; при переигровке выбор сохраняется",
+setup.difficulty.0,Menu:3411,Easy,,Easy
+setup.difficulty.1,Menu:3412,Normal,,Medium
+setup.difficulty.2,Menu:3413,Hard,,Hard
+setup.style.balanced,,Balanced,Равновесие,A bot style with every axis at 25 or more
+setup.style.aggression,,Aggression,Агрессия,
+setup.style.expansion,,Expansion,Расширение,
+setup.style.tech,,Tech,Развитие,
+setup.bot_item,,Bot · {0} ({1}),ИИ · {0} ({1}),"{0} = bot, {1} = difficulty"
+setup.random_item,,Random ({0}),Случайный ({0}),{0} = difficulty
+setup.random_bot,,Random {0} bot,Случайный ИИ ({0}),{0} = difficulty
+setup.random.title,,Random · {0},Случайный · {0},{0} = difficulty
+setup.random.chooses,,Chooses a random {0} bot when the match starts.,В начале матча выбирается случайный ИИ (сложность: {0}).,{0} = difficulty
+setup.random.keeps_traits,,Keeps this slot's selected traits.,Черты этой позиции сохраняются.,
+setup.commanded_by_you,,Commanded by you,Под вашим командованием,
+setup.traits,,Traits,Черты,
+setup.traits_count,,{0} traits,Черты: {0},{0} = count
+setup.traits_list,,Traits: {0},Черты: {0},{0} = trait names
+setup.traits.for_bots,,Traits are for bots,Черты есть только у ИИ,
+setup.traits.pick,,Pick traits for this bot,Выберите черты для этого ИИ,
+setup.trait.not_with,,Not with {0}.,Несовместимо: {0}.,{0} = trait names
+setup.trait.Rusher,,Rusher,Торопыга,
+setup.trait.Rusher.tip,,"Small parties from the first soldiers, the cheapest units, more Barracks; no research or expansion before 15:00, fewer workers.","Малые отряды с первых воинов, самые дешевые войска, больше казарм; до 15:00 никаких исследований и новых баз, меньше рабочих.",
+setup.trait.Expansionist,,Expansionist,Поселенец,
+setup.trait.Expansionist.tip,,"A new Citadel from 4:00 and every 3:00 after, up to five, and more workers.","Новая цитадель с 4:00 и затем каждые 3:00, до пяти, и больше рабочих.",
+setup.trait.Defender,,Defender,Защитник,
+setup.trait.Defender.tip,,"A tower first and at least two by every Citadel, with more as the base grows; guards of a full party. Attacks with three towers and twelve soldiers, or from 20:00.","Сначала башня и не меньше двух у каждой цитадели, больше по мере роста базы; охрана из полного отряда. Атакует с тремя башнями и двенадцатью воинами или с 20:00.",
+setup.trait.Relentless,,Relentless,Неотступный,
+setup.trait.Relentless.tip,,"Parties never fall back and the wounded never retreat; half a party at home joins the one out.","Отряды не отступают, раненые не уходят с поля; половина отряда из дома присоединяется к ушедшему.",
+setup.trait.Marksman,,Marksman,Стрелок,
+setup.trait.Marksman.tip,,An army of 60% ranged units instead of 20%.,Армия на 60% из стрелков вместо 20%.,
+setup.trait.Demolisher,,Demolisher,Разрушитель,
+setup.trait.Demolisher.tip,,"Parties raze buildings, military first, and ignore the soldiers and towers hitting them.","Отряды сносят здания, сначала военные, не обращая внимания на воинов и башни, которые их атакуют.",
+setup.trait.Raider,,Raider,Налетчик,
+setup.trait.Raider.tip,,"Assaults go for Mills and Foundries first, and small raids of three to six (by the bot's Harassment) hit workers elsewhere while they fight.","Атаки сначала направлены на мельницы и рудники, а малые набеги по три-шесть воинов бьют рабочих в других местах.",
+setup.bot.FarmerMaggot,,"Tends his fields: many workers and Mills, an early second base, rare attacks.","Возделывает поля: много рабочих и мельниц, ранняя вторая база, редкие атаки.",
+setup.bot.Gollum,,"Impatient: small early attacks, little research.","Нетерпелив: малые ранние атаки, мало исследований.",
+setup.bot.Saleme,,"Hides behind towers and research, attacks late.","Прячется за башнями и исследованиями, атакует поздно.",
+setup.bot.Default,,A bit of everything.,Всего понемногу.,
+setup.bot.Frodo,,"Explorer: spreads to new bases quickly and defends them.","Исследователь: быстро занимает новые базы и защищает их.",
+setup.bot.Gimli,,"Stubborn: a tower first, upgrades early, attacks with heavy parties.","Упрям: сначала башня, ранние улучшения, атаки крупными отрядами.",
+setup.bot.Grishnakh,,"Orc raider: early and frequent attacks with cheap units.","Орк-налетчик: ранние и частые атаки дешевыми войсками.",
+setup.bot.Legolas,,"Precise: researches early and attacks with an upgraded army.","Точен: рано исследует и атакует улучшенной армией.",
+setup.bot.Shelob,,"Lurker: builds up quietly, defends well, strikes late with a large army.","Затаившаяся: тихо копит силы, хорошо защищается, поздно бьет большой армией.",
+setup.bot.Aragorn,,"Steady pressure from mid-game, army kept upgraded.","Постоянный натиск с середины игры, армия всегда улучшена.",
+setup.bot.Gandalf,,"Fast tech, then decisive attacks with a researched army.","Быстрое развитие, затем решительные атаки армией с исследованиями.",
+setup.bot.Saruman,,"Industry: several bases, then a flood of soldiers.","Промышленник: несколько баз, затем поток воинов.",
+setup.bot.Smaug,,All-out aggression from the first minutes.,Безудержная агрессия с первых минут.,
+setup.bot.none,,No description yet.,Описания пока нет.,
+setup.card.sandbox_title,,Sandbox · test map,Песочница · испытательная карта,
+setup.card.sandbox_detail,,Player 1 and Player 2 · both yours,Игрок 1 и Игрок 2 · оба ваши,
+setup.card.no_bots,,No bots,Нет ИИ,
+setup.card.no_bots.tip,,Choose a bot for a start position to see how it plays.,"Выберите ИИ для стартовой позиции, чтобы увидеть, как он играет.",
+setup.card.random_detail,,Player {0} · Personality chosen at Start,Игрок {0} · личность выбирается в начале,{0} = start position
+setup.card.style,,Player {0} · Aggression {1} · Expansion {2} · Tech {3},Игрок {0} · Агрессия {1} · Расширение {2} · Развитие {3},
+setup.triangle.tip,,"The bot's style: Aggression, Expansion and Tech sum to 100.
+The shaded centre is Balanced, each 25 or more.","Стиль ИИ: Агрессия, Расширение и Развитие в сумме дают 100.
+Затененный центр — Равновесие, каждое 25 или больше.",
+setup.map.unavailable_detail,,{0} start positions · unavailable,Стартовых позиций: {0} · недоступна,
+setup.map.sandbox_detail,,Test map · empty level field · {0} × {1} m,Испытательная карта · пустое ровное поле · {0} × {1} м,
+setup.map.detail,,{0} start positions · {1} × {2} m,Стартовых позиций: {0} · {1} × {2} м,
+setup.game_settings,Menu:1703,Game settings,,Game Settings
+setup.start_speed,Menu:1400,Start speed,,Game Speed
+setup.start_speed.tip,,Game speed at the start · - and + change it during the match,Темп игры в начале · - и + меняют его во время матча,
+setup.instant_build,,Instant building and training,Мгновенные стройка и обучение,
+setup.instant_build.tip,,"Buildings, units, upgrades and research finish at once for both players.","Здания, войска, улучшения и исследования у обоих игроков готовы сразу.",
+setup.instant_build.tip_debug,,F4 still turns it off in the match.,В матче F4 отключает это.,
+setup.training_dummies,,Training dummies,Учебные манекены,
+setup.training_dummies.tip,,"Four gilded dummies stand by the blue base, one per damage type, showing every hit's damage.","У синей базы стоят четыре позолоченных манекена, по одному на тип урона, и показывают урон каждого удара.",
+setup.fog,,Fog of war,Туман войны,
+setup.fog.tip,,"What no unit or building of a side sees is hidden from it, bots included; enemy buildings stay as last seen.","Все, чего не видят войска и здания стороны, от нее скрыто, в том числе от ИИ; вражеские здания остаются такими, какими их видели в последний раз.",
+setup.quit,Menu:9007,Quit,,Quit
+setup.start,Menu:9018,Start,,Start
+setup.sandbox_description,,"An empty level field for trying units out. You command both players: every building stands finished and fully upgraded, banks stay full, units gather in front of their base, no bots play and nothing ends the match. Tab or the console tabs switch players; clicking the other player's unit or building does too.","Пустое ровное поле для испытания войск. Вы командуете обоими игроками: все здания достроены и полностью улучшены, запасы всегда полны, войска собираются перед базой, ИИ не играет и ничто не заканчивает матч. Игроков переключают Tab или вкладки на панели, а также щелчок по войску или зданию другого игрока.",
+setup.unavailable,,This map cannot be read from the install (see the log).,Эту карту нельзя прочитать из установки (см. журнал).,
+setup.loading,,Loading {0}…,Загрузка: {0}…,{0} = map
+setup.status.no_sandbox,,"The Sandbox is made from {0}, which the install does not give.","Песочница строится из карты «{0}», которой нет в установке.",{0} = map
+setup.status.no_maps,,The install gives no multiplayer maps.,В установке нет карт для сетевой игры.,
+setup.status.two_open,,At least two start positions must be open.,Открытыми должны быть хотя бы две стартовые позиции.,
+setup.status.sandbox,,Sandbox: you command Player 1 and Player 2 · Tab switches · {0} speed,Песочница: вы командуете Игроком 1 и Игроком 2 · Tab переключает · темп {0},{0} = speed
+setup.status.slow_build,,building and training take their time,стройка и обучение занимают время,
+setup.status.no_dummies,,no training dummies,без учебных манекенов,
+setup.status.no_fog,,no fog of war,без тумана войны,
+setup.status.play,,You play Player {0} ({1}) against {2} · {3} speed,"Вы — Игрок {0} ({1}), против вас {2} · темп {3}","{0} = start position, {1} = side, {2} = bots, {3} = speed"
+setup.status.watch,,Nobody plays: you watch {0} · {1} speed,Никто не играет: вы наблюдаете за {0} · темп {1},"{0} = bots, {1} = speed"
+setup.bots.one,,{0} bot,{0} ИИ,
+setup.bots.few,,,{0} ИИ,
+setup.bots.many,,,{0} ИИ,
+setup.bots.other,,{0} bots,,
+"# Build-223: the in-game menu and the Settings page (GameMenu.cs, Main.GameMenu.cs)."
+menu.title,Menu:4,Main Menu,,Main Menu
+menu.resume,Menu:4803,Resume,,Resume
+menu.exit_to_main,,Exit to Main Menu,Выход в главное меню,The English release's Menu:9036 says Quit to Stats Screen
+menu.exit_to_windows,Menu:9037,Exit to Windows,,Quit to Windows
+menu.exit_to_main.disabled,,This match did not start from the setup screen.,Этот матч начат не с экрана настройки.,
+button.reset,Menu:9028,Reset,,Reset
+button.apply,Menu:9029,Apply,,Apply
+settings.tab.game,Menu:1600,Game,,Gameplay
+settings.tab.controls,Menu:1700,Controls,,Controls
+settings.tab.reforged,,Reforged,Reforged,
+settings.tab.audio,Menu:1604,Audio,,Sound
+settings.health_bars,,Health bars,Полоски здоровья,
+settings.player_bars,,Player-colored health bars,Полоски в цветах игроков,
+settings.player_bars.tip,,Use each player's map color for health bars over units and buildings.,Полоски здоровья над войсками и зданиями окрашены в цвет игрока на карте.,
+settings.overhead_bars,,Overhead health bars,Полоски над моделями,
+settings.overhead_bars.tip,,Place damaged units' and buildings' health bars above their models.,Полоски здоровья раненых войск и поврежденных зданий видны над их моделями.,
+settings.violence,Menu:1603,Violence,,Mature
+settings.blood,,Blood,Кровь,
+settings.blood.tip,,"Show blood when units are hit or killed, blood pools and bloodied weapons.","Кровь при ранениях и гибели войск, лужи крови и окровавленное оружие.",
+settings.unit_selection,,Unit selection,Выделение войск,
+settings.player_selectors,,Player-colored unit selectors,Кольца выделения в цветах игроков,
+settings.player_selectors.tip,,"Use each player's color for unit rings. Off uses gold for friendly and neutral units, and red for enemies.","Кольца под войсками окрашены в цвет игрока. Если выключено, свои и нейтральные войска выделяются золотым, враги — красным.",
+settings.interface_size,,Interface size,Размер интерфейса,
+settings.cursor_size,,Cursor size,Размер курсора,
+settings.volume.master,Menu:1605,Master volume,,Master Volume
+settings.volume.music,Menu:1607,Music,,Music Volume
+settings.volume.effects,Menu:1609,Sound effects,,Sound Effects Volume
+settings.volume.speech,Menu:1608,Unit speech,,Dialogue Volume
+settings.mute,,Mute all audio,Отключить весь звук,
+settings.mute.tip,,Silence every audio channel without changing its volume.,"Заглушить все каналы звука, не меняя их громкость.",
+settings.test_speech,,Test unit speech,Проверить речь,
+settings.audio_note,,Volume changes preview immediately. Apply or OK saves; Cancel restores the saved mix.,"Громкость меняется сразу. Применить или ОК сохраняют ее, Отмена возвращает сохраненную.",
+settings.edition,,Edition,Издание,
+settings.edition.purist,,Purist Edition,Классическое издание,
+settings.edition.purist.tip,,"Every Reforged improvement off, for play as close to the original game as possible.","Все улучшения Reforged выключены: игра как можно ближе к оригиналу.",
+settings.edition.reforged,,Reforged Edition,Издание Reforged,
+settings.edition.reforged.tip,,Every Reforged improvement on.,Все улучшения Reforged включены.,
+settings.edition.custom,,Custom Edition,Свое издание,
+settings.edition.custom.tip,,Choose each improvement yourself.,Каждое улучшение выбирается вручную.,
+settings.improvements,,Improvements,Улучшения,
+settings.no_improvements,,No Reforged improvements yet.,Улучшений Reforged пока нет.,
+settings.option.scaled_blood,,Scaled blood,Кровь по силе удара,
+settings.option.scaled_blood.tip,,"Harder hits throw more blood, and units bleed more often the more they are wounded. Off: every hit bleeds, as in the original.","Чем сильнее удар, тем больше крови, а чем сильнее ранен воин, тем чаще он кровоточит. Если выключено, кровь при каждом ударе, как в оригинале.",
+settings.controls_reference,,"Selection: click or drag; Shift-click adds/removes; Shift-drag adds.
+Double-click or Ctrl-click selects all living units of the same type and team.
+I selects and centers the next idle worker.
+Groups: Ctrl+number assigns, Shift+number adds, number recalls, double-tap centers.
+Orders: A Attack, M Move, S Stop, H Hold Position, G Guard, T Patrol. Shift-click queues.
+Movement: F2 toggles global Walk / Run for your army without replacing orders.
+Right-click: move / attack; Ctrl adds attack-move. Esc or right-click cancels targeting.
+Camera: arrows or middle-drag pan; the wheel steps between close, medium and far.
+Testing: Space pauses, Alt+right-click toggles an obstacle, Ctrl+Alt+right-click targets terrain beneath a bridge. F10 hides the interface.","Выделение: щелчок или рамка; Shift-щелчок добавляет или убирает; Shift-рамка добавляет.
+Двойной щелчок или Ctrl-щелчок выделяет все живые войска того же типа и стороны.
+I выделяет следующего бездействующего рабочего и показывает его.
+Группы: Ctrl+цифра назначает, Shift+цифра добавляет, цифра вызывает, двойное нажатие показывает.
+Приказы: A Атака, M Движение, S Стоп, H Держать позицию, G Охрана, T Патруль. Shift-щелчок ставит в очередь.
+Движение: F2 переключает шаг и бег для всей армии, не отменяя приказов.
+Правый щелчок: движение или атака; с Ctrl — атака на марше. Esc или правый щелчок отменяет выбор цели.
+Камера: стрелки или средняя кнопка двигают; колесо переключает близкое, среднее и дальнее расстояние.
+Испытания: Пробел — пауза, Alt+правый щелчок ставит или убирает препятствие, Ctrl+Alt+правый щелчок — цель на земле под мостом. F10 скрывает интерфейс.",
+settings.controls_debug,,Debug session: F4 opens the debug tools.,Отладочный сеанс: F4 открывает инструменты отладки.,

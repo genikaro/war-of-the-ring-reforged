@@ -21,6 +21,22 @@ public static class MusicPlaylistChecks
         }
         playlist.Finish();
         check(playlist.Advance(300) && playlist.Current == tracks[1],"a long frame starts only the next track");
+        // Build-222: a match's faction music is shuffled, each track once per round, never the same twice running, with
+        // a random quiet spell between tracks.
+        var shuffled = new MusicPlaylist(tracks,shuffle: true,random: new Random(7));
+        var order = new List<MusicTrack>(); bool gapsInRange = true,gapsVary = false; double firstGap = -1;
+        for (int i = 0; i < 40; i++)
+        {
+            order.Add(shuffled.Current!); shuffled.Finish();
+            double gap = shuffled.GapRemaining;
+            gapsInRange &= gap >= MusicPlaylist.MinShuffleGap && gap <= MusicPlaylist.MaxShuffleGap && !shuffled.Advance(gap-.5);
+            if (firstGap < 0) firstGap = gap; else gapsVary |= Math.Abs(gap-firstGap) > .5;
+            check(shuffled.Advance(.5) && !shuffled.Waiting,"a shuffled track starts only once its quiet spell is over");
+        }
+        check(order.Chunk(10).All(round => round.Distinct().Count() == 10),"each shuffled round plays every track once");
+        check(order.Zip(order.Skip(1)).All(p => p.First != p.Second),"a shuffled track never plays twice running");
+        check(!order.Take(10).SequenceEqual(tracks) && !order.Take(10).SequenceEqual(order.Skip(10).Take(10)),"shuffled rounds differ from the source order and each other");
+        check(gapsInRange && gapsVary,"quiet spells between shuffled tracks are random, within their bounds");
         var one = new MusicPlaylist(tracks.Take(1)); one.Finish();
         check(!one.Advance(14) && one.Advance(1) && one.Current == tracks[0],"a single menu cue repeats after the full gap");
         var empty = new MusicPlaylist([]); empty.Finish();

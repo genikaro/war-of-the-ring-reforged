@@ -34,6 +34,8 @@ public static class ConstructionChecks
         check(single.ConstructionSites[7].Complete && single.ConstructionSites[7].Health == 100 && single.Units[0].Order == OrderKind.Gather,"completion reaches full health and automatically starts gathering");
         Step(single,400);
         check(single.Economies[0].Food == 135 && single.Resources[7].RemainingMilli == 0,"completed Mill unlocks food and deliveries without creating stock");
+        check(single.ConstructionSites[7] is { Team: -1,Complete: false,Health: 0 } && !single.Navigation.IsObstacleActive(20007)
+            && single.Resources.ContainsKey(7) && single.Units[0].Order == OrderKind.Idle,"an exhausted Mill demolishes itself and leaves its empty source");
         var replay = Fixture(); replay.Commands.AddRange(single.Commands); Step(replay,single.Tick);
         check(single.StateDigest() == replay.StateDigest(),"construction and improved economy replay identically");
         replay.ConstructionSites[7].Health--;
@@ -43,6 +45,9 @@ public static class ConstructionChecks
         check(cooperative.ConstructionSites[7].ProgressMicroTicks == 59_800_000 && !cooperative.ConstructionSites[7].Complete,"additional workers contribute the imported ten percent work rate");
         cooperative.Step();
         check(cooperative.ConstructionSites[7].Complete && cooperative.Economies[0].Ore == 275,"cooperative completion never charges once per worker");
+        check(!cooperative.CanGather(1,7),"enemy cannot gather through an owned improvement");
+        cooperative.Enqueue(0,[],OrderKind.CancelConstruction,target: 7); cooperative.Step();
+        check(cooperative.ConstructionSites[7].Complete && cooperative.Economies[0].Ore == 275,"completed buildings cannot receive construction cancellation refunds");
 
         var paused = Fixture(); paused.Enqueue(0,[0],OrderKind.Build,target: 7); Step(paused,10);
         paused.Enqueue(0,[0],OrderKind.Stop); paused.Step(); long progress = paused.ConstructionSites[7].ProgressMicroTicks; Step(paused,20);
@@ -81,11 +86,11 @@ public static class ConstructionChecks
         var ore = Fixture(food: false); ore.Enqueue(0,[0],OrderKind.Gather,target: 7); Step(ore,1000);
         check(ore.Resources[7].RemainingMilli == 9000 && ore.Units[0].Order == OrderKind.Idle && ore.Economies[0].Ore == 336,"raw stock reaches its extraction floor");
         ore.Enqueue(0,[0],OrderKind.Build,target: 7); Step(ore,400);
-        check(ore.ConstructionSites[7].Complete && ore.Resources[7].RemainingMilli == 0 && ore.Economies[0].Ore == 295,
-            "Foundry exposes residual raw stock while conserving cost plus total gathered ore");
-        check(!ore.CanGather(1,7),"enemy cannot gather through an owned improvement");
-        ore.Enqueue(0,[],OrderKind.CancelConstruction,target: 7); ore.Step();
-        check(ore.ConstructionSites[7].Complete && ore.Economies[0].Ore == 295,"completed buildings cannot receive construction cancellation refunds");
+        // Build-222: having given its last load, the exhausted Foundry comes down; the empty pile stays, unclaimed.
+        check(ore.ConstructionSites[7] is { Team: -1,Complete: false } && ore.Resources[7].RemainingMilli == 0 && ore.Economies[0].Ore == 295
+            && !ore.Navigation.IsObstacleActive(20007),"Foundry exposes residual raw stock while conserving cost plus total gathered ore");
+        ore.Enqueue(0,[0],OrderKind.Build,target: 7); Step(ore,40);
+        check(ore.ConstructionSites[7].Team == -1 && ore.Economies[0].Ore == 295,"an exhausted source cannot take a new Foundry");
 
         var instant = Fixture(); instant.InstantBuildTeams.Add(0); instant.Enqueue(0,[0],OrderKind.Build,target: 7); instant.Step();
         check(instant.ConstructionSites[7].Complete && instant.ConstructionSites[7].Health == 100 && instant.Economies[0].Ore == 275

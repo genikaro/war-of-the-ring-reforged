@@ -6,6 +6,8 @@ using Godot;
 public sealed class GameSettings
 {
     public enum Edition { Purist,Reforged,Custom }
+    /// <summary>Build-222: the camera level a match starts at (Main.CameraLevels); medium is the original's.</summary>
+    public enum CameraLevel { Close,Medium,Far }
 
     /// <summary>A modern improvement over the original that the Reforged tab can switch off. Each build lists its
     /// own here and asks <see cref="IsOn"/> before applying it.</summary>
@@ -34,6 +36,8 @@ public sealed class GameSettings
     /// <summary>Build-129: hit blood, death blood pools and bloody weapons, the effects and decals the source flags
     /// IsMature ("will not be seen if player turns off maturity in the options").</summary>
     public bool Blood { get; set; } = true;
+    private CameraLevel _cameraDistance = CameraLevel.Medium;
+    public CameraLevel CameraDistance { get => _cameraDistance; set => _cameraDistance = Enum.IsDefined(value) ? value : CameraLevel.Medium; }
     public bool Muted { get; set; }
     private double _masterVolume = 80,_musicVolume = 45,_effectsVolume = 80,_voiceVolume = 90;
     public double MasterVolume { get => _masterVolume; set => _masterVolume = Volume(value,80); }
@@ -50,6 +54,7 @@ public sealed class GameSettings
 
     public GameSettings Copy() => new() { PlayerColoredBars = PlayerColoredBars,OverheadBars = OverheadBars,Blood = Blood,CursorSizePercent = CursorSizePercent,
         PlayerColoredUnitSelectors = PlayerColoredUnitSelectors,ReforgedEdition = ReforgedEdition,CustomOn = [.. CustomOn],Muted = Muted,
+        CameraDistance = CameraDistance,
         MasterVolume = MasterVolume,MusicVolume = MusicVolume,EffectsVolume = EffectsVolume,VoiceVolume = VoiceVolume };
 
     public static GameSettings Load(string path = DefaultPath)
@@ -61,6 +66,7 @@ public sealed class GameSettings
         settings.PlayerColoredUnitSelectors = config.GetValue("game","player_colored_unit_selectors",true).AsBool();
         settings.Blood = config.GetValue("game","blood",true).AsBool();
         settings.CursorSizePercent = config.GetValue("interface","cursor_size_percent",DefaultCursorSizePercent).AsInt32();
+        if (Enum.TryParse<CameraLevel>(config.GetValue("game","camera_distance","").AsString(),out var camera)) settings.CameraDistance = camera;
         settings.Muted = config.GetValue("audio","muted",false).AsBool();
         settings.MasterVolume = config.GetValue("audio","master",80.0).AsDouble();
         settings.MusicVolume = config.GetValue("audio","music",45.0).AsDouble();
@@ -79,6 +85,7 @@ public sealed class GameSettings
         config.SetValue("health_bars","overhead",OverheadBars);
         config.SetValue("game","player_colored_unit_selectors",PlayerColoredUnitSelectors);
         config.SetValue("game","blood",Blood);
+        config.SetValue("game","camera_distance",CameraDistance.ToString());
         config.SetValue("interface","cursor_size_percent",CursorSizePercent);
         config.SetValue("audio","muted",Muted);
         config.SetValue("audio","master",MasterVolume);

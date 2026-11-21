@@ -5,6 +5,33 @@ public partial class Main
 {
     // Viewport pixels at each window edge that scroll the map, as in the original manual ("pushing" on screen edges).
     private const float EdgePanMargin = 8;
+    /// <summary>Build-222: in play (a skirmish or the Sandbox, not observing) the wheel steps between three camera
+    /// distances, close, medium and far; medium is the original's (the start camera's 40 m). Settings → Game picks the
+    /// one a match starts at. An observer, and the test scenes, keep the free zoom.</summary>
+    public static readonly float[] CameraLevels = [28,StartDistance,60];
+    private const float FreeZoomMin = 12,FreeZoomMax = 450;
+    private float? _zoomTarget;
+    private bool CameraLimited => _skirmish && !_observing;
+    private float PlayCameraDistance => CameraLevels[(int)_settings.CameraDistance];
+
+    /// <summary>One wheel notch: -1 toward the ground, +1 away. In play it eases to the next level in that direction.</summary>
+    private void ZoomCamera(int step)
+    {
+        if (!CameraLimited) { _zoomTarget = null; _distance = step < 0 ? Math.Max(FreeZoomMin,_distance*.88f) : Math.Min(FreeZoomMax,_distance*1.12f); return; }
+        float from = _zoomTarget ?? _distance;
+        // From between two levels (a debug view), the first notch reaches the next level in that direction.
+        float? next = step < 0 ? CameraLevels.Where(level => level < from-.01f).Cast<float?>().LastOrDefault()
+            : CameraLevels.Where(level => level > from+.01f).Cast<float?>().FirstOrDefault();
+        _zoomTarget = next ?? (step < 0 ? CameraLevels[0] : CameraLevels[^1]);
+    }
+
+    private void EaseZoom(float dt)
+    {
+        if (_zoomTarget is not float target) return;
+        _distance = Mathf.Lerp(_distance,target,1-Mathf.Exp(-12*dt));
+        if (Math.Abs(_distance-target) < .02f) { _distance = target; _zoomTarget = null; }
+    }
+
     private bool _pointerInWindow, _windowFocused = true;
     private readonly List<(string Type,float X,float Z)> _minimapMarkers = [];
 

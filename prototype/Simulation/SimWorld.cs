@@ -796,7 +796,7 @@ public sealed partial class SimWorld(GridNavigation navigation,CombatRules? rule
         }
         using (SimProfiler.Time("queued orders")) { ReleaseHeldOrders(); ActivateQueuedOrders(); }
         using (SimProfiler.Time("ai")) UpdateAi();
-        using (SimProfiler.Time("construction")) { UpdateConstruction(); UpdateRepairs(); }
+        using (SimProfiler.Time("construction")) { UpdateConstruction(); UpdateRepairs(); DemolishExhaustedImprovements(); }
         using (SimProfiler.Time("defenses")) UpdateDefenses();
         using (SimProfiler.Time("production")) { UpdateUpgrades(); UpdateResearch(); UpdateProduction(); UpdateWarpostFate(); }
         UpdateHeroAbilities();

@@ -37,11 +37,16 @@ respective source events, with source chance and a bounded spatial voice pool.
 Observer selection and bot orders do not produce foreground replies. Battlefield
 voices are limited to visible units within 50 m of the camera focus.
 
-Since build-120, setup uses the original `MUSIC_TRACK_HOBBIT_MAIN_INTRO_ENDING`
-cue. A match plays ten original normal tracks for the player's faction (Good or
-Evil), in source track order, repeating the sequence without shuffling. Each
-track finishes in full, followed by 15 seconds of silence. The menu cue also
-repeats after that interval. Combat never switches to a battle variant or seeks
+Since build-222, the menu and setup play the original main menu's cue,
+`MUSIC_TRACK_MORDOR_EVIL` (`Mordor_Evil_Build`): Rings.exe's main-menu screen
+(0x48d849) adds MusicTracks id 17 to an empty playlist in the normal theme. Builds
+120-221 played `MUSIC_TRACK_HOBBIT_MAIN_INTRO_ENDING`, a credits theme the original
+unlocks at a Good victory. The menu cue repeats after 15 seconds of silence. A match
+plays the normal tracks of the player's faction (Good or Evil, ten each) and the three
+Generic tracks, which have no clan, so 13 per side; the menu cue is also Evil music.
+They are shuffled: each round plays every track once in a random order, and a track
+never plays twice running. Each track finishes in full, followed by a random 30-90
+seconds of silence (build-120 to 221: source order, 15 seconds). Combat never switches to a battle variant or seeks
 the playing track. Returning to setup restores the menu cue; the in-match menu
 keeps the faction music. Playback and quiet intervals continue during pause,
 while spatial effects and battlefield voices pause with the world.
@@ -55,8 +60,8 @@ Switching the commanded player in the Sandbox also switches faction music; switc
 between two players of the same faction preserves the playing track and quiet interval.
 Older/demo caches without seated factions use unit names, then the content faction.
 Old format-1 caches can still play their Good normal
-tracks and report how to refresh menu/Evil music. The 15-second interval and
-fixed order are presentation choices; no exact legacy scheduler timing is claimed.
+tracks and report how to refresh menu/Evil music. The quiet intervals and the
+shuffle are presentation choices; no exact legacy scheduler timing is claimed.
 
 Melee impact events resolve through the attacker's original melee weapon and the
 target's composition, supplementing the existing ranged impact mappings. Source

@@ -8,7 +8,8 @@ static class AiWorkerChecks
     private static SimWorld Fixture(int workers=1,int difficulty=1,bool food=true,bool ore=true,bool extraFood=false)
     {
         var nav=new GridNavigation(Width,65,1000,Enumerable.Repeat(true,Width*65).ToArray(),new int[(Width+1)*66],
-            obstacles:[new(Keep,[],[]),new(EnemyKeep,[],[])]);
+            // Build-222: the Mills' and Foundries' own obstacles too, which an exhausted one's demolition clears.
+            obstacles:[new(Keep,[],[]),new(EnemyKeep,[],[]),new(Food,[],[]),new(Ore,[],[]),new(ExtraFood,[],[])]);
         var rules=new CombatRules();rules.Units.Add(Worker.Name,Worker);
         var w=new SimWorld(nav,rules){InitialPopulationCapacity=100};
         w.Workers.Add(Worker.Name,new(10,9));w.Economies.Add(0,new(10000,10000));w.Economies.Add(1,new(10000,10000));

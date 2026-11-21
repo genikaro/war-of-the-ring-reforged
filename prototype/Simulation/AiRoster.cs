@@ -7,9 +7,13 @@ public sealed record AiStyle(int Aggression,int Expansion,int Tech)
     public static readonly AiStyle Balanced = new(34,33,33);
 
     /// <summary>"Balanced" when every value is at least 25, else the axes of 30 or more, heaviest first ("Aggression-Tech").</summary>
-    public string Label => Aggression >= 25 && Expansion >= 25 && Tech >= 25 ? "Balanced"
-        : string.Join('-',new[] {("Aggression",Aggression),("Expansion",Expansion),("Tech",Tech)}
-            .Where(a => a.Item2 >= 30).OrderByDescending(a => a.Item2).Select(a => a.Item1));
+    public string Label => string.Join('-',Axes);
+
+    /// <summary>Build-223: the label's parts, ["Balanced"] or the heavy axes heaviest first, for the lobby to name in
+    /// the install's language.</summary>
+    public string[] Axes => Aggression >= 25 && Expansion >= 25 && Tech >= 25 ? ["Balanced"]
+        : [.. new[] {("Aggression",Aggression),("Expansion",Expansion),("Tech",Tech)}
+            .Where(a => a.Item2 >= 30).OrderByDescending(a => a.Item2).Select(a => a.Item1)];
 
     public bool Valid => Aggression >= 0 && Expansion >= 0 && Tech >= 0 && Aggression+Expansion+Tech == 100;
 }

@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 
 /// <summary>The in-game menu in a match (build-96, see GameMenu): the console's Menu button opens it and pauses the game
 /// until Resume, which restores the pause state from before. Its Settings took the player's options out of the debug
@@ -7,9 +8,9 @@ using Godot;
 /// from the defaults and save nothing.</summary>
 public partial class Main
 {
-    private const string ControlsList = "Selection: click or drag; Shift-click adds/removes; Shift-drag adds.\nDouble-click or Ctrl-click selects all living units of the same type and team.\nI selects and centers the next idle worker.\nGroups: Ctrl+number assigns, Shift+number adds, number recalls, double-tap centers.\nOrders: A Attack, M Move, S Stop, H Hold Position, G Guard, T Patrol. Shift-click queues.\nMovement: F2 toggles global Walk / Run for your army without replacing orders.\nRight-click: move / attack; Ctrl adds attack-move. Esc or right-click cancels targeting.\nCamera: arrows or middle-drag pan; wheel zooms.\nTesting: Space pauses, Alt+right-click toggles an obstacle, Ctrl+Alt+right-click targets terrain beneath a bridge. F10 hides the interface.";
-    /// <summary>The controls list; F4 only in a debug session (build-189), where the debug tools exist.</summary>
-    private static string ControlsReference => ControlsList + (DebugSession.Enabled ? "\nDebug session: F4 opens the debug tools." : "");
+    /// <summary>The Controls tab's key and mouse reference (build-223: catalog rows, in the install's language).</summary>
+    private static string ControlsReference => GameText.T("settings.controls_reference")
+        + (DebugSession.Enabled ? "\n"+GameText.T("settings.controls_debug") : "");
     private GameMenu _gameMenu = null!;
     private GameSettings _settings = new();
     private GameAudio _audio = null!;

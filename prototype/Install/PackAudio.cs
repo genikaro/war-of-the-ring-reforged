@@ -13,7 +13,9 @@ namespace Reforged.Install;
 public sealed class PackAudio
 {
     private static readonly int[] EffectEvents = [124, 147, 148, 149, 150, 243, 244, 245, 255, 256, 276, 277, 291];
-    private const string MenuTrack = "MUSIC_TRACK_HOBBIT_MAIN_INTRO_ENDING";
+    /// <summary>Build-222: the original main menu's cue. Rings.exe's main-menu screen (0x48d849) adds MusicTracks id 17
+    /// to an empty playlist in the normal theme: Mordor's Evil build music, not the Hobbit credits theme.</summary>
+    private const string MenuTrack = "MUSIC_TRACK_MORDOR_EVIL";
 
     private readonly LqrDatabase _db;
     private readonly GameArchives _archives;
@@ -105,10 +107,14 @@ public sealed class PackAudio
         {
             var track = T("MusicTracks").Get(I(entry,"Track"));
             if (track == null || I(entry,"Theme") != 1) continue;
-            string? context = track.Name == MenuTrack ? "Menu"
-                : track.Name.EndsWith("_GOOD",StringComparison.Ordinal) && I(track,"ClanAffiliation") == 1 ? "Good"
-                : track.Name.EndsWith("_EVIL",StringComparison.Ordinal) && I(track,"ClanAffiliation") == 2 ? "Evil" : null;
-            if (context != null) music[context]!.AsArray().Add(new JsonObject { ["Name"] = track.Name, ["File"] = Copy("Music",entry) });
+            // Build-222: the menu cue is also Evil faction music, and the Generic tracks (no clan) play for both sides.
+            var contexts = new List<string>();
+            if (track.Name == MenuTrack) contexts.Add("Menu");
+            if (track.Name.EndsWith("_GOOD",StringComparison.Ordinal) && I(track,"ClanAffiliation") == 1
+                || track.Name.StartsWith("MUSIC_TRACK_GENERIC",StringComparison.Ordinal) && I(track,"ClanAffiliation") == 0) contexts.Add("Good");
+            if (track.Name.EndsWith("_EVIL",StringComparison.Ordinal) && I(track,"ClanAffiliation") == 2
+                || track.Name.StartsWith("MUSIC_TRACK_GENERIC",StringComparison.Ordinal) && I(track,"ClanAffiliation") == 0) contexts.Add("Evil");
+            foreach (string context in contexts) music[context]!.AsArray().Add(new JsonObject { ["Name"] = track.Name, ["File"] = Copy("Music",entry) });
         }
         return new JsonObject { ["FormatVersion"] = 2, ["Speech"] = speech, ["Effects"] = effects, ["Melee"] = melee, ["Music"] = music, ["Sources"] = sources };
     }

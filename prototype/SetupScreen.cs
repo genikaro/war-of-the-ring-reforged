@@ -38,11 +38,11 @@ public partial class SetupScreen : Control
     /// <summary>Back to the main menu (Quit when the screen was opened on its own with --setup).</summary>
     public event Action? BackChosen;
     /// <summary>Set before the screen enters the tree: which screen, the speeds, the last match chosen here (to start
-    /// from its choices) and the Back button's caption.</summary>
+    /// from its choices) and whether its corner button goes Back to the main menu or Quits (a screen opened on its own).</summary>
     public SetupKind Kind { get; set; }
     public int[] Speeds { get; set; } = [1];
     public SkirmishSetup? Previous { get; set; }
-    public string BackText { get; set; } = "Back";
+    public bool BackToMenu { get; set; } = true;
 
     private const int Slots = 8,You = 0,Closed = 1,FirstBot = 2;
     private static readonly Vector2 ScreenSize = new(1024,768);
@@ -61,7 +61,7 @@ public partial class SetupScreen : Control
     /// <summary>Each row's bot in a few words: its difficulty and style (build-147).</summary>
     private readonly Label[] _summaries = new Label[Slots];
     private const int GoodSide = 0,EvilSide = 1,RandomSide = 2;
-    private static readonly string[] SideNames = ["Good","Evil","Random"];
+    private static readonly string[] SideNames = ["good","evil","random"];
     private static readonly string[] SideKeys = [SimWorld.Good,SimWorld.Evil,SimWorld.RandomSide];
     /// <summary>Each slot's bot traits, kept while the slot stays a bot.</summary>
     private readonly SortedSet<AiTrait>[] _traits = [.. Enumerable.Range(0,Slots).Select(_ => new SortedSet<AiTrait>())];
@@ -96,33 +96,34 @@ public partial class SetupScreen : Control
             var panel = Place(new Panel { MouseFilter = MouseFilterEnum.Ignore },0,0,1024,768);
             panel.AddThemeStyleboxOverride("panel",new StyleBoxFlat { BgColor = new Color("3c3b3a"),BorderColor = Gold,BorderWidthLeft = 2,BorderWidthRight = 2,BorderWidthTop = 2,BorderWidthBottom = 2 });
         }
-        _title = Place(Caption(sandbox ? "Sandbox" : "Skirmish",34,Ink,true),36,142,560,50);
+        _title = Place(Caption(GameText.T(sandbox ? "sandbox.title" : "setup.title.skirmish"),34,Ink,true),36,142,560,50);
 
         // The player table (MENU_SKIRMISH: header at y 0.256, rows from 0.293 one every 0.0349, x 0.067 to 0.935).
         const float tableLeft = 69,tableRight = 950,headerY = 197,rowTop = 225,rowStep = 26.8f;
-        foreach (var (text,x) in new[] { ("Player",76f),(sandbox ? "Commander" : "Controller",190f),("Side",448f),(sandbox ? "" : "Traits",556f),(sandbox ? "" : "Bot",684f) })
-            Place(Caption(text,16,Gold,true),x,headerY,180,25);
+        foreach (var (key,x) in new[] { ("player",76f),(sandbox ? "commander" : "controller",190f),("side",448f),(sandbox ? "" : "traits",556f),(sandbox ? "" : "bot",684f) })
+            Place(Caption(key == "" ? "" : GameText.T("setup.header."+key),16,Gold,true),x,headerY,180,25);
         Place(new ColorRect { Color = Rule,MouseFilter = MouseFilterEnum.Ignore },tableLeft,rowTop-3,tableRight-tableLeft,1);
         for (int slot = 0; slot < Slots; slot++)
         {
             int index = slot; float y = rowTop+slot*rowStep;
             var row = Place(new Control { MouseFilter = MouseFilterEnum.Ignore },tableLeft,y,tableRight-tableLeft,rowStep);
             var swatch = PlaceIn(row,new ColorRect { MouseFilter = MouseFilterEnum.Ignore },8,7,13,13);
-            var name = PlaceIn(row,Caption($"Player {slot+1}",15,Ink),27,0,90,24);
+            var name = PlaceIn(row,Caption(GameText.T("setup.player",slot+1),15,Ink),27,0,90,24);
             var choice = PlaceIn(row,new OptionButton { FocusMode = FocusModeEnum.None },121,1,250,23);
             StyleDropDown(choice,choice.GetPopup()); choice.ItemSelected += item => ChooseSlot(index,(int)item);
             choice.Pressed += () => { _cardSlot = index; Refresh(); };
-            var side = PlaceIn(row,new OptionButton { FocusMode = FocusModeEnum.None,TooltipText = "The side this player commands: the Free Peoples (Good), the Minions of Sauron (Evil) or Random" },379,1,100,23);
-            foreach (string sideName in SideNames) side.AddItem(sideName);
-            side.SetItemTooltip(RandomSide,"Good or Evil, drawn when the match starts; Restart keeps the draw");
+            var side = PlaceIn(row,new OptionButton { FocusMode = FocusModeEnum.None,TooltipText = GameText.T("setup.side.tip") },379,1,100,23);
+            for (int sideIndex = 0; sideIndex < SideNames.Length; sideIndex++) side.AddItem(SideName(sideIndex));
+            side.SetItemTooltip(RandomSide,GameText.T("setup.side.random.tip"));
             StyleDropDown(side,side.GetPopup()); side.ItemSelected += _ => Refresh(); _sides[slot] = side;
             // Traits (build-51): check items that stay open, so several can be ticked in one go.
-            var traits = PlaceIn(row,new MenuButton { Text = "Traits",FocusMode = FocusModeEnum.None,Flat = false },487,1,120,23);
+            var traits = PlaceIn(row,new MenuButton { Text = GameText.T("setup.traits"),FocusMode = FocusModeEnum.None,Flat = false },487,1,120,23);
             var menu = traits.GetPopup(); menu.HideOnCheckableItemSelection = false;
             foreach (var trait in AiRoster.Traits)
             {
-                menu.AddCheckItem(trait.Name,(int)trait.Trait);
-                menu.SetItemTooltip(menu.ItemCount-1,trait.Description+(trait.Excludes.Length > 0 ? $"\nNot with {AiRoster.TraitList(trait.Excludes)}." : ""));
+                menu.AddCheckItem(TraitName(trait.Trait),(int)trait.Trait);
+                menu.SetItemTooltip(menu.ItemCount-1,GameText.T("setup.trait."+trait.Trait+".tip")
+                    +(trait.Excludes.Length > 0 ? "\n"+GameText.T("setup.trait.not_with",TraitList(trait.Excludes)) : ""));
             }
             StyleDropDown(traits,menu); menu.IdPressed += id => ToggleTrait(index,(AiTrait)id);
             traits.Pressed += () => { _cardSlot = index; Refresh(); };
@@ -140,7 +141,7 @@ public partial class SetupScreen : Control
         var list = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill }; list.AddThemeConstantOverride("separation",1); _scroll.AddChild(list);
         // Wrapping from the start: a label first sized to its unwrapped text keeps that width.
         _sandboxText = Caption("",15,Ink); _sandboxText.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        Place(_sandboxText,35,484,302,240); _sandboxText.Text = SandboxDescription;
+        Place(_sandboxText,35,484,302,240); _sandboxText.Text = GameText.T("setup.sandbox_description");
         _sandboxText.VerticalAlignment = VerticalAlignment.Top; _sandboxText.Visible = sandbox;
 
         // Middle: the minimap (0.344, 0.6225, 0.151 × 0.191) and the map's name and size under it.
@@ -149,27 +150,27 @@ public partial class SetupScreen : Control
         _mapDetail = Place(Caption("",13,Dim),352,656,190,72); _mapDetail.AutowrapMode = TextServer.AutowrapMode.WordSmart; _mapDetail.VerticalAlignment = VerticalAlignment.Top;
 
         // Bottom right: Game settings under the gold rule (0.548, 0.665, 0.426).
-        Place(Caption("Game settings",18,Gold,true),565,480,380,27);
+        Place(Caption(GameText.T("setup.game_settings"),18,Gold,true),565,480,380,27);
         if (art.Art("control_golden_panel_thin") is { } rule)
             Place(new TextureRect { Texture = rule,MouseFilter = MouseFilterEnum.Ignore,ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,StretchMode = TextureRect.StretchModeEnum.Scale },561,509,436,6);
-        Place(Caption("Start speed",15,Ink),565,520,120,26);
-        _speed = Place(new SpeedSlider { TooltipText = "Game speed at the start · - and + change it during the match" },700,515,280,40);
+        Place(Caption(GameText.T("setup.start_speed"),15,Ink),565,520,130,26);
+        _speed = Place(new SpeedSlider { TooltipText = GameText.T("setup.start_speed.tip") },700,515,280,40);
         _speed.Chosen += _ => Refresh();
-        _instantBuild = Place(Check("Instant building and training","Buildings, units, upgrades and research finish at once for both players."+(DebugSession.Enabled ? " F4 still turns it off in the match." : "")),561,560,420,30);
-        _trainingDummies = Place(Check("Training dummies","Four gilded dummies stand by the blue base, one per damage type, showing every hit's damage."),561,592,420,30);
+        _instantBuild = Place(Check(GameText.T("setup.instant_build"),GameText.T("setup.instant_build.tip")
+            +(DebugSession.Enabled ? " "+GameText.T("setup.instant_build.tip_debug") : "")),561,560,420,30);
+        _trainingDummies = Place(Check(GameText.T("setup.training_dummies"),GameText.T("setup.training_dummies.tip")),561,592,420,30);
         _instantBuild.Visible = _trainingDummies.Visible = sandbox;
         _instantBuild.ButtonPressed = Previous?.SandboxInstantBuild ?? true; _trainingDummies.ButtonPressed = Previous?.SandboxTrainingDummies ?? true;
         _instantBuild.Toggled += _ => Refresh(); _trainingDummies.Toggled += _ => Refresh();
         // Build-150: fog of war, on as in the original.
-        _fogOfWar = Place(Check("Fog of war","What no unit or building of a side sees is hidden from it, bots included; enemy buildings stay as last seen."),815,478,180,30);
+        _fogOfWar = Place(Check(GameText.T("setup.fog"),GameText.T("setup.fog.tip")),815,478,180,30);
         _fogOfWar.Visible = !sandbox; _fogOfWar.ButtonPressed = Previous?.FogOfWar ?? true; _fogOfWar.Toggled += _ => Refresh();
 
         var card = new PanelContainer { Visible = !sandbox }; _card = card;
         var cardBox = Box(new Color(0,0,0,.45f),Edge); cardBox.ContentMarginTop = cardBox.ContentMarginBottom = 4; cardBox.ContentMarginLeft = cardBox.ContentMarginRight = 6;
         card.AddThemeStyleboxOverride("panel",cardBox); Place(card,561,557,436,132);
         var cardRow = new HBoxContainer(); cardRow.AddThemeConstantOverride("separation",8); card.AddChild(cardRow);
-        _triangle = new StyleTriangle { CustomMinimumSize = new(150,104),
-            TooltipText = "The bot's style: Aggression, Expansion and Tech sum to 100.\nThe shaded centre is Balanced, each 25 or more." };
+        _triangle = new StyleTriangle { CustomMinimumSize = new(150,104),TooltipText = GameText.T("setup.triangle.tip") };
         cardRow.AddChild(_triangle);
         var cardText = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill,Alignment = BoxContainer.AlignmentMode.Center };
         cardText.AddThemeConstantOverride("separation",1); cardRow.AddChild(cardText);
@@ -180,14 +181,14 @@ public partial class SetupScreen : Control
         foreach (var label in new[] { _cardTitle,_cardDetail,_cardTraits,_cardDescription }) label.CustomMinimumSize = new(250,0);
 
         // The corner boxes (0.653 and 0.809, 0.908).
-        _quit = Place(ActionButton(BackText),669,698,154,42); _quit.Pressed += () => BackChosen?.Invoke();
-        _start = Place(ActionButton("Start"),829,698,167,42); _start.AddThemeFontSizeOverride("font_size",20); _start.Pressed += Start;
+        _quit = Place(ActionButton(GameText.T(BackToMenu ? "button.back" : "setup.quit")),669,698,154,42); _quit.Pressed += () => BackChosen?.Invoke();
+        _start = Place(ActionButton(GameText.T("setup.start")),829,698,167,42); _start.AddThemeFontSizeOverride("font_size",20); _start.Pressed += Start;
 
         _maps.AddRange(FindMaps().Where(m => m.Sandbox == sandbox));
         foreach (var map in _maps.Where(_ => !sandbox))
         {
             var button = new Button { Text = map.Title,ToggleMode = true,FocusMode = FocusModeEnum.None,Alignment = HorizontalAlignment.Left,
-                CustomMinimumSize = new(300,24),TooltipText = map.Available ? map.Title : $"{map.Title}\n{Unavailable}" };
+                CustomMinimumSize = new(300,24),TooltipText = map.Available ? map.Title : $"{map.Title}\n{GameText.T("setup.unavailable")}" };
             StyleListItem(button,map.Available);
             var count = Caption($"{map.Players}",14,map.Available ? Dim : Edge); count.HorizontalAlignment = HorizontalAlignment.Right;
             count.SetAnchorsAndOffsetsPreset(LayoutPreset.RightWide); count.OffsetLeft = -40; count.OffsetRight = -10; button.AddChild(count);
@@ -215,7 +216,7 @@ public partial class SetupScreen : Control
     public override void _UnhandledKeyInput(InputEvent input)
     {
         if (input is InputEventKey { Pressed: true,Echo: false,Keycode: Key.Enter or Key.KpEnter } && !_start.Disabled) { Start(); GetViewport().SetInputAsHandled(); }
-        else if (input is InputEventKey { Pressed: true,Echo: false,Keycode: Key.Escape } && !_quit.Disabled && BackText == "Back") { BackChosen?.Invoke(); GetViewport().SetInputAsHandled(); }
+        else if (input is InputEventKey { Pressed: true,Echo: false,Keycode: Key.Escape } && !_quit.Disabled && BackToMenu) { BackChosen?.Invoke(); GetViewport().SetInputAsHandled(); }
     }
 
     private T Place<T>(T control,float x,float y,float width,float height) where T : Control => PlaceIn(_frame,control,x,y,width,height);
@@ -232,9 +233,9 @@ public partial class SetupScreen : Control
         _selected = map;
         foreach (var (stem,button) in _mapButtons) button.SetPressedNoSignal(stem == map.Stem);
         _mapTitle.Text = map.Title;
-        _mapDetail.Text = !map.Available ? $"{map.Players} start positions · unavailable"
-            : map.Sandbox ? $"Test map · empty level field · {map.WidthMm/1000} × {map.HeightMm/1000} m"
-            : $"{map.Players} start positions · {map.WidthMm/1000} × {map.HeightMm/1000} m";
+        _mapDetail.Text = !map.Available ? GameText.T("setup.map.unavailable_detail",map.Players)
+            : map.Sandbox ? GameText.T("setup.map.sandbox_detail",map.WidthMm/1000,map.HeightMm/1000)
+            : GameText.T("setup.map.detail",map.Players,map.WidthMm/1000,map.HeightMm/1000);
         for (int slot = 0; slot < Slots; slot++)
         {
             var (row,swatch,name,choice,_) = _slots[slot];
@@ -244,13 +245,13 @@ public partial class SetupScreen : Control
             swatch.Color = slot < map.Colors.Length ? map.Colors[slot] : Dim;
             choice.Clear();
             _sides[slot].Select(previous != null && previous.Cache == map.Cache && Array.IndexOf(SideKeys,previous.Factions?.ElementAtOrDefault(slot)) is int side and >= 0 ? side : GoodSide);
-            choice.AddItem("You"); choice.AddItem("Closed");
+            choice.AddItem(GameText.T("setup.you")); choice.AddItem(GameText.T("setup.closed"));
             // On the Sandbox both start positions are yours.
             choice.Disabled = map.Sandbox;
             if (map.Sandbox) { choice.Select(You); continue; }
             foreach (var bot in map.Personalities)
             {
-                choice.AddItem(bot.Label);
+                choice.AddItem(BotItem(bot));
                 choice.SetItemTooltip(choice.ItemCount-1,BotTip(bot));
             }
             int pick = slot == 0 ? You : DefaultBot(map);
@@ -272,10 +273,26 @@ public partial class SetupScreen : Control
 
     private static string BotTip(AiBotOption bot)
     {
-        if(bot.IsRandom) return $"Random · {AiRoster.Difficulty(bot.Difficulty)}\nChooses a random {AiRoster.Difficulty(bot.Difficulty)} bot when the match starts.\nKeeps this slot's selected traits.";
+        if(bot.IsRandom) return GameText.T("setup.random.title",Difficulty(bot.Difficulty))+"\n"+GameText.T("setup.random.chooses",Difficulty(bot.Difficulty))
+            +"\n"+GameText.T("setup.random.keeps_traits");
         var entry = AiRoster.Entry(bot.Id);
-        return $"{entry.Name} · {AiRoster.Summary(bot.Difficulty,entry.Style)}\n{entry.Description}";
+        return $"{BotName(bot.Id)} · {StyleSummary(bot.Difficulty,entry.Style)}\n{BotDescription(bot.Id)}";
     }
+
+    // Build-223: the lobby's words in the install's language (setup.* catalog rows). AiRoster keeps its English for the
+    // simulation, its checks and the observer's journal; the bots' names are the install's own, from its .rai files.
+    private static readonly Dictionary<string,string> BotNames = new(StringComparer.OrdinalIgnoreCase);
+    public static string Difficulty(int level) => GameText.T("setup.difficulty."+Math.Clamp(level,0,2));
+    public static string StyleName(AiStyle style) => string.Join('-',style.Axes.Select(axis => GameText.T("setup.style."+axis.ToLowerInvariant())));
+    public static string StyleSummary(int difficulty,AiStyle style) => $"{Difficulty(difficulty)} · {StyleName(style)} ({style.Aggression}/{style.Expansion}/{style.Tech})";
+    public static string TraitName(AiTrait trait) => GameText.T("setup.trait."+trait);
+    public static string TraitList(IEnumerable<AiTrait> traits) => string.Join(", ",traits.Select(TraitName));
+    public static string BotName(string id) => string.Equals(id,"Default",StringComparison.OrdinalIgnoreCase) ? GameText.T("ai.default")
+        : BotNames.GetValueOrDefault(id) ?? AiRoster.Entry(id).Name;
+    public static string BotDescription(string id) => GameText.TryT("setup.bot."+AiRoster.Entry(id).Id) ?? GameText.T("setup.bot.none");
+    public static string BotItem(AiBotOption bot) => bot.IsRandom ? GameText.T("setup.random_item",Difficulty(bot.Difficulty))
+        : GameText.T("setup.bot_item",BotName(bot.Id),Difficulty(bot.Difficulty));
+    public static string SideName(int side) => GameText.T("setup.side."+SideNames[side]);
 
     /// <summary>Only one person plays: choosing You for a slot hands the previous one to the default bot.</summary>
     private void ChooseSlot(int slot,int item)
@@ -310,21 +327,22 @@ public partial class SetupScreen : Control
         var chosen = _traits[slot]; var menu = button.GetPopup();
         for (int item = 0; item < menu.ItemCount; item++) menu.SetItemChecked(item,chosen.Contains((AiTrait)menu.GetItemId(item)));
         button.Disabled = Choice(slot) < FirstBot;
-        button.Text = chosen.Count == 0 ? "Traits" : chosen.Count == 1 ? chosen.Min.ToString() : $"{chosen.Count} traits";
-        button.TooltipText = button.Disabled ? "Traits are for bots" : chosen.Count == 0 ? "Pick traits for this bot" : "Traits: "+AiRoster.TraitList(chosen);
+        button.Text = chosen.Count == 0 ? GameText.T("setup.traits") : chosen.Count == 1 ? TraitName(chosen.Min) : GameText.T("setup.traits_count",chosen.Count);
+        button.TooltipText = button.Disabled ? GameText.T("setup.traits.for_bots") : chosen.Count == 0 ? GameText.T("setup.traits.pick")
+            : GameText.T("setup.traits_list",TraitList(chosen));
     }
 
     /// <summary>A row's bot in a few words, beside its trait button.</summary>
     private string Summary(MapEntry map,int slot)
     {
-        if (map.Sandbox) return "Commanded by you";
+        if (map.Sandbox) return GameText.T("setup.commanded_by_you");
         int choice = Choice(slot);
-        if (choice == You) return "Commanded by you";
+        if (choice == You) return GameText.T("setup.commanded_by_you");
         if (choice == Closed) return "";
         var bot = map.Personalities[choice-FirstBot];
-        if (bot.IsRandom) return $"Random {AiRoster.Difficulty(bot.Difficulty)} bot";
+        if (bot.IsRandom) return GameText.T("setup.random_bot",Difficulty(bot.Difficulty));
         var entry = AiRoster.Entry(bot.Id);
-        return $"{AiRoster.Difficulty(bot.Difficulty)} · {entry.Style.Label}";
+        return $"{Difficulty(bot.Difficulty)} · {StyleName(entry.Style)}";
     }
 
     /// <summary>The bot card shows the focused slot's bot, else the first bot slot's.</summary>
@@ -335,31 +353,31 @@ public partial class SetupScreen : Control
         _triangle.Visible = !map.Sandbox;
         if (map.Sandbox)
         {
-            _cardTitle.Text = "Sandbox · test map"; _cardDetail.Text = "Player 1 and Player 2 · both yours";
-            _cardTraits.Text = ""; _cardTraits.Visible = false; _cardDescription.Text = SandboxDescription;
+            _cardTitle.Text = GameText.T("setup.card.sandbox_title"); _cardDetail.Text = GameText.T("setup.card.sandbox_detail");
+            _cardTraits.Text = ""; _cardTraits.Visible = false; _cardDescription.Text = GameText.T("setup.sandbox_description");
             _triangle.Display(null,Dim); _card.Visible = Kind != SetupKind.Sandbox; return;
         }
         int slot = _cardSlot >= 0 && _cardSlot < players && Choice(_cardSlot) >= FirstBot ? _cardSlot
             : Enumerable.Range(0,players).FirstOrDefault(s => Choice(s) >= FirstBot,-1);
         if (slot < 0)
         {
-            _cardTitle.Text = "No bots"; _cardDetail.Text = _cardTraits.Text = ""; _cardTraits.Visible = false;
-            _cardDescription.Text = "Choose a bot for a start position to see how it plays.";
+            _cardTitle.Text = GameText.T("setup.card.no_bots"); _cardDetail.Text = _cardTraits.Text = ""; _cardTraits.Visible = false;
+            _cardDescription.Text = GameText.T("setup.card.no_bots.tip");
             _triangle.Display(null,Dim); return;
         }
         var bot = map.Personalities[Choice(slot)-FirstBot];
-        _cardTraits.Text = _traits[slot].Count == 0 ? "" : "Traits: "+AiRoster.TraitList(_traits[slot]); _cardTraits.Visible = _traits[slot].Count > 0;
+        _cardTraits.Text = _traits[slot].Count == 0 ? "" : GameText.T("setup.traits_list",TraitList(_traits[slot])); _cardTraits.Visible = _traits[slot].Count > 0;
         if(bot.IsRandom)
         {
-            _cardTitle.Text=$"Random · {AiRoster.Difficulty(bot.Difficulty)}";
-            _cardDetail.Text=$"Player {slot+1} · Personality chosen at Start";
-            _cardDescription.Text=$"Chooses a random {AiRoster.Difficulty(bot.Difficulty)} bot when the match starts. Keeps this slot's selected traits.";
+            _cardTitle.Text=GameText.T("setup.random.title",Difficulty(bot.Difficulty));
+            _cardDetail.Text=GameText.T("setup.card.random_detail",slot+1);
+            _cardDescription.Text=GameText.T("setup.random.chooses",Difficulty(bot.Difficulty))+" "+GameText.T("setup.random.keeps_traits");
             _triangle.Display(null,Dim); _triangle.Visible=false; return;
         }
         var entry = AiRoster.Entry(bot.Id); var style = entry.Style;
-        _cardTitle.Text = $"{entry.Name} · {AiRoster.Difficulty(bot.Difficulty)} · {style.Label}";
-        _cardDetail.Text = $"Player {slot+1} · Aggression {style.Aggression} · Expansion {style.Expansion} · Tech {style.Tech}";
-        _cardDescription.Text = entry.Description;
+        _cardTitle.Text = $"{BotName(bot.Id)} · {Difficulty(bot.Difficulty)} · {StyleName(style)}";
+        _cardDetail.Text = GameText.T("setup.card.style",slot+1,style.Aggression,style.Expansion,style.Tech);
+        _cardDescription.Text = BotDescription(bot.Id);
         _triangle.Display(style,slot < map.Colors.Length ? map.Colors[slot] : Ink);
     }
 
@@ -380,13 +398,14 @@ public partial class SetupScreen : Control
         RefreshCard(map,players);
         string speed = _speed.Labels.ElementAtOrDefault(_speed.Index) ?? "";
         _start.Disabled = _loading || map is not { Available: true } || open < 2;
-        _status.Text = map == null ? (Kind == SetupKind.Sandbox ? "The Sandbox is made from Bilbo's Bluffs, which the install does not give." : "The install gives no multiplayer maps.")
-            : !map.Available ? Unavailable
-            : open < 2 ? "At least two start positions must be open."
-            : map.Sandbox ? $"Sandbox: you command Player 1 and Player 2 · Tab switches · {speed} speed"
-                + (_instantBuild.ButtonPressed ? "" : " · building and training take their time") + (_trainingDummies.ButtonPressed ? "" : " · no training dummies")
-            : (human >= 0 ? $"You play Player {human+1} ({SideNames[Math.Max(GoodSide,_sides[human].Selected)]}) against {open-1} bot{(open == 2 ? "" : "s")} · {speed} speed"
-            : $"Nobody plays: you watch {open} bots · {speed} speed")+(_fogOfWar.ButtonPressed ? "" : " · no fog of war");
+        _status.Text = map == null ? (Kind == SetupKind.Sandbox ? GameText.T("setup.status.no_sandbox",MapTitle("MP02_Bilbos_Bluffs","Bilbo's Bluffs"))
+                : GameText.T("setup.status.no_maps"))
+            : !map.Available ? GameText.T("setup.unavailable")
+            : open < 2 ? GameText.T("setup.status.two_open")
+            : map.Sandbox ? GameText.T("setup.status.sandbox",speed)
+                + (_instantBuild.ButtonPressed ? "" : " · "+GameText.T("setup.status.slow_build")) + (_trainingDummies.ButtonPressed ? "" : " · "+GameText.T("setup.status.no_dummies"))
+            : (human >= 0 ? GameText.T("setup.status.play",human+1,SideName(Math.Max(GoodSide,_sides[human].Selected)),GameText.Plural("setup.bots",open-1,open-1),speed)
+            : GameText.T("setup.status.watch",GameText.Plural("setup.bots",open,open),speed))+(_fogOfWar.ButtonPressed ? "" : " · "+GameText.T("setup.status.no_fog"));
     }
 
     private void Start()
@@ -402,18 +421,12 @@ public partial class SetupScreen : Control
     }
 
     public const string SandboxStem = "Sandbox";
-    private const string SandboxDescription = "An empty level field for trying units out. You command both players: every building "
-        + "stands finished and fully upgraded, banks stay full, units gather in front of their base, "
-        + "no bots play and nothing ends the match. "
-        + "Tab or the console tabs switch players; clicking the other player's unit or building does too.";
-
-    private const string Unavailable = "This map cannot be read from the install (see the log).";
 
     /// <summary>Freezes the screen while the chosen map loads.</summary>
     public void ShowLoading()
     {
         _loading = true; _start.Disabled = _quit.Disabled = true;
-        _status.Text = $"Loading {_selected?.Title}…";
+        _status.Text = GameText.T("setup.loading",_selected?.Title ?? "");
     }
 
     /// <summary>Build-210: the install's maps and their previews, when an install is open (Main sets it).</summary>
@@ -458,6 +471,10 @@ public partial class SetupScreen : Control
             personalities = AiBotOptions.For(ai.GetProperty("personalities").EnumerateArray()
                 .Select(p => new AiBotOption(p.GetProperty("id").GetString()!,p.GetProperty("difficulty").GetInt32())));
             fallback = ai.GetProperty("default_personality").GetString()!;
+            // Build-223: the lobby names each bot as the install does (its .rai file's name).
+            foreach (var personality in ai.GetProperty("personalities").EnumerateArray())
+                if (personality.TryGetProperty("display_name",out var shown) && shown.GetString() is { Length: > 0 } name)
+                    lock (BotNames) BotNames[personality.GetProperty("id").GetString()!] = name;
         }
         return new(stem,MapTitle(stem,manifest.GetProperty("name").GetString()!.Split(" — ")[0]),cache,bases.Length,bases,resources,
             preview.Width*preview.CellSizeMm,preview.Height*preview.CellSizeMm,colors,personalities,fallback,
@@ -614,9 +631,9 @@ public partial class StyleTriangle : Control
         DrawColoredPolygon([Point(50,25,25),Point(25,50,25),Point(25,25,50)],new Color(1,.9f,.5f,.18f));
         DrawPolyline([top,left,right,top],new Color("6f6040"),1.5f,true);
         var ink = new Color("c9b98a");
-        DrawString(font,new Vector2(top.X-50,labelSize),"Aggression",HorizontalAlignment.Center,100,labelSize,ink);
-        DrawString(font,new Vector2(left.X-66,left.Y+4),"Expansion",HorizontalAlignment.Right,62,labelSize,ink);
-        DrawString(font,new Vector2(right.X+4,right.Y+4),"Tech",HorizontalAlignment.Left,62,labelSize,ink);
+        DrawString(font,new Vector2(top.X-50,labelSize),GameText.T("setup.style.aggression"),HorizontalAlignment.Center,100,labelSize,ink);
+        DrawString(font,new Vector2(left.X-66,left.Y+4),GameText.T("setup.style.expansion"),HorizontalAlignment.Right,62,labelSize,ink);
+        DrawString(font,new Vector2(right.X+4,right.Y+4),GameText.T("setup.style.tech"),HorizontalAlignment.Left,62,labelSize,ink);
         if (Style is not { } style) return;
         var at = Point(style.Aggression,style.Expansion,style.Tech);
         DrawCircle(at,6,new Color(0,0,0,.7f));

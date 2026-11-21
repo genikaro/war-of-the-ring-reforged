@@ -50,15 +50,17 @@ class AudioExportTests(unittest.TestCase):
                   'Weapons': table([]), 'WeaponEffects': table([]), 'SoundEvents': table([]),
                   'MusicTracks': table([record(0, 'MUSIC_TRACK_TEST_GOOD', ClanAffiliation=1),
                                         record(1, 'MUSIC_TRACK_TEST_EVIL', ClanAffiliation=2),
-                                        record(2, game_audio.MENU_TRACK, ClanAffiliation=1),
+                                        record(2, game_audio.MENU_TRACK, ClanAffiliation=2),
                                         record(3, 'MUSIC_TRACK_CINE_TEST', ClanAffiliation=-1),
-                                        record(4, 'MUSIC_TRACK_SECOND_GOOD', ClanAffiliation=1)]),
+                                        record(4, 'MUSIC_TRACK_SECOND_GOOD', ClanAffiliation=1),
+                                        record(5, 'MUSIC_TRACK_GENERIC9', ClanAffiliation=0)]),
                   'Music': table([record(6, 'SECOND', Track=4, Theme=1, Filename='build.wav'),
                                   record(1, 'BUILD', Track=0, Theme=1, Filename='build.wav'),
                                   record(2, 'BATTLE', Track=0, Theme=2, Filename='missing.wav'),
                                   record(3, 'EVIL', Track=1, Theme=1, Filename='evil.wav'),
                                   record(4, 'MENU', Track=2, Theme=1, Filename='menu.wav'),
-                                  record(5, 'CINEMATIC', Track=3, Theme=1, Filename='missing.wav')])}
+                                  record(5, 'CINEMATIC', Track=3, Theme=1, Filename='missing.wav'),
+                                  record(7, 'GENERIC', Track=5, Theme=1, Filename='build.wav')])}
             resolver = SimpleNamespace(db=db, index=SimpleNamespace(find=lambda _, name:
                 str(root / name) if (root / name).is_file() else None))
             with patch.object(game_audio, 'EFFECT_EVENTS', []):
@@ -69,8 +71,11 @@ class AudioExportTests(unittest.TestCase):
             self.assertEqual(data['Music'], {
                 'Menu': [{'Name': game_audio.MENU_TRACK, 'File': 'audio/music/4.ogg'}],
                 'Good': [{'Name': 'MUSIC_TRACK_TEST_GOOD', 'File': 'audio/music/1.ogg'},
-                         {'Name': 'MUSIC_TRACK_SECOND_GOOD', 'File': 'audio/music/6.ogg'}],
-                'Evil': [{'Name': 'MUSIC_TRACK_TEST_EVIL', 'File': 'audio/music/3.ogg'}]})
+                         {'Name': 'MUSIC_TRACK_SECOND_GOOD', 'File': 'audio/music/6.ogg'},
+                         {'Name': 'MUSIC_TRACK_GENERIC9', 'File': 'audio/music/7.ogg'}],
+                'Evil': [{'Name': 'MUSIC_TRACK_TEST_EVIL', 'File': 'audio/music/3.ogg'},
+                         {'Name': game_audio.MENU_TRACK, 'File': 'audio/music/4.ogg'},
+                         {'Name': 'MUSIC_TRACK_GENERIC9', 'File': 'audio/music/7.ogg'}]})
             self.assertFalse((root / 'output/audio/music/2.ogg').exists())
             self.assertEqual((root / 'output/audio/music/4.ogg').read_bytes(), b'local-menu-ogg')
             self.assertEqual((root / 'output/audio/speechfx/2.wav').read_bytes(), pcm.getvalue())

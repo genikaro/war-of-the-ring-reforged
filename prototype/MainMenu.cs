@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 
 /// <summary>The main menu (build-147), laid out from the original Screens/Menu_Main.lsr on its 1024 × 768 screen:
 /// the game's logo at the top right (CONTROL_MAIN_MENU_WOTR_LOGO, 0.504, -0.026, 0.557 × 0.386), five torn-parchment
@@ -7,7 +8,9 @@ using Godot;
 /// 0.026). The original's items were Single Player, Multiplayer, Load, Settings and Exit; here they are Campaign (not
 /// built yet, so disabled), Skirmish, Sandbox, Settings and Exit, lettered in the Immortal font. The menu keeps the
 /// screen's height and stands at the right edge, leaving the 3D menu scene the rest of a wide window. Exit asks the
-/// original question (Menu text 3100) in the original box (console_dialog_quit_acknowledgement_g_box).</summary>
+/// original question (Menu text 3100) in the original box (console_dialog_quit_acknowledgement_g_box). Build-222: the
+/// labels are the install's own (Skirmish, Options, Quit, OK, Cancel) or the catalog's, and the Sandbox, a testing
+/// field, shows in a debug session only; the items below it move up.</summary>
 public partial class MainMenu : Control
 {
     public event Action? SkirmishChosen,SandboxChosen,SettingsChosen,ExitChosen;
@@ -15,12 +18,16 @@ public partial class MainMenu : Control
     private static readonly Vector2 ScreenSize = new(1024,768),QuitSize = new(370,249);
     private static readonly Color Ink = new("2a1a0c"),InkHover = new("7b1406"),InkPressed = new("4a0c04"),InkDisabled = new(.165f,.1f,.047f,.38f),
         Engraved = new("e6dcc4"),Highlight = new("ffffff"),Gold = new("f2d27a"),Shadow = new(0,0,0,.85f);
-    private static readonly (string Text,string Art,string Tip)[] Items = [
-        ("Campaign","parchment_button_04","The Good and Evil campaigns are not built yet."),
-        ("Skirmish","parchment_button_01","Battle bots on any of the 32 multiplayer maps."),
-        ("Sandbox","parchment_button_02","Try every unit out on an empty field, commanding both players."),
-        ("Settings","parchment_button_03",""),
-        ("Exit","parchment_button_02","")];
+    /// <summary>Each item's catalog key (its tooltip is key.tip, when there is one) and its parchment.</summary>
+    private static readonly (string Key,string Art)[] Items = [
+        ("mainmenu.campaign","parchment_button_04"),
+        ("mainmenu.skirmish","parchment_button_01"),
+        ("mainmenu.sandbox","parchment_button_02"),
+        ("mainmenu.settings","parchment_button_03"),
+        ("mainmenu.exit","parchment_button_02")];
+    private const int SandboxItem = 2;
+    /// <summary>Build-222: the Sandbox item shows only in a debug session (-Debug, -DebugMenu, smokes and captures).</summary>
+    public static bool SandboxShown => DebugSession.Enabled;
     private const float ButtonX = .6492f*1024,ButtonWidth = .2851f*1024,ButtonHeight = .0925f*768,FirstButton = .3577f*768,BulletWidth = .0505f*1024,BulletHeight = .026f*768;
 
     private readonly List<(Control Control,Rect2 Rect,bool Centered)> _places = [];
@@ -48,20 +55,24 @@ public partial class MainMenu : Control
         var art = FrontEndArt.Shared;
         Place(new TextureRect { Texture = art.Art("lotr_wotr_logo"),MouseFilter = MouseFilterEnum.Ignore,ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered },new(.5042f*1024,-.026f*768,.5566f*1024,.3861f*768));
-        var subtitle = new Label { Name = "ReforgedSubtitle",Text = "Reforged",HorizontalAlignment = HorizontalAlignment.Center,
+        var subtitle = new Label { Name = "ReforgedSubtitle",Text = GameText.T("launcher.subtitle"),HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,MouseFilter = MouseFilterEnum.Ignore };
         subtitle.AddThemeColorOverride("font_color",Gold); subtitle.AddThemeColorOverride("font_shadow_color",Shadow);
         subtitle.AddThemeConstantOverride("shadow_offset_x",2); subtitle.AddThemeConstantOverride("shadow_offset_y",2);
         if (art.Immortal(27) is { } subtitleFont) subtitle.AddThemeFontOverride("font",subtitleFont);
         Place(subtitle,new(ButtonX,238,ButtonWidth,32)); _fonts.Add((subtitle,27));
+        int row = 0;
         for (int i = 0; i < Items.Length; i++)
         {
-            int index = i; float top = FirstButton+i*ButtonHeight;
+            int index = i; bool shown = i != SandboxItem || SandboxShown; float top = FirstButton+row*ButtonHeight;
+            if (shown) row++;
+            // A hidden item keeps its button, out of sight, and leaves no parchment or gap behind.
             var parchment = art.Art(Items[i].Art);
-            if (parchment != null) Place(new TextureRect { Texture = parchment,MouseFilter = MouseFilterEnum.Ignore,ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            if (shown && parchment != null) Place(new TextureRect { Texture = parchment,MouseFilter = MouseFilterEnum.Ignore,ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
                 StretchMode = TextureRect.StretchModeEnum.Scale },new(ButtonX,top,ButtonWidth,ButtonHeight));
-            else Place(new ColorRect { Color = new Color("cbb489"),MouseFilter = MouseFilterEnum.Ignore },new(ButtonX+8,top+10,ButtonWidth-16,ButtonHeight-20));
-            var button = new Button { Text = Items[i].Text,Flat = true,FocusMode = FocusModeEnum.None,TooltipText = Items[i].Tip,MouseDefaultCursorShape = CursorShape.PointingHand };
+            else if (shown) Place(new ColorRect { Color = new Color("cbb489"),MouseFilter = MouseFilterEnum.Ignore },new(ButtonX+8,top+10,ButtonWidth-16,ButtonHeight-20));
+            var button = new Button { Text = GameText.T(Items[i].Key),Flat = true,FocusMode = FocusModeEnum.None,Visible = shown,
+                TooltipText = GameText.TryT(Items[i].Key+".tip") ?? "",MouseDefaultCursorShape = CursorShape.PointingHand };
             foreach (string style in new[] { "normal","hover","pressed","hover_pressed","disabled","focus" }) button.AddThemeStyleboxOverride(style,new StyleBoxEmpty());
             button.AddThemeColorOverride("font_color",Ink); button.AddThemeColorOverride("font_hover_color",InkHover);
             button.AddThemeColorOverride("font_pressed_color",InkPressed); button.AddThemeColorOverride("font_hover_pressed_color",InkPressed);
@@ -93,19 +104,19 @@ public partial class MainMenu : Control
         var box = new Control { MouseFilter = MouseFilterEnum.Ignore }; _quit.AddChild(box); _places.Add((box,new(Vector2.Zero,QuitSize),true));
         Place(box,new TextureRect { Texture = art.Art("console_dialog_quit_acknowledgement_g_box"),MouseFilter = MouseFilterEnum.Ignore,
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,StretchMode = TextureRect.StretchModeEnum.Scale },new(Vector2.Zero,QuitSize));
-        var question = new Label { Text = "Confirm exit from the game.",HorizontalAlignment = HorizontalAlignment.Center,VerticalAlignment = VerticalAlignment.Center,
+        var question = new Label { Text = GameText.T("mainmenu.quit_question"),HorizontalAlignment = HorizontalAlignment.Center,VerticalAlignment = VerticalAlignment.Center,
             AutowrapMode = TextServer.AutowrapMode.WordSmart,MouseFilter = MouseFilterEnum.Ignore };
         question.AddThemeColorOverride("font_color",Highlight); question.AddThemeColorOverride("font_shadow_color",Shadow);
         question.AddThemeConstantOverride("shadow_offset_x",2); question.AddThemeConstantOverride("shadow_offset_y",2);
         if (art.Immortal(20) is { } questionFont) question.AddThemeFontOverride("font",questionFont);
         Place(box,question,new(56,78,258,48)); _fonts.Add((question,20));
-        _quitOk = QuitItem(box,"OK",134,() => ExitChosen?.Invoke());
-        _quitCancel = QuitItem(box,"Cancel",169,() => ShowQuit(false));
+        _quitOk = QuitItem(box,GameText.T("button.ok"),134,() => ExitChosen?.Invoke());
+        _quitCancel = QuitItem(box,GameText.T("button.cancel"),169,() => ShowQuit(false));
         if (!art.Available)
         {
-            var missing = new Label { Text = "Menu art not exported yet: python tools/frontend_assets.py",MouseFilter = MouseFilterEnum.Ignore };
+            var missing = new Label { Text = GameText.T("mainmenu.no_art"),MouseFilter = MouseFilterEnum.Ignore };
             missing.AddThemeColorOverride("font_color",Engraved); missing.AddThemeColorOverride("font_shadow_color",Shadow);
-            Place(missing,new(ButtonX-200,FirstButton+5*ButtonHeight+20,ButtonWidth+220,28)); _fonts.Add((missing,15));
+            Place(missing,new(ButtonX-200,FirstButton+row*ButtonHeight+20,ButtonWidth+220,28)); _fonts.Add((missing,15));
         }
         Resize(); GetViewport().SizeChanged += Resize;
     }
@@ -128,7 +139,7 @@ public partial class MainMenu : Control
 
     private void ShowBullets(int index,bool shown)
     {
-        bool lit = shown && !_buttons[index].Disabled && !_quit.Visible;
+        bool lit = shown && _buttons[index].Visible && !_buttons[index].Disabled && !_quit.Visible;
         _bullets[index].Left.Visible = _bullets[index].Right.Visible = lit;
     }
 

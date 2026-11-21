@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 using Reforged.Simulation;
 using System.Text.Json;
 
@@ -46,7 +47,7 @@ public partial class Main
                 {
                     var maps = screen.Maps;
                     SetupChecks["setup_plays_menu_cue"] = _audio.MusicPlaying && _audio.MusicContext == Reforged.Presentation.MusicContext.Menu
-                        && _audio.MusicTrackName == "MUSIC_TRACK_HOBBIT_MAIN_INTRO_ENDING";
+                        && _audio.MusicTrackName == "MUSIC_TRACK_MORDOR_EVIL";
                     var big = maps.FirstOrDefault(m => m.Stem == SetupBigMap);
                     SetupChecks["setup_lists_every_map"] = maps.Count >= 32 && big is { Available: true,Players: 8 }
                         && maps.Any(m => m.Stem == SetupSmallMap && m.Available && m.Players == 2)
@@ -67,7 +68,7 @@ public partial class Main
                         && options.GroupBy(p=>p.Difficulty).All(g=>g.First().IsRandom
                             && g.Skip(1).Select(p=>p.Name).SequenceEqual(g.Skip(1).Select(p=>p.Name).Order(StringComparer.OrdinalIgnoreCase)));
                     SetupChecks["random_choice_for_each_difficulty"] = options.Where(p=>p.IsRandom).Select(p=>p.Difficulty).SequenceEqual([0,1,2])
-                        && Enumerable.Range(0,3).All(d=>screen.SlotChoice(0).GetItemText(BotItem(AiBotOptions.RandomId(d)))==$"Random ({AiRoster.Difficulty(d)})");
+                        && Enumerable.Range(0,3).All(d=>screen.SlotChoice(0).GetItemText(BotItem(AiBotOptions.RandomId(d)))==GameText.T("setup.random_item",SetupScreen.Difficulty(d)));
                     PickSlot(2,0); PickSlot(0,BotItem("Gimli")); PickSlot(1,BotItem("Aragorn"));
                     TickTrait(0,AiTrait.Defender); TickTrait(0,AiTrait.Marksman); TickTrait(0,AiTrait.Rusher);
                     PickSlot(3,BotItem(AiBotOptions.RandomId(0))); PickSlot(4,BotItem(AiBotOptions.RandomId(2)));
@@ -85,26 +86,32 @@ public partial class Main
                 {
                     // Build-49: each bot item's tooltip and the bot card describe the bot. The last slot changed was closed,
                     // so the card falls back to the first bot slot, Gimli's.
-                    SetupChecks["bot_tooltip_describes_the_bot"] = screen.BotTooltip(0,BotItem("Gimli")) == "Gimli · Normal · Tech-Aggression (30/20/50)\n"
-                        +"Stubborn: a tower first, upgrades early, attacks with heavy parties." && screen.SlotChoice(0).GetItemText(BotItem("Smaug")) == "Bot · Smaug (Hard)";
-                    _setupCardOk = screen.CardText.StartsWith("Gimli · Normal · Tech-Aggression\nPlayer 1 · Aggression 30 · Expansion 20 · Tech 50\n"
-                            +"Traits: Rusher, Marksman\nStubborn") && screen.CardStyle == new AiStyle(30,20,50)
-                        && screen.SlotTraits(0).SequenceEqual([AiTrait.Rusher,AiTrait.Marksman]) && screen.TraitButton(0).Text == "2 traits"
+                    // Build-223: in the install's language: its bot names, the original's difficulty words, the catalog's styles.
+                    string normal = SetupScreen.Difficulty(1),techAggression = GameText.T("setup.style.tech")+"-"+GameText.T("setup.style.aggression");
+                    string gimli = SetupScreen.BotName("Gimli"),traits = GameText.T("setup.traits_list",SetupScreen.TraitList([AiTrait.Rusher,AiTrait.Marksman]));
+                    SetupChecks["bot_tooltip_describes_the_bot"] = screen.BotTooltip(0,BotItem("Gimli")) == $"{gimli} · {normal} · {techAggression} (30/20/50)\n"
+                        +GameText.T("setup.bot.Gimli") && screen.SlotChoice(0).GetItemText(BotItem("Smaug")) == GameText.T("setup.bot_item",SetupScreen.BotName("Smaug"),SetupScreen.Difficulty(2));
+                    _setupCardOk = screen.CardText.StartsWith($"{gimli} · {normal} · {techAggression}\n{GameText.T("setup.card.style",1,30,20,50)}\n"
+                            +$"{traits}\n{GameText.T("setup.bot.Gimli")}") && screen.CardStyle == new AiStyle(30,20,50)
+                        && screen.SlotTraits(0).SequenceEqual([AiTrait.Rusher,AiTrait.Marksman]) && screen.TraitButton(0).Text == GameText.T("setup.traits_count",2)
                         && screen.TraitButton(2).Disabled && !screen.TraitButton(1).Disabled;
                     PickSlot(0,BotItem(AiBotOptions.RandomId(1)));
-                    SetupChecks["random_card_keeps_difficulty_and_traits"] = screen.CardText.StartsWith("Random · Normal\nPlayer 1 · Personality chosen at Start\nTraits: Rusher, Marksman\nChooses a random Normal bot")
-                        && screen.CardStyle==null && screen.BotTooltip(0,BotItem(AiBotOptions.RandomId(1))).Contains("Keeps this slot's selected traits.");
+                    SetupChecks["random_card_keeps_difficulty_and_traits"] = screen.CardText.StartsWith($"{GameText.T("setup.random.title",normal)}\n"
+                            +$"{GameText.T("setup.card.random_detail",1)}\n{traits}\n{GameText.T("setup.random.chooses",normal)}")
+                        && screen.CardStyle==null && screen.BotTooltip(0,BotItem(AiBotOptions.RandomId(1))).Contains(GameText.T("setup.random.keeps_traits"));
                     PickSlot(0,BotItem("Gimli"));
                     PickSlot(1,BotItem("Aragorn"));
                 }
                 if (_frames == 11)
                 {
-                    SetupChecks["bot_card_follows_the_chosen_slot"] = _setupCardOk && screen.CardText.StartsWith("Aragorn · Hard · Aggression-Tech\nPlayer 2 · ")
+                    SetupChecks["bot_card_follows_the_chosen_slot"] = _setupCardOk && screen.CardText.StartsWith($"{SetupScreen.BotName("Aragorn")} · {SetupScreen.Difficulty(2)} · "
+                            +$"{GameText.T("setup.style.aggression")}-{GameText.T("setup.style.tech")}\n{ShownBefore("setup.card.style",2,Slot,Slot,Slot)}")
                         && screen.CardStyle == new AiStyle(50,20,30);
-                    SetupChecks["status_names_the_match"] = screen.StatusText == "You play Player 3 (Good) against 4 bots · 2x speed" && !screen.StartButton.Disabled;
+                    SetupChecks["status_names_the_match"] = screen.StatusText == GameText.T("setup.status.play",3,SetupScreen.SideName(0),GameText.Plural("setup.bots",4,4),"2x")
+                        && !screen.StartButton.Disabled;
                     // Build-133: each slot has a side; the last bot plays Evil.
-                    SetupChecks["setup_offers_both_sides"] = screen.SlotSide(4).ItemCount == 3 && screen.SlotSide(4).GetItemText(1) == "Evil"
-                        && screen.SlotSide(4).GetItemText(2) == "Random" && screen.SlotSide(4).Selected == 0;
+                    SetupChecks["setup_offers_both_sides"] = screen.SlotSide(4).ItemCount == 3 && screen.SlotSide(4).GetItemText(1) == SetupScreen.SideName(1)
+                        && screen.SlotSide(4).GetItemText(2) == SetupScreen.SideName(2) && screen.SlotSide(4).Selected == 0;
                     screen.SlotSide(4).Select(1); screen.SlotSide(3).Select(2);
                     if(_capture!="") Press(screen.SlotChoice(3).GetGlobalRect().GetCenter());
                 }
@@ -121,7 +128,7 @@ public partial class Main
                 {
                     var world = _world;
                     SetupChecks["starting_match_plays_faction_music"] = _audio.MusicPlaying
-                        && _audio.MusicContext == Reforged.Presentation.MusicContext.Good && _audio.MusicTrackName.EndsWith("_GOOD");
+                        && _audio.MusicContext == Reforged.Presentation.MusicContext.Good && Reforged.Presentation.MusicPlaylist.Fits(_audio.MusicTrackName,Reforged.Presentation.MusicContext.Good);
                     SetupChecks["match_loads_the_chosen_map"] = _cache.Replace('\\','/').EndsWith("/"+SetupBigMap) && _mapName == _setupBigTitle;
                     SetupChecks["human_plays_the_chosen_slot"] = PlayerTeam == 2 && !_observing && _commands.PlayerTeam == 2 && _commands.ResourcesVisible
                         && world.Units.Count(u => u.Team == 2) == 4 && world.StartStructures.Any(s => s.Team == 2) && !world.AiPlayers.ContainsKey(2);
@@ -176,7 +183,7 @@ public partial class Main
                 if (_frames == 9) Release(screen.SpeedSlider.NotchGlobal(Speeds.Length-1));
                 if (_frames == 11)
                 {
-                    SetupChecks["status_names_the_match"] &= screen.StatusText == "Nobody plays: you watch 2 bots · 16x speed";
+                    SetupChecks["status_names_the_match"] &= screen.StatusText == GameText.T("setup.status.watch",GameText.Plural("setup.bots",2,2),"16x");
                     Press(screen.StartButton.GetGlobalRect().GetCenter());
                 }
                 if (_frames == 12) { _setupPhase = 3; Release(screen.StartButton.GetGlobalRect().GetCenter()); }

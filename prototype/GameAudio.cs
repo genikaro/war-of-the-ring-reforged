@@ -39,6 +39,7 @@ public partial class GameAudio : Node
     public string MusicTrackName => _playlist?.Current?.Name ?? "";
     public double MusicPosition => _music.GetPlaybackPosition();
     public double MusicGapRemaining => _playlist?.GapRemaining ?? 0;
+    public int MusicTrackCount => _playlist?.Count ?? 0;
 
     public override void _Ready()
     {
@@ -209,7 +210,8 @@ public partial class GameAudio : Node
         if (_stopped || !Loaded) return;
         if (_playlist != null && MusicContext == context) return;
         _music.Stop(); _music.Stream = null; MusicContext = context;
-        _playlist = new MusicPlaylist(MusicPlaylist.Tracks(_data.GetProperty("Music"),context));
+        // Build-222: faction music plays in a random order with random quiet spells; the menu repeats its one cue.
+        _playlist = new MusicPlaylist(MusicPlaylist.Tracks(_data.GetProperty("Music"),context),shuffle: context != MusicContext.Menu,random: _random);
         StartMusicTrack();
     }
 

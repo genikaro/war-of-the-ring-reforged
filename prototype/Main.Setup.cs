@@ -32,7 +32,7 @@ public partial class Main
 
     private void ShowSetupScreen(SetupScreen.SetupKind kind)
     {
-        _setupScreen = new SetupScreen { Kind = kind,Speeds = Speeds,Previous = kind == SetupScreen.SetupKind.Sandbox ? _lastSandboxSetup : _lastSetup,BackText = _menuMode || _mainMenuSeen ? "Back" : "Quit" };
+        _setupScreen = new SetupScreen { Kind = kind,Speeds = Speeds,Previous = kind == SetupScreen.SetupKind.Sandbox ? _lastSandboxSetup : _lastSetup,BackToMenu = _menuMode || _mainMenuSeen };
         _frontEndLayer!.AddChild(_setupScreen);
         _audio.HookControls(_setupScreen);
         _setupScreen.Started += setup => _ = StartSetupMatch(setup,kind);

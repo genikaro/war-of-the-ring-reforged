@@ -149,7 +149,7 @@ public partial class Main
                 if (_audio.MusicGapRemaining <= 0 && Time.GetTicksMsec() < _audioEndDeadline) { _frames--; break; }
                 _audioChecks["natural_track_end_waits_in_silence"] = !_audio.MusicPlaying && _audio.MusicGapRemaining > 13
                     && _audio.MusicTrackName == _audioSmokeTrack;
-                _audio._Process(MusicPlaylist.GapSeconds);
+                _audio._Process(_audio.MusicGapRemaining);
                 _audioChecks["next_track_starts_after_gap_while_paused"] = _audio.MusicPlaying && _audio.MusicGapRemaining == 0
                     && _audio.MusicTrackName != _audioSmokeTrack;
                 bool passed = _audioChecks.Values.All(value => value);
@@ -164,7 +164,8 @@ public partial class Main
         foreach (var context in new[] {MusicContext.Good,MusicContext.Evil,MusicContext.Menu})
         {
             _audio.PlayMusic(context);
-            string first = _audio.MusicTrackName; int count = context == MusicContext.Menu ? 1 : 10;
+            // Build-222: ten faction tracks and the three Generic ones, shuffled; the menu's one cue.
+            string first = _audio.MusicTrackName; int count = context == MusicContext.Menu ? 1 : 13;
             var heard = new HashSet<string>(); bool passed = true;
             for (int i=0;i<count;i++)
             {
@@ -172,13 +173,13 @@ public partial class Main
                 passed &= _audio.MusicPlaying && heard.Add(name);
                 // Simulate a completed track through the same signal as natural playback.
                 player.Stop(); player.EmitSignal(AudioStreamPlayer.SignalName.Finished);
-                _audio._Process(MusicPlaylist.GapSeconds-.1);
+                _audio._Process(_audio.MusicGapRemaining-.1);
                 passed &= !_audio.MusicPlaying && _audio.MusicTrackName == name && _audio.MusicGapRemaining > 0;
                 _audio._Process(.1);
                 passed &= _audio.MusicPlaying && _audio.MusicGapRemaining == 0;
             }
-            _audioChecks[context+"_playlist_loads_all_tracks_and_waits_between_them"] = passed
-                && heard.Count == count && _audio.MusicTrackName == first;
+            _audioChecks[context+"_playlist_loads_all_tracks_and_waits_between_them"] = passed && _audio.MusicTrackCount == count
+                && heard.Count == count && (context != MusicContext.Menu || _audio.MusicTrackName == first);
         }
         _audio.PlayMusic(MusicContext.Good);
         _audioSmokeTrack = _audio.MusicTrackName;

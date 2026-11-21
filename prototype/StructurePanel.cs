@@ -111,8 +111,9 @@ public partial class CommandPanel
         _structureProgressText.Position = details.Place != "" ? new(0,66) : new(70,28);
         _structureProgressText.Size = details.Place != "" ? new(505,63) : new(248,36);
         _structureProgressText.AutowrapMode = details.Place != "" ? TextServer.AutowrapMode.WordSmart : TextServer.AutowrapMode.Off;
-        _order.Text = details.Place != "" ? details.Place : details.Team < 0 ? "Neutral structure" : details.Team == PlayerTeam ? ""
-            : PlayerTeam < 0 ? $"Player {details.Team+1} structure" : "Enemy structure";
+        // Build-222: whose structure it is is an observer aid; in play only a place of power's line shows.
+        _order.Text = details.Place != "" ? details.Place : PlayerTeam >= 0 ? ""
+            : details.Team < 0 ? "Neutral structure" : $"Player {details.Team+1} structure";
     }
 
     public bool StructureHealthVisible => _structureHealthDetails.IsVisibleInTree();

@@ -16,7 +16,8 @@ from resolve_model import Resolver
 import wor
 
 EFFECT_EVENTS = [124, 147, 148, 149, 150, 243, 244, 245, 255, 256, 276, 277, 291]
-MENU_TRACK = 'MUSIC_TRACK_HOBBIT_MAIN_INTRO_ENDING'
+# Build-222: Rings.exe's main-menu screen (0x48d849) plays MusicTracks id 17 in the normal theme.
+MENU_TRACK = 'MUSIC_TRACK_MORDOR_EVIL'
 
 
 def export(output, resolver=None, roster=None):
@@ -102,10 +103,10 @@ def export(output, resolver=None, roster=None):
         # has its own cue, and cinematic/credits music stays out of faction play.
         if track is None or entry['Theme'] != 1:
             continue
-        context = ('Menu' if track.name == MENU_TRACK else
-                   'Good' if track.name.endswith('_GOOD') and track['ClanAffiliation'] == 1 else
-                   'Evil' if track.name.endswith('_EVIL') and track['ClanAffiliation'] == 2 else None)
-        if context:
+        # Build-222: the menu cue is also Evil faction music, and the Generic tracks (no clan) play for both sides.
+        generic = track.name.startswith('MUSIC_TRACK_GENERIC') and track['ClanAffiliation'] == 0
+        contexts = (['Menu'] if track.name == MENU_TRACK else []) +             (['Good'] if track.name.endswith('_GOOD') and track['ClanAffiliation'] == 1 or generic else []) +             (['Evil'] if track.name.endswith('_EVIL') and track['ClanAffiliation'] == 2 or generic else [])
+        for context in contexts:
             music[context].append({'Name': track.name, 'File': copy_asset('Music', entry)})
     data = {'FormatVersion': 2, 'Speech': speech, 'Effects': effects, 'Melee': melee,
             'Music': music,

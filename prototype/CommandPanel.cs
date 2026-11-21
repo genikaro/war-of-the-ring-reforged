@@ -419,10 +419,11 @@ public partial class CommandPanel : Control
         _describedTick = tick; _describedKey = key; _describedWorld = _world; _describedTeam = PlayerTeam;
         Dictionary<int,UnitOrderReadout> readouts = _world == null || !fresh ? [] : units.ToDictionary(u => u.Id,u => UnitOrderReadout.From(_world,u,name));
         // The bottom line: while observing, whose units these are; the job a bot gave them (so an observer sees why they
-        // do what they do); then the queue.
+        // do what they do); then the queue. Build-222: an observer aid only; in play the line stays empty for units.
         string side = !available || !observing ? "" : units.All(u => u.Team < 0) ? "Neutral"
             : units.Any(u => u.Team != units[0].Team) ? "Mixed sides" : $"Player {units[0].Team+1}";
-        if (fresh)
+        if (fresh && !observing) _order.Text = "";
+        else if (fresh)
         {
             int queued = units.Sum(u => u.OrderQueue.Count);
             var only = single ? readouts.GetValueOrDefault(units[0].Id) : null;

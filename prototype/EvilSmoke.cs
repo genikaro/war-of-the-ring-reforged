@@ -102,16 +102,16 @@ public partial class Main
                 _evilChecks["evil_console_for_the_evil_player"] = _commands.EvilSkin;
                 _evilChecks["evil_tooltip_has_light_body_and_description"] = _commands.TooltipBodyInk.R>.9f && _commands.TooltipDescriptionInk.R>.9f;
                 _evilChecks["evil_player_hears_evil_music"] = _audio.MusicContext == Reforged.Presentation.MusicContext.Evil
-                    && _audio.MusicPlaying && _audio.MusicTrackName.EndsWith("_EVIL");
+                    && _audio.MusicPlaying && Reforged.Presentation.MusicPlaylist.Fits(_audio.MusicTrackName,Reforged.Presentation.MusicContext.Evil);
                 int musicTransitions = _audio.MusicTransitions;
                 CommandSandboxPlayer(1);
                 _evilChecks["good_tooltip_restores_dark_ink"] = _commands.TooltipBodyInk.R<.3f && _commands.TooltipDescriptionInk.R<.3f;
                 _evilChecks["sandbox_good_player_hears_good_music"] = _audio.MusicContext == Reforged.Presentation.MusicContext.Good
-                    && _audio.MusicPlaying && _audio.MusicTrackName.EndsWith("_GOOD");
+                    && _audio.MusicPlaying && Reforged.Presentation.MusicPlaylist.Fits(_audio.MusicTrackName,Reforged.Presentation.MusicContext.Good);
                 CommandSandboxPlayer(0);
                 _evilChecks["returning_to_evil_restores_light_tooltip_ink"] = _commands.TooltipBodyInk.R>.9f && _commands.TooltipDescriptionInk.R>.9f;
                 _evilChecks["sandbox_returns_to_evil_music"] = _audio.MusicContext == Reforged.Presentation.MusicContext.Evil
-                    && _audio.MusicPlaying && _audio.MusicTrackName.EndsWith("_EVIL") && _audio.MusicTransitions == musicTransitions+2;
+                    && _audio.MusicPlaying && Reforged.Presentation.MusicPlaylist.Fits(_audio.MusicTrackName,Reforged.Presentation.MusicContext.Evil) && _audio.MusicTransitions == musicTransitions+2;
                 string[] Abilities(string hero) => [.. _rules.Units[hero].Abilities!.Select(a => a.Name)];
                 _evilChecks["evil_heroes_carry_their_source_abilities"] = Abilities("UNIT_E_HERO_GOLLUM").SequenceEqual([ShownAbility(37,"Sneak"),ShownAbility(38,"Surprise Attack"),ShownAbility(20,"Dark Tracking")])
                     && Abilities("UNIT_E_HERO_NAZGUL_KING").SequenceEqual([ShownAbility(36,"Shadow Bind"),ShownAbility(29,"Shadow Walk"),ShownAbility(8,"Aura of Terror")])

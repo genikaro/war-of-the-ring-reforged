@@ -1,4 +1,5 @@
 using Godot;
+using Reforged.Presentation;
 
 /// <summary>The in-game menu behind the console's Menu button (build-96), after the original InGame_MainMenu,
 /// InGame_Options and Quit_Acknowledgement screens. The Good menu frame (background_good_mainmenu) over a dimmed
@@ -7,7 +8,8 @@ using Godot;
 /// with the tabs Game (1600), Controls (1700) and Reforged, and the original Reset (9028), Apply (9029), Cancel (9000)
 /// and OK (9015): changes wait for Apply or OK, Cancel drops them. Exit asks the original question: Exit to Main Menu
 /// (9036), Exit to Windows (9037) or Cancel (9000). The original's Load, Save, Technologies, Objectives and Restart
-/// are not built yet. English labels and Godot's default font stand in for the Russian text and the Immortal font.
+/// are not built yet. Build-223: the labels are the install's own where the original has them (Menu text in brackets
+/// above, tabs 1600/1700/1604, volumes 1605-1609), catalog rows (menu.*, settings.*) otherwise.
 /// Layout is in the art's own pixels, scaled with the window as the original scales its 1024x768 screens.</summary>
 public partial class GameMenu : Control
 {
@@ -31,7 +33,8 @@ public partial class GameMenu : Control
     private readonly List<(Control Control,int Size)> _fonts = [];
     private readonly List<(Control Page,Vector2 Size)> _pages = [];
     private readonly Dictionary<TextureRect,Panel> _fallbacks = [];
-    private readonly ButtonGroup _tabGroup = new(),_editionGroup = new(),_cursorSizeGroup = new();
+    private readonly ButtonGroup _tabGroup = new(),_editionGroup = new(),_cursorSizeGroup = new(),_cameraGroup = new();
+    private readonly Dictionary<GameSettings.CameraLevel,Button> _cameraLevels = [];
     private Control _main = null!,_settings = null!,_exit = null!,_gameTab = null!,_controlsTab = null!,_reforgedTab = null!,_audioTab = null!;
     private TextureRect _mainFrame = null!,_settingsFrame = null!,_exitFrame = null!,_capLeft = null!,_capRight = null!;
     private Button _settingsButton = null!,_exitButton = null!,_resumeButton = null!,_exitToMain = null!,_exitToWindows = null!,_exitCancel = null!;
@@ -61,6 +64,7 @@ public partial class GameMenu : Control
     public Button OkButton => _ok;
     public Button TabButton(int tab) => _tabs[tab];
     public Button CursorSizeButton(int percent) => _cursorSizes[percent];
+    public Button CameraLevelButton(GameSettings.CameraLevel level) => _cameraLevels[level];
     public HSlider VolumeSlider(int channel) => _volumes[channel];
     public CheckBox MuteBox => _mute;
     public Button VoicePreviewButton => _testVoice;
@@ -82,19 +86,19 @@ public partial class GameMenu : Control
         AddChild(shade); shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
 
         _main = NewPage(MainSize); _mainFrame = Frame(_main,MainSize);
-        Place(_main,Caption("Main Menu",17,Highlight,HorizontalAlignment.Center),88,84,195,26);
-        _settingsButton = Item(_main,"Settings",228,() => ShowPage(Page.Settings));
-        _exitButton = Item(_main,"Exit",265,() => ShowPage(Page.Exit));
-        _resumeButton = Item(_main,"Resume",302,() => ResumeChosen?.Invoke());
+        Place(_main,Caption(GameText.T("menu.title"),17,Highlight,HorizontalAlignment.Center),88,84,195,26);
+        _settingsButton = Item(_main,GameText.T("mainmenu.settings"),228,() => ShowPage(Page.Settings));
+        _exitButton = Item(_main,GameText.T("mainmenu.exit"),265,() => ShowPage(Page.Exit));
+        _resumeButton = Item(_main,GameText.T("menu.resume"),302,() => ResumeChosen?.Invoke());
 
         _exit = NewPage(ExitSize); _exitFrame = Frame(_exit,ExitSize);
-        _exitToMain = Item(_exit,"Exit to Main Menu",99,() => ExitToMainMenuChosen?.Invoke(),56,258);
-        _exitToWindows = Item(_exit,"Exit to Windows",134,() => ExitToWindowsChosen?.Invoke(),56,258);
-        _exitCancel = Item(_exit,"Cancel",169,() => ShowPage(Page.Main),56,258);
+        _exitToMain = Item(_exit,GameText.T("menu.exit_to_main"),99,() => ExitToMainMenuChosen?.Invoke(),56,258);
+        _exitToWindows = Item(_exit,GameText.T("menu.exit_to_windows"),134,() => ExitToWindowsChosen?.Invoke(),56,258);
+        _exitCancel = Item(_exit,GameText.T("button.cancel"),169,() => ShowPage(Page.Main),56,258);
 
         _settings = NewPage(SettingsSize); _settingsFrame = Frame(_settings,SettingsSize);
-        Place(_settings,Caption("Settings",20,Highlight,HorizontalAlignment.Center),360,70,301,34);
-        string[] tabs = ["Game","Controls","Reforged","Audio"];
+        Place(_settings,Caption(GameText.T("mainmenu.settings"),20,Highlight,HorizontalAlignment.Center),360,70,301,34);
+        string[] tabs = [.. new[] {"game","controls","reforged","audio"}.Select(tab => GameText.T("settings.tab."+tab))];
         for (int tab = 0; tab < tabs.Length; tab++)
         {
             int index = tab;
@@ -105,38 +109,46 @@ public partial class GameMenu : Control
         _controlsTab = Place(_settings,new Control { MouseFilter = MouseFilterEnum.Ignore },132,170,757,266);
         _reforgedTab = Place(_settings,new Control { MouseFilter = MouseFilterEnum.Ignore },132,170,757,266);
         _audioTab = Place(_settings,new Control { MouseFilter = MouseFilterEnum.Ignore },132,170,757,266);
-        _reset = Place(_settings,BoxButton("Reset",ResetDraft),132,448,130,34);
-        _apply = Place(_settings,BoxButton("Apply",ApplyDraft),475,448,130,34);
-        _cancel = Place(_settings,BoxButton("Cancel",() => ShowPage(Page.Main)),617,448,130,34);
-        _ok = Place(_settings,BoxButton("OK",() => { ApplyDraft(); ShowPage(Page.Main); }),759,448,130,34);
+        _reset = Place(_settings,BoxButton(GameText.T("button.reset"),ResetDraft),132,448,130,34);
+        _apply = Place(_settings,BoxButton(GameText.T("button.apply"),ApplyDraft),475,448,130,34);
+        _cancel = Place(_settings,BoxButton(GameText.T("button.cancel"),() => ShowPage(Page.Main)),617,448,130,34);
+        _ok = Place(_settings,BoxButton(GameText.T("button.ok"),() => { ApplyDraft(); ShowPage(Page.Main); }),759,448,130,34);
 
-        Place(_gameTab,Caption("Health bars",17,Ink),0,0,360,26);
-        _playerBars = Place(_gameTab,Check("Player-colored health bars","Use each player's map color for health bars over units and buildings.",
+        Place(_gameTab,Caption(GameText.T("settings.health_bars"),17,Ink),0,0,360,26);
+        _playerBars = Place(_gameTab,Check(GameText.T("settings.player_bars"),GameText.T("settings.player_bars.tip"),
             on => _draft.PlayerColoredBars = on),0,32,360,34);
-        _overheadBars = Place(_gameTab,Check("Overhead health bars","Place damaged units' and buildings' health bars above their models.",
+        _overheadBars = Place(_gameTab,Check(GameText.T("settings.overhead_bars"),GameText.T("settings.overhead_bars.tip"),
             on => _draft.OverheadBars = on),0,70,360,34);
-        Place(_gameTab,Caption("Violence",17,Ink),0,124,360,26);
-        _blood = Place(_gameTab,Check("Blood","Show blood when units are hit or killed, blood pools and bloodied weapons.",
+        Place(_gameTab,Caption(GameText.T("settings.violence"),17,Ink),0,124,360,26);
+        _blood = Place(_gameTab,Check(GameText.T("settings.blood"),GameText.T("settings.blood.tip"),
             on => _draft.Blood = on),0,156,360,34);
-        Place(_gameTab,Caption("Unit selection",17,Ink),0,198,360,26);
-        _playerSelectors = Place(_gameTab,Check("Player-colored unit selectors",
-            "Use each player's color for unit rings. Off uses gold for friendly and neutral units, and red for enemies.",
+        Place(_gameTab,Caption(GameText.T("settings.unit_selection"),17,Ink),0,198,360,26);
+        _playerSelectors = Place(_gameTab,Check(GameText.T("settings.player_selectors"),GameText.T("settings.player_selectors.tip"),
             on => _draft.PlayerColoredUnitSelectors = on),0,230,360,34);
-        Place(_gameTab,Caption("Interface size",17,Ink),400,0,357,26);
+        Place(_gameTab,Caption(GameText.T("settings.interface_size"),17,Ink),400,0,357,26);
         _capLeft = Place(_gameTab,new TextureRect { MouseFilter = MouseFilterEnum.Ignore,StretchMode = TextureRect.StretchModeEnum.KeepCentered },400,38,14,24);
         _interfaceScale = Place(_gameTab,new HSlider { MinValue = 75,MaxValue = 150,Step = 5,Value = 100,FocusMode = FocusModeEnum.None },416,36,260,28);
         _capRight = Place(_gameTab,new TextureRect { MouseFilter = MouseFilterEnum.Ignore,StretchMode = TextureRect.StretchModeEnum.KeepCentered },678,38,14,24);
         _scaleValue = Place(_gameTab,Caption("100%",15,Ink),700,36,57,28);
         _interfaceScale.ValueChanged += value => { _draftScale = value; _scaleValue.Text = $"{value:0}%"; };
-        Place(_gameTab,Caption("Cursor size",17,Ink),400,86,357,26);
+        Place(_gameTab,Caption(GameText.T("settings.cursor_size"),17,Ink),400,86,357,26);
         foreach (int percent in GameSettings.CursorSizes)
         {
             var button = BoxButton($"{percent}%",() => _draft.CursorSizePercent = percent);
             button.ToggleMode = true; button.ButtonGroup = _cursorSizeGroup;
             _cursorSizes.Add(percent,Place(_gameTab,button,400+_cursorSizes.Count*100,118,90,32));
         }
+        // Build-222: the camera level a match starts at; in play the wheel steps between the three.
+        Place(_gameTab,Caption(GameText.T("settings.camera_distance"),17,Ink),400,170,357,26);
+        foreach (var level in Enum.GetValues<GameSettings.CameraLevel>())
+        {
+            var button = BoxButton(GameText.T("settings.camera."+level.ToString().ToLowerInvariant()),() => _draft.CameraDistance = level);
+            button.ToggleMode = true; button.ButtonGroup = _cameraGroup;
+            button.TooltipText = GameText.T("settings.camera_distance.tip");
+            _cameraLevels.Add(level,Place(_gameTab,button,400+_cameraLevels.Count*100,202,90,32));
+        }
 
-        string[] channels = ["Master volume","Music","Sound effects","Unit speech"];
+        string[] channels = [.. new[] {"master","music","effects","speech"}.Select(channel => GameText.T("settings.volume."+channel))];
         for (int i=0;i<channels.Length;i++)
         {
             int channel = i;
@@ -149,30 +161,32 @@ public partial class GameMenu : Control
                 _volumeValues[channel].Text = $"{value:0}%"; AudioPreviewed?.Invoke(_draft.Copy());
             };
         }
-        _mute = Place(_audioTab,Check("Mute all audio","Silence every audio channel without changing its volume.",
+        _mute = Place(_audioTab,Check(GameText.T("settings.mute"),GameText.T("settings.mute.tip"),
             on => { _draft.Muted = on; AudioPreviewed?.Invoke(_draft.Copy()); }),0,188,330,34);
-        _testVoice = Place(_audioTab,BoxButton("Test unit speech",() => VoicePreviewChosen?.Invoke()),470,188,215,34);
-        Place(_audioTab,Caption("Volume changes preview immediately. Apply or OK saves; Cancel restores the saved mix.",13,InkSoft,wrap: true),0,234,757,30);
+        _testVoice = Place(_audioTab,BoxButton(GameText.T("settings.test_speech"),() => VoicePreviewChosen?.Invoke()),470,188,215,34);
+        Place(_audioTab,Caption(GameText.T("settings.audio_note"),13,InkSoft,wrap: true),0,234,757,30);
 
         var scroll = Place(_controlsTab,new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled },0,0,757,266);
         _controls = Caption("",14,Ink,wrap: true); _controls.SizeFlagsHorizontal = SizeFlags.ExpandFill; scroll.AddChild(_controls);
 
-        Place(_reforgedTab,Caption("Edition",17,Ink),0,0,360,26);
+        Place(_reforgedTab,Caption(GameText.T("settings.edition"),17,Ink),0,0,360,26);
         for (int i = 0; i < GameSettings.Editions.Length; i++)
         {
-            var (edition,name,description) = GameSettings.Editions[i];
+            var (edition,_,_) = GameSettings.Editions[i];
+            string key = "settings.edition."+edition.ToString().ToLowerInvariant(),name = GameText.T(key),description = GameText.T(key+".tip");
             _editions[i] = Place(_reforgedTab,Check(name,"",on => { if (on) { _draft.ReforgedEdition = edition; RefreshSettings(); } }),0,32+i*66,360,30);
             _editions[i].ButtonGroup = _editionGroup;
             Place(_reforgedTab,Caption(description,13,InkSoft,wrap: true),58,60+i*66,300,36);
         }
-        Place(_reforgedTab,Caption("Improvements",17,Ink),400,0,357,26);
-        if (GameSettings.ReforgedOptions.Length == 0) Place(_reforgedTab,Caption("No Reforged improvements yet.",14,InkSoft),400,36,357,26);
+        Place(_reforgedTab,Caption(GameText.T("settings.improvements"),17,Ink),400,0,357,26);
+        if (GameSettings.ReforgedOptions.Length == 0) Place(_reforgedTab,Caption(GameText.T("settings.no_improvements"),14,InkSoft),400,36,357,26);
         var list = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         Place(_reforgedTab,new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled },400,32,357,234).AddChild(list);
         foreach (var option in GameSettings.ReforgedOptions)
         {
             string key = option.Key;
-            var box = Check(option.Name,option.Description,on => { if (on) _draft.CustomOn.Add(key); else _draft.CustomOn.Remove(key); });
+            var box = Check(GameText.TryT("settings.option."+key) ?? option.Name,GameText.TryT("settings.option."+key+".tip") ?? option.Description,
+                on => { if (on) _draft.CustomOn.Add(key); else _draft.CustomOn.Remove(key); });
             _options[key] = box; list.AddChild(box);
         }
         ShowPage(Page.Main); Visible = false;
@@ -187,7 +201,7 @@ public partial class GameMenu : Control
         if (!_artApplied) { ApplyArt(art); _artApplied = true; }
         _current = settings.Copy(); _currentScale = interfaceScale; _controls.Text = ControlsText;
         _exitToMain.Disabled = !canExitToMainMenu;
-        _exitToMain.TooltipText = canExitToMainMenu ? "" : "This match did not start from the setup screen.";
+        _exitToMain.TooltipText = canExitToMainMenu ? "" : GameText.T("menu.exit_to_main.disabled");
         _settingsOnly = false;
         ShowPage(Page.Main); Visible = true;
     }
@@ -245,6 +259,7 @@ public partial class GameMenu : Control
         _playerSelectors.SetPressedNoSignal(_draft.PlayerColoredUnitSelectors);
         _interfaceScale.SetValueNoSignal(_draftScale); _scaleValue.Text = $"{_draftScale:0}%";
         foreach (var (percent,button) in _cursorSizes) button.SetPressedNoSignal(_draft.CursorSizePercent == percent);
+        foreach (var (level,button) in _cameraLevels) button.SetPressedNoSignal(_draft.CameraDistance == level);
         double[] volumes = [_draft.MasterVolume,_draft.MusicVolume,_draft.EffectsVolume,_draft.VoiceVolume];
         for (int i=0;i<volumes.Length;i++) { _volumes[i].SetValueNoSignal(volumes[i]); _volumeValues[i].Text = $"{volumes[i]:0}%"; }
         _mute.SetPressedNoSignal(_draft.Muted);

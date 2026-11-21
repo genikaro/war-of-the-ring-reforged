@@ -27,13 +27,13 @@ public partial class MenuScene : Node3D
     {
         var art = FrontEndArt.Shared;
         var presentation = new ScenePresentation();
-        await step("Loading the menu scene",.05f);
+        await step("loading.menu_scene",.05f);
         // Build-212: the install's menu scene, built off the main thread, when it gives it.
         byte[]? built = await Task.Run(() => InstallFiles.Glb(art.MenuScene!));
         var scene = built != null ? presentation.Load(built,"map/scene.glb") : presentation.Load(art.MenuScene!,"map/scene.glb"); AddChild(scene);
-        await step("Placing the army",.4f);
+        await step("loading.army",.4f);
         await AnimateArmy(scene,presentation,step);
-        await step("Lighting the fires",.9f);
+        await step("loading.fires",.9f);
         AddChild(Environment(art.MenuSky));
         var sun = new DirectionalLight3D { LightColor = new Color("ffc29a"),LightEnergy = .95f,ShadowEnabled = true,
             RotationDegrees = new Vector3(-38,-128,0),DirectionalShadowMaxDistance = 160 };

@@ -62,8 +62,9 @@ public partial class Main
         {
             case 2:
                 MenuChecks["menu_opens_on_the_menu_scene"] = _menuMode && menu.Visible && _menuScene is { Visible: true,AnimatedUnits: >= 60,Fires: >= 10 }
-                    && _lastLoadSteps.Contains("Loading the menu scene") && _lastLoadSteps.Contains("Placing the army");
-                MenuChecks["menu_lists_the_five_items"] = Enumerable.Range(0,5).Select(i => menu.ItemButton(i).Text).SequenceEqual(["Campaign","Skirmish","Sandbox","Settings","Exit"])
+                    && _lastLoadSteps.Contains("loading.menu_scene") && _lastLoadSteps.Contains("loading.army");
+                MenuChecks["menu_lists_the_five_items"] = Enumerable.Range(0,5).Select(i => menu.ItemButton(i).Text).SequenceEqual(new[] {"campaign","skirmish","sandbox","settings","exit"}.Select(k => GameText.T("mainmenu."+k)))
+                    && MainMenu.SandboxShown && Enumerable.Range(0,5).All(i => menu.ItemButton(i).Visible)
                     && menu.CampaignButton.Disabled && Enumerable.Range(1,4).All(i => !menu.ItemButton(i).Disabled);
                 var art = FrontEndArt.Shared;
                 MenuChecks["menu_uses_original_art_and_font"] = art.Available && art.Art("parchment_button_01") != null && art.Art("lotr_wotr_logo") != null
@@ -121,10 +122,10 @@ public partial class Main
                 PressButton(menu.SandboxButton); break;
             case 16: ReleaseButton(menu.SandboxButton); break;
             case 18:
-                MenuChecks["sandbox_setup_screen"] = screen is { Kind: SetupScreen.SetupKind.Sandbox,TitleText: "Sandbox",MapListShown: false,SelectedMap.Sandbox: true }
+                MenuChecks["sandbox_setup_screen"] = screen is { Kind: SetupScreen.SetupKind.Sandbox,MapListShown: false,SelectedMap.Sandbox: true } && screen.TitleText == GameText.T("sandbox.title")
                     && screen.SlotShown(1) && !screen.SlotShown(2) && Enumerable.Range(0,2).All(s => screen.SlotChoice(s) is { Selected: 0,Disabled: true } && !screen.SlotSide(s).Disabled)
                     && screen.InstantBuildBox is { Visible: true,ButtonPressed: true } && screen.TrainingDummiesBox is { Visible: true,ButtonPressed: true }
-                    && screen.StatusText.StartsWith("Sandbox: you command Player 1 and Player 2") && screen.BackButton.Text == "Back" && !screen.StartButton.Disabled
+                    && screen.StatusText.StartsWith(ShownBefore("setup.status.sandbox",Slot)) && screen.BackButton.Text == GameText.T("button.back") && !screen.StartButton.Disabled
                     && !menu.Visible && _menuScene is { Visible: false };
                 if (_capture != "") _ = CaptureScreen(MenuCapture("sandbox-setup"));
                 break;
@@ -135,10 +136,10 @@ public partial class Main
                 PressButton(menu.SkirmishButton); break;
             case 24: ReleaseButton(menu.SkirmishButton); break;
             case 26:
-                MenuChecks["skirmish_setup_screen"] = screen is { Kind: SetupScreen.SetupKind.Skirmish,TitleText: "Skirmish",MapListShown: true }
+                MenuChecks["skirmish_setup_screen"] = screen is { Kind: SetupScreen.SetupKind.Skirmish,MapListShown: true } && screen.TitleText == GameText.T("setup.title.skirmish")
                     && screen.Maps.Count >= 32 && !screen.Maps.Any(m => m.Sandbox) && screen.SelectedMap?.Stem == "MP02_Bilbos_Bluffs"
-                    && screen.SlotChoice(0).Selected == 0 && screen.SlotSummary(0) == "Commanded by you" && screen.SlotSummary(1).Contains(" · ")
-                    && screen.TraitButton(1).Visible && screen.StatusText.StartsWith("You play Player 1 (Good) against 1 bot");
+                    && screen.SlotChoice(0).Selected == 0 && screen.SlotSummary(0) == GameText.T("setup.commanded_by_you") && screen.SlotSummary(1).Contains(" · ")
+                    && screen.TraitButton(1).Visible && screen.StatusText.StartsWith(ShownBefore("setup.status.play",1,SetupScreen.SideName(0),GameText.Plural("setup.bots",1,1),Slot));
                 if (_capture != "") _ = CaptureScreen(MenuCapture("skirmish-setup"));
                 break;
             case 28: PressButton(screen!.BackButton); break;
@@ -148,7 +149,7 @@ public partial class Main
             case 34:
                 screen!.SlotSide(1).Select(1); screen.SlotSide(1).EmitSignal(OptionButton.SignalName.ItemSelected,1L);
                 screen.TrainingDummiesBox.ButtonPressed = false; screen.InstantBuildBox.ButtonPressed = false;
-                MenuChecks["sandbox_choices_shown"] = screen.StatusText.Contains("building and training take their time") && screen.StatusText.Contains("no training dummies");
+                MenuChecks["sandbox_choices_shown"] = screen.StatusText.Contains(GameText.T("setup.status.slow_build")) && screen.StatusText.Contains(GameText.T("setup.status.no_dummies"));
                 break;
             case 35: PressButton(screen!.StartButton); break;
             case 36: _menuPhase = 1; _menuStep = 0; ReleaseButton(screen!.StartButton); break;
@@ -175,7 +176,7 @@ public partial class Main
             case 4:
                 MenuChecks["loading_screen_shows_ring_progress"] = _menuLoadingArt && _menuLoadingTitle == GameText.T("sandbox.title") && MenuLoadingProgress.Count >= 10
                     && MenuLoadingProgress.Zip(MenuLoadingProgress.Skip(1)).All(p => p.Second >= p.First) && MenuLoadingProgress[^1] == 1
-                    && _lastLoadSteps.Contains("Loading the terrain") && _lastLoadSteps.Contains("Building the Sandbox bases") && _lastLoadMs > 0;
+                    && _lastLoadSteps.Contains("loading.terrain") && _lastLoadSteps.Contains("loading.sandbox_bases") && _lastLoadMs > 0;
                 MenuChecks["sandbox_choices_reach_the_match"] = _sandboxMap && world.FactionOf(1) == Reforged.Simulation.SimWorld.Evil && world.FactionOf(0) == Reforged.Simulation.SimWorld.Good
                     && _sandboxDummies.Count == 0 && !world.InstantBuildTeams.Contains(0) && !world.InstantBuildTeams.Contains(1)
                     && _chosenKind == SetupScreen.SetupKind.Sandbox && _lastSandboxSetup is { SandboxTrainingDummies: false,SandboxInstantBuild: false };

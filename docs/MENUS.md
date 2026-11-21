@@ -37,6 +37,14 @@ window shows more of the scene. Settings opens the in-game Settings page on its 
 (OK, Cancel or Esc returns). Exit asks "Confirm exit from the game." (Menu text 3100)
 in the original `console_dialog_quit_acknowledgement_g_box`; Esc opens and closes it.
 
+**Build-222:** the labels are the install's own where the original has them, Skirmish (Menu text 12), Options (3),
+Quit (8006), the exit question (3100), OK (9015) and Cancel (9000), and catalog rows (`mainmenu.*`) for Campaign,
+Sandbox and the tooltips, so a Russian install shows Сражение, Настройка and Выход. The **Sandbox** is a testing
+field: it shows only in a debug session (`-Debug`, `-DebugMenu`, smokes and captures, `DebugSession.Enabled`), and
+otherwise the items below it move up a row. The loading screen's steps are catalog rows too (`loading.*`).
+Build-223 does the same for the setup screens and the in-game menu with its Settings page (`setup.*`, `menu.*`,
+`settings.*`); see the build log for the original Menu text each label takes.
+
 **Lettering.** `Fonts/Immortal.lfn` is a `LIQDFONT`: float 1.0, glyph count (160),
 size count (4), then per size a header (size, 0, space width, letter spacing, page
 width, page height, layers), BGRA pixels for every layer, and 160 glyphs of (code,

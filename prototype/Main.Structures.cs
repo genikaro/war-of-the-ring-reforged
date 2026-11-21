@@ -101,6 +101,12 @@ public partial class Main
     private bool StructureVisible(StructureVisual entry) => entry.Root.IsVisibleInTree()
         && (!entry.Obstacle || _world!.Navigation.IsObstacleActive(entry.Id));
 
+    /// <summary>Build-222: an ore pile or food well under a Mill or Foundry the viewer can see (built or a foundation)
+    /// is part of that building: clicks, hover and box selection reach the building, never the source beneath it.</summary>
+    private bool UnderBuilding(StructureVisual entry) => entry.Team < 0 && entry.Resource >= 0
+        && _constructionViews.TryGetValue(entry.Resource,out var building) && building.Root.IsVisibleInTree()
+        && _world!.ConstructionSites.TryGetValue(entry.Resource,out var site) && site.Team >= 0;
+
     private (int Id,float Distance)? StructureAt(Vector2 mouse)
     {
         Vector3 origin = _camera.ProjectRayOrigin(mouse),direction = _camera.ProjectRayNormal(mouse);
@@ -109,7 +115,7 @@ public partial class Main
         (int Id,float Distance)? hit = null;
         foreach (var entry in _structureViews.Values.OrderBy(s => s.Id))
         {
-            if (!StructureVisible(entry)) continue;
+            if (!StructureVisible(entry) || UnderBuilding(entry)) continue;
             foreach (var (mesh,faces) in entry.Meshes)
             {
                 if (!mesh.IsVisibleInTree()) continue;
@@ -199,7 +205,7 @@ public partial class Main
     {
         if (_selectedObelisk >= 0) return SelectedObeliskDetails();
         if (_selectedStructure is not int id || !_structureViews.TryGetValue(id,out var entry)) return null;
-        if (!StructureVisible(entry)) { _selectedStructure = null; return null; }
+        if (!StructureVisible(entry) || UnderBuilding(entry)) { _selectedStructure = null; return null; }
         var world = _world!;
         var site = entry.Team >= 0 ? world.ConstructionSites.Values.FirstOrDefault(s => s.Obstacle == id && s.Team == entry.Team) : null;
         // An upgrade changes the building's type under the same view.
