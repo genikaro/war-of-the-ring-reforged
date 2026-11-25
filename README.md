@@ -16,10 +16,10 @@ copy of the original game — see [NOTICE.md](NOTICE.md).
 
 | Part | Progress | Where it stands |
 | --- | --- | --- |
-| Engine | `██████████████░░░░░░` 70% | Reads the original's archives, database, models, maps, audio and text; deterministic simulation, rendering, fog of war, HUD, menus and launcher. Works, needs polishing. |
-| Campaign | `░░░░░░░░░░░░░░░░░░░░` 0% | Not started. |
-| Skirmish | `████████████████░░░░` 80% | The install's maps against bots, as Good or Evil: economy, construction, research, heroes, abilities, places of power. Playable, needs polishing. |
-| Multiplayer | `░░░░░░░░░░░░░░░░░░░░` 0% | Not started. |
+| Engine | <img src="docs/progress/70.svg" alt="70%" width="240"> | Reads the original's archives, database, models, maps, audio and text; deterministic simulation, rendering, fog of war, HUD, menus and launcher. Works, needs polishing. |
+| Campaign | <img src="docs/progress/0.svg" alt="0%" width="240"> | Not started. |
+| Skirmish | <img src="docs/progress/80.svg" alt="80%" width="240"> | The install's maps against bots, as Good or Evil: economy, construction, research, heroes, abilities, places of power. Playable, needs polishing. |
+| Multiplayer | <img src="docs/progress/0.svg" alt="0%" width="240"> | Not started. |
 
 ## Why this exists
 

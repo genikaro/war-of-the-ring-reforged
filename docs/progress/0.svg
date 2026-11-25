@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="20" viewBox="0 0 240 20" role="img" aria-label="0%">
+  <title>0%</title>
+  <clipPath id="pill"><rect width="240" height="20" rx="10"/></clipPath>
+  <g clip-path="url(#pill)">
+    <rect width="240" height="20" fill="#d0d7de"/>
+    <rect width="0" height="20" fill="#d4a72c"/>
+  </g>
+  <text x="120" y="14" text-anchor="middle" font-family="Segoe UI,Helvetica,Arial,sans-serif" font-size="12" font-weight="600" fill="#24292f">0%</text>
+</svg>
