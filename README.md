@@ -14,10 +14,10 @@ copy of the original game — see [NOTICE.md](NOTICE.md).
 
 ## Progress
 
-> [!WARNING]
-> ### Status: not in active development
-> The project is paused where it stands; see [Why this exists](#why-this-exists). Forks, issues and
-> pull requests are still welcome.
+### Status: not in active development
+
+The project is paused where it stands; see [Why this exists](#why-this-exists). Forks, issues and
+pull requests are still welcome.
 
 | Part | Progress | Where it stands |
 | --- | --- | --- |
