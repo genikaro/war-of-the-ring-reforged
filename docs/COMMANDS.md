@@ -93,7 +93,7 @@ box beside the pointer (`GameHints.cs`): a short first line in the dark title ba
 
 Every console tooltip opens in one place: the original parchment box, flush with the
 console's right edge on top of it, growing upward
-([reference](../references/original-game/TOOLTIPS-2026-10-21.md)), as Warcraft III
+(reference), as Warcraft III
 shows tooltips above its command card. It follows the hovered control at once, never
 the pointer. The first line sits in the dark title band; a cost line becomes food,
 ore, Fate and population cells; the rest follows the Description strip. Godot's own
@@ -255,10 +255,10 @@ and holding units do not yield for passing traffic, so they can block a passage.
 
 ## Original references and deliberate differences
 
-The local [reference library](../references/original-game/README.md) contains
+The local reference library contains
 the original manual and addendum.
 
-The [reference audit](../references/original-game/REFERENCE-AUDIT.md) excludes
+The reference audit excludes
 prerelease/modified sources. Retained gameplay images show the four standard
 commands along the bottom with abilities above, but do not establish executable
 provenance. The manual's labeled interface diagram is documentation only and
@@ -299,12 +299,12 @@ full original binding/layout fidelity remain subsequent work.
 
 ## Planned corrections from the local original-game session
 
-The [30-capture session](../references/original-game/LOCAL-SESSION-2026-10-19.md)
+The 30-capture session
 confirms the bottom command row and captures its tooltips. It does not validate
 the current command algorithms. The [roadmap](ROADMAP.md#next-milestone-original-game-command-and-combat-corrections)
 puts a focused comparison/correction pass before ranged combat. The controls
 above describe the implementation as it stands. The
-[behavior matrix](../references/original-game/COMMAND-BEHAVIOR-MATRIX.md)
+behavior matrix
 tracks implemented corrections and unresolved comparisons.
 
 - **Implemented:** Hold Position is the player-facing label. Measure

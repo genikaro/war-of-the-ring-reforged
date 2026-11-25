@@ -1,25 +1,25 @@
 # War of the Ring Reforged Roadmap
 
-Updated Oct 21, 2026 · @Evgenii
+Updated Oct 21, 2026
 
 Phases 1 and 2 implementation are complete. All 54 maps decode through EOF, including 752 decals. Helm's Deep and a decal-heavy Birth of the Uruk-Hai scene render and validate. An initial reference review has corrected prototype rendering bugs; controlled original-game fidelity validation remains open. The user has accepted Phase 3's movement and combat-spacing baseline. The command panel, explicit orders and first imported melee slice are implemented in the Godot 4 C# sandbox (engine chosen Oct 19). The Elven Archer ranged slice is implemented with projectile resolution. A bounded original-game command/combat comparison and correction pass remains open. Original armor/range formulas remain unresolved.
 
-An [original-game reference library](../references/original-game/README.md) now
+An original-game reference library now
 contains 26 visually retail-compatible images, the original manual and addendum,
 editor help and recording candidates, with provenance and checksums. The
-[reference audit](../references/original-game/REFERENCE-AUDIT.md) excludes all 48
+reference audit excludes all 48
 prerelease images and modified sources from active use. Retained web captures
 have unverified provenance and are not final-build baselines; controlled
 original-game screenshot comparison and gameplay verification remain open.
 
-The [first local original-game session](../references/original-game/LOCAL-SESSION-2026-10-19.md)
+The first local original-game session
 adds 30 build-identified captures from **1.01.0011**, including command tooltips,
 Good HUD, recruitment, a melee encounter and technology trees. These are
 provisional observations: installation authenticity is unverified, captures are
 1920 × 1080 JPEGs, and stills do not establish combat timing. They inform the
 next tasks below without closing the original-game fidelity gates.
 
-The [prototype reference review](../references/original-game/PROTOTYPE-REVIEW.md)
+The prototype reference review
 corrects missing runtime mipmaps, ignored lake vertex colours, spawned team
 colours and selection disks. Menu/launch-time views and capture metadata make further
 comparisons repeatable. Build-152 lights every map with its own decoded sun, ambient, clouds and
@@ -670,7 +670,7 @@ The October 20 command correction adds the agreed **F2 Walk/Run** toggle and
 original run-icon button. Build-1 makes pace global to the player's army; changing mode preserves
 orders, queues, targeting, swing timing and the camera. Source root-track ratios
 set walking speeds; default running stays at 3 m/s. The visible Hold label is
-now **Hold Position**. The [command behavior matrix](../references/original-game/COMMAND-BEHAVIOR-MATRIX.md)
+now **Hold Position**. The command behavior matrix
 records evidence and intentional choices; original timing comparisons and
 Aragorn's Q/W/E slots are connected in build-2; other heroes remain open. The 4K Walk UI was inspected; 27 Orders checks,
 34 Command checks pass. The 206-hit historical melee result predates the larger bodies.
@@ -731,7 +731,7 @@ with all 16 matchups stored in the hashed rules cache. Equal types and Hero
 targets use 100%. Single selection shows the original type icon and live Attack,
 Armor and Victories, following the saved original-game HUD. Enemy lethal hits
 increment the attacker's victory counter once. See the
-[reference note](../references/original-game/COMBAT-RATINGS-2026-10-19.md) for the
+reference note for the
 diagram, addendum confirmation, linked guide and unresolved formula policies.
 
 ## Accepted baseline: movement and combat spacing
@@ -827,8 +827,8 @@ the One Ring loading screen with staged loading, and `prototype/export.ps1` buil
 
 ## Next milestone: original-game command and combat corrections
 
-Use the [local findings](../references/original-game/LOCAL-SESSION-2026-10-19.md)
-and [capture protocol](../references/original-game/CAPTURE-CHECKLIST.md).
+Use the local findings
+and capture protocol.
 Preserve the accepted movement/spacing baseline. Implementation checks remain
 valid; they demonstrate our behavior, not equivalence to the original.
 

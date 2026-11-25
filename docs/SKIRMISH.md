@@ -2971,7 +2971,7 @@ River Raid match.
 ## Build-58: the rest of the Good tech tree, and the Fate heroes
 
 The owner asked to continue the Good tech tree in the Sandbox, checked against the
-references and the [Good compendium](../references/original-game/GOOD-COMPENDIUM.md),
+references and the Good compendium,
 heroes included. Everything below is imported from the source tables into the shared
 content pack, so it reaches every map; the Sandbox simply builds and upgrades all of it.
 

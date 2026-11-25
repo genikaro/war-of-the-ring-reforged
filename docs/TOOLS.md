@@ -18,15 +18,15 @@ Initial reference review is complete;
 controlled original-game fidelity validation remains open.
 
 Original-game research references are in the
-[reference library](../references/original-game/README.md): 26 visually retail-compatible images,
+reference library: 26 visually retail-compatible images,
 the manual and addendum, browsable editor help, campaign recording links and
 per-file source/checksum records. All 48 prerelease images are excluded;
-the [audit](../references/original-game/REFERENCE-AUDIT.md) records the review.
+the audit records the review.
 The retained web images and recording candidates are not controlled final-build
-baselines. The [gallery](../references/original-game/gallery.html)
+baselines. The gallery
 opens locally. Controlled, matching original-game captures are still needed
 for fidelity validation.
-The [prototype comparison](../references/original-game/PROTOTYPE-REVIEW.md)
+The prototype comparison
 documents the corrected rendering imports and remaining gaps.
 
 Latest verification (Oct 19, 2026): 129 Python tests, eight JavaScript tests,

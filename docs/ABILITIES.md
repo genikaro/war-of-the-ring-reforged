@@ -380,7 +380,7 @@ ranger-camouflaged, ranger-enemy-hidden and ranger-enemy-detected.
 
 ## Elven Sanctuary — build-94
 
-The [Good compendium](../references/original-game/GOOD-COMPENDIUM.md), the
+The Good compendium, the
 source atlas and the installed spell graph define these abilities. Sanctuary
 training and Citadel requirements were already implemented: Elven Archer at
 Citadel 3, Lightbearer at Citadel 4.

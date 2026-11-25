@@ -1350,7 +1350,7 @@ camera buttons; their F1/F2/F3 shortcuts are removed. Runtime textures have mipm
 anisotropic filtering, painted lake colours/opacity render correctly, and the
 spawned teams use the original blue/red colours. Selected units have hollow
 gold rings for friendlies and red rings for inspected enemies, sized to the
-collision body. The [reference review](../references/original-game/PROTOTYPE-REVIEW.md)
+collision body. The reference review
 records before/after captures, fixes and remaining fidelity gaps. Lighting and
 selection art remain preview approximations.
 

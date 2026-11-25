@@ -62,7 +62,7 @@ the reverse and 85% against heroes. Until build-61 the prototype applied both,
 so a Rider hit a Swordsman for 125% × 150% = 187.5%. Now a pair with a source row
 uses that row alone (`CombatRules.DamageScale`), and the table above applies only
 to pairs the source leaves out, such as the Sandbox dummies. Armor follows.
-See [the reference note](../references/original-game/COMBAT-RATINGS-2026-10-19.md).
+See the reference note.
 
 Refresh an existing cache using `python tools/prepare_prototype.py --rules-only`
 and `python tools/prepare_prototype.py --ui-only` for the type icons.
@@ -206,7 +206,7 @@ scheduling remain open.
 
 ## Verification and limits
 
-The [October 19 original-game session](../references/original-game/LOCAL-SESSION-2026-10-19.md)
+The October 19 original-game session
 adds sampled encounter evidence, not a timing trace. A Gondor swordsman displays
 155 HP, Attack 10, Armor 0 and a victory counter; after combat the counter reached
 1. HP also rose between later samples. Those observations do not establish

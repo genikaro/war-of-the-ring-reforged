@@ -55,7 +55,7 @@ The combined GLB passes Khronos validation with zero errors and warnings.
 17 map/navigation/decal regressions. Both scenes were inspected in the browser. Models use
 static poses; water uses the stored surface and opacity without animated ripple,
 reflection or refraction shaders. The prototype's
-[initial reference review](../references/original-game/PROTOTYPE-REVIEW.md) now
+initial reference review now
 corrects runtime texture filtering and lake vertex-colour binding. Controlled
 original-game fidelity comparison remains unverified.
 

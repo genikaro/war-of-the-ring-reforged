@@ -42,7 +42,7 @@ live Good menu in `references/original-game/GOOD-LIVE-OBSERVATIONS-2026-10-23.md
 Blessed Wind uses its spell action's 20 s timer; the global row also contains an
 unused 30 field. Raw rows and actions remain in `combat/rules.json`.
 
-The [original Evil capture](../references/original-game/evil-gallery-2026-11-06.html#capture-13)
+The original Evil capture
 shows the whole Fate grid dimmed immediately after summoning the Balrog. The
 capture does not establish when each slot becomes available again. Knockback uses
 the source nominal force and angle with the deterministic ballistic adapter, without random

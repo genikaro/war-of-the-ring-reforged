@@ -445,7 +445,7 @@ the Obelisk shows its idle model, and the Goblin Slave beside it shows the prote
 
 ## Build-171: the compendium's open source rules
 
-The [Evil compendium](../references/original-game/EVIL-COMPENDIUM.md) (6 November 2026) lists what the checkpoint and the
+The Evil compendium (6 November 2026) lists what the checkpoint and the
 tables show. Read against the code, four source rules were still missing.
 
 | Rule | Source | What the game does |
