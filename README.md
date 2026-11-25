@@ -14,6 +14,11 @@ copy of the original game — see [NOTICE.md](NOTICE.md).
 
 ## Progress
 
+> [!WARNING]
+> ### Status: not in active development
+> The project is paused where it stands; see [Why this exists](#why-this-exists). Forks, issues and
+> pull requests are still welcome.
+
 | Part | Progress | Where it stands |
 | --- | --- | --- |
 | Engine | <img src="docs/progress/70.svg" alt="70%" width="240"> | Reads the original's archives, database, models, maps, audio and text; deterministic simulation, rendering, fog of war, HUD, menus and launcher. Works, needs polishing. |
