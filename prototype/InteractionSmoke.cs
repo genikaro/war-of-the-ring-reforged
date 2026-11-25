@@ -258,6 +258,12 @@ public partial class Main
             case 86:
                 checks["enemy_hover_uses_half_opacity_owner_color"] = _hoveredUnit == _interactionEnemy
                     && _views[_interactionEnemy].RingColor == new Color(TeamColor(world.Units[_interactionEnemy].Team).Lightened(HoverUnitRingLightening),.5f);
+                // Build-224: a box over the enemy (none of yours in it) inspects that one unit, as a click on it does.
+                _selected.Clear(); _interactionStart = InteractionPoint(_interactionEnemy)-new Vector2(14,14);
+                _interactionEnd = InteractionPoint(_interactionEnemy)+new Vector2(14,14);
+                Press(_interactionStart); InteractionMotion(_interactionEnd); Release(_interactionEnd);
+                checks["box_over_enemy_inspects_one_unit"] = _selected.Count == 1 && _selected.Contains(_interactionEnemy);
+                _selected.Clear();
                 InteractionHover(_commands.Minimap.GetGlobalRect().GetCenter());
                 break;
             case 89:
@@ -284,7 +290,7 @@ public partial class Main
                 checks["leaving_window_hides_hover_ring"] = _hoveredUnit == -1 && !_views[_interactionTarget].Ring.Visible;
                 break;
             case 103:
-                FinishInteractionSmoke(44);
+                FinishInteractionSmoke(45);
                 break;
         }
     }

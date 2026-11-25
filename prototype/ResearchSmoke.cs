@@ -123,7 +123,7 @@ public partial class Main
                 PushGridKey(0); break;
             case 20:
                 _researchChecks["q_starts_research_and_pays"] = Site(SmokeForge) is { Research: SmokeIronBlades } && bank.FoodMilli == _researchFood-75_000 && bank.OreMilli == _researchOre-75_000
-                    && _commands.TrainingVisible && _commands.QueueButton(0) is { Visible: true,Icon: not null } && _commands.DisplayedOrder.StartsWith(GameText.T("queue.researching",Shown("TECHNIQUE_IRON_BLADES","Iron Blades")))
+                    && _commands.TrainingVisible && _commands.QueueButton(0) is { Visible: true,Icon: not null } queueHead && queueHead.TooltipText.StartsWith(GameText.T("queue.researching",Shown("TECHNIQUE_IRON_BLADES","Iron Blades")))
                     && _commands.ResearchButton(1) is { Visible: true,Disabled: true } && _commands.ResearchButton(1).TooltipText.EndsWith("Research in progress");
                 Press(_commands.QueueButton(0).GetGlobalRect().GetCenter()); break;
             case 21: Release(_commands.QueueButton(0).GetGlobalRect().GetCenter()); break;

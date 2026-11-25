@@ -86,7 +86,7 @@ public partial class Main
                 break;
             case 213:
                 checks["twenty_first_portrait_enables_scrolling"] = _commands.SelectionScrollbarVisible;
-                FinishInteractionSmoke(105);
+                FinishInteractionSmoke(106);
                 break;
         }
     }

@@ -133,11 +133,11 @@ public partial class Main
         return hit;
     }
 
-    private int? StructureInBox(Rect2 rect)
+    private int? StructureInBox(Rect2 rect,bool own = false)
     {
         // Keep a single structure inspector. When several structures overlap
         // the box, prefer the one whose ground anchor is nearest its center.
-        foreach (var entry in _structureViews.Values.Where(StructureVisible)
+        foreach (var entry in _structureViews.Values.Where(StructureVisible).Where(s => !own || s.Team == PlayerTeam && PlayerTeam >= 0)
             .Where(s => !_camera.IsPositionBehind(s.Root.GlobalPosition))
             .OrderBy(s => _camera.UnprojectPosition(s.Root.GlobalPosition).DistanceSquaredTo(rect.GetCenter())).ThenBy(s => s.Id))
         {

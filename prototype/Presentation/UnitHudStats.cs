@@ -8,7 +8,7 @@ namespace Reforged.Presentation;
 /// them in green, red below zero, as the source console's "+ 9" column (local capture campaign-004) and its tooltip
 /// split into base and bonus: research, places of power and a training dummy's buttons.</summary>
 public sealed record UnitHudStats(string Type,string Icon,string Matchups,string Attack,string Armor,string Victories,string Health,string AttackTip = "",
-    string AttackBonus = "",string ArmorBonus = "",string ArmorTip = "")
+    string AttackBonus = "",string ArmorBonus = "",string ArmorTip = "",bool HasAttack = true)
 {
     // Build-184: every word comes from GameText (the catalog keeps today's English as its English).
     public static string TypeName(int type) => GameText.T(type switch { 0 => "stat.type.cutting",1 => "stat.type.piercing",2 => "stat.type.blunt",3 => "stat.type.hero",_ => "stat.type.none" });
@@ -41,7 +41,7 @@ public sealed record UnitHudStats(string Type,string Icon,string Matchups,string
         return new(TypeName(type),icon == "" ? "" : $"counter_marker_{(evil ? 'E' : 'G')}_{icon}",matchups,dps <= 0 ? perHit : basePerHit,
             baseArmor.ToString("0.###",CultureInfo.InvariantCulture),
             unit.KillCount.ToString(CultureInfo.InvariantCulture),$"{unit.Health}/{unit.MaxHealth}",tip,
-            dps <= 0 || hitBonus == 0 ? "" : Signed(hitBonus),armor == baseArmor ? "" : Signed(armor-baseArmor),armorTip);
+            dps <= 0 || hitBonus == 0 ? "" : Signed(hitBonus),armor == baseArmor ? "" : Signed(armor-baseArmor),armorTip,dps > 0);
     }
 
     /// <summary>The Dwarf Shieldbreaker's Shield Break gear (BattleGear 26), whose name the armor tooltip shows.</summary>

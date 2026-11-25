@@ -13,7 +13,7 @@ public partial class CommandPanel
     private Button _structurePortrait = null!;
     private Label _structureHealthText = null!,_structureArmorText = null!,_structureProgressText = null!;
     private Control _structureStats = null!;
-    private TextureRect _structureStatsBackground = null!;
+    private NinePatchRect _structureStatsBackground = null!;
     private readonly (Label Name,Label Value)[] _structureStatRows = new (Label,Label)[3];
     private string _structureAttack = "",_structureAttackTip = "";
     private ColorRect _structureHealthBar = null!;
@@ -35,8 +35,7 @@ public partial class CommandPanel
         _structureHealthText = Counter("",new(0,85),new(248,16),11,HorizontalAlignment.Center); _structureHealthDetails.AddChild(_structureHealthText);
         _structureStats = new Control { Position = new(333,28),Size = new(171,77),MouseFilter = MouseFilterEnum.Ignore };
         _structureDetails.AddChild(_structureStats);
-        _structureStatsBackground = new TextureRect { Size = new(171,77),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-            MouseFilter = MouseFilterEnum.Ignore }; _structureStats.AddChild(_structureStatsBackground);
+        _structureStatsBackground = StatsFrame(); _structureStatsBackground.Size = new(171,StatsHeight(3)); _structureStats.AddChild(_structureStatsBackground);
         for (int row = 0; row < _structureStatRows.Length; row++)
         {
             var name = Text("",new(12,5+row*22),new(84,22),13);
@@ -46,7 +45,8 @@ public partial class CommandPanel
         }
         _structureArmorText = _structureStatRows[0].Value;
         _structureProgressText = Text("",new(70,28),new(248,36),13); _structureDetails.AddChild(_structureProgressText);
-        _structureBurning = new TextureRect { Position = new(0,104),Size = new(StatusSize,StatusSize),
+        // Build-224: at the right end of the Health caption, leaving the row under the bar to the training queue.
+        _structureBurning = new TextureRect { Position = new(248-StatusSize,61),Size = new(StatusSize,StatusSize),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,StretchMode = TextureRect.StretchModeEnum.Scale,
             MouseFilter = MouseFilterEnum.Stop,Visible = false,
             TooltipText = HudTip.Make(GameText.T("status.burning.title"),null,GameText.T("structure.burning")) };
@@ -85,6 +85,8 @@ public partial class CommandPanel
         _structureStatsBackground.Texture = _statsBackground.Texture;
         _structureAttack = details.Attack; _structureAttackTip = string.Join("\n\n",weapons.Select(w => w.Tooltip));
         int count = Math.Min(2,weapons.Length);
+        // Build-224: the frame holds just the building's rows: Armor alone for most, its weapons above it for a defence.
+        _structureStats.Size = _structureStatsBackground.Size = new(171,StatsHeight(count+1));
         for (int row = 0; row < _structureStatRows.Length; row++)
         {
             var (name,value) = _structureStatRows[row];

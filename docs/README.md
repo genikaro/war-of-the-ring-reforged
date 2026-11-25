@@ -1,5 +1,29 @@
 # Godot C# skirmish sandbox
 
+**build-224:** seven adjustments. **Training queue:** a building's unit in training and its queue sit under its health
+bar, and the console's bottom line no longer spells out the training, the queue length and the rally point (the
+queue portraits' tooltips say it); a burning building's fire icon moves to the end of the Health caption. **Stats
+frame:** the frame beside a selection is as tall as its rows (its five-pixel gold edge kept, `NinePatchRect`): most
+buildings show Armor alone, a defence its weapons above it, and a unit without a weapon drops the Attack row.
+**Rally on resources:** with a producer selected, a right-click on the ground beside a well or an ore pile (within
+the 4 m a worker's gather order allows) rallies onto it, so new workers go straight to gathering; before, only a click
+on the model itself did. **Flags wave:** a model's cloths (`node.extras.wotrCloth`: banners and flags) were a still
+grid. Each vertex now carries, in `CUSTOM0`, the direction away from the cloth's pinned stretch (the source's pins, by
+particle id) and its distance in metres, and the classic shader's cloth variant moves it along the cloth's normal by
+a wave running outward from the pins, fullest 1.2 m and more from them, tilting its normal so the folds catch the sun;
+each flag's position offsets its phase. There is still no cloth solver. **Box selection:** a box with none of your
+units takes one of your buildings, else one other visible unit, the one nearest the box's centre, as a click on it
+does. **Skirmish screen:** no start speed (1x), no bot summary column, no map size, no status line for a ready match;
+each bot row has a **?** button that opens its card (style triangle, traits, description) in a popup, without the
+row of numbers; the triangle's corner words sit under their corners. **Tooltips:** every Godot tooltip outside the
+console (menus, setup screens, Settings, the game menu) is drawn as the console's: the parchment backing, a short
+first line in the dark title band, the rest in dark ink wrapped at 320 px (`GameHints.cs`, through the scene tree's
+`node_added`). **Camera:** the three play distances each move one step closer: close 20 m, medium 28 m (the default)
+and far 40 m, the original's; the smokes and captures start at far, the 40 m view their screen clicks were written for
+(the research smoke could not place its Dwarf Hall from 28 m). Checks: the setup smoke opens and closes Gimli's card, expects no status line and a 1x
+start; the menu smoke expects the card buttons; the interaction smoke boxes an enemy and inspects that one unit; the research and tech smokes read the queue head's tooltip instead of
+the bottom line.
+
 **build-223:** the setup screens, the in-game menu and its Settings page speak the install's language. Where the
 original has the words they are its own: Skirmish (Menu text 12), Side, Good, Evil and Random (1501-1505), the
 difficulties (3411-3413: an English install says Easy, Medium and Hard, a Russian one Низкая, Средняя, Высокая),

@@ -124,7 +124,7 @@ public static class ClassicLighting
 
     /// <summary>A classic copy of an imported material; the copy remembers its source for code that derives
     /// per-instance variants (ghosts, gilded dummies) from the imported material.</summary>
-    public static ShaderMaterial Convert(BaseMaterial3D source,Texture2D? cloudMap)
+    public static ShaderMaterial Convert(BaseMaterial3D source,Texture2D? cloudMap,bool cloth = false)
     {
         bool clouds = cloudMap != null;
         if (source.Uv1Scale != Vector3.One || source.Uv1Offset != Vector3.Zero || source.Uv1Triplanar)
@@ -137,9 +137,9 @@ public static class ClassicLighting
             _ => throw new InvalidOperationException("Unsupported transparency for classic lighting: "+source.Transparency) };
         string cull = source.CullMode switch { BaseMaterial3D.CullModeEnum.Disabled => "cull_disabled",BaseMaterial3D.CullModeEnum.Front => "cull_front",_ => "cull_back" };
         bool emission = source.EmissionEnabled,multiply = source.EmissionOperator == BaseMaterial3D.EmissionOperatorEnum.Multiply;
-        string key = $"{blend} {cull} {source.VertexColorUseAsAlbedo} {emission} {multiply} {clouds}";
+        string key = $"{blend} {cull} {source.VertexColorUseAsAlbedo} {emission} {multiply} {clouds} {cloth}";
         if (!Shaders.TryGetValue(key,out var shader))
-            Shaders[key] = shader = new Shader { Code = MaterialCode(blend,cull,source.VertexColorUseAsAlbedo,emission,multiply,clouds) };
+            Shaders[key] = shader = new Shader { Code = MaterialCode(blend,cull,source.VertexColorUseAsAlbedo,emission,multiply,clouds,cloth) };
         var material = new ShaderMaterial { Shader = shader,RenderPriority = source.RenderPriority,ResourceName = source.ResourceName };
         material.SetShaderParameter("albedo",source.AlbedoColor);
         if (source.AlbedoTexture != null) material.SetShaderParameter("albedo_texture",source.AlbedoTexture);
@@ -167,7 +167,7 @@ public static class ClassicLighting
         return ImageTexture.CreateFromImage(image);
     }
 
-    private static string MaterialCode(string blend,string cull,bool vertexColor,bool emission,bool multiply,bool clouds)
+    private static string MaterialCode(string blend,string cull,bool vertexColor,bool emission,bool multiply,bool clouds,bool cloth = false)
     {
         string tile = MapLighting.CloudTileMetres.ToString("0.0###",System.Globalization.CultureInfo.InvariantCulture);
         // A vertex colour is the source's diffuse (terrain paint and precomputed shadows): it scales the sun's light in
@@ -184,8 +184,22 @@ public static class ClassicLighting
         string cloud = clouds ? $"    return mix(vec3(1.0), min(2.0 * texture(cloud_map, world_position.xz / {tile} + TIME * classic_cloud_velocity).rgb, vec3(1.0)), classic_clouds);"
             : "    return vec3(1.0);";
         return string.Join('\n',["shader_type spatial;",$"render_mode {mode};",MaterialHeader,"vec3 cloud_shade() {",cloud,"}","void vertex() {",
-            "    world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;",vertex,"}","void fragment() {",..body,"}",MaterialLight]);
+            cloth ? ClothWave : "","    world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;",vertex,"}","void fragment() {",..body,"}",MaterialLight]);
     }
+
+    /// <summary>Build-224: a flag or banner (ScenePresentation.PrepareCloths) waves. CUSTOM0 holds the direction away
+    /// from the cloth's pins and the distance from them in metres: the cloth moves along its normal by a wave running
+    /// outward from the pins, still at the pins and fullest a metre and more from them, its normal tilted by the wave's
+    /// slope so the folds catch the sun. Each cloth's position offsets its phase, so neighbouring flags never beat in time.</summary>
+    private const string ClothWave = """
+            float reach = min(CUSTOM0.w, 1.2);
+            float seed = dot(MODEL_MATRIX[3].xyz, vec3(0.73, 0.0, 1.31));
+            float phase = 3.5 * CUSTOM0.w - 5.0 * TIME + 1.4 * dot(VERTEX, cross(NORMAL, CUSTOM0.xyz)) + seed;
+            float wave = sin(phase) + 0.35 * sin(2.1 * phase + 1.3);
+            float slope = 3.5 * (cos(phase) + 0.735 * cos(2.1 * phase + 1.3));
+            VERTEX += NORMAL * 0.12 * reach * wave;
+            NORMAL = normalize(NORMAL - CUSTOM0.xyz * 0.12 * (step(CUSTOM0.w, 1.2) * wave + reach * slope));
+        """;
 
     private const string MaterialHeader = """
         global uniform vec3 classic_ambient;

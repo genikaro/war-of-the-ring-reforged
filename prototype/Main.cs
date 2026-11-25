@@ -130,6 +130,7 @@ public partial class Main : Node3D
         // Build-188: the exported game opens on the launcher, which checks the original game; Start Reforged returns here.
         if (Launcher.Wanted) { OpenLauncher(); return; }
         GetTree().AutoAcceptQuit = false;
+        GameHints.Install(GetTree());
         LoadGameText();
         // Build-217: the game reads only the install. Without one it can show nothing, so the launcher asks for it; a
         // run that nobody can answer (a smoke, a capture, a headless run) stops and says how to name one.
@@ -751,6 +752,17 @@ public partial class Main : Node3D
         // Units in the box (or retained by Shift) take priority. Structures
         // remain a separate inspection selection when no units are selected.
         if (_selected.Count > 0) { SelectionSpeech(); return; }
+        // Build-224: with none of your units in it, the box takes one of your buildings, else one other unit you can see,
+        // as a click on it would: the one whose body is nearest the box's centre (Warcraft III). Never several, never mixed with yours.
+        if (StructureInBox(rect,own: true) is int ownStructure) { SelectStructure(ownStructure); return; }
+        if (!_observing && _world.Units.Where(u => u.Team != PlayerTeam && u.Present && _world.CanSeeUnit(ViewTeam,u) && InBox(rect,u))
+            .OrderBy(u => _camera.UnprojectPosition(_views[u.Id].Root.GlobalPosition+Vector3.Up*(UnitBarHeight(u)-.25f)/2).DistanceSquaredTo(rect.GetCenter()))
+            .ThenBy(u => u.Id)
+            .FirstOrDefault() is { } other)
+        {
+            UnitSelection.Click(_selected,_world.Units,other,append: false,sameType: false);
+            SelectionSpeech(); return;
+        }
         if (StructureInBox(rect) is int structureId) SelectStructure(structureId);
         else if (append) _selectedStructure = previousStructure;
     }

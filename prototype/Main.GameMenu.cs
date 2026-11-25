@@ -37,7 +37,9 @@ public partial class Main
             if (!AutomatedRun) settings.Save();
             _status = "Settings applied";
         };
-        UseSettings(AutomatedRun ? new() : GameSettings.Load());
+        // Build-224: the smokes and captures keep the original's 40 m start view their screen clicks were written for, now
+        // the Far level (a player starts at Medium, 28 m).
+        UseSettings(AutomatedRun ? new() { CameraDistance = GameSettings.CameraLevel.Far } : GameSettings.Load());
         if (GameAudio.SessionMuted) GD.Print("Debug session: audio is muted (run.ps1 -Unmuted, or --unmuted, plays it).");
         _audio.HookControls(_hud);
     }

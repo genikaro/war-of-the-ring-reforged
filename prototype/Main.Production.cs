@@ -118,6 +118,15 @@ public partial class Main
             ShowStructureCommandFeedback(target.Id);
             return true;
         }
+        // Build-224: the ground beside a well or an ore pile counts as the pile, as it does for a worker's gather order
+        // (ResourceAt), so a rally dropped on a resource sends the new workers to gather it.
+        if (structure == null && ResourceAt(mouse) is { } source)
+        {
+            _world!.Enqueue(PlayerTeam,[],OrderKind.SetRallyResource,source.Id,producer.Id);
+            _status = "Rally point set on "+(source.Kind == ResourceKind.Food ? "food" : "ore")+(_paused ? " (paused)" : "");
+            if (_structureViews.ContainsKey(source.Id)) ShowStructureCommandFeedback(source.Id);
+            return true;
+        }
         Vector3 origin = _camera.ProjectRayOrigin(mouse),direction = _camera.ProjectRayNormal(mouse);
         var hit = _picker.Pick(new(-origin.X,origin.Y,origin.Z),new(-direction.X,direction.Y,direction.Z));
         int cell = hit == null ? -1 : _world!.Navigation.Nearest(hit.Node);

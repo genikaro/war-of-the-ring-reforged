@@ -138,8 +138,9 @@ public partial class Main
             case 26:
                 MenuChecks["skirmish_setup_screen"] = screen is { Kind: SetupScreen.SetupKind.Skirmish,MapListShown: true } && screen.TitleText == GameText.T("setup.title.skirmish")
                     && screen.Maps.Count >= 32 && !screen.Maps.Any(m => m.Sandbox) && screen.SelectedMap?.Stem == "MP02_Bilbos_Bluffs"
-                    && screen.SlotChoice(0).Selected == 0 && screen.SlotSummary(0) == GameText.T("setup.commanded_by_you") && screen.SlotSummary(1).Contains(" · ")
-                    && screen.TraitButton(1).Visible && screen.StatusText.StartsWith(ShownBefore("setup.status.play",1,SetupScreen.SideName(0),GameText.Plural("setup.bots",1,1),Slot));
+                    // Build-224: a bot's row has its card button, yours none; a ready skirmish has no status line and no start speed.
+                    && screen.SlotChoice(0).Selected == 0 && !screen.BotInfoButton(0).Visible && screen.BotInfoButton(1).Visible && !screen.CardOpen
+                    && screen.TraitButton(1).Visible && screen.StatusText == "" && !screen.SpeedSlider.Visible;
                 if (_capture != "") _ = CaptureScreen(MenuCapture("skirmish-setup"));
                 break;
             case 28: PressButton(screen!.BackButton); break;

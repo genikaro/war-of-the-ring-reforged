@@ -9,6 +9,8 @@ public sealed class FrontEndArt
 {
     private static FrontEndArt? _shared;
     public static FrontEndArt Shared => _shared ??= new(GamePaths.Installed());
+    /// <summary>Build-224: the menu art once a screen has asked for it (GameHints never makes it early, before an install is open).</summary>
+    public static FrontEndArt? Loaded => _shared;
 
     private readonly Dictionary<string,string> _files = [];
     private readonly Dictionary<string,Texture2D?> _textures = [];

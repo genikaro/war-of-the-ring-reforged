@@ -4,11 +4,12 @@ using Reforged.Simulation;
 using System.Text.Json;
 
 /// <summary>The setup screen end to end, across the scene reloads it causes. On the 8-player Boneyard it puts you in
-/// slot 3, closes slots 6-8, selects named and Easy/Hard random bots and starts at 2x: the match must load exactly that. The bot items' tooltips
-/// and the bot card must describe the bots chosen (build-49), and Gimli's traits, ticked in the lobby (Defender, then
+/// slot 3, closes slots 6-8, selects named and Easy/Hard random bots and starts: the match must load exactly that, at 1x (build-224: the
+/// Skirmish screen has no start speed). The bot items' tooltips and the bot card, opened from Gimli's row and closed by a click
+/// elsewhere (build-224), must describe the bots chosen (build-49), and Gimli's traits, ticked in the lobby (Defender, then
 /// Marksman, then Rusher, which drops Defender), must reach the match and come back with the setup (build-51). The debug menu's
 /// Skirmish setup button then returns to the screen, which keeps those choices, and an observer match of a Normal random bot
-/// against Aragorn on Bilbo's Bluffs at 16x must load as chosen. Restart must retain its random draw. Build-161: a Random side
+/// against Aragorn on Bilbo's Bluffs must load as chosen. Restart must retain its random draw. Build-161: a Random side
 /// (the Easy random bot's on Boneyard, both on Bilbo's Bluffs) plays the side its seed draws and Restart keeps it. The Sandbox test map has its own
 /// setup screen since build-147 and stays out of the list. Clicks press and release on separate frames.</summary>
 public partial class Main
@@ -17,7 +18,7 @@ public partial class Main
     /// <summary>Which screen or match the smoke is in; static, like the checks, because each start reloads the scene.</summary>
     private static int _setupPhase;
     private static readonly Dictionary<string,bool> SetupChecks = [];
-    private const int SetupSmokeChecks = 29;
+    private const int SetupSmokeChecks = 31;
     private const string SetupBigMap = "MP08_Boneyard",SetupSmallMap = "MP02_Bilbos_Bluffs";
     private static string _setupBigTitle = "";
     private static bool _setupCardOk;
@@ -74,16 +75,16 @@ public partial class Main
                     PickSlot(3,BotItem(AiBotOptions.RandomId(0))); PickSlot(4,BotItem(AiBotOptions.RandomId(2)));
                     TickTrait(3,AiTrait.Defender);
                     foreach (int slot in new[] {5,6,7}) PickSlot(slot,1);
-                    Press(screen.SpeedSlider.NotchGlobal(1));
+                    Press(screen.BotInfoButton(0).GetGlobalRect().GetCenter());
                 }
-                if (_frames == 9)
-                {
-                    Release(screen.SpeedSlider.NotchGlobal(1));
-                    // Gimli's card with his traits, before Aragorn is picked again below.
-                    if (_capture != "") _ = CaptureScreen(System.IO.Path.ChangeExtension(_capture,null)+"-setup.png");
-                }
+                if (_frames == 9) Release(screen.BotInfoButton(0).GetGlobalRect().GetCenter());
                 if (_frames == 10)
                 {
+                    // Build-224: Gimli's row button opens his card under the row; a ready skirmish has no status line or start speed.
+                    SetupChecks["bot_card_opens_from_its_row"] = screen.CardOpen && !screen.BotInfoButton(2).Visible && !screen.BotInfoButton(5).Visible
+                        && screen.CardRect.Position.Y >= screen.BotInfoButton(0).GetGlobalRect().End.Y-1;
+                    // Gimli's card with his traits, before Aragorn is picked again below.
+                    if (_capture != "") _ = CaptureScreen(System.IO.Path.ChangeExtension(_capture,null)+"-setup.png");
                     // Build-49: each bot item's tooltip and the bot card describe the bot. The last slot changed was closed,
                     // so the card falls back to the first bot slot, Gimli's.
                     // Build-223: in the install's language: its bot names, the original's difficulty words, the catalog's styles.
@@ -91,13 +92,13 @@ public partial class Main
                     string gimli = SetupScreen.BotName("Gimli"),traits = GameText.T("setup.traits_list",SetupScreen.TraitList([AiTrait.Rusher,AiTrait.Marksman]));
                     SetupChecks["bot_tooltip_describes_the_bot"] = screen.BotTooltip(0,BotItem("Gimli")) == $"{gimli} · {normal} · {techAggression} (30/20/50)\n"
                         +GameText.T("setup.bot.Gimli") && screen.SlotChoice(0).GetItemText(BotItem("Smaug")) == GameText.T("setup.bot_item",SetupScreen.BotName("Smaug"),SetupScreen.Difficulty(2));
-                    _setupCardOk = screen.CardText.StartsWith($"{gimli} · {normal} · {techAggression}\n{GameText.T("setup.card.style",1,30,20,50)}\n"
+                    _setupCardOk = screen.CardText.StartsWith($"{gimli} · {normal} · {techAggression}\n"
                             +$"{traits}\n{GameText.T("setup.bot.Gimli")}") && screen.CardStyle == new AiStyle(30,20,50)
                         && screen.SlotTraits(0).SequenceEqual([AiTrait.Rusher,AiTrait.Marksman]) && screen.TraitButton(0).Text == GameText.T("setup.traits_count",2)
                         && screen.TraitButton(2).Disabled && !screen.TraitButton(1).Disabled;
                     PickSlot(0,BotItem(AiBotOptions.RandomId(1)));
                     SetupChecks["random_card_keeps_difficulty_and_traits"] = screen.CardText.StartsWith($"{GameText.T("setup.random.title",normal)}\n"
-                            +$"{GameText.T("setup.card.random_detail",1)}\n{traits}\n{GameText.T("setup.random.chooses",normal)}")
+                            +$"{traits}\n{GameText.T("setup.random.chooses",normal)}")
                         && screen.CardStyle==null && screen.BotTooltip(0,BotItem(AiBotOptions.RandomId(1))).Contains(GameText.T("setup.random.keeps_traits"));
                     PickSlot(0,BotItem("Gimli"));
                     PickSlot(1,BotItem("Aragorn"));
@@ -105,23 +106,29 @@ public partial class Main
                 if (_frames == 11)
                 {
                     SetupChecks["bot_card_follows_the_chosen_slot"] = _setupCardOk && screen.CardText.StartsWith($"{SetupScreen.BotName("Aragorn")} · {SetupScreen.Difficulty(2)} · "
-                            +$"{GameText.T("setup.style.aggression")}-{GameText.T("setup.style.tech")}\n{ShownBefore("setup.card.style",2,Slot,Slot,Slot)}")
+                            +$"{GameText.T("setup.style.aggression")}-{GameText.T("setup.style.tech")}\n")
                         && screen.CardStyle == new AiStyle(50,20,30);
-                    SetupChecks["status_names_the_match"] = screen.StatusText == GameText.T("setup.status.play",3,SetupScreen.SideName(0),GameText.Plural("setup.bots",4,4),"2x")
-                        && !screen.StartButton.Disabled;
+                    SetupChecks["ready_match_has_no_status_line"] = screen.StatusText == "" && !screen.SpeedSlider.Visible && !screen.StartButton.Disabled;
                     // Build-133: each slot has a side; the last bot plays Evil.
                     SetupChecks["setup_offers_both_sides"] = screen.SlotSide(4).ItemCount == 3 && screen.SlotSide(4).GetItemText(1) == SetupScreen.SideName(1)
                         && screen.SlotSide(4).GetItemText(2) == SetupScreen.SideName(2) && screen.SlotSide(4).Selected == 0;
                     screen.SlotSide(4).Select(1); screen.SlotSide(3).Select(2);
+                    // A click beside the open card closes it.
+                    Press(screen.StartButton.GetGlobalRect().Position-new Vector2(0,40));
+                }
+                if (_frames == 12)
+                {
+                    Release(screen.StartButton.GetGlobalRect().Position-new Vector2(0,40));
+                    SetupChecks["card_closes_on_a_click_elsewhere"] = !screen.CardOpen;
                     if(_capture!="") Press(screen.SlotChoice(3).GetGlobalRect().GetCenter());
                 }
-                if(_frames==12 && _capture!="")
+                if(_frames==13 && _capture!="")
                 {
                     Release(screen.SlotChoice(3).GetGlobalRect().GetCenter());
                     _=CaptureScreen(System.IO.Path.ChangeExtension(_capture,null)+"-bot-list.png");
                 }
-                if(_frames==13) { screen.SlotChoice(3).GetPopup().Hide(); Press(screen.StartButton.GetGlobalRect().GetCenter()); }
-                if (_frames == 14) { _setupPhase = 1; Release(screen.StartButton.GetGlobalRect().GetCenter()); }
+                if(_frames==14) { screen.SlotChoice(3).GetPopup().Hide(); Press(screen.StartButton.GetGlobalRect().GetCenter()); }
+                if (_frames == 15) { _setupPhase = 1; Release(screen.StartButton.GetGlobalRect().GetCenter()); }
                 break;
             case 1 when _world != null:
                 if (_frames == 5)
@@ -137,7 +144,7 @@ public partial class Main
                             && !world.Economies.ContainsKey(t) && !world.Navigation.IsObstacleActive(SkirmishObstacleBase+t));
                     SetupChecks["bots_hold_the_other_slots"] = world.AiPlayers.Keys.SequenceEqual([0,1,3,4])
                         && world.AiPlayers[0].Personality.Id == "Gimli" && world.AiPlayers[1].Personality.Id == "Aragorn";
-                    SetupChecks["start_speed_applies"] = _speed == 2;
+                    SetupChecks["skirmish_starts_at_normal_speed"] = _speed == 1;
                     SetupChecks["evil_slot_plays_the_evil_side"] = world.FactionOf(4) == SimWorld.Evil && world.FactionOf(2) == SimWorld.Good && world.FactionOf(0) == SimWorld.Good
                         && world.Units.Count(u => u.Team == 4 && u.Definition.Name == "UNIT_E_GOBLIN_SLAVE") == 4 && world.Units.Any(u => u.Team == 4 && u.Definition.Name == "UNIT_E_GOBLIN_SLAVE_MASTER")
                         && world.StartStructures.Any(s => s.Team == 4 && s.Building == "BUILDING_E_WORKER_STRUCTURE") && world.StartStructures.Any(s => s.Team == 2 && s.Building == "BUILDING_G_TOWN_CENTER_LEVEL_1")
@@ -162,7 +169,7 @@ public partial class Main
                 if (_frames == 3)
                 {
                     SetupChecks["setup_returns_with_the_last_choices"] = screen.SelectedMap?.Stem == SetupBigMap && screen.SlotChoice(2).Selected == 0
-                        && screen.SlotChoice(5).Selected == 1 && screen.SlotChoice(0).Selected == BotItem("Gimli") && screen.SpeedSlider.Index == 1;
+                        && screen.SlotChoice(5).Selected == 1 && screen.SlotChoice(0).Selected == BotItem("Gimli");
                     SetupChecks["returning_to_setup_restores_menu_cue"] = _audio.MusicPlaying
                         && _audio.MusicContext == Reforged.Presentation.MusicContext.Menu;
                     SetupChecks["lobby_traits_survive_the_return"] = screen.SlotTraits(0).SequenceEqual([AiTrait.Rusher,AiTrait.Marksman])
@@ -178,12 +185,10 @@ public partial class Main
                 {
                     PickSlot(0,BotItem(AiBotOptions.RandomId(1))); PickSlot(1,BotItem("Aragorn"));
                     TickTrait(0,AiTrait.Marksman); screen.SlotSide(0).Select(2); screen.SlotSide(1).Select(2);
-                    Press(screen.SpeedSlider.NotchGlobal(Speeds.Length-1));
                 }
-                if (_frames == 9) Release(screen.SpeedSlider.NotchGlobal(Speeds.Length-1));
                 if (_frames == 11)
                 {
-                    SetupChecks["status_names_the_match"] &= screen.StatusText == GameText.T("setup.status.watch",GameText.Plural("setup.bots",2,2),"16x");
+                    SetupChecks["ready_match_has_no_status_line"] &= screen.StatusText == "";
                     Press(screen.StartButton.GetGlobalRect().GetCenter());
                 }
                 if (_frames == 12) { _setupPhase = 3; Release(screen.StartButton.GetGlobalRect().GetCenter()); }
@@ -191,7 +196,7 @@ public partial class Main
             case 3 when _world != null:
                 if (_frames < 5) break;
                 SetupChecks["observer_match_as_chosen"] = _observing && PlayerTeam == ObserverTeam && _observerHud.Visible && _world.Contenders.SetEquals([0,1])
-                    && _world.AiPlayers[0].Personality.Difficulty == 1 && _world.AiPlayers[1].Personality.Id == "Aragorn" && _speed == 16
+                    && _world.AiPlayers[0].Personality.Difficulty == 1 && _world.AiPlayers[1].Personality.Id == "Aragorn" && _speed == 1
                     && _mapName == SetupScreen.MapTitle("MP02_Bilbos_Bluffs","Bilbo's Bluffs");
                 SetupChecks["random_observer_bot_keeps_its_traits"] = _world.AiPlayers[0].Traits.SequenceEqual([AiTrait.Marksman])
                     && _lastSetup!.Bots[0]==AiBotOptions.RandomId(1)+"+Marksman";
@@ -221,7 +226,7 @@ public partial class Main
     {
         _setupPhase = 5;
         var report = new { build = BuildInfo.Label,checks = SetupChecks,passed = SetupChecks.Count == SetupSmokeChecks && SetupChecks.Values.All(v => v),
-            fixture = $"--setup: {SetupBigMap} with you in slot 3, named and Easy/Hard random bots, slots 6-8 closed, 2x; return retains random choices and sides; then Bilbo's Bluffs observed with a Normal random bot at 16x, both sides Random" };
+            fixture = $"--setup: {SetupBigMap} with you in slot 3, named and Easy/Hard random bots, slots 6-8 closed, Gimli's card opened and closed; return retains random choices and sides; then Bilbo's Bluffs observed with a Normal random bot, both sides Random" };
         string json = JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented = true });
         System.IO.File.WriteAllText(GamePaths.Report("setup-smoke-report.json"),json);
         GD.Print("SETUP_SMOKE "+JsonSerializer.Serialize(report));

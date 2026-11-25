@@ -89,8 +89,12 @@ Back and Start boxes (0.653 and 0.809, 0.908). Drop-downs are the black
 - **Skirmish** lists the 32 multiplayer maps (the Sandbox is no longer among them).
   Each row: player and colour, controller (You, Closed, a bot), side (Good / Evil / Random,
   build-161: drawn from the match seed at load, kept by Restart),
-  traits, and the bot in a few words (difficulty and style). The bot card and the
-  start speed sit under Game settings. Behaviour is the build-39/49/51/133 lobby's.
+  and, for a bot, its traits and a **?** button that opens its card (build-224: the style triangle, traits and
+  description, in a popup under the row that any other click or Esc closes). Build-224 took out the start speed (a
+  skirmish starts at 1x; - and + change it in play), the bot summary column, the map size and the status line's
+  description of the match (it now only warns: no maps, an unavailable map, fewer than two open positions, loading);
+  a closed position has no side or traits to choose. Game settings holds Fog of war. Behaviour is otherwise the
+  build-39/49/51/133 lobby's.
 - **Sandbox** shows the Sandbox field, both start positions yours with a side each,
   the start speed, and two choices: *Instant building and training* (the build-56
   cheat, still on by default; F4 still toggles it) and *Training dummies* (the

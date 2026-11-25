@@ -83,14 +83,15 @@ public sealed class ScenePresentation
                         teamMaterials++;
                     }
                 }
-        int classic = Classic ? UseClassicMaterials(scene, name == "map/scene.glb") : 0;
+        var cloths = PrepareCloths(state, scene);
+        int classic = Classic ? UseClassicMaterials(scene, name == "map/scene.glb", cloths) : 0;
         Imports.Add(new(name, textures, before, after, materials.Count, teamMaterials, vertexColorSurfaces, disabledBefore, disabledAfter, classic));
         return scene;
     }
 
     /// <summary>Puts a classic copy of every lit material on its mesh surface, so per-instance overrides (ghosts) still
     /// fall back to it. The ground of a map (its terrain and editor decals) also carries the cloud map.</summary>
-    private int UseClassicMaterials(Node3D scene, bool map)
+    private int UseClassicMaterials(Node3D scene, bool map, HashSet<MeshInstance3D> cloths)
     {
         var copies = new Dictionary<ulong, ShaderMaterial>();
         var ground = map ? scene.GetChildren().OfType<Node3D>().Where(n => n.Name == "Terrain" || n.Name.ToString().StartsWith("DECAL_"))
@@ -100,13 +101,79 @@ public sealed class ScenePresentation
                 for (int surface = 0; surface < array.GetSurfaceCount(); surface++)
                     if (array.SurfaceGetMaterial(surface) is BaseMaterial3D { ShadingMode: not BaseMaterial3D.ShadingModeEnum.Unshaded } material)
                     {
-                        bool clouds = ground.Contains(mesh) && CloudMap != null;
-                        ulong key = material.GetInstanceId() * 2 + (clouds ? 1UL : 0);
+                        bool clouds = ground.Contains(mesh) && CloudMap != null, cloth = cloths.Contains(mesh);
+                        ulong key = material.GetInstanceId() * 4 + (clouds ? 1UL : 0) + (cloth ? 2UL : 0);
                         if (!copies.TryGetValue(key, out var copy))
-                            copies[key] = copy = ClassicLighting.Convert(material, clouds ? CloudMap : null);
+                            copies[key] = copy = ClassicLighting.Convert(material, clouds ? CloudMap : null, cloth);
                         array.SurfaceSetMaterial(surface, copy);
                     }
         return copies.Count;
+    }
+
+    /// <summary>Build-224: a model's cloths (its flags and banners, glTF nodes carrying extras.wotrCloth) wave in the
+    /// classic shader. The source simulates each cloth's particle grid with its pinned particles held (configuration.pins,
+    /// by particle id); here every vertex gets, in CUSTOM0, the direction away from the nearest pinned stretch (the
+    /// segment between two pins, or a lone pin) and its distance in metres, and the shader moves it along the cloth's
+    /// normal by a wave that runs outward from the pins and grows with that distance. Returns the cloth meshes.</summary>
+    private static HashSet<MeshInstance3D> PrepareCloths(GltfState state, Node3D scene)
+    {
+        var cloths = new HashSet<MeshInstance3D>();
+        if (state.Json is not { } json || !json.TryGetValue("nodes", out var nodes)) return cloths;
+        var list = nodes.AsGodotArray();
+        // The generated nodes by name (glTF node names are unique in a document); GetSceneNode can name a freed
+        // importer node at runtime.
+        var gltfNodes = state.GetNodes();
+        Dictionary<string, MeshInstance3D>? meshes = null;
+        for (int index = 0; index < list.Count; index++)
+        {
+            if (!list[index].AsGodotDictionary().TryGetValue("extras", out var extras)
+                || !extras.AsGodotDictionary().TryGetValue("wotrCloth", out var cloth)) continue;
+            meshes ??= Descendants(scene).OfType<MeshInstance3D>().GroupBy(m => m.Name.ToString()).ToDictionary(g => g.Key, g => g.First());
+            if (index >= gltfNodes.Count || !meshes.TryGetValue(gltfNodes[index].ResourceName, out var instance)
+                || instance.Mesh is not ArrayMesh mesh) continue;
+            var asset = cloth.AsGodotDictionary();
+            var particles = new Dictionary<int, Vector3>();
+            foreach (var particle in asset["particles"].AsGodotArray().Select(p => p.AsGodotDictionary()))
+            {
+                var at = particle["position"].AsGodotArray();
+                // The exporter's axes (ModelGltf.Axes): the game's x y z are glTF's -x z y.
+                particles[particle["id"].AsInt32()] = new(-at[0].AsSingle(), at[2].AsSingle(), at[1].AsSingle());
+            }
+            var pins = asset["configuration"].AsGodotDictionary()["pins"].AsGodotArray()
+                .Select(pin => pin.AsGodotArray()[0].AsInt32()).Where(particles.ContainsKey).Select(id => particles[id]).Distinct().ToArray();
+            if (pins.Length == 0) continue;
+            instance.Mesh = WithPinDistances(mesh, pins);
+            cloths.Add(instance);
+        }
+        return cloths;
+    }
+
+    private static ArrayMesh WithPinDistances(ArrayMesh mesh, Vector3[] pins)
+    {
+        (Vector3 From, Vector3 To)[] segments = pins.Length == 1 ? [(pins[0], pins[0])]
+            : [.. pins.SelectMany((a, i) => pins.Skip(i + 1).Select(b => (a, b)))];
+        var copy = new ArrayMesh { ResourceName = mesh.ResourceName };
+        for (int surface = 0; surface < mesh.GetSurfaceCount(); surface++)
+        {
+            var arrays = mesh.SurfaceGetArrays(surface);
+            var vertices = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+            var custom = new float[vertices.Length * 4];
+            for (int vertex = 0; vertex < vertices.Length; vertex++)
+            {
+                var point = vertices[vertex];
+                var nearest = segments.Select(s => Geometry3D.GetClosestPointToSegment(point, s.From, s.To))
+                    .MinBy(p => p.DistanceSquaredTo(point));
+                var away = point - nearest; float distance = away.Length();
+                var direction = distance > 1e-4f ? away / distance : Vector3.Zero;
+                (custom[vertex * 4], custom[vertex * 4 + 1], custom[vertex * 4 + 2], custom[vertex * 4 + 3]) = (direction.X, direction.Y, direction.Z, distance);
+            }
+            arrays[(int)Mesh.ArrayType.Custom0] = custom;
+            copy.AddSurfaceFromArrays(mesh.SurfaceGetPrimitiveType(surface), arrays,
+                flags: (Mesh.ArrayFormat)((long)Mesh.ArrayCustomFormat.RgbaFloat << (int)Mesh.ArrayFormat.FormatCustom0Shift));
+            copy.SurfaceSetMaterial(surface, mesh.SurfaceGetMaterial(surface));
+            copy.SurfaceSetName(surface, mesh.SurfaceGetName(surface));
+        }
+        return copy;
     }
 
     public static IEnumerable<Node> Descendants(Node root)

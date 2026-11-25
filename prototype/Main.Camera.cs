@@ -6,9 +6,10 @@ public partial class Main
     // Viewport pixels at each window edge that scroll the map, as in the original manual ("pushing" on screen edges).
     private const float EdgePanMargin = 8;
     /// <summary>Build-222: in play (a skirmish or the Sandbox, not observing) the wheel steps between three camera
-    /// distances, close, medium and far; medium is the original's (the start camera's 40 m). Settings → Game picks the
-    /// one a match starts at. An observer, and the test scenes, keep the free zoom.</summary>
-    public static readonly float[] CameraLevels = [28,StartDistance,60];
+    /// distances, close, medium and far. Settings → Game picks the one a match starts at. An observer, and the test
+    /// scenes, keep the free zoom. Build-224: each one step closer (60 m was too far): close 20 m, medium 28 m and far the
+    /// original's 40 m (the old medium).</summary>
+    public static readonly float[] CameraLevels = [20,28,StartDistance];
     private const float FreeZoomMin = 12,FreeZoomMax = 450;
     private float? _zoomTarget;
     private bool CameraLimited => _skirmish && !_observing;

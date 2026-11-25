@@ -42,7 +42,8 @@ unit selectors** in **Settings → Game** for the original gold rings on friendl
 and neutral units and red rings on enemies. The action palette is empty while
 the global Walk/Run switch stays available. Enemy inspection replaces a friendly selection.
 Drag selection prioritizes friendly units; when none are selected by the box,
-it can inspect a building or neutral structure. Picking intersects the nearest live body up to the terrain/deck
+it takes one of your buildings, else (build-224) one other unit you can see, the one nearest the box's centre, as a
+click on it would (never several, never mixed with yours), else a building or neutral structure. Picking intersects the nearest live body up to the terrain/deck
 hit, rather than a fixed screen-space foot marker. Selection rings use each unit's
 original display radius or 125% of its collision radius, whichever is larger.
 Ctrl assignment while inspecting an enemy preserves stored friendly groups;
@@ -55,7 +56,8 @@ unit commands for a page of buildings (see [Build menu](SKIRMISH.md#build-16-bui
 enemy/neutral units have empty palettes. With your Citadel selected, right-click
 sets its rally point and Backspace cancels the last queued unit, following the
 original manual; see [training](SKIRMISH.md#build-12-citadel-worker-training). A rally point on a Mill, a Foundry, a well or an
-ore pile sends each new worker straight to gathering there. The Build page and the
+ore pile sends each new worker straight to gathering there; build-224: the ground beside a well or a pile counts as the
+pile, as for a worker's gather order, so the rally no longer has to hit the model itself. The Build page and the
 training buttons use Warcraft III grid hotkeys: each button's key is its position
 on the four-by-three grid, rows **Q W E R**, **A S D F**, **Z X C V** (by key
 position, so any keyboard layout works), shown in the button's corner; see
@@ -85,6 +87,9 @@ Harmful effects will follow the helpful ones once poison and slows are simulated
 Attack and Armor show the unit's own table values (a Fury weapon included); research,
 places of power and a training dummy's buttons appear beside them in green, red below
 zero, like the original "+ 9" column. Hovering the row splits base and bonus.
+
+Build-224: every other tooltip in the game (the menus, the setup screens, Settings) is drawn in the same parchment
+box beside the pointer (`GameHints.cs`): a short first line in the dark title band, the rest in dark ink.
 
 Every console tooltip opens in one place: the original parchment box, flush with the
 console's right edge on top of it, growing upward
@@ -155,8 +160,9 @@ addendum's default Force-Move behavior. **Ctrl + Alt + right-click** picks terra
 below bridges. Alt + right-click still toggles obstacles.
 
 Arrow keys and middle-drag pan the camera. Use the mouse wheel to zoom. Build-222: in a skirmish or the Sandbox the
-wheel steps, easing, between three distances, close (28 m), medium (40 m, the original's) and far (60 m); Settings →
-Game → Camera distance picks the one a match starts at. An observer keeps the free zoom (12-450 m).
+wheel steps, easing, between three distances, close (20 m), medium (28 m) and far (40 m, the original's; build-224 moved
+each one step closer, from 28/40/60 m); Settings → Game → Camera distance picks the one a match starts at. An observer
+keeps the free zoom (12-450 m).
 F4 or the top-right Debug button opens Debug tools, which includes Pause/Resume,
 a paused single-tick step, encounter restart, the unit current action toggle and
 cheats. Opening Debug tools does not pause the simulation. The console's Menu

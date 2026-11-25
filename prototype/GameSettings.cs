@@ -6,7 +6,7 @@ using Godot;
 public sealed class GameSettings
 {
     public enum Edition { Purist,Reforged,Custom }
-    /// <summary>Build-222: the camera level a match starts at (Main.CameraLevels); medium is the original's.</summary>
+    /// <summary>Build-222: the camera level a match starts at (Main.CameraLevels); build-224: far is the original's.</summary>
     public enum CameraLevel { Close,Medium,Far }
 
     /// <summary>A modern improvement over the original that the Reforged tab can switch off. Each build lists its

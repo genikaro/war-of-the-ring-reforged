@@ -50,7 +50,7 @@ public partial class Main
             case 13: ReleaseButton(_commands.UpgradeButton); break;
             case 15:
                 _techChecks["upgrade_pays_and_heads_the_queue"] = citadel.Upgrading && bank.FoodMilli == _techFood-115_000 && bank.OreMilli == _techOre-105_000
-                    && _commands.TrainingVisible && _commands.QueueButton(0) is { Visible: true,Icon: not null } && _commands.DisplayedOrder.StartsWith(GameText.T("queue.upgrading",Shown("BUILDING_G_TOWN_CENTER_LEVEL_2","Citadel 2")))
+                    && _commands.TrainingVisible && _commands.QueueButton(0) is { Visible: true,Icon: not null } queueHead && queueHead.TooltipText.StartsWith(GameText.T("queue.upgrading",Shown("BUILDING_G_TOWN_CENTER_LEVEL_2","Citadel 2")))
                     && _commands.UpgradeButton.Disabled;
                 PressButton(_commands.TrainButton(0)); break;
             case 16: ReleaseButton(_commands.TrainButton(0)); break;

@@ -15,6 +15,8 @@ public partial class CommandPanel
     private readonly Button[] _trainButtons = new Button[6];
     private readonly Button[] _queueButtons = new Button[SimWorld.ProductionQueueLimit];
     private Control _training = null!,_trainingProgress = null!;
+    /// <summary>Build-224: the training row's top in the building panel, just under the health bar (StructurePanel.cs).</summary>
+    private const float TrainingTop = 104;
     private TextureRect _trainingBar = null!;
     public Button TrainButton(int slot) => _trainButtons[slot];
     public Button QueueButton(int index) => _queueButtons[index];
@@ -36,8 +38,9 @@ public partial class CommandPanel
             _trainButtons[slot] = button; _content.AddChild(button);
         }
         _upgradeButton = ActionButton(UpgradeSlot); _upgradeButton.Pressed += () => UpgradeChosen?.Invoke();
-        // Original selection panel: the unit in training with the purple bar, followed by the queue.
-        _training = new Control { Position = new(270,58),Size = new(235,46),Visible = false,MouseFilter = MouseFilterEnum.Ignore };
+        // Original selection panel: the unit in training with the purple bar, followed by the queue. Build-224: under the
+        // building's health bar, where the console's bottom line used to repeat it in words.
+        _training = new Control { Position = new(0,TrainingTop),Size = new(235,46),Visible = false,MouseFilter = MouseFilterEnum.Ignore };
         _structureDetails.AddChild(_training);
         for (int index = 0; index < _queueButtons.Length; index++)
         {
@@ -96,17 +99,13 @@ public partial class CommandPanel
                 upgrade.FoodCost*upgrade.FoodRefundPpm/1_000_000,upgrade.OreCost*upgrade.OreRefundPpm/1_000_000)
             : research != null ? (GameText.T("queue.researching",research.DisplayName),researchPortrait,site!.ResearchTicks,research.DurationTicks,research.FoodCost,research.OreCost) : null;
         _training.Visible = producer is { Queue.Count: > 0 } || head != null;
-        if (producer == null && head == null) return;
-        string rally = producer == null ? "" : producer.RallyResource >= 0
-            ? GameText.T(world.Resources[producer.RallyResource].Kind == ResourceKind.Food ? "rally.gather_food" : "rally.gather_ore")
-            : GameText.T(producer.RallyCell >= 0 ? "rally.set" : "rally.none");
+        // Build-224: the queue speaks for itself (its portraits' tooltips); the console's bottom line no longer spells out
+        // the training, the queue length or the rally point.
         var queue = producer?.Queue ?? [];
-        if (head == null && queue.Count == 0) { _order.Text = rally; return; }
+        if (head == null && queue.Count == 0) return;
         int done = head?.Done ?? producer!.ProgressTicks;
         int duration = head?.Duration ?? world.ProductionRules[queue[0].Unit].DurationTicks;
-        int percent = done*100/duration,waiting = queue.Count-(head != null ? 0 : 1);
-        _order.Text = (head != null ? $"{head.Value.Label} {percent}%" : GameText.T("queue.training",world.ProductionRules[queue[0].Unit].DisplayName)+$" {percent}%")
-            + (waiting > 0 ? " · "+GameText.T("queue.waiting",waiting) : "")+(rally != "" ? " · "+rally : "");
+        int percent = done*100/duration;
         _trainingBar.Texture ??= _art.GetValueOrDefault("console_g_progressbar");
         _trainingProgress.Size = new(185f*done/duration,6);
         int offset = head != null ? 1 : 0;

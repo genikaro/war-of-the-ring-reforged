@@ -33,7 +33,10 @@ public partial class CommandPanel : Control
     private ScrollContainer _rosterScroll = null!;
     private Control _single = null!;
     private Button _singlePortrait = null!;
-    private TextureRect _typeIcon = null!, _statsBackground = null!, _singleHealthFrame = null!;
+    private TextureRect _typeIcon = null!, _singleHealthFrame = null!;
+    private NinePatchRect _statsBackground = null!;
+    /// <summary>The unit stats rows: Attack, Armor and Kills.</summary>
+    private readonly (Label Name,Label Value)[] _statRows = new (Label,Label)[3];
     private ColorRect _singleHealth = null!;
     private Label _singleHealthText = null!, _attackName = null!, _attackValue = null!, _armorName = null!, _armorValue = null!, _victoriesValue = null!;
     // Build-67: the selected unit's order, beside its portrait. Build-70 drops the activity line under the health bar
@@ -129,19 +132,17 @@ public partial class CommandPanel : Control
         _singleOrder.VerticalAlignment = VerticalAlignment.Top; _singleOrder.AddThemeConstantOverride("line_spacing",-3);
         _singleOrder.Hide(); _single.AddChild(_singleOrder);
         _typeIcon = new TextureRect { Name = "AttackTypeIcon",Position = new(270,28),Size = new(47,48),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Stop }; _single.AddChild(_typeIcon);
-        _statsBackground = new TextureRect { Position = new(333,28),Size = new(171,77),ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,MouseFilter = MouseFilterEnum.Ignore }; _single.AddChild(_statsBackground);
+        _statsBackground = StatsFrame(); _statsBackground.Position = new(333,28); _statsBackground.Size = new(171,StatsHeight(3)); _single.AddChild(_statsBackground);
         string[] statNames = [GameText.T("stat.attack"),GameText.T("stat.armor"),GameText.T("stat.victories")];
-        var statValues = new Label[3];
         for (int row = 0; row < statNames.Length; row++)
         {
             // Build-70: values end before the green bonus column (StatusBar.cs).
-            var name = Text(statNames[row],new(345,33+row*22),new(64,22),13); _single.AddChild(name);
-            var value = Text("",new(409,33+row*22),new(48,22),13); value.HorizontalAlignment = HorizontalAlignment.Right;
-            _single.AddChild(value); statValues[row] = value;
-            if (row == 0) _attackName = name;
-            if (row == 1) _armorName = name;
+            var name = Text(statNames[row],new(345,StatsRowY(row)),new(64,22),13); _single.AddChild(name);
+            var value = Text("",new(409,StatsRowY(row)),new(48,22),13); value.HorizontalAlignment = HorizontalAlignment.Right;
+            _single.AddChild(value); _statRows[row] = (name,value);
         }
-        (_attackValue,_armorValue,_victoriesValue) = (statValues[0],statValues[1],statValues[2]);
+        (_attackName,_armorName) = (_statRows[0].Name,_statRows[1].Name);
+        (_attackValue,_armorValue,_victoriesValue) = (_statRows[0].Value,_statRows[1].Value,_statRows[2].Value);
         // Build-62: Attack shows damage per hit; hovering the row gives the damage per second and attack speed.
         foreach (var label in new[] {_attackName,_attackValue,_armorName,_armorValue}) label.MouseFilter = MouseFilterEnum.Pass;
         CreateStatusBar();
@@ -475,6 +476,16 @@ public partial class CommandPanel : Control
                 _tipAttackChart.Texture = stats.Icon == "" ? null : _art.GetValueOrDefault(evil ? "tooltip_E_right_counter_graph" : "tooltip_g_right_counter_graph");
                 _typeIcon.TooltipText = _tipAttackChart.Texture != null ? AttackTypeChartTitle : GameText.T("stat.type_damage",stats.Type)+"\n"+stats.Matchups;
                 _attackValue.Text = stats.Attack; _armorValue.Text = stats.Armor; _victoriesValue.Text = stats.Victories;
+                // Build-224: a unit without a weapon has no Attack row; the frame holds just the rows it shows.
+                _attackName.Visible = _attackValue.Visible = _attackBonus.Visible = stats.HasAttack;
+                int shown = 0;
+                foreach (var (statName,statValue) in _statRows.Where(r => r.Name.Visible))
+                {
+                    statName.Position = new(statName.Position.X,StatsRowY(shown)); statValue.Position = new(statValue.Position.X,StatsRowY(shown));
+                    if (statValue == _armorValue) _armorBonus.Position = new(_armorBonus.Position.X,StatsRowY(shown));
+                    shown++;
+                }
+                _statsBackground.Size = new(_statsBackground.Size.X,StatsHeight(shown));
                 _attackName.TooltipText = _attackValue.TooltipText = stats.AttackTip;
                 _armorName.TooltipText = _armorValue.TooltipText = stats.ArmorTip;
                 ShowBonus(_attackBonus,stats.AttackBonus,stats.AttackTip); ShowBonus(_armorBonus,stats.ArmorBonus,stats.ArmorTip);

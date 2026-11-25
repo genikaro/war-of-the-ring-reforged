@@ -29,9 +29,18 @@ public partial class CommandPanel
 
     private Label BonusLabel(int row)
     {
-        var label = Text("",new(461,33+row*22),new(40,22),13); label.MouseFilter = MouseFilterEnum.Pass;
+        var label = Text("",new(461,StatsRowY(row)),new(40,22),13); label.MouseFilter = MouseFilterEnum.Pass;
         _single.AddChild(label); return label;
     }
+
+    /// <summary>Build-224: the stats frame (console_stats_background_*) as tall as its rows: its five-pixel gold edge kept,
+    /// the dark middle stretched. Three rows give the original's 77-pixel frame.</summary>
+    public const float StatsRowStep = 22;
+    public static float StatsHeight(int rows) => 11+Math.Max(1,rows)*StatsRowStep;
+    /// <summary>A unit stats row's top in the single-unit panel (the frame's top is at 28).</summary>
+    private static float StatsRowY(int row) => 33+row*StatsRowStep;
+    private static NinePatchRect StatsFrame() => new() { PatchMarginLeft = 5,PatchMarginTop = 5,PatchMarginRight = 5,PatchMarginBottom = 5,
+        MouseFilter = MouseFilterEnum.Ignore };
 
     private static void ShowBonus(Label label,string bonus,string tip)
     {
